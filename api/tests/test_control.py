@@ -669,24 +669,24 @@ def test_fact_edit_invalidate_delete_undo(client, monkeypatch):
     try: c.select_graph(name).delete()
     except Exception: pass
     g = c.select_graph(name)
-    g.query("CREATE (a:Entity {uuid:'a', name:'Vesta'}), (b:Entity {uuid:'b', name:'Hetzner'}), (e:Episodic {uuid:'e1', entity_edges:['f1']}), "
-            "(a)-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Vesta esta en Hetzner', episodes:['e1'], group_id:name, created_at:'2026-01-01T00:00:00+00:00', fact_embedding: vecf32([0.5,0.5,0.5,0.5])}]->(b)".replace("group_id:name", "group_id:'x'"))
+    g.query("CREATE (a:Entity {uuid:'a', name:'Vesta'}), (b:Entity {uuid:'b', name:'Cloudco'}), (e:Episodic {uuid:'e1', entity_edges:['f1']}), "
+            "(a)-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Vesta esta en Cloudco', episodes:['e1'], group_id:name, created_at:'2026-01-01T00:00:00+00:00', fact_embedding: vecf32([0.5,0.5,0.5,0.5])}]->(b)".replace("group_id:name", "group_id:'x'"))
     n = lambda q: g.query(q).result_set[0][0]  # noqa: E731
     try:
         client.post("/api/brains", json={"slug": "fa", "name": "Fa", "graph_name": name})
         base = "/api/brains/fa"
         assert client.patch(f"{base}/facts/f1", json={}).status_code == 400
-        r = client.patch(f"{base}/facts/f1", json={"fact": "Vesta es un PBS remoto en Hetzner", "name": "runs on"}).json()
-        assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.fact") == "Vesta es un PBS remoto en Hetzner" and n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.name") == "RUNS_ON"
+        r = client.patch(f"{base}/facts/f1", json={"fact": "Vesta es un servidor de copias remoto en Cloudco", "name": "runs on"}).json()
+        assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.fact") == "Vesta es un servidor de copias remoto en Cloudco" and n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.name") == "RUNS_ON"
         assert client.post(f"{base}/vocab/ops/{r['op']}/revert").status_code == 200
-        assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.fact") == "Vesta esta en Hetzner" and n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.name") == "HOSTED_ON"
+        assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.fact") == "Vesta esta en Cloudco" and n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.name") == "HOSTED_ON"
         r = client.post(f"{base}/facts/f1/invalidate").json()
         assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.invalid_at") is not None and client.post(f"{base}/facts/f1/invalidate").status_code == 409
         assert client.post(f"{base}/vocab/ops/{r['op']}/revert").status_code == 200 and n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.invalid_at") is None
         r = client.delete(f"{base}/facts/f1").json()
         assert n("MATCH ()-[r:RELATES_TO]->() RETURN count(r)") == 0 and n("MATCH (e:Episodic) RETURN size(e.entity_edges)") == 0
         assert client.post(f"{base}/vocab/ops/{r['op']}/revert").status_code == 200
-        assert n("MATCH (:Entity {uuid:'a'})-[r {uuid:'f1'}]->(:Entity {uuid:'b'}) RETURN r.fact") == "Vesta esta en Hetzner" and n("MATCH (e:Episodic) RETURN e.entity_edges") == ["f1"]
+        assert n("MATCH (:Entity {uuid:'a'})-[r {uuid:'f1'}]->(:Entity {uuid:'b'}) RETURN r.fact") == "Vesta esta en Cloudco" and n("MATCH (e:Episodic) RETURN e.entity_edges") == ["f1"]
         assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.fact_embedding IS NOT NULL") is True
     finally:
         g.delete()
