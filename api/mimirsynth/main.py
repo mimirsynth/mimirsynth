@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,6 +28,9 @@ def _bootstrap() -> None:
             return
         for it in items:
             slug, _, name = it.partition(":")
+            if not (brains.SLUG.match(slug) and brains.GRAPH.match(slug)):
+                logging.getLogger("mimirsynth").warning("MIMIRSYNTH_BOOTSTRAP_GRAPHS: se ignora «%s» (slug no válido; formato slug:Nombre)", it)
+                continue
             if not db.scalar(select(Brain).where(Brain.slug == slug)):
                 db.add(Brain(slug=slug, name=name or slug, graph_name=slug))
         db.commit()

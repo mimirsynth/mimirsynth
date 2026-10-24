@@ -212,3 +212,16 @@ def test_two_factor_enrol_login_recovery_required_and_reset(client, local):  # n
     # desactivar con contraseña y código
     assert client.post("/api/me/2fa/disable", json={"password": PW, "code": codes[1]}).status_code == 200
     assert client.get("/api/me/2fa").json()["enabled"] is False
+
+
+def test_bootstrap_ignores_invalid_entries(monkeypatch):
+    from sqlalchemy import select
+    from mimirsynth import main as m
+    from mimirsynth.models import Brain
+    with _factory()() as db:
+        db.query(Brain).delete(); db.commit()
+    monkeypatch.setattr(settings, "bootstrap_graphs", '# comentario "slug:Nombre,otro", docs:Docs, mal slug')
+    m._bootstrap()
+    with _factory()() as db:
+        assert [b.slug for b in db.scalars(select(Brain))] == ["docs"]
+        db.query(Brain).delete(); db.commit()

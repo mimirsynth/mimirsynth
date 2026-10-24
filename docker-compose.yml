@@ -34,7 +34,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${MIMIRSYNTH_PORT:-8000}:8000"
     environment:
       MIMIRSYNTH_DATABASE_URL: "postgresql+psycopg://mimirsynth:${POSTGRES_PASSWORD}@postgres:5432/mimirsynth"
       MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-falkordb}"
