@@ -3,7 +3,7 @@
 Hook `UserPromptSubmit` que consulta MimirSynth antes de cada prompt e inyecta los hechos y fragmentos relevantes.
 Solo lectura (rol de token `reader`).
 
-1. En MimirSynth: Administración → Tokens de API → crea un token de rol *Lector* para tu brain.
+1. En MimirSynth: Mi cuenta → Tokens de API → crea un token de rol *Lector* para tu brain.
 2. Guarda la configuración en `~/.config/mimirsynth/config.json`:
    ```json
    {"url": "https://mimirsynth.example.com", "token": "mst_...", "brain": "mi-brain"}
@@ -29,4 +29,4 @@ python3 mimirsynth_remember.py --title "Base de datos migrada a db02" --content 
 
 ## Documentos en el recall
 
-Desde la memoria documental, el contexto que devuelve `/recall` puede incluir una sección `## Documentos` con hasta 2 pasajes citados (título, sección, `[doc N, trozo M]`). Solo aparece si hay un pasaje realmente relevante, no pasa de ~600 tokens y se omite si la búsqueda tarda más de 0,6 s. El agente puede pedir más contexto con `GET /api/brains/{slug}/docs/{N}/context?chunk={M}` o el original con `/docs/{N}/file`. Para desactivarlo en una petición, `"docs": 0`; el umbral (`MIMIRSYNTH_DOC_MIN_SIMILARITY`) hay que recalibrarlo si se cambia el modelo de embeddings.
+Desde la memoria documental, el contexto que devuelve `/recall` puede incluir una sección `## Documentos` con hasta 2 pasajes citados (título, sección, `[doc N, trozo M]`). Solo aparece si hay un pasaje realmente relevante, no pasa de ~600 tokens y se omite si la búsqueda tarda más de 0,6 s. El agente puede pedir más contexto con `GET /api/brains/{slug}/docs/{N}/context?chunk={M}` o el original con `/docs/{N}/file`. Para desactivarlo en una petición, `"docs": 0`; el umbral (Administración → Recuerdo → «Similitud mínima de un pasaje») hay que recalibrarlo si se cambia el modelo de embeddings.

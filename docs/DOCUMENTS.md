@@ -1,6 +1,6 @@
-# Memoria documental (borrador de diseño)
+# Memoria documental (diseño)
 
-Estado: **borrador para revisión**, sin código. Fecha: 2026-10-22.
+Estado: **diseño de referencia** de la memoria documental, implementada en su mayor parte (subidas, directorios y wikis Outline). Algunas secciones describen decisiones tomadas durante el diseño y alternativas descartadas.
 
 ## Qué es y qué no es
 
