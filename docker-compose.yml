@@ -1,0 +1,79 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mimirsynth
+      POSTGRES_DB: mimirsynth
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?define POSTGRES_PASSWORD}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mimirsynth -d mimirsynth"]
+      interval: 10s
+      retries: 5
+
+  # Motor de grafos incluido. Se arranca con `docker compose --profile bundled up -d` y MIMIRSYNTH_FALKOR_HOST=falkordb.
+  # Si ya tienes un FalkorDB, no uses el perfil y apunta MIMIRSYNTH_FALKOR_HOST a él.
+  falkordb:
+    profiles: ["bundled"]
+    image: falkordb/falkordb:v4.22.0
+    restart: unless-stopped
+    volumes:
+      - graphdata:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  mimirsynth:
+    build: .
+    image: mimirsynth:0.2.0
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      MIMIRSYNTH_DATABASE_URL: "postgresql+psycopg://mimirsynth:${POSTGRES_PASSWORD}@postgres:5432/mimirsynth"
+      MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-falkordb}"
+      MIMIRSYNTH_FALKOR_PORT: "${MIMIRSYNTH_FALKOR_PORT:-6379}"
+      MIMIRSYNTH_DEFAULT_GRAPH: "${MIMIRSYNTH_DEFAULT_GRAPH:-default}"
+      MIMIRSYNTH_BOOTSTRAP_GRAPHS: "${MIMIRSYNTH_BOOTSTRAP_GRAPHS:-}"
+      MIMIRSYNTH_EMBEDDING_BASE_URL: "${MIMIRSYNTH_EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}"
+      MIMIRSYNTH_EMBEDDING_MODEL: "${MIMIRSYNTH_EMBEDDING_MODEL:-nomic-embed-text}"
+      MIMIRSYNTH_EMBEDDING_API_KEY: "${MIMIRSYNTH_EMBEDDING_API_KEY:-}"
+      MIMIRSYNTH_EMBEDDING_DIM: "${MIMIRSYNTH_EMBEDDING_DIM:-768}"
+      MIMIRSYNTH_LLM_BASE_URL: "${MIMIRSYNTH_LLM_BASE_URL:-}"
+      MIMIRSYNTH_LLM_API_KEY: "${MIMIRSYNTH_LLM_API_KEY:-}"
+      MIMIRSYNTH_LLM_MODEL: "${MIMIRSYNTH_LLM_MODEL:-}"
+      MIMIRSYNTH_LLM_SMALL_MODEL: "${MIMIRSYNTH_LLM_SMALL_MODEL:-}"
+      MIMIRSYNTH_AUTH_MODE: "${MIMIRSYNTH_AUTH_MODE:-local}"
+      MIMIRSYNTH_SESSION_SECRET: "${MIMIRSYNTH_SESSION_SECRET:?define MIMIRSYNTH_SESSION_SECRET}"
+      MIMIRSYNTH_PUBLIC_URL: "${MIMIRSYNTH_PUBLIC_URL:-}"
+      MIMIRSYNTH_COOKIE_SECURE: "${MIMIRSYNTH_COOKIE_SECURE:-false}"
+      MIMIRSYNTH_OIDC_ISSUER: "${MIMIRSYNTH_OIDC_ISSUER:-}"
+      MIMIRSYNTH_OIDC_CLIENT_ID: "${MIMIRSYNTH_OIDC_CLIENT_ID:-}"
+      MIMIRSYNTH_OIDC_CLIENT_SECRET: "${MIMIRSYNTH_OIDC_CLIENT_SECRET:-}"
+      MIMIRSYNTH_ADMIN_EMAILS: "${MIMIRSYNTH_ADMIN_EMAILS:-}"
+      MIMIRSYNTH_ACCOUNT_URL: "${MIMIRSYNTH_ACCOUNT_URL:-}"
+      MIMIRSYNTH_DOC_STORE: "/data/documents"
+      MIMIRSYNTH_DOC_MAX_MB: "${MIMIRSYNTH_DOC_MAX_MB:-2048}"
+      MIMIRSYNTH_DOC_ROOTS_BASE: "/sources"  # las raíces de fuentes se registran en Administración y solo pueden estar bajo esta carpeta
+    volumes:
+      - type: bind  # carpeta del host con los directorios que pueden ser fuentes de documentos; siempre en solo lectura
+        source: ${MIMIRSYNTH_SOURCES_DIR:-./sources}
+        target: /sources
+        read_only: true
+        bind: {propagation: rslave, create_host_path: true}  # rslave: lo que montes después bajo esa carpeta en el host aparece dentro sin reiniciar
+      - docstore:/data/documents  # originales de la memoria documental: entra en las copias de seguridad junto con Postgres
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+volumes:
+  pgdata:
+  graphdata:
+  docstore:

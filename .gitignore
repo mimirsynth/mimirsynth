@@ -1,0 +1,22 @@
+.venv/
+__pycache__/
+node_modules/
+dist/
+.env
+*.log
+dev.db
+
+# Local configuration and data: never commit
+.env
+.env.*
+!.env.example
+sources/
+*.db
+*.sqlite
+*.sql
+.venv/
+.pytest_cache/
+*.log
+.playwright-mcp/
+.DS_Store
+*.egg-info/

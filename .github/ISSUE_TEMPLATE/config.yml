@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Preguntas y debate
+    url: https://github.com/MimirSynth/mimirsynth/discussions
+    about: Para dudas de uso o ideas aún sin madurar
+  - name: Vulnerabilidades
+    url: https://github.com/MimirSynth/mimirsynth/security/advisories/new
+    about: Informa de forma privada, no con un issue público

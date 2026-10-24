@@ -1,0 +1,14 @@
+name: Propuesta
+description: Una mejora o funcionalidad nueva
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes: {label: Qué problema resuelve}
+    validations: {required: true}
+  - type: textarea
+    id: idea
+    attributes: {label: Cómo lo imaginas}
+  - type: textarea
+    id: alternatives
+    attributes: {label: Alternativas que has considerado}

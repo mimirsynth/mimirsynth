@@ -1,0 +1,329 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sub: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)  # claim "sub" del OIDC
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    name: Mapped[str] = mapped_column(String(255), default="")
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)  # administrador de la instancia
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    display_name: Mapped[str] = mapped_column(String(80), default="")  # nombre a mostrar elegido por la persona; vacío = el del proveedor de identidad
+    picture_url: Mapped[str] = mapped_column(Text, default="")  # claim «picture» del proveedor de identidad
+    avatar_ref: Mapped[str] = mapped_column(Text, default="")  # avatar subido (ruta relativa al almacén de ficheros)
+    avatar_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    session_epoch: Mapped[int] = mapped_column(Integer, default=0)  # sube al «cerrar todas las sesiones»
+    password_hash: Mapped[str] = mapped_column(Text, default="")  # argon2id; vacío = sin contraseña (solo entra por un proveedor externo)
+    status: Mapped[str] = mapped_column(String(12), default="active")  # invited | active | disabled | deleted (anonimizado: conserva la historia de propuestas y auditoría)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)  # contraseña temporal puesta por un administrador
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    invited_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    totp_secret: Mapped[str] = mapped_column(Text, default="")  # secreto TOTP sellado (secretbox); con totp_enabled falso es una alta a medias
+    totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    totp_last_step: Mapped[int] = mapped_column(Integer, default=0)  # último intervalo de 30 s aceptado: un código no se puede reutilizar
+
+
+class Identity(Base):
+    """Identidad externa (OIDC) vinculada a un usuario: una persona puede tener contraseña propia y además uno o varios proveedores."""
+    __tablename__ = "identities"
+    __table_args__ = (UniqueConstraint("provider", "sub"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(32), default="oidc")
+    sub: Mapped[str] = mapped_column(String(255))
+    email: Mapped[str] = mapped_column(String(255), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class RecoveryCode(Base):
+    """Código de recuperación del doble factor: de un solo uso, se guarda solo el hash."""
+    __tablename__ = "recovery_codes"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class UserToken(Base):
+    """Enlace de un solo uso para aceptar una invitación o restablecer la contraseña; se guarda solo el hash."""
+    __tablename__ = "user_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    purpose: Mapped[str] = mapped_column(String(12))  # invite | reset
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Brain(Base):
+    __tablename__ = "brains"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str] = mapped_column(String(255))
+    description: Mapped[str] = mapped_column(Text, default="")
+    graph_name: Mapped[str] = mapped_column(String(255))  # grafo en el GraphStore
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+    __table_args__ = (UniqueConstraint("user_id", "brain_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(16))
+    user: Mapped[User] = relationship()
+    brain: Mapped[Brain] = relationship(back_populates="members")
+
+
+class Audit(Base):
+    __tablename__ = "audit_log"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    brain_id: Mapped[int | None] = mapped_column(ForeignKey("brains.id", ondelete="SET NULL"), nullable=True)
+    action: Mapped[str] = mapped_column(String(64))
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class AppSetting(Base):
+    """Ajuste de la instancia editable desde Administración → Ajustes. Solo guarda lo que se ha cambiado: sin fila, manda el valor por defecto (variable de entorno o valor de fábrica)."""
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)  # {"v": valor}
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class ApiToken(Base):
+    """Token de API para agentes y MCP: acotado a un brain y con rol máximo; se guarda solo el hash."""
+    __tablename__ = "api_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(120))
+    role: Mapped[str] = mapped_column(String(16))  # tope; el efectivo es min(rol del usuario, este)
+    prefix: Mapped[str] = mapped_column(String(12))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    user: Mapped[User] = relationship()
+
+
+class Proposal(Base):
+    """Aportación pendiente de entrar al grafo (cuarentena). pending -> approved|rejected; approved -> ingested|failed."""
+    __tablename__ = "proposals"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    token_id: Mapped[int | None] = mapped_column(ForeignKey("api_tokens.id", ondelete="SET NULL"), nullable=True)
+    name: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), default="text")  # text | message | json
+    source_description: Mapped[str] = mapped_column(String(255), default="")
+    reference_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confidence: Mapped[float | None] = mapped_column(nullable=True)  # 0..1 declarada por el autor/agente
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)
+    reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_note: Mapped[str] = mapped_column(Text, default="")  # nota escrita por el revisor humano
+    review_kind: Mapped[str] = mapped_column(String(16), default="")  # human | direct (curador al enviar) | decider
+    decision: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # detalle del triaje del decisor
+    ingest_error: Mapped[str] = mapped_column(Text, default="")
+    ingest_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # tipos usados y relaciones fuera de la ontología
+    episode_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    author: Mapped[User] = relationship(foreign_keys=[author_id])
+
+
+class LlmEngine(Base):
+    """Motor LLM (endpoint OpenAI-compatible) usado para extraer hechos al ingerir. La clave se guarda cifrada."""
+    __tablename__ = "llm_engines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    base_url: Mapped[str] = mapped_column(String(500))
+    model: Mapped[str] = mapped_column(String(255))
+    small_model: Mapped[str] = mapped_column(String(255), default="")
+    api_key_enc: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class EmbeddingEngine(Base):
+    """Motor de embeddings (endpoint OpenAI-compatible). Modelo y dimensión son inmutables: los vectores guardados dependen de ellos."""
+    __tablename__ = "embedding_engines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    base_url: Mapped[str] = mapped_column(String(500))
+    model: Mapped[str] = mapped_column(String(255))
+    dim: Mapped[int] = mapped_column()
+    api_key_enc: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DecisionEngine(Base):
+    """Decisor: modelo de decisión cerrada (elige una opción etiquetada con letra y da probabilidades por logprobs)."""
+    __tablename__ = "decision_engines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    base_url: Mapped[str] = mapped_column(String(500))
+    model: Mapped[str] = mapped_column(String(255))
+    api_key_enc: Mapped[str] = mapped_column(Text, default="")
+    threshold: Mapped[float] = mapped_column(default=0.8)  # confianza mínima para actuar sin revisión humana
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class BrainOntology(Base):
+    """Ontología de un brain: tipos de entidad y de relación (y su mapa) que guían la extracción al ingerir."""
+    __tablename__ = "brain_ontologies"
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class DocSource(Base):
+    """Fuente de la memoria documental de un brain (subidas, directorio de archivos, wiki)."""
+    __tablename__ = "doc_sources"
+    __table_args__ = (UniqueConstraint("brain_id", "name"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # upload | directory | wiki
+    name: Mapped[str] = mapped_column(String(120))
+    config: Mapped[dict] = mapped_column(JSON, default=dict)  # los secretos van cifrados con secretbox
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sync_interval: Mapped[int | None] = mapped_column(Integer, nullable=True)  # minutos; vacío = solo manual
+    status: Mapped[str] = mapped_column(String(16), default="idle")
+    last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Document(Base):
+    """Documento indexado. El original vive en el almacén de ficheros; aquí solo su referencia y metadatos (los trozos y vectores, en doc_chunks)."""
+    __tablename__ = "documents"
+    __table_args__ = (UniqueConstraint("source_id", "external_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("doc_sources.id", ondelete="CASCADE"), index=True)
+    external_id: Mapped[str] = mapped_column(String(500))
+    title: Mapped[str] = mapped_column(String(500), default="")
+    filename: Mapped[str] = mapped_column(String(500), default="")
+    url: Mapped[str] = mapped_column(Text, default="")
+    mime: Mapped[str] = mapped_column(String(120), default="")
+    size: Mapped[int] = mapped_column(BigInteger, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), default="")
+    storage_ref: Mapped[str] = mapped_column(Text, default="")  # ruta del original relativa al almacén
+    text_ref: Mapped[str] = mapped_column(Text, default="")  # ruta del texto normalizado (sobre el que apuntan char_start/char_end)
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(12), default="pending", index=True)  # pending | indexing | active | error | deleted
+    error: Mapped[str] = mapped_column(Text, default="")
+    chunks: Mapped[int] = mapped_column(Integer, default=0)
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class VocabAlias(Base):
+    """Alias de vocabulario por brain: variante -> canónico (kind='relation'). No destructivo: se aplica al leer."""
+    __tablename__ = "vocab_aliases"
+    __table_args__ = (UniqueConstraint("brain_id", "kind", "alias"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16), default="relation")
+    alias: Mapped[str] = mapped_column(String(200))
+    canonical: Mapped[str] = mapped_column(String(200))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class VocabOp(Base):
+    """Cambio de vocabulario aplicado (tipos de entidad). Guarda lo necesario para deshacerlo."""
+    __tablename__ = "vocab_ops"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(32))  # type.create | type.edit | type.delete | type.rename | type.merge
+    summary: Mapped[str] = mapped_column(String(300), default="")
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(12), default="applied")  # applied | reverted
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class RetypeSuggestion(Base):
+    """Propuesta de cambio de tipo de una entidad del grafo (corrector de tipos con decisor). Reversible: guarda el tipo anterior."""
+    __tablename__ = "retype_suggestions"
+    __table_args__ = (UniqueConstraint("brain_id", "entity_uuid"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    entity_uuid: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(500))
+    current_type: Mapped[str] = mapped_column(String(64), default="")
+    suggested_type: Mapped[str] = mapped_column(String(64), default="")
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | doubtful | same | applied | rejected | reverted
+    previous_type: Mapped[str] = mapped_column(String(64), default="")
+    reason: Mapped[str] = mapped_column(String(200), default="")  # por qué es dudosa (status=doubtful)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class Job(Base):
+    """Trabajo en segundo plano (ingesta, indexación, reescaneo…). Registro central: estado, progreso, salida y reintentos."""
+    __tablename__ = "jobs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int | None] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), nullable=True, index=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    title: Mapped[str] = mapped_column(String(300), default="")
+    status: Mapped[str] = mapped_column(String(12), default="queued", index=True)  # queued | running | done | failed | cancelled
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    progress_done: Mapped[int] = mapped_column(Integer, default=0)
+    progress_total: Mapped[int] = mapped_column(Integer, default=0)
+    message: Mapped[str] = mapped_column(String(300), default="")  # paso actual
+    log: Mapped[list] = mapped_column(JSON, default=list)  # últimas líneas [{t, msg}]
+    error: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)  # intentos dentro de la ejecución (reintentos por límite de tasa, etc.)
+    retry_of: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dedupe_key: Mapped[str] = mapped_column(String(120), default="", index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DocRoot(Base):
+    """Carpeta del servidor autorizada como raíz de fuentes de documentos (siempre bajo MIMIRSYNTH_DOC_ROOTS_BASE, montada en solo lectura)."""
+    __tablename__ = "doc_roots"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(40), unique=True)
+    path: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(String(200), default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
