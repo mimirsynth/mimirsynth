@@ -1,5 +1,7 @@
 # Documentación de MimirSynth
 
+> La **guía de usuario completa** (cada pantalla, administración, agentes, solución de problemas) está en la [wiki del proyecto](https://github.com/MimirSynth/mimirsynth/wiki). Esta carpeta contiene la documentación técnica que acompaña al código.
+
 | Documento | Para qué |
 |---|---|
 | [INSTALL.md](INSTALL.md) | Instalar, actualizar y hacer copias de seguridad |

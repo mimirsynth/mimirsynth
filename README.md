@@ -16,7 +16,7 @@ Estado: **en desarrollo activo** (0.x). Funciona de extremo a extremo, pero la A
 - **Interfaz web** para explorar el grafo, curar el vocabulario, revisar propuestas y administrar la instancia.
 - **Integración con Claude Code:** hook de recall y escritura como propuesta ([`integrations/claude-code`](integrations/claude-code)).
 
-Documentación: [instalación](docs/INSTALL.md), [configuración](docs/CONFIGURATION.md), [conectar agentes](docs/AGENTS.md), [arquitectura](docs/ARCHITECTURE.md) y [memoria documental](docs/DOCUMENTS.md).
+**Guía de usuario completa en la [wiki](https://github.com/MimirSynth/mimirsynth/wiki).** Resumen técnico: [instalación](docs/INSTALL.md), [configuración](docs/CONFIGURATION.md), [conectar agentes](docs/AGENTS.md), [arquitectura](docs/ARCHITECTURE.md) y [memoria documental](docs/DOCUMENTS.md).
 
 ## Inicio rápido
 Necesitas Docker con Compose y un endpoint compatible con OpenAI para embeddings (p. ej. Ollama con `nomic-embed-text`) y otro para el LLM de extracción.

@@ -30,7 +30,7 @@ Abre la aplicación, introduce el código y crea la cuenta de administrador. Gua
 4. Opcional: correo SMTP (invitaciones y recuperación de contraseña), OIDC, doble factor obligatorio y carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md).
 
 ## HTTPS y proxy inverso
-No publiques el puerto 8000 a Internet sin TLS. Pon un proxy inverso (Caddy, Traefik, nginx…) delante, define `MIMIRSYNTH_PUBLIC_URL` con la dirección pública y `MIMIRSYNTH_COOKIE_SECURE=true`. Si subes ficheros grandes, comprueba el límite de tamaño de petición del proxy: las subidas se envían por partes (por defecto de 50 MB).
+No publiques el puerto 8000 a Internet sin TLS. Pon un proxy inverso (Caddy, Traefik, nginx…) delante, define `MIMIRSYNTH_PUBLIC_URL` con la dirección pública y `MIMIRSYNTH_COOKIE_SECURE=true`. Si subes ficheros grandes, comprueba el límite de tamaño de petición del proxy: las subidas se envían por partes (por defecto de 64 MB).
 
 PostgreSQL y FalkorDB no publican puertos fuera de la red de Compose. No los expongas.
 

@@ -51,7 +51,7 @@ Los originales viven en un **volumen del stack** que monta la aplicación (`MIMI
 ```
 
 - **Rutas generadas por el servidor,** nunca a partir de un nombre que mande el usuario: se guarda el nombre original solo como metadato.
-- **Subida por partes:** el navegador envía el fichero en trozos (~50 MB como máximo por petición, porque los proxies delante de la aplicación suelen limitar el cuerpo) que el servidor escribe a disco en flujo, sin cargarlo en memoria. Hay un tope total configurable en Administración → Ajustes (por defecto, `MIMIRSYNTH_DOC_MAX_MB`).
+- **Subida por partes:** el navegador envía el fichero en trozos (hasta 64 MB (ajustable) por petición, porque los proxies delante de la aplicación suelen limitar el cuerpo) que el servidor escribe a disco en flujo, sin cargarlo en memoria. Hay un tope total configurable en Administración → Ajustes (por defecto, `MIMIRSYNTH_DOC_MAX_MB`).
 - **Directorio de archivos:** no se copia nada. `storage_ref` apunta a la ruta dentro de la raíz montada en solo lectura; solo se escribe el texto normalizado cuando el formato lo requiere (HTML, PDF…). Si el fichero desaparece, el documento pasa a `deleted`.
 - **Wiki:** se guarda una instantánea en Markdown de cada página, para poder volver a trocear sin pedirla de nuevo y para citar aunque la wiki no responda.
 - **Cambio de contenido:** la versión nueva se escribe y se indexa primero; solo entonces se borra la anterior, de modo que nunca se queda un documento sin original.
