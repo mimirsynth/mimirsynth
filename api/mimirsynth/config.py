@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     lockout_minutes: int = 15
     invite_days: int = 7  # validez de un enlace de invitación o recuperación
     oidc_trust_unverified_email: str = "no"
+    oidc_auto_provision: str = "no"  # "yes": quien entra por OIDC con email verificado de un dominio permitido se da de alta solo
+    oidc_allowed_domains: str = ""  # dominios (coma) permitidos para el alta automática
+    oidc_groups_claim: str = "groups"  # claim del proveedor con los grupos de la persona
+    oidc_admin_group: str = ""  # grupo cuyos miembros son administradores de la instancia
+    oidc_group_roles: str = ""  # grupo=brain:rol, ... (p. ej. curadores=docs:curator)
     require_2fa: str = "no"  # "yes": quien entra con contraseña debe activar el doble factor
     admin_emails: str = ""  # emails (coma) que son administradores de la instancia al iniciar sesión
 

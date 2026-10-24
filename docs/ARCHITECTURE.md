@@ -40,7 +40,7 @@ Un **brain** es un dominio de conocimiento aislado: su grafo, su ontología (tip
 ## Usuarios y roles
 
 - **Cuentas propias** (email y contraseña con argon2id, bloqueo tras intentos fallidos, invitaciones y recuperación por enlace de un solo uso, correo por SMTP opcional) y **doble factor TOTP** con códigos de recuperación, que el administrador puede exigir.
-- **OIDC opcional** (Keycloak, Authentik, Entra ID, PocketID…): solo entra quien ya tiene cuenta o invitación.
+- **OIDC opcional** (Keycloak, Authentik, Entra ID, PocketID…): por defecto solo entra quien ya tiene cuenta o invitación; opcionalmente, alta automática por dominios y roles según los grupos del proveedor.
 - **Rol por brain:** lector < colaborador < curador < administrador < propietario. El administrador de la instancia ve todo.
 - **Tokens de API** acotados a un brain, para agentes y plugins; nunca superan el rol de quien los crea y no administran la instancia.
 - Las acciones de administración y de acceso quedan en un **registro de auditoría**.

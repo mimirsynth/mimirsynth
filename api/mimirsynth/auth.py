@@ -270,13 +270,41 @@ async def login(request: Request):
     return await _oidc().authorize_redirect(request, _redirect_uri(request))
 
 
-@router.get("/auth/callback")
-async def callback(request: Request, db: Session = Depends(get_db)):
-    """Solo entra quien ya tiene cuenta: vinculada a esta identidad, o invitada/creada por un administrador con el mismo email verificado."""
-    if settings.auth_mode == "off":
-        return RedirectResponse("/")
-    token = await _oidc().authorize_access_token(request)
-    info = token.get("userinfo") or await _oidc().userinfo(token=token)
+def _csv(value: str) -> list[str]:
+    return [x.strip() for x in value.split(",") if x.strip()]
+
+
+def apply_groups(db: Session, user: User, info: dict) -> None:
+    """Concede (nunca retira ni rebaja) el rol de instancia y los roles de brain que correspondan a los grupos que trae el proveedor."""
+    from .models import Brain, Membership
+    from .roles import ROLES, rank
+    claim = info.get(appsettings.get("oidc_groups_claim") or "groups") or []
+    groups = {str(g) for g in (claim if isinstance(claim, list) else [claim])}
+    admin_group = appsettings.get("oidc_admin_group").strip()
+    if admin_group and admin_group in groups and not user.is_admin:
+        user.is_admin = True
+        audit(db, user, "user.role", via="oidc-group", is_admin=True)
+    for rule in _csv(appsettings.get("oidc_group_roles")):
+        group, _, target = rule.partition("=")
+        slug, _, role = target.strip().partition(":")
+        if group.strip() not in groups or role.strip() not in ROLES[:4]:  # por grupo nunca se concede «owner»
+            continue
+        brain = db.scalar(select(Brain).where(Brain.slug == slug.strip()))
+        if not brain:
+            continue
+        m = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.brain_id == brain.id))
+        if not m:
+            db.add(Membership(user_id=user.id, brain_id=brain.id, role=role.strip()))
+            audit(db, user, "member.set", brain, via="oidc-group", role=role.strip())
+        elif rank(role.strip()) > rank(m.role):
+            m.role = role.strip()
+            audit(db, user, "member.set", brain, via="oidc-group", role=role.strip())
+    db.commit()
+
+
+def resolve_oidc_user(db: Session, info: dict) -> tuple[User | None, str]:
+    """Persona a la que corresponde la identidad del proveedor, o (None, motivo). Entra quien ya está vinculado, quien fue invitado con el mismo
+    email verificado, un administrador declarado en Ajustes o, si se activó, quien tenga un email verificado de un dominio permitido."""
     sub = info["sub"]
     email = (info.get("email") or info.get("preferred_username") or "").lower() or None
     verified = info.get("email_verified") is True or appsettings.get("oidc_trust_unverified_email") == "yes"
@@ -285,22 +313,43 @@ async def callback(request: Request, db: Session = Depends(get_db)):
     if not user and email and verified:
         user = db.scalar(select(User).where(User.email == email))
         if user and user.status in ("invited", "active"):
-            db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email or ""))
+            db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email))
             if user.status == "invited":
                 user.status = "active"
-        elif not user and email in {e.strip().lower() for e in appsettings.get("admin_emails").split(",") if e.strip()}:
+        elif not user and email in {e.lower() for e in _csv(appsettings.get("admin_emails"))}:
             user = User(email=email, name=info.get("name") or email, is_admin=True, status="active")  # administrador declarado en Ajustes
             db.add(user); db.flush()
             db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email))
+        elif not user and info.get("email_verified") is True and appsettings.get("oidc_auto_provision") == "yes" and email.rpartition("@")[2] in {d.lower().lstrip("@") for d in _csv(appsettings.get("oidc_allowed_domains"))}:
+            user = User(email=email, name=info.get("name") or email, is_admin=False, status="active")
+            db.add(user); db.flush()
+            db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email))
+            audit(db, user, "user.autoprovision", email=email)
+        else:
+            user = None
     if not user:
-        return RedirectResponse("/?auth_error=not_invited")
+        return None, "not_invited"
     if user.status != "active":
-        return RedirectResponse("/?auth_error=disabled")
+        return None, "disabled"
+    return user, ""
+
+
+@router.get("/auth/callback")
+async def callback(request: Request, db: Session = Depends(get_db)):
+    """Inicio de sesión por el proveedor de identidad (ver resolve_oidc_user para quién puede entrar)."""
+    if settings.auth_mode == "off":
+        return RedirectResponse("/")
+    token = await _oidc().authorize_access_token(request)
+    info = token.get("userinfo") or await _oidc().userinfo(token=token)
+    user, why = resolve_oidc_user(db, info)
+    if not user:
+        return RedirectResponse(f"/?auth_error={why}")
     user.last_login = now()
     user.picture_url = str(info.get("picture") or "")[:2000]
     if not user.name:
-        user.name = info.get("name") or email or sub
+        user.name = info.get("name") or user.email or info["sub"]
     db.commit()
+    apply_groups(db, user, info)
     audit(db, user, "login", method="oidc")
     userlib.start_session(request, user, "oidc")
     return RedirectResponse("/")

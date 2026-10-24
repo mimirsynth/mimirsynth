@@ -225,3 +225,32 @@ def test_bootstrap_ignores_invalid_entries(monkeypatch):
     with _factory()() as db:
         assert [b.slug for b in db.scalars(select(Brain))] == ["docs"]
         db.query(Brain).delete(); db.commit()
+
+
+def test_oidc_resolution_autoprovision_and_groups(client, local, monkeypatch):  # noqa: F811
+    from sqlalchemy import select
+    from mimirsynth import appsettings
+    from mimirsynth.models import Brain, Membership
+    sets = {"oidc_auto_provision": "no", "oidc_allowed_domains": "", "oidc_admin_group": "", "oidc_group_roles": "", "admin_emails": "", "oidc_trust_unverified_email": "no", "oidc_groups_claim": "groups"}
+    monkeypatch.setattr(appsettings, "get", lambda k: sets[k])
+    with _factory()() as db:
+        db.add(Brain(slug="grp", name="Grp", graph_name="grp-g")); db.commit()
+        info = {"sub": "s1", "email": "nueva@corp.example", "email_verified": True, "name": "Nueva", "groups": ["curadores", "admins"]}
+        assert auth.resolve_oidc_user(db, info) == (None, "not_invited")  # sin alta automática solo entran invitados
+        sets["oidc_auto_provision"], sets["oidc_allowed_domains"] = "yes", "corp.example, otra.example"
+        assert auth.resolve_oidc_user(db, {**info, "email": "x@evil.example", "sub": "s2"}) == (None, "not_invited")  # dominio no permitido
+        assert auth.resolve_oidc_user(db, {**info, "email_verified": False, "sub": "s3"}) == (None, "not_invited")  # sin verificar, nunca se da de alta
+        sets["oidc_trust_unverified_email"] = "yes"
+        assert auth.resolve_oidc_user(db, {**info, "email_verified": False, "sub": "s3"}) == (None, "not_invited")  # ni confiando en emails sin verificar
+        u, why = auth.resolve_oidc_user(db, info)
+        assert u and not why and u.status == "active" and not u.is_admin and not u.password_hash
+        assert auth.resolve_oidc_user(db, info)[0].id == u.id  # la segunda vez entra por su identidad vinculada
+
+        sets["oidc_admin_group"], sets["oidc_group_roles"] = "admins", "curadores=grp:curator, lectores=grp:reader, curadores=grp:owner, x=nope:reader"
+        auth.apply_groups(db, u, info)
+        assert u.is_admin
+        assert db.scalar(select(Membership.role).where(Membership.user_id == u.id, Membership.brain_id == db.scalar(select(Brain.id).where(Brain.slug == "grp")))) == "curator"
+        auth.apply_groups(db, u, {**info, "groups": ["lectores"]})  # nunca rebaja
+        assert db.scalar(select(Membership.role).where(Membership.user_id == u.id)) == "curator"
+        u.status = "disabled"; db.commit()
+        assert auth.resolve_oidc_user(db, info) == (None, "disabled")

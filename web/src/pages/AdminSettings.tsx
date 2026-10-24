@@ -10,7 +10,7 @@ type Data = { groups: { key: string; label: string }[]; items: Item[]; secrets: 
 const GROUP_HELP: Record<string, string> = {
   security: "Cómo se protegen las cuentas con contraseña: longitud mínima, bloqueo tras intentos fallidos y caducidad de los enlaces.",
   mail: "Servidor de correo saliente. Se usa para enviar invitaciones y enlaces de recuperación de contraseña.",
-  identity: "Inicio de sesión con un proveedor externo (OIDC). Es opcional: solo entran las personas que ya tienen cuenta.",
+  identity: "Inicio de sesión con un proveedor externo (OIDC). Es opcional. Por defecto solo entran las personas que ya tienen cuenta; puedes permitir el alta automática por dominio y asignar roles según los grupos del proveedor.",
   docs: "Límites de la memoria documental: qué se acepta al subir o escanear.",
   recall: "Cómo se buscan y mezclan los pasajes de documentos con los hechos cuando un agente pide contexto.",
   ingest: "Reintentos de la ingesta y cuánto tiempo se conservan los trabajos.",
