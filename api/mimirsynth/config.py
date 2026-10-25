@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     oidc_groups_claim: str = "groups"  # claim del proveedor con los grupos de la persona
     oidc_admin_group: str = ""  # grupo cuyos miembros son administradores de la instancia
     oidc_group_roles: str = ""  # grupo=brain:rol, ... (p. ej. curadores=docs:curator)
-    default_language: str = "es"  # idioma de la interfaz y de los correos cuando la persona no ha elegido uno
+    default_language: str = "en"  # idioma de la interfaz y de los correos cuando la persona no ha elegido uno
     require_2fa: str = "no"  # "yes": quien entra con contraseña debe activar el doble factor
     admin_emails: str = ""  # emails (coma) que son administradores de la instancia al iniciar sesión
 

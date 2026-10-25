@@ -36,6 +36,8 @@ def test_mails_and_profile_language(client, monkeypatch):  # noqa: F811
     userlib.email_invite("a@example.com", "Ana", "https://x/acceso/t", "invite", U())
     assert sent[-1][0].startswith("You have been invited") and "single use" in sent[-1][1]
     U.locale = ""
+    from mimirsynth.config import settings
+    monkeypatch.setattr(settings, "default_language", "es")
     userlib.email_invite("a@example.com", "Ana", "https://x/acceso/t", "reset")
     assert sent[-1][0].startswith("Restablece")  # idioma por defecto de la instancia: español
     assert client.patch("/api/me/profile", json={"locale": "en"}).status_code == 200

@@ -37,6 +37,9 @@ En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un e
   - **Alta automática:** con «Sí» y una lista de **dominios permitidos**, quien entre con un email *verificado* de esos dominios se da de alta solo, como usuario sin acceso a ningún brain. Nunca se aplica a emails sin verificar, aunque actives «Aceptar emails sin verificar».
   - **Grupos:** si tu proveedor envía los grupos de la persona (claim `groups` por defecto), puedes nombrar un **grupo de administradores de la instancia** y reglas **grupo=brain:rol** (p. ej. `curadores=docs:curator`). Al iniciar sesión se *concede* el rol si no tiene ya uno igual o mayor; nunca se rebaja ni se retira (quitar a alguien de un grupo no le quita el acceso: hazlo en Usuarios), y por grupo nunca se concede «propietario».
 
+## Idioma
+**Administración → General → Idioma por defecto** fija el idioma de la interfaz y de los correos para quien no haya elegido uno. Cada persona elige el suyo en Mi cuenta → Perfil. Se incluyen inglés y español.
+
 ## Memoria documental
 - **Carpetas:** Administración → Carpetas registra las raíces bajo `/sources` que los administradores de un brain pueden usar como fuentes. En Conocimiento se añaden fuentes de tipo directorio, wiki (Outline) o subidas.
 - **Límites:** tamaño máximo de fichero, de cada parte de subida y del texto extraído (Administración → Límites).
