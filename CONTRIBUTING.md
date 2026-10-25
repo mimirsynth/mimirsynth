@@ -25,3 +25,8 @@ One PR, one purpose. Describe the why, link the issue and tick the template's ch
 
 ## License
 By contributing you agree that your contribution is published under [Apache-2.0](LICENSE).
+
+## Releasing (maintainers)
+1. Set the new version in `api/pyproject.toml` (the single source of truth: the app, the image labels and the release check read it) and move the `[Unreleased]` entries of `CHANGELOG.md` under a new `## [X.Y.Z] - date` heading.
+2. Commit, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`. A pre-release uses `vX.Y.Z-rc.N` (it does not move `latest`).
+3. The *Release* workflow checks that the tag matches the version, builds the image for `linux/amd64` and `linux/arm64`, pushes it to `ghcr.io/mimirsynth/mimirsynth` and creates the GitHub release from the changelog.

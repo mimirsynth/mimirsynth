@@ -28,7 +28,7 @@ services:
 
   mimirsynth:
     build: .
-    image: mimirsynth:0.2.0
+    image: ghcr.io/mimirsynth/mimirsynth:${MIMIRSYNTH_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       postgres:

@@ -13,8 +13,9 @@ cp .env.example .env
 ```
 Edit `.env` and set at least `POSTGRES_PASSWORD` and `MIMIRSYNTH_SESSION_SECRET` (generate both with `openssl rand -hex 32`). Then:
 ```bash
-docker compose --profile bundled up -d --build
+docker compose --profile bundled up -d
 ```
+This pulls the published image (`ghcr.io/mimirsynth/mimirsynth`). To build it from the source in your checkout instead, add `--build`; to pin a version, set `MIMIRSYNTH_VERSION=0.3.0` in `.env`.
 - `--profile bundled` also starts a bundled FalkorDB. If you already have one, omit the profile and put its address in `MIMIRSYNTH_FALKOR_HOST`.
 - The application is available at `http://localhost:8000` (change the port with `MIMIRSYNTH_PORT`).
 
@@ -40,8 +41,8 @@ PostgreSQL and FalkorDB do not publish ports outside the Compose network. Do not
 
 ## Upgrading
 ```bash
-git pull
-docker compose --profile bundled up -d --build
+docker compose pull        # or `git pull` + `--build` if you build from source
+docker compose --profile bundled up -d
 ```
 Database migrations are applied automatically on start. Take a backup before upgrading.
 

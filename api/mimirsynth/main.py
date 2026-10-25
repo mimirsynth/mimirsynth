@@ -73,7 +73,11 @@ async def lifespan(_: FastAPI):
     task2.cancel()
 
 
-VERSION = "0.2.0"
+try:
+    from importlib.metadata import version as _version
+    VERSION = _version("mimirsynth")  # única fuente de verdad: api/pyproject.toml
+except Exception:  # noqa: BLE001  (ejecutado sin instalar)
+    VERSION = "0.0.0"
 app = FastAPI(title=f"{brand.NAME} API", version=VERSION, lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, https_only=settings.cookie_secure,
                    same_site="lax", max_age=14 * 24 * 3600)

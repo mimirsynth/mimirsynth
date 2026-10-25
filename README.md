@@ -25,7 +25,7 @@ You need Docker with Compose, an OpenAI-compatible endpoint for embeddings (e.g.
 ```bash
 git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
 cp .env.example .env     # set POSTGRES_PASSWORD and MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
-docker compose --profile bundled up -d --build    # includes FalkorDB; without the profile, point MIMIRSYNTH_FALKOR_HOST at your own
+docker compose --profile bundled up -d    # pulls the published image; includes FalkorDB (without the profile, point MIMIRSYNTH_FALKOR_HOST at your own)
 docker compose logs mimirsynth | grep -A3 "FIRST START"    # installation wizard code
 ```
 Open `http://localhost:8000`, enter the code and create the administrator account. Then set up the AI providers under **Administration**.

@@ -1,4 +1,5 @@
-FROM node:22-slim AS web
+# The compiled web is static: it is built once and shared by every architecture.
+FROM --platform=$BUILDPLATFORM node:22-slim AS web
 WORKDIR /w
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -6,6 +7,8 @@ COPY web/ ./
 RUN npm run build
 
 FROM python:3.12-slim
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="MimirSynth" org.opencontainers.image.description="Memory for AI agents on a temporal knowledge graph" org.opencontainers.image.licenses="Apache-2.0" org.opencontainers.image.source="https://github.com/MimirSynth/mimirsynth" org.opencontainers.image.version="${VERSION}"
 ENV PYTHONUNBUFFERED=1 MIMIRSYNTH_STATIC_DIR=/srv/web
 WORKDIR /srv
 COPY api ./api
