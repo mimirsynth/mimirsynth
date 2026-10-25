@@ -262,7 +262,7 @@ def test_oidc_resolution_autoprovision_and_groups(client, local, monkeypatch):  
         auth.apply_groups(db, u, info, p)
         assert u.is_admin
         assert db.scalar(select(Membership.role).where(Membership.user_id == u.id, Membership.brain_id == db.scalar(select(Brain.id).where(Brain.slug == "grp")))) == "curator"
-        auth.apply_groups(db, u, {**info, "groups": ["lectores"]}, p)  # nunca rebaja
+        auth.apply_groups(db, u, {**info, "groups": ["curadores", "lectores", "admins"]}, p)  # un rol menor del mismo brain no rebaja el mayor
         assert db.scalar(select(Membership.role).where(Membership.user_id == u.id)) == "curator"
         u.status = "disabled"; db.commit()
         assert auth.resolve_oidc_user(db, info, p) == (None, "disabled")
@@ -345,3 +345,96 @@ def test_migration_imports_legacy_oidc_config(tmp_path, monkeypatch):
         assert (row.slug, row.issuer, row.client_id, bool(row.auto_provision), bool(row.enabled)) == ("oidc", "https://env.example.com", "ui-cid", True, True)  # lo de Ajustes manda sobre el entorno
         assert secretbox.unseal(row.client_secret) == "ui-secret"
         assert conn.execute(sa.text("SELECT count(*) FROM app_settings WHERE key LIKE 'oidc%'")).scalar() == 0
+
+
+def test_group_roles_are_revoked_but_manual_ones_never(client, local, monkeypatch):  # noqa: F811
+    """Al dejar el grupo se retira lo que el grupo concedió (y se restaura el rol anterior); lo puesto a mano no se toca; sin campo de grupos no se retira nada."""
+    from sqlalchemy import select
+    from mimirsynth import appsettings, userlib
+    from mimirsynth.models import Brain, Membership, RoleGrant
+    monkeypatch.setattr(appsettings, "get", lambda k: "")
+    p = _provider("rev", admin_group="admins", group_roles="curadores=b1:curator, lectores=b2:reader, curadores=b3:curator")
+    with _factory()() as db:
+        p = db.merge(p)
+        b1, b2, b3 = (Brain(slug=s_, name=s_, graph_name=s_ + "-g") for s_ in ("b1", "b2", "b3"))
+        db.add_all([b1, b2, b3]); db.flush()
+        boss = User(email="boss@example.com", name="Boss", is_admin=True, status="active")
+        u = User(email="p@example.com", name="P", status="active")
+        db.add_all([boss, u]); db.flush()
+        db.add(Membership(user_id=u.id, brain_id=b2.id, role="reader"))  # manual: ya era lector
+        db.add(Membership(user_id=u.id, brain_id=b3.id, role="contributor"))  # manual, menor: el grupo lo sube
+        db.commit()
+        role = lambda b: db.scalar(select(Membership.role).where(Membership.user_id == u.id, Membership.brain_id == b.id))
+        auth.apply_groups(db, u, {"groups": ["admins", "curadores", "lectores"]}, p)
+        assert u.is_admin and role(b1) == "curator" and role(b2) == "reader" and role(b3) == "curator"
+        assert db.query(RoleGrant).filter_by(user_id=u.id).count() == 3  # admin + b1 + b3 (b2 no: ya lo tenía)
+        auth.apply_groups(db, u, {"groups": ["admins", "curadores", "lectores"]}, p)  # idempotente
+        assert db.query(RoleGrant).filter_by(user_id=u.id).count() == 3
+        auth.apply_groups(db, u, {}, p)  # el proveedor no envía grupos: no se retira nada
+        assert u.is_admin and role(b1) == "curator"
+        auth.apply_groups(db, u, {"groups": []}, p)  # ya no está en ningún grupo
+        assert not u.is_admin  # y se le cierran las sesiones abiertas
+        assert role(b1) is None  # la concedió el grupo: fuera
+        assert role(b3) == "contributor"  # lo subió el grupo: vuelve al que tenía
+        assert role(b2) == "reader"  # era manual: intacto
+        assert db.query(RoleGrant).filter_by(user_id=u.id).count() == 0
+        # un administrador cambia a mano lo que dio el grupo: el grupo ya no lo retira
+        auth.apply_groups(db, u, {"groups": ["curadores"]}, p)
+        assert role(b1) == "curator"
+        userlib.forget_grants(db, u.id, b1.id); m = db.scalar(select(Membership).where(Membership.user_id == u.id, Membership.brain_id == b1.id)); m.role = "admin"; db.commit()
+        auth.apply_groups(db, u, {"groups": []}, p)
+        assert role(b1) == "admin"
+        # nunca se deja la instancia sin administradores
+        db.query(User).update({"is_admin": False}); db.commit()
+        auth.apply_groups(db, u, {"groups": ["admins"]}, p)
+        assert u.is_admin and userlib.admin_count(db) == 1
+        auth.apply_groups(db, u, {"groups": []}, p)
+        assert u.is_admin  # es el último administrador: se conserva
+
+
+def test_identity_linking_and_unlinking(client, local, monkeypatch):  # noqa: F811
+    """Vincular añade la identidad a la sesión actual (sin abrir otra), no se puede robar la de otra persona y siempre queda una forma de entrar."""
+    from mimirsynth.models import Identity
+    _provider("pk", name="Pk"); _provider("gh", name="Gh")
+    _admin(client)
+    me = client.get("/api/me/identities").json()
+    assert me["identities"] == [] and {x["slug"] for x in me["available"]} >= {"pk", "gh"} and me["can_unlink"] is True  # tiene contraseña
+
+    class FakeIdp:
+        sub = "ext-1"
+        async def authorize_redirect(self, request, uri): return __import__("fastapi").responses.RedirectResponse("http://idp.example/auth")
+        async def authorize_access_token(self, request): return {"userinfo": {"sub": self.sub, "email": "root@example.com"}}
+    idp = FakeIdp()
+    monkeypatch.setattr(auth, "_oidc", lambda p: idp)
+    assert client.get("/api/me/identities/link/pk", follow_redirects=False).status_code == 307
+    r = client.get("/api/auth/callback/pk", follow_redirects=False)
+    assert r.headers["location"].endswith("linked=1")
+    ids = client.get("/api/me/identities").json()
+    assert [i["provider"] for i in ids["identities"]] == ["pk"] and "pk" not in {x["slug"] for x in ids["available"]}
+    assert client.get("/api/me/identities/link/pk").status_code == 409  # ya vinculado
+    # otra persona intenta vincular la misma identidad externa
+    other = TestClient(app)
+    with _factory()() as db:
+        o = User(email="otra@example.com", name="Otra", status="active", password_hash=passwords_hash()); db.add(o); db.commit()
+    assert other.post("/api/auth/login", json={"email": "otra@example.com", "password": PW}).status_code == 200
+    other.get("/api/me/identities/link/pk", follow_redirects=False)
+    assert other.get("/api/auth/callback/pk", follow_redirects=False).headers["location"].endswith("link_error=taken")
+    # sin intención de vincular, el callback es un inicio de sesión normal (y no vincula)
+    # desvincular: con contraseña se puede; sin contraseña y sin otra identidad, no
+    iid = ids["identities"][0]["id"]
+    with _factory()() as db:
+        db.query(User).filter_by(email="root@example.com").update({"password_hash": ""}); db.commit()
+    r = client.delete(f"/api/me/identities/{iid}")
+    assert r.status_code == 409 and client.get("/api/me/identities").json()["can_unlink"] is False
+    with _factory()() as db:
+        from mimirsynth import passwords
+        db.query(User).filter_by(email="root@example.com").update({"password_hash": passwords.hash_password(PW)}); db.commit()
+    assert client.delete(f"/api/me/identities/{iid}").status_code == 200
+    assert client.delete(f"/api/me/identities/{iid}").status_code == 404
+    with _factory()() as db:
+        assert db.query(Identity).filter_by(provider="pk").count() == 0
+
+
+def passwords_hash():
+    from mimirsynth import passwords
+    return passwords.hash_password(PW)

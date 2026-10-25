@@ -71,6 +71,20 @@ class OidcProvider(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class RoleGrant(Base):
+    """Rol concedido por un grupo del proveedor de identidad. Permite retirarlo cuando la persona deja el grupo sin tocar nunca lo que dio un administrador a mano."""
+    __tablename__ = "role_grants"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    group: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(8))  # admin (administrador de la instancia) | member (rol en un brain)
+    brain_id: Mapped[int | None] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), nullable=True)
+    role: Mapped[str] = mapped_column(String(16), default="")  # rol concedido (member)
+    previous_role: Mapped[str] = mapped_column(String(16), default="")  # rol que tenía antes (vacío = no era miembro)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class RecoveryCode(Base):
     """Código de recuperación del doble factor: de un solo uso, se guarda solo el hash."""
     __tablename__ = "recovery_codes"

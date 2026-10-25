@@ -83,3 +83,12 @@ def email_invite(to: str, name: str, url: str, purpose: str, user: User | None =
 def require_not_last_admin(db: Session, target: User) -> None:
     if target.is_admin and target.status == "active" and admin_count(db, excluding=target.id) == 0:
         raise HTTPException(409, "es el último administrador activo de la instancia")
+
+
+def forget_grants(db: Session, user_id: int, brain_id: int | None = None, admin: bool = False) -> None:
+    """Un administrador cambia a mano un rol: deja de depender del grupo (el grupo no lo retirará)."""
+    from sqlalchemy import delete
+
+    from .models import RoleGrant
+    q = delete(RoleGrant).where(RoleGrant.user_id == user_id)
+    db.execute(q.where(RoleGrant.kind == "admin") if admin else q.where(RoleGrant.kind == "member", RoleGrant.brain_id == brain_id))

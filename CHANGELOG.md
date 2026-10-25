@@ -6,6 +6,8 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 ### Added
+- Roles granted by a provider group are now revoked when the person leaves that group (instance administrator and brain roles). Every grant is recorded with its origin: roles set by hand by an administrator, and roles that existed before, are never touched; a role raised by a group goes back to the previous one. The last active administrator is never revoked, and nothing is revoked if the provider does not send the groups claim.
+- My account → Security → Linked identities: link and unlink external providers (several per person). Unlinking is refused if it would leave no way to sign in.
 - Several OIDC providers at once. Administration → Identity is now a list (add, edit, test, delete); each provider has its own issuer, credentials, scopes, automatic sign-up policy and group-based roles, and its own button on the sign-in screen. New routes `/api/auth/login/{slug}` and `/api/auth/callback/{slug}`.
 - The CI now runs the test suite against a real FalkorDB and a real PostgreSQL with pgvector, so those tests are no longer skipped.
 

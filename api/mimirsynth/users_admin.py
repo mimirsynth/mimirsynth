@@ -104,6 +104,7 @@ def patch(uid: int, body: PatchIn, admin: User = Depends(require_admin), db: Ses
                 raise HTTPException(409, "no puedes quitarte a ti mismo el rol de administrador")
             userlib.require_not_last_admin(db, u)
         u.is_admin = body.is_admin
+        userlib.forget_grants(db, u.id, admin=True)
         audit(db, admin, "user.role", user_id=u.id, email=u.email, is_admin=body.is_admin)
     if body.name is not None:
         u.name = body.name.strip() or u.name
@@ -166,6 +167,7 @@ def set_membership(uid: int, body: MemberIn, admin: User = Depends(require_admin
     if not b:
         raise HTTPException(404, "brain no encontrado")
     m = db.scalar(select(Membership).where(Membership.user_id == uid, Membership.brain_id == b.id))
+    userlib.forget_grants(db, uid, b.id)
     if body.role is None:
         if m:
             db.delete(m)
