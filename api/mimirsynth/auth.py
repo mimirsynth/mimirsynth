@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import appsettings, passwords, ratelimit, userlib
@@ -288,30 +288,70 @@ def _csv(value: str) -> list[str]:
 
 
 def apply_groups(db: Session, user: User, info: dict, p: OidcProvider) -> None:
-    """Concede (nunca retira ni rebaja) el rol de instancia y los roles de brain que correspondan a los grupos que trae el proveedor."""
-    from .models import Brain, Membership
+    """Sincroniza los roles que dan los grupos del proveedor: concede los que corresponden (nunca rebaja uno mayor) y retira los que concedió
+    antes un grupo del que la persona ya no forma parte. Lo que puso un administrador a mano no se toca nunca. Si el proveedor no envía el
+    campo de grupos, no se retira nada (un fallo de configuración no debe dejar sin acceso a todo el mundo)."""
+    from .models import Brain, Membership, RoleGrant
     from .roles import ROLES, rank
-    claim = info.get(p.groups_claim or "groups") or []
+    key = p.groups_claim or "groups"
+    claim = info.get(key) or []
     groups = {str(g) for g in (claim if isinstance(claim, list) else [claim])}
+    records = list(db.scalars(select(RoleGrant).where(RoleGrant.user_id == user.id, RoleGrant.provider == p.slug)))
+
     admin_group = p.admin_group.strip()
-    if admin_group and admin_group in groups and not user.is_admin:
-        user.is_admin = True
-        audit(db, user, "user.role", via=f"oidc-group:{p.slug}", is_admin=True)
+    want_admin = bool(admin_group) and admin_group in groups
+    rules: list[tuple] = []  # (brain, grupo, rol) de las reglas que cumple la persona
     for rule in _csv(p.group_roles):
         group, _, target = rule.partition("=")
         slug, _, role = target.strip().partition(":")
-        if group.strip() not in groups or role.strip() not in ROLES[:4]:  # por grupo nunca se concede «owner»
-            continue
-        brain = db.scalar(select(Brain).where(Brain.slug == slug.strip()))
-        if not brain:
-            continue
+        group, slug, role = group.strip(), slug.strip(), role.strip()
+        brain = db.scalar(select(Brain).where(Brain.slug == slug)) if group in groups and role in ROLES[:4] else None  # por grupo nunca se concede «owner»
+        if brain:
+            rules.append((brain, group, role))
+    wanted = {("member", b.id, g, r) for b, g, r in rules} | ({("admin", None, admin_group, "")} if want_admin else set())
+
+    if key in info:  # solo se retira cuando el proveedor ha dicho de verdad a qué grupos pertenece
+        for r in records:
+            if (r.kind, r.brain_id, r.group, r.role if r.kind == "member" else "") in wanted:
+                continue
+            if r.kind == "admin":
+                if user.is_admin and userlib.admin_count(db, excluding=user.id) < 1:
+                    audit(db, user, "oidc.revoke.skipped", via=f"oidc-group:{p.slug}", reason="last-admin")
+                    continue  # nunca se deja la instancia sin administrador
+                if user.is_admin:
+                    user.is_admin = False
+                    user.session_epoch += 1  # la sesión abierta deja de tener privilegios al instante
+                    audit(db, user, "user.role", via=f"oidc-revoke:{p.slug}", is_admin=False)
+            else:
+                m = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.brain_id == r.brain_id))
+                if m and m.role == r.role:  # si un administrador lo cambió a mano, ya no era del grupo
+                    brain = db.get(Brain, r.brain_id)
+                    if r.previous_role:
+                        m.role = r.previous_role
+                    else:
+                        db.delete(m)
+                    audit(db, user, "member.set" if r.previous_role else "member.remove", brain, via=f"oidc-revoke:{p.slug}", role=r.previous_role or None)
+            db.delete(r)
+        db.flush()
+        records = [r for r in records if r in db]
+
+    if want_admin and not user.is_admin:
+        user.is_admin = True
+        db.add(RoleGrant(user_id=user.id, provider=p.slug, group=admin_group, kind="admin"))
+        audit(db, user, "user.role", via=f"oidc-group:{p.slug}", is_admin=True)
+    for brain, group, role in rules:
+        if any(r.kind == "member" and r.brain_id == brain.id and r.group == group and r.role == role for r in records):
+            continue  # ya concedido por este grupo
         m = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.brain_id == brain.id))
         if not m:
-            db.add(Membership(user_id=user.id, brain_id=brain.id, role=role.strip()))
-            audit(db, user, "member.set", brain, via=f"oidc-group:{p.slug}", role=role.strip())
-        elif rank(role.strip()) > rank(m.role):
-            m.role = role.strip()
-            audit(db, user, "member.set", brain, via=f"oidc-group:{p.slug}", role=role.strip())
+            db.add(Membership(user_id=user.id, brain_id=brain.id, role=role))
+            db.add(RoleGrant(user_id=user.id, provider=p.slug, group=group, kind="member", brain_id=brain.id, role=role))
+        elif rank(role) > rank(m.role):
+            db.add(RoleGrant(user_id=user.id, provider=p.slug, group=group, kind="member", brain_id=brain.id, role=role, previous_role=m.role))
+            m.role = role
+        else:
+            continue  # ya tiene ese rol o uno mayor: no es del grupo, no se podrá retirar
+        audit(db, user, "member.set", brain, via=f"oidc-group:{p.slug}", role=role)
     db.commit()
 
 
@@ -354,8 +394,11 @@ async def callback(slug: str, request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/")
     p = _provider(db, slug)
     client = _oidc(p)
+    link = request.session.pop("link", None)  # vinculación iniciada desde «Mi cuenta»: no abre sesión, añade la identidad a la sesión actual
     token = await client.authorize_access_token(request)
     info = token.get("userinfo") or await client.userinfo(token=token)
+    if link and link.get("slug") == slug and link.get("exp", 0) > time.time() and link.get("uid") == request.session.get("uid"):
+        return _finish_link(db, request, p, info, link["uid"])
     user, why = resolve_oidc_user(db, info, p)
     if not user:
         return RedirectResponse(f"/?auth_error={why}")
@@ -368,6 +411,20 @@ async def callback(slug: str, request: Request, db: Session = Depends(get_db)):
     audit(db, user, "login", method="oidc", provider=p.slug)
     userlib.start_session(request, user, "oidc")
     return RedirectResponse("/")
+
+
+def _finish_link(db: Session, request: Request, p: OidcProvider, info: dict, uid: int) -> RedirectResponse:
+    user = db.get(User, uid)
+    if not user or user.status != "active":
+        return RedirectResponse("/cuenta?seccion=seguridad&link_error=session")
+    mine = db.scalar(select(Identity).where(Identity.provider == p.slug, Identity.sub == info["sub"]))
+    if mine and mine.user_id != user.id:
+        return RedirectResponse("/cuenta?seccion=seguridad&link_error=taken")  # esa identidad ya es de otra persona
+    if not mine:
+        db.add(Identity(user_id=user.id, provider=p.slug, sub=info["sub"], email=(info.get("email") or "").lower()))
+        db.commit()
+        audit(db, user, "identity.link", provider=p.slug)
+    return RedirectResponse("/cuenta?seccion=seguridad&linked=1")
 
 
 @router.get("/auth/callback")
@@ -387,3 +444,37 @@ def me(request: Request, user: User = Depends(current_user)):
     return {"id": user.id, "name": user.display_name or user.name, "email": user.email, "is_admin": user.is_admin, "auth_mode": settings.auth_mode,
             "avatar": avatar_url(user), "account_url": appsettings.get("account_url"), "has_password": bool(user.password_hash), "locale": user.locale, "must_change_password": user.must_change_password,
             "totp_enabled": user.totp_enabled, "must_setup_2fa": settings.auth_mode != "off" and needs_2fa_setup(request, user)}
+
+
+# --- identidades vinculadas (Mi cuenta) ---------------------------------------------------------
+
+@router.get("/me/identities")
+def my_identities(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    names = {p.slug: p.name for p in db.scalars(select(OidcProvider))}
+    rows = list(db.scalars(select(Identity).where(Identity.user_id == user.id).order_by(Identity.id)))
+    linked = {i.provider for i in rows}
+    return {"identities": [{"id": i.id, "provider": i.provider, "name": names.get(i.provider, i.provider), "email": i.email, "created_at": i.created_at} for i in rows],
+            "can_unlink": bool(user.password_hash) or len(rows) > 1,  # siempre le queda una forma de entrar
+            "available": [{"slug": p.slug, "name": p.name} for p in enabled_providers(db) if p.slug not in linked]}
+
+
+@router.delete("/me/identities/{iid}")
+def unlink_identity(iid: int, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    i = db.get(Identity, iid)
+    if not i or i.user_id != user.id:
+        raise HTTPException(404, "identidad no encontrada")
+    others = db.scalar(select(func.count()).select_from(Identity).where(Identity.user_id == user.id, Identity.id != iid)) or 0
+    if not user.password_hash and not others:
+        raise HTTPException(409, "es tu única forma de entrar: pon una contraseña o vincula otro proveedor antes de desvincularla")
+    db.delete(i); db.commit()
+    audit(db, user, "identity.unlink", provider=i.provider)
+    return {"ok": True}
+
+
+@router.get("/me/identities/link/{slug}")
+async def link_identity(slug: str, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    p = _provider(db, slug)
+    if db.scalar(select(Identity).where(Identity.user_id == user.id, Identity.provider == p.slug)):
+        raise HTTPException(409, "ya tienes una identidad vinculada con ese proveedor")
+    request.session["link"] = {"slug": p.slug, "uid": user.id, "exp": time.time() + 600}
+    return await _oidc(p).authorize_redirect(request, _redirect_uri(request, p.slug))

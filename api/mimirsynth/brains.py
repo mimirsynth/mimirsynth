@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import userlib
 from .db import client
 from .deps import BrainCtx, admin_of_brain, audit, current_user, owner_of_brain, require_admin
 from .models import Audit, Brain, Membership, User
@@ -196,6 +197,7 @@ def set_member(body: MemberIn, ctx: BrainCtx = Depends(admin_of_brain)):
     m = db.scalar(select(Membership).where(Membership.user_id == u.id, Membership.brain_id == ctx.brain.id))
     if m and rank(m.role) > rank(ctx.role):
         raise HTTPException(403, "no puedes modificar a un miembro con rol superior al tuyo")
+    userlib.forget_grants(db, u.id, ctx.brain.id)
     if m:
         m.role = body.role
     else:
@@ -212,6 +214,7 @@ def remove_member(user_id: int, ctx: BrainCtx = Depends(admin_of_brain)):
         raise HTTPException(404, "miembro no encontrado")
     if rank(m.role) > rank(ctx.role):
         raise HTTPException(403, "no puedes quitar a un miembro con rol superior al tuyo")
+    userlib.forget_grants(ctx.db, user_id, ctx.brain.id)
     ctx.db.delete(m); ctx.db.commit()
     audit(ctx.db, ctx.user, "member.remove", ctx.brain, user_id=user_id)
     return {"ok": True}

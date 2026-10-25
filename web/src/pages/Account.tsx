@@ -4,7 +4,7 @@ import { tr, setLanguage } from "../i18n";
 import { TwoFactor } from "./TwoFactor";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fmt, get, send } from "../api";
 import TokensPanel, { ROLE } from "./TokensPanel";
 import { Avatar, Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, Page, Panel, Pill, SelectField, TextField, useTableView, MutationError, ConfirmDialog, DataState, PageHeader, FilePicker, Form, LanguageSelect, PasswordField, SettingsBody, SettingsGroup, SettingsLayout, SettingsRow, SubNav, useTabParam } from "../ui";
@@ -29,6 +29,37 @@ const ACTION: Record<string, string> = {
 const what = (a: Act) => { const s = typeof a.detail?.summary === "string" ? a.detail.summary : ""; return (tr(ACTION[a.action] ?? a.action)) + (s ? ` — ${s}` : ""); };
 
 /** Cambio (o primera definición) de la contraseña propia. */
+type Ident = { identities: { id: number; provider: string; name: string; email: string; created_at: string }[]; can_unlink: boolean; available: { slug: string; name: string }[] };
+
+/** Identidades externas vinculadas a la cuenta: otras formas de entrar. Vincular abre el proveedor y vuelve aquí. */
+function Identities({ onMsg }: { onMsg: (m: { tone: "info" | "danger"; text: string }) => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["my-identities"], queryFn: () => get<Ident>("me/identities") });
+  const [del, setDel] = useState<{ id: number; name: string } | null>(null);
+  const unlink = useMutation({ mutationFn: (id: number) => send("DELETE", `me/identities/${id}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-identities"] }); onMsg({ tone: "info", text: t("Identidad desvinculada.") }); } });
+  return (
+    <SettingsGroup title={t("Identidades vinculadas")} description={t("Proveedores externos con los que puedes entrar a esta cuenta. Vincula otro para tener más de una forma de acceso.")}>
+      <SettingsBody>
+        <DataState query={q}>
+          {(d) => <Stack gap="xs">
+            {d.identities.length === 0 && <Text size="sm" c="dimmed">{t("Todavía no has vinculado ningún proveedor.")}</Text>}
+            {d.identities.map((i) => (
+              <Group key={i.id} justify="space-between" wrap="nowrap">
+                <Group gap={8}><Pill>{i.name}</Pill><Text size="sm" className="ms-breakall">{i.email || "—"}</Text><Text size="xs" c="dimmed">{fmt(i.created_at)}</Text></Group>
+                <Btn size="row" kind="danger" icon="trash" disabled={!d.can_unlink} title={d.can_unlink ? undefined : t("Es tu única forma de entrar: pon una contraseña antes.")} onClick={() => setDel({ id: i.id, name: i.name })}>{t("Desvincular")}</Btn>
+              </Group>))}
+            {d.available.length > 0 && <Group gap={6}>{d.available.map((a) => <Btn key={a.slug} size="row" component="a" href={`/api/me/identities/link/${a.slug}`} icon="plus">{t("Vincular {{name}}", { name: a.name })}</Btn>)}</Group>}
+          </Stack>}
+        </DataState>
+        <MutationError error={unlink.error} />
+      </SettingsBody>
+      <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Desvincular identidad")} action={t("Desvincular")}
+        warning={t("Dejarás de poder entrar con «{{name}}». Podrás volver a vincularla cuando quieras.", { name: del?.name })} onConfirm={() => unlink.mutateAsync(del!.id)} />
+    </SettingsGroup>
+  );
+}
+
 function PasswordForm({ has, onDone }: { has: boolean; onDone: () => void }) {
   const { t } = useTranslation();
   const [f, setF] = useState({ current: "", pw: "", again: "" });
@@ -78,6 +109,12 @@ export default function Account() {
   const logout = useMutation({ mutationFn: () => send("POST", "auth/logout"), onSuccess: () => { qc.clear(); window.location.href = "/"; } });
   const others = useMutation({ mutationFn: () => send("POST", "me/sessions/revoke-others"), onSuccess: () => { setMsg({ tone: "info", text: t("Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); } });
 
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("linked")) setMsg({ tone: "info", text: t("Identidad vinculada.") });
+    else if (q.get("link_error")) setMsg({ tone: "danger", text: q.get("link_error") === "taken" ? t("Esa identidad ya pertenece a otra cuenta.") : t("No se pudo vincular: vuelve a intentarlo.") });
+    if (q.has("linked") || q.has("link_error")) window.history.replaceState(null, "", window.location.pathname + "?seccion=seguridad");
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const [section, setSection] = useTabParam("perfil", "seccion");
   const nav = [{ heading: t("Cuenta") }, { value: "perfil", label: t("Perfil") }, { value: "seguridad", label: t("Seguridad") }, { heading: t("Acceso") }, { value: "tokens", label: t("Tokens de API") }, { heading: t("Historial") }, { value: "actividad", label: t("Actividad") }];
   const p = prof.data;
@@ -126,6 +163,7 @@ export default function Account() {
               <SettingsGroup title={t("Contraseña")} description={p.has_password ? t("Cámbiala cuando quieras; se cierra la sesión en el resto de dispositivos.") : t("Para poder entrar también directamente, sin depender del proveedor de identidad.")}>
                 <SettingsBody><PasswordForm has={p.has_password} onDone={() => { setMsg({ tone: "info", text: t("Contraseña actualizada. Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); }} /></SettingsBody>
               </SettingsGroup>
+              <Identities onMsg={setMsg} />
               {p.has_password && <SettingsGroup title={t("Verificación en dos pasos")} description={t("Además de la contraseña, pide un código de una app de autenticación.")}><SettingsBody><TwoFactor /></SettingsBody></SettingsGroup>}
               <SettingsGroup title={t("Sesiones")} description={t("Si crees que alguien más tiene abierta tu sesión, ciérrala en todos los demás dispositivos. Esta sesión sigue abierta.")}>
                 <SettingsBody><Group gap="xs">

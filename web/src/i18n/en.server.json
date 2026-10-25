@@ -135,6 +135,7 @@
  "es demasiado simple: usa más caracteres distintos": "it is too simple: use more distinct characters",
  "es el motor por defecto; elige otro antes de borrarlo": "it is the default engine; choose another before deleting it",
  "es el último administrador activo de la instancia": "it is the last active administrator of the instance",
+ "es tu única forma de entrar: pon una contraseña o vincula otro proveedor antes de desvincularla": "it is your only way to sign in: set a password or link another provider before unlinking it",
  "es una secuencia (abcdef, 123456…)": "it is a sequence (abcdef, 123456…)",
  "esa carpeta ya está registrada": "that folder is already registered",
  "esa regla no existe": "that rule does not exist",
@@ -152,6 +153,7 @@
  "hay cambios posteriores: deshaz primero el más reciente": "there are later changes: undo the most recent one first",
  "hay nombres de tipo repetidos": "there are repeated type names",
  "hecho no encontrado": "fact not found",
+ "identidad no encontrada": "identity not found",
  "indica al menos el servidor SMTP y el remitente": "enter at least the SMTP server and the sender",
  "indica el client secret": "enter the client secret",
  "ingesta no configurada (MIMIRSYNTH_LLM_BASE_URL y MIMIRSYNTH_LLM_MODEL)": "ingestion not configured (MIMIRSYNTH_LLM_BASE_URL and MIMIRSYNTH_LLM_MODEL)",
@@ -236,6 +238,7 @@
  "ya hay un proveedor con ese identificador": "a provider with that identifier already exists",
  "ya hay una raíz con ese nombre": "a root with that name already exists",
  "ya se está indexando": "it is already being indexed",
+ "ya tienes una identidad vinculada con ese proveedor": "you already have an identity linked with that provider",
  "{{alias}} ya es alias de {{amap}}": "{{alias}} is already an alias of {{amap}}",
  "{{n}} fuente(s) de brains usan esta raíz: quítalas antes": "{{n}} brain source(s) use this root: remove them first",
  "«Entity» es la etiqueta base de Graphiti": "“Entity” is Graphiti's base label"
