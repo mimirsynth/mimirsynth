@@ -1,11 +1,13 @@
-# Código de conducta
+**English** · [Español](docs/es/CODE_OF_CONDUCT.md)
 
-Queremos una comunidad respetuosa y acogedora. Al participar en este proyecto (issues, pull requests, discusiones) te comprometes a:
+# Code of conduct
 
-- tratar a las demás personas con respeto, sin acoso ni discriminación de ningún tipo;
-- criticar las ideas, no a las personas, y aceptar la crítica con buena fe;
-- no publicar información privada ajena ni contenido ofensivo.
+We want a respectful and welcoming community. By taking part in this project (issues, pull requests, discussions) you commit to:
 
-Quien incumpla estas normas puede ver moderadas o eliminadas sus aportaciones y ser expulsado del proyecto. Para informar de una conducta inaceptable, escribe a los mantenedores mediante el aviso privado de seguridad del repositorio (*Security → Report a vulnerability*) indicando que se trata de un tema de conducta.
+- treat others with respect, without harassment or discrimination of any kind;
+- criticise ideas, not people, and accept criticism in good faith;
+- not publish others' private information or offensive content.
 
-Adaptado del [Contributor Covenant](https://www.contributor-covenant.org/es/version/2/1/code_of_conduct/), versión 2.1.
+Anyone who breaks these rules may have their contributions moderated or removed and may be banned from the project. To report unacceptable conduct, write to the maintainers through the repository's private security advisory (*Security → Report a vulnerability*), stating that it is a conduct matter.
+
+Adapted from the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/), version 2.1.

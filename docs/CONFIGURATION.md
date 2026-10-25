@@ -1,45 +1,50 @@
-# Configuración
+**English** · [Español](es/CONFIGURATION.md)
 
-La configuración tiene dos niveles:
+# Configuration
 
-1. **Entorno (`.env`):** solo lo necesario para arrancar y conectar. Se lee al iniciar.
-2. **Interfaz (Administración → Ajustes y demás secciones):** todo lo demás. Se aplica sin reiniciar y cada cambio queda en la auditoría. Si una variable de entorno equivalente existe, hace de valor por defecto, y «Restaurar» en la interfaz vuelve a él.
+Configuration has two levels:
 
-## Variables de entorno
-Plantilla comentada en [`.env.example`](../.env.example).
+1. **Environment (`.env`):** only what is needed to start and connect. Read at startup.
+2. **Interface (Administration → Settings and the other sections):** everything else. Applied without a restart; every change is recorded in the audit log. If an equivalent environment variable exists, it acts as the default, and "Restore" in the interface goes back to it.
 
-| Variable | Por defecto | Descripción |
+## Environment variables
+Commented template in [`.env.example`](../.env.example).
+
+| Variable | Default | Description |
 |---|---|---|
-| `POSTGRES_PASSWORD` | – | Contraseña de PostgreSQL (obligatoria) |
-| `MIMIRSYNTH_SESSION_SECRET` | – | Firma las sesiones y cifra los secretos guardados (obligatoria) |
-| `MIMIRSYNTH_PORT` | `8000` | Puerto publicado en el host |
+| `POSTGRES_PASSWORD` | – | PostgreSQL password (required) |
+| `MIMIRSYNTH_SESSION_SECRET` | – | Signs sessions and encrypts the secrets stored in the database (required) |
+| `MIMIRSYNTH_PORT` | `8000` | Port published on the host |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
-| `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | vacío | Grafos existentes a adoptar como brains en el primer arranque (`slug:Nombre,otro:Otro`) |
-| `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, OIDC opcional) o `off` (solo desarrollo, sin inicio de sesión) |
-| `MIMIRSYNTH_PUBLIC_URL` | vacío | URL pública, para OIDC y enlaces de invitación |
-| `MIMIRSYNTH_COOKIE_SECURE` | `false` | `true` si sirves por HTTPS |
-| `MIMIRSYNTH_EMBEDDING_*`, `MIMIRSYNTH_LLM_*` | vacío | Motores por defecto si aún no hay ninguno configurado en la interfaz |
-| `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del host montada en solo lectura en `/sources` |
+| `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | empty | Existing graphs to adopt as brains on first start (`slug:Name,other:Other`) |
+| `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (own accounts, optional OIDC) or `off` (development only, no sign-in) |
+| `MIMIRSYNTH_PUBLIC_URL` | empty | Public URL, for OIDC and invitation links |
+| `MIMIRSYNTH_COOKIE_SECURE` | `false` | `true` if you serve over HTTPS |
+| `MIMIRSYNTH_EMBEDDING_*`, `MIMIRSYNTH_LLM_*` | empty | Default engines if none is configured in the interface yet |
+| `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Host folder mounted read-only at `/sources` |
 
-## Proveedores de IA
-En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
-- **Modelo LLM:** extrae entidades y hechos al ingerir propuestas. Para modelos que «razonan» y devuelven JSON vacío, usa un proxy que desactive el *thinking*.
-- **Embeddings:** modelo y dimensión **no se pueden cambiar** una vez creados el índice (los vectores dependen del modelo). Debe ser el mismo que use Graphiti sobre ese FalkorDB.
-- **Decisor:** modelo de decisión cerrada (con probabilidades) para el triaje de propuestas y el corrector de tipos. Solo aprueba lo factual con confianza suficiente; nunca rechaza por su cuenta.
+## AI providers
+Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.
+- **LLM model:** extracts entities and facts when proposals are ingested. For "reasoning" models that return empty JSON, use a proxy that disables *thinking*.
+- **Embeddings:** model and dimension **cannot be changed** once the index exists (vectors depend on the model). It must be the same one Graphiti uses on that FalkorDB.
+- **Decider:** closed-decision model (with probabilities) for proposal triage and the type corrector. It only approves what is factual with enough confidence; it never rejects on its own.
 
-## Cuentas y seguridad
-- **Usuarios:** Administración → Usuarios. Alta por invitación (enlace de un solo uso) o con contraseña temporal; roles, brains, deshabilitar, restablecer y eliminar.
-- **Seguridad de cuentas:** longitud mínima de contraseña, bloqueo tras intentos fallidos, validez de los enlaces y **doble factor obligatorio**.
-- **Correo (SMTP):** necesario para enviar invitaciones y recuperar contraseñas por email. Sin él, el administrador copia los enlaces desde la ficha del usuario.
-- **Identidad (OIDC):** emisor, Client ID, secreto y scopes. La pantalla muestra la URL de retorno a registrar en tu proveedor y permite probar la conexión. Por defecto solo entra quien ya tiene cuenta o invitación con el mismo email verificado.
-  - **Alta automática:** con «Sí» y una lista de **dominios permitidos**, quien entre con un email *verificado* de esos dominios se da de alta solo, como usuario sin acceso a ningún brain. Nunca se aplica a emails sin verificar, aunque actives «Aceptar emails sin verificar».
-  - **Grupos:** si tu proveedor envía los grupos de la persona (claim `groups` por defecto), puedes nombrar un **grupo de administradores de la instancia** y reglas **grupo=brain:rol** (p. ej. `curadores=docs:curator`). Al iniciar sesión se *concede* el rol si no tiene ya uno igual o mayor; nunca se rebaja ni se retira (quitar a alguien de un grupo no le quita el acceso: hazlo en Usuarios), y por grupo nunca se concede «propietario».
+## Accounts and security
+- **Users:** Administration → Users. Sign-up by invitation (single-use link) or with a temporary password; roles, brains, disable, reset and delete.
+- **Account security:** minimum password length, lockout after failed attempts, link validity and **mandatory two-factor**.
+- **Email (SMTP):** needed to send invitations and recover passwords by email. Without it, the administrator copies the links from the user's page.
+- **Identity (OIDC):** issuer, Client ID, secret and scopes. The screen shows the return URL to register at your provider and lets you test the connection. By default only people who already have an account or invitation with the same verified email can sign in.
+  - **Automatic sign-up:** with "Yes" and a list of **allowed domains**, anyone signing in with a *verified* email from those domains is registered automatically, as a user with no access to any brain. It is never applied to unverified emails, even if you enable "Accept unverified emails".
+  - **Groups:** if your provider sends each person's groups (`groups` claim by default), you can name an **instance administrators group** and **group=brain:role** rules (e.g. `curators=docs:curator`). On sign-in the role is *granted* if the person does not already have an equal or higher one; it is never lowered or removed (removing someone from a group does not take their access away: do that under Users), and "owner" is never granted by group.
 
-## Memoria documental
-- **Carpetas:** Administración → Carpetas registra las raíces bajo `/sources` que los administradores de un brain pueden usar como fuentes. En Conocimiento se añaden fuentes de tipo directorio, wiki (Outline) o subidas.
-- **Límites:** tamaño máximo de fichero, de cada parte de subida y del texto extraído (Administración → Límites).
-- **Recall:** similitud mínima, pasajes por consulta y tiempo máximo de la búsqueda documental (Administración → Recuerdo). La similitud depende del modelo de embeddings: recalíbrala si lo cambias.
+## Language
+**Administration → General → Default language** sets the interface and email language for people who have not chosen one. Each person picks theirs under My account → Profile. English and Spanish are included.
 
-## Sistema
-- **Ingesta y trabajos:** reintentos y plazos de retención (los reescaneos programados sin incidencias se purgan a los 7 días por defecto; el resto, a los 60).
-- **Auditoría:** registro de acciones de administración y de acceso.
+## Document memory
+- **Folders:** Administration → Folders registers the roots under `/sources` that brain administrators can use as sources. Under Knowledge you add sources of type folder, wiki (Outline) or uploads.
+- **Limits:** maximum file size, upload part size and extracted text size (Administration → Limits).
+- **Recall:** minimum similarity, passages per query and maximum time of the document search (Administration → Recall). Similarity depends on the embedding model: recalibrate it if you change it.
+
+## System
+- **Ingestion and jobs:** retries and retention periods (scheduled rescans without issues are purged after 7 days by default; the rest after 60).
+- **Audit:** log of administration and access actions.

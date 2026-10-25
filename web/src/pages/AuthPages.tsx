@@ -57,7 +57,7 @@ export function AuthScreen({ name }: { name: string }) {
     return (
       <Card name={name} subtitle={t("Primer arranque: crea la cuenta de administrador")}>
         <Form onSubmit={() => setup.mutate()}>
-          <Notice tone="info">{t("Escribe el código de instalación que el servicio ha impreso en su log (")}<code>{t("docker logs")}</code> {t("del contenedor).")}</Notice>
+          <Notice tone="info">{t("Escribe el código de instalación que el servicio ha impreso en su log (docker logs del contenedor).")}</Notice>
           <TextField label={t("Código de instalación")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off" />
           <TextField label={t("Tu nombre")} value={uname} onChange={(e) => setUname(e.currentTarget.value)} autoComplete="name" />
           <TextField label={t("Email")} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} autoComplete="username" />

@@ -1,16 +1,18 @@
-# Seguridad
+**English** · [Español](docs/es/SECURITY.md)
 
-## Versiones con soporte
-MimirSynth está en desarrollo 0.x: solo se corrige la última versión publicada.
+# Security
 
-## Cómo informar de una vulnerabilidad
-**No abras un issue público.** Usa el aviso privado de GitHub: pestaña *Security → Report a vulnerability* de este repositorio.
+## Supported versions
+MimirSynth is in 0.x development: only the latest published version is fixed.
 
-Incluye los pasos para reproducirlo, la versión afectada y el impacto que estimas. Responderemos lo antes posible y coordinaremos contigo la divulgación.
+## Reporting a vulnerability
+**Do not open a public issue.** Use GitHub's private advisory: *Security → Report a vulnerability* tab of this repository.
 
-## Buenas prácticas de despliegue
-- Define un `MIMIRSYNTH_SESSION_SECRET` largo y aleatorio; firma las sesiones y cifra los secretos guardados.
-- Sirve la aplicación detrás de HTTPS y activa `MIMIRSYNTH_COOKIE_SECURE=true`.
-- No uses `MIMIRSYNTH_AUTH_MODE=off` fuera de desarrollo: desactiva el inicio de sesión.
-- Exige el doble factor en Administración → Seguridad de cuentas.
-- No expongas FalkorDB ni PostgreSQL fuera de la red del despliegue.
+Include the steps to reproduce, the affected version and the impact you estimate. We will reply as soon as possible and coordinate disclosure with you.
+
+## Deployment good practices
+- Set a long, random `MIMIRSYNTH_SESSION_SECRET`; it signs sessions and encrypts stored secrets.
+- Serve the application behind HTTPS and set `MIMIRSYNTH_COOKIE_SECURE=true`.
+- Do not use `MIMIRSYNTH_AUTH_MODE=off` outside development: it disables sign-in.
+- Require two-factor under Administration → Security.
+- Do not expose FalkorDB or PostgreSQL outside the deployment network.

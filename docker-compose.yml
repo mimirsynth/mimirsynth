@@ -13,8 +13,8 @@ services:
       interval: 10s
       retries: 5
 
-  # Motor de grafos incluido. Se arranca con `docker compose --profile bundled up -d` y MIMIRSYNTH_FALKOR_HOST=falkordb.
-  # Si ya tienes un FalkorDB, no uses el perfil y apunta MIMIRSYNTH_FALKOR_HOST a él.
+  # Bundled graph engine. Start it with `docker compose --profile bundled up -d` and MIMIRSYNTH_FALKOR_HOST=falkordb.
+  # If you already have a FalkorDB, do not use the profile and point MIMIRSYNTH_FALKOR_HOST at it.
   falkordb:
     profiles: ["bundled"]
     image: falkordb/falkordb:v4.22.0
@@ -60,14 +60,14 @@ services:
       MIMIRSYNTH_ACCOUNT_URL: "${MIMIRSYNTH_ACCOUNT_URL:-}"
       MIMIRSYNTH_DOC_STORE: "/data/documents"
       MIMIRSYNTH_DOC_MAX_MB: "${MIMIRSYNTH_DOC_MAX_MB:-2048}"
-      MIMIRSYNTH_DOC_ROOTS_BASE: "/sources"  # las raíces de fuentes se registran en Administración y solo pueden estar bajo esta carpeta
+      MIMIRSYNTH_DOC_ROOTS_BASE: "/sources"  # source roots are registered under Administration and can only be inside this folder
     volumes:
-      - type: bind  # carpeta del host con los directorios que pueden ser fuentes de documentos; siempre en solo lectura
+      - type: bind  # host folder with the directories that can be document sources; always read-only
         source: ${MIMIRSYNTH_SOURCES_DIR:-./sources}
         target: /sources
         read_only: true
-        bind: {propagation: rslave, create_host_path: true}  # rslave: lo que montes después bajo esa carpeta en el host aparece dentro sin reiniciar
-      - docstore:/data/documents  # originales de la memoria documental: entra en las copias de seguridad junto con Postgres
+        bind: {propagation: rslave, create_host_path: true}  # rslave: anything you mount later under that folder on the host appears inside without a restart
+      - docstore:/data/documents  # originals of the document memory: include it in backups together with Postgres
     read_only: true
     tmpfs: ["/tmp"]
     cap_drop: [ALL]

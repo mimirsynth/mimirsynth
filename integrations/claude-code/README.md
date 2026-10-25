@@ -1,32 +1,32 @@
-# MimirSynth para Claude Code
+**English** · [Español](README.es.md)
 
-Hook `UserPromptSubmit` que consulta MimirSynth antes de cada prompt e inyecta los hechos y fragmentos relevantes.
-Solo lectura (rol de token `reader`).
+# MimirSynth for Claude Code
 
-1. En MimirSynth: Mi cuenta → Tokens de API → crea un token de rol *Lector* para tu brain.
-2. Guarda la configuración en `~/.config/mimirsynth/config.json`:
+A `UserPromptSubmit` hook that queries MimirSynth before every prompt and injects the relevant facts and fragments. Read-only (token role `reader`).
+
+1. In MimirSynth: My account → API tokens → create a token with the *Reader* role for your brain.
+2. Save the configuration in `~/.config/mimirsynth/config.json`:
    ```json
-   {"url": "https://mimirsynth.example.com", "token": "mst_...", "brain": "mi-brain"}
+   {"url": "https://mimirsynth.example.com", "token": "mst_...", "brain": "my-brain"}
    ```
-3. Añade el hook en `~/.claude/settings.json`:
+3. Add the hook in `~/.claude/settings.json`:
    ```json
-   {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 /ruta/a/mimirsynth_recall.py"}]}]}}
+   {"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 /path/to/mimirsynth_recall.py"}]}]}}
    ```
-Si el servidor no responde en 4 s no se inyecta nada y el prompt sigue su curso.
+If the server does not respond within 4 s, nothing is injected and the prompt carries on.
 
+## Writing memory (proposals)
 
-## Escribir memoria (propuestas)
-
-`mimirsynth_remember.py` envía un aprendizaje como propuesta:
+`mimirsynth_remember.py` sends a learning as a proposal:
 
 ```bash
-python3 mimirsynth_remember.py --title "Base de datos migrada a db02" --content "El 19-oct la base de datos de producción pasó al servidor db02" --confidence 0.8
+python3 mimirsynth_remember.py --title "Database moved to db02" --content "On 19 Oct the production database moved to server db02" --confidence 0.8
 ```
 
-- Usa `write_token` de `~/.config/mimirsynth/config.json` (token de API con rol **colaborador**: entra en cuarentena y la aprueba un curador o el decisor). Sin él usa `token`, que si es de lector devuelve 403.
-- Con un token de curador queda aprobada y se ingiere al momento. Para agentes se recomienda colaborador.
-- `--dry-run` muestra la petición sin enviarla.
+- It uses `write_token` from `~/.config/mimirsynth/config.json` (an API token with the **contributor** role: it goes into quarantine and a curator or the decider approves it). Without it, it uses `token`, which returns 403 if it is a reader token.
+- With a curator token it is approved and ingested right away. Contributor is recommended for agents.
+- `--dry-run` shows the request without sending it.
 
-## Documentos en el recall
+## Documents in recall
 
-Desde la memoria documental, el contexto que devuelve `/recall` puede incluir una sección `## Documentos` con hasta 2 pasajes citados (título, sección, `[doc N, trozo M]`). Solo aparece si hay un pasaje realmente relevante, no pasa de ~600 tokens y se omite si la búsqueda tarda más de 0,6 s. El agente puede pedir más contexto con `GET /api/brains/{slug}/docs/{N}/context?chunk={M}` o el original con `/docs/{N}/file`. Para desactivarlo en una petición, `"docs": 0`; el umbral (Administración → Recuerdo → «Similitud mínima de un pasaje») hay que recalibrarlo si se cambia el modelo de embeddings.
+With document memory, the context returned by `/recall` can include a `## Documents` section with up to 2 cited passages (title, section, `[doc N, chunk M]`). It only appears if there is a really relevant passage, it does not exceed ~600 tokens and it is omitted if the search takes longer than 0.6 s. The agent can ask for more context with `GET /api/brains/{slug}/docs/{N}/context?chunk={M}` or the original with `/docs/{N}/file`. To disable it for one request, use `"docs": 0`; the threshold (Administration → Recall → "Minimum similarity of a passage") must be recalibrated if the embedding model changes.

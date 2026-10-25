@@ -1,11 +1,12 @@
-## Qué cambia y por qué
+## What changes and why
 
-## Cómo se ha probado
+## How it was tested
 
-## Lista
-- [ ] Tests nuevos o actualizados (y migración de Alembic si cambia el esquema)
-- [ ] `npm run build` pasa (incluye `check:ui`) si toca la interfaz
-- [ ] Sin datos propios de infraestructura, secretos ni nombres personales
-- [ ] Documentación actualizada si cambia el comportamiento
+## Checklist
+- [ ] Tests added or updated (and an Alembic migration if the schema changes)
+- [ ] `npm run build` passes (includes `check:ui` and the i18n check) if it touches the interface
+- [ ] New visible texts go through `t("…")` and have an English translation
+- [ ] No infrastructure-specific data, secrets or personal names
+- [ ] Documentation updated if behaviour changes
 
-Cierra #
+Closes #

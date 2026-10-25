@@ -1,14 +1,14 @@
-name: Propuesta
-description: Una mejora o funcionalidad nueva
+name: Feature request
+description: An improvement or a new feature
 labels: [enhancement]
 body:
   - type: textarea
     id: problem
-    attributes: {label: Qué problema resuelve}
+    attributes: {label: What problem does it solve}
     validations: {required: true}
   - type: textarea
     id: idea
-    attributes: {label: Cómo lo imaginas}
+    attributes: {label: How do you imagine it}
   - type: textarea
     id: alternatives
-    attributes: {label: Alternativas que has considerado}
+    attributes: {label: Alternatives you have considered}

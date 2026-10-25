@@ -35,7 +35,7 @@ def ensure_setup_token(db: Session) -> None:
     global _SETUP_TOKEN
     if setup_required(db):
         _SETUP_TOKEN = secrets.token_urlsafe(12)
-        log.warning("=" * 70 + "\nPRIMER ARRANQUE: no hay administradores. Código para el asistente de instalación:\n\n    %s\n" + "=" * 70, _SETUP_TOKEN)
+        log.warning("=" * 70 + "\nFIRST START / PRIMER ARRANQUE: there are no administrators. Installation wizard code / código del asistente:\n\n    %s\n" + "=" * 70, _SETUP_TOKEN)
     else:
         _SETUP_TOKEN = ""
 

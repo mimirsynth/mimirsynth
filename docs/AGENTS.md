@@ -1,41 +1,43 @@
-# Conectar agentes
+**English** · [Español](es/AGENTS.md)
 
-Los agentes hablan con MimirSynth por HTTP con un **token de API**. Cada token vale para **un solo brain** y su rol nunca supera el de quien lo creó (máximo curador y nunca administra la instancia).
+# Connecting agents
 
-## Crear un token
-En Mi cuenta → Tokens de API (o Administración → Acceso al brain) elige el brain, un nombre y un rol:
+Agents talk to MimirSynth over HTTP with an **API token**. Each token is valid for **one brain** and its role never exceeds that of the person who created it (maximum curator, and it never administers the instance).
 
-| Rol | Puede |
+## Create a token
+Under My account → API tokens (or Administration → Brain access) choose the brain, a name and a role:
+
+| Role | Can |
 |---|---|
-| Lector | Consultar (recall, hechos, documentos) |
-| Colaborador | Además, **proponer** memoria: entra en cuarentena hasta que la apruebe un curador o el decisor |
-| Curador | Además, aprobar: sus propuestas se ingieren directamente |
+| Reader | Query (recall, facts, documents) |
+| Contributor | Also **propose** memory: it goes into quarantine until a curator or the decider approves it |
+| Curator | Also approve: their proposals are ingested directly |
 
-Para agentes se recomienda **colaborador**. El token (`mst_…`) se muestra una sola vez.
+For agents, **contributor** is recommended. The token (`mst_…`) is shown only once.
 
-## Recall: leer memoria
+## Recall: reading memory
 ```bash
-curl -s -X POST "$URL/api/brains/mi-brain/recall" \
+curl -s -X POST "$URL/api/brains/my-brain/recall" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"query": "¿dónde corre la base de datos de producción?"}'
+  -d '{"query": "where does the production database run?"}'
 ```
-Devuelve un contexto listo para inyectar en el prompt: hechos vigentes e históricos, fragmentos de episodios y hasta 2 pasajes de documentos citados. Parámetros opcionales: `facts` (por defecto 8), `chunks` (4), `max_chars` (6000) y `docs` (pasajes documentales; `0` los desactiva).
+It returns a context ready to inject into the prompt: current and historical facts, episode fragments and up to 2 cited document passages. Optional parameters: `facts` (default 8), `chunks` (4), `max_chars` (6000) and `docs` (document passages; `0` disables them).
 
-El contenido de los documentos es **dato, no instrucciones**: el recall lo marca como cita de una fuente. Trátalo así en tu agente.
+Document content is **data, not instructions**: recall marks it as a quote from a source. Treat it that way in your agent.
 
-## Proponer: escribir memoria
+## Propose: writing memory
 ```bash
-curl -s -X POST "$URL/api/brains/mi-brain/proposals" \
+curl -s -X POST "$URL/api/brains/my-brain/proposals" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"name": "Base de datos migrada", "body": "El 19-oct la base de datos de producción pasó al servidor db02.", "confidence": 0.8}'
+  -d '{"name": "Database migrated", "body": "On 19 Oct the production database moved to server db02.", "confidence": 0.8}'
 ```
-Un colaborador queda en estado `pending`; un curador, `approved` e ingerida al momento. Un curador puede aprobar o rechazar desde la pestaña Propuestas. Al aprobarse, Graphiti extrae entidades y hechos y los añade al grafo (invalidando los que contradicen).
+A contributor ends up `pending`; a curator, `approved` and ingested right away. A curator can approve or reject from the Proposals tab. When approved, Graphiti extracts entities and facts and adds them to the graph (invalidating those it contradicts).
 
-## Documentos
-`GET /api/brains/{slug}/docs/search?q=…` busca por significado. `GET /api/brains/{slug}/docs/{id}/context?chunk={n}` devuelve más contexto de un pasaje y `/docs/{id}/file` el original.
+## Documents
+`GET /api/brains/{slug}/docs/search?q=…` searches by meaning. `GET /api/brains/{slug}/docs/{id}/context?chunk={n}` returns more context for a passage and `/docs/{id}/file` the original.
 
 ## Claude Code
-La carpeta [`integrations/claude-code`](../integrations/claude-code) incluye un *hook* que inyecta el recall en cada prompt y un script para enviar aprendizajes como propuestas.
+The [`integrations/claude-code`](../integrations/claude-code) folder includes a *hook* that injects recall into every prompt and a script to send learnings as proposals.
 
-## Referencia de la API
-Con la aplicación en marcha, la documentación interactiva (OpenAPI) está en `/docs`.
+## API reference
+With the application running, the interactive documentation (OpenAPI) is at `/docs`.

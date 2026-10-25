@@ -1,79 +1,82 @@
-# Arquitectura
+**English** · [Español](es/ARCHITECTURE.md)
 
-MimirSynth es una capa de memoria para agentes de IA. Se apoya en [Graphiti](https://github.com/getzep/graphiti) (grafo de conocimiento temporal) sobre FalkorDB y añade lo que un grafo solo no da: usuarios y permisos, cuarentena de lo que escriben los agentes, recall híbrido, memoria documental y una interfaz web.
+# Architecture
 
-## Idea central
+MimirSynth is a memory layer for AI agents. It relies on [Graphiti](https://github.com/getzep/graphiti) (a temporal knowledge graph) on FalkorDB and adds what a graph alone does not give: users and permissions, quarantine for what agents write, hybrid recall, document memory and a web interface.
 
-Los hechos no se sobrescriben: se **invalidan** y se conserva su historial (modelo bi-temporal: cuándo ocurrió y cuándo se supo). Cada tipo de memoria del marco cognitivo [CoALA](https://arxiv.org/abs/2309.02427) tiene su sitio:
+## Core idea
 
-| Memoria | Qué guarda | Dónde |
+Facts are not overwritten: they are **invalidated** and their history is kept (bi-temporal model: when it happened and when it became known). Each memory type of the [CoALA](https://arxiv.org/abs/2309.02427) cognitive framework has its place:
+
+| Memory | What it stores | Where |
 |---|---|---|
-| Episódica | Qué pasó, inmutable | Episodios de Graphiti, más un índice de su texto en PostgreSQL (pgvector + búsqueda de texto completo) |
-| Semántica | Entidades y hechos con fechas de validez | Graphiti sobre FalkorDB |
-| Documental | Qué dicen los documentos | Trozos con vectores y texto completo en PostgreSQL; originales en un volumen. Ver [DOCUMENTS.md](DOCUMENTS.md) |
+| Episodic | What happened, immutable | Graphiti episodes, plus an index of their text in PostgreSQL (pgvector + full-text search) |
+| Semantic | Entities and facts with validity dates | Graphiti on FalkorDB |
+| Documents | What documents say | Chunks with vectors and full text in PostgreSQL; originals on a volume. See [DOCUMENTS.md](DOCUMENTS.md) |
 
-## Componentes
+## Components
 
 ```
-agentes / plugins ──token de API──┐
-navegador ────────cuenta u OIDC───┤
-                                  ▼
-                        ┌──────────────────┐        ┌────────────────┐
-                        │ MimirSynth       │───────▶│ FalkorDB       │ un grafo por brain
-                        │ API (FastAPI)    │        └────────────────┘
-                        │ + UI (React)     │        ┌────────────────┐
-                        │                  │───────▶│ PostgreSQL     │ plano de control,
-                        └──────────────────┘        │ + pgvector     │ índices de texto
-                           │        │               └────────────────┘
-                           ▼        ▼
-                  LLM (extracción)  Embeddings   (cualquier endpoint compatible con OpenAI)
+agents / plugins ──API token──┐
+browser ──────account or OIDC─┤
+                              ▼
+                    ┌──────────────────┐        ┌────────────────┐
+                    │ MimirSynth       │───────▶│ FalkorDB       │ one graph per brain
+                    │ API (FastAPI)    │        └────────────────┘
+                    │ + UI (React)     │        ┌────────────────┐
+                    │                  │───────▶│ PostgreSQL     │ control plane,
+                    └──────────────────┘        │ + pgvector     │ text indexes
+                       │        │               └────────────────┘
+                       ▼        ▼
+              LLM (extraction)  Embeddings   (any OpenAI-compatible endpoint)
 ```
 
-- **Un solo contenedor** sirve la API y la interfaz; PostgreSQL y FalkorDB son servicios aparte (el `docker-compose.yml` incluye ambos).
-- **Ingesta:** `graphiti-core` se usa como librería dentro de la aplicación, sobre el mismo FalkorDB.
-- **Proveedores de IA** (LLM, embeddings y decisores) se configuran en la interfaz, con las claves cifradas en la base de datos. Cualquier endpoint compatible con OpenAI sirve (nube, Ollama, un proxy…).
+- **A single container** serves the API and the interface; PostgreSQL and FalkorDB are separate services (the `docker-compose.yml` includes both).
+- **Ingestion:** `graphiti-core` is used as a library inside the application, on the same FalkorDB.
+- **AI providers** (LLM, embeddings and deciders) are configured in the interface, with keys encrypted in the database. Any OpenAI-compatible endpoint works (cloud, Ollama, a proxy…).
 
 ## Brains
 
-Un **brain** es un dominio de conocimiento aislado: su grafo, su ontología (tipos de entidad y relación), su índice de texto, sus miembros y sus tokens. Todo lo que hace la API está acotado a un brain y al usuario autenticado.
+A **brain** is an isolated knowledge domain: its graph, its ontology (entity and relation types), its text index, its members and its tokens. Everything the API does is scoped to a brain and to the authenticated user.
 
-## Usuarios y roles
+## Users and roles
 
-- **Cuentas propias** (email y contraseña con argon2id, bloqueo tras intentos fallidos, invitaciones y recuperación por enlace de un solo uso, correo por SMTP opcional) y **doble factor TOTP** con códigos de recuperación, que el administrador puede exigir.
-- **OIDC opcional** (Keycloak, Authentik, Entra ID, PocketID…): por defecto solo entra quien ya tiene cuenta o invitación; opcionalmente, alta automática por dominios y roles según los grupos del proveedor.
-- **Rol por brain:** lector < colaborador < curador < administrador < propietario. El administrador de la instancia ve todo.
-- **Tokens de API** acotados a un brain, para agentes y plugins; nunca superan el rol de quien los crea y no administran la instancia.
-- Las acciones de administración y de acceso quedan en un **registro de auditoría**.
+- **Own accounts** (email and password with argon2id, lockout after failed attempts, single-use invitation and recovery links, optional email through SMTP) and **TOTP two-factor** with recovery codes, which the administrator can require.
+- **Optional OIDC** (Keycloak, Authentik, Entra ID, PocketID…): by default only people who already have an account or invitation can sign in; optionally, automatic sign-up by domain and roles from the provider's groups.
+- **Per-brain role:** reader < contributor < curator < administrator < owner. The instance administrator sees everything.
+- **API tokens** scoped to a brain, for agents and plugins; they never exceed the creator's role and do not administer the instance.
+- Administration and access actions are recorded in an **audit log**.
+- **Language:** the interface and emails are available in English and Spanish, chosen per person.
 
-## Escritura: cuarentena de propuestas
+## Writing: proposal quarantine
 
-Lo que aporta un colaborador o un agente no entra directo al grafo. Crea una **propuesta** con su autor y su confianza:
+What a contributor or an agent adds does not go straight into the graph. It creates a **proposal** with its author and confidence:
 
-1. Un **decisor** (modelo de decisión cerrada, con umbral) puede aprobar automáticamente lo claramente factual. Nunca rechaza por su cuenta.
-2. Lo dudoso espera a un **curador**, que aprueba o rechaza. Si propone un curador, queda aprobada.
-3. Al aprobarse, se **ingiere** con Graphiti (extracción de entidades y hechos con el LLM del brain) mediante un trabajo en cola, con reintentos y progreso.
+1. A **decider** (closed-decision model with a threshold) can automatically approve what is clearly factual. It never rejects on its own.
+2. Anything doubtful waits for a **curator**, who approves or rejects. If a curator proposes, it is approved.
+3. Once approved, it is **ingested** with Graphiti (extraction of entities and facts with the brain's LLM) through a queued job, with retries and progress.
 
-## Lectura: recall híbrido
+## Reading: hybrid recall
 
-Una consulta combina, sin llamar a un LLM:
+A query combines, without calling an LLM:
 
-1. **Hechos** vigentes e históricos del grafo, por similitud de embedding.
-2. **Fragmentos del texto original** de los episodios, por vectores y texto completo.
-3. **Pasajes de documentos**, con presupuesto y tiempo máximo.
-4. Fusión por rango recíproco (RRF) con peso por recencia, y un bloque con la evolución de los hechos de las entidades consultadas.
+1. **Facts** (current and historical) from the graph, by embedding similarity.
+2. **Fragments of the original episode text**, by vectors and full text.
+3. **Document passages**, with a budget and a maximum time.
+4. Reciprocal rank fusion (RRF) with a recency weight, and a block with the evolution of the facts of the queried entities.
 
-## Vocabulario
+## Vocabulary
 
-La ontología se define por brain (paquetes de partida en `api/mimirsynth/presets/`). La interfaz permite normalizar alias, fusionar duplicados, retipar entidades y editar los tipos de relación; cada cambio es reversible y queda auditado.
+The ontology is defined per brain (starter packages in `api/mimirsynth/presets/`). The interface lets you normalise aliases, merge duplicates, retype entities and edit relation types; every change is reversible and audited.
 
-## Trabajos
+## Jobs
 
-Ingesta, escaneo de carpetas y reindexado pasan por una cola general con progreso, cancelación y reintento. Los reescaneos programados sin incidencias se purgan solos; los plazos se cambian en Administración → Ajustes.
+Ingestion, folder scanning and reindexing go through a general queue with progress, cancellation and retry. Scheduled rescans without issues purge themselves; the periods are changed under Administration → Settings.
 
-## Configuración
+## Configuration
 
-El entorno solo lleva lo necesario para arrancar y conectar (ver `.env.example`). Todo lo demás se cambia en la interfaz (Administración → Ajustes) y se aplica sin reiniciar; las variables de entorno equivalentes funcionan como valor por defecto. Los secretos guardados en la base de datos se cifran con una clave derivada de `MIMIRSYNTH_SESSION_SECRET`: si cambia, hay que volver a introducirlos.
+The environment only carries what is needed to start and connect (see `.env.example`). Everything else is changed in the interface (Administration) and applies without a restart; the equivalent environment variables act as defaults. Secrets stored in the database are encrypted with a key derived from `MIMIRSYNTH_SESSION_SECRET`: if it changes, they must be entered again.
 
-## Dependencias y licencias
+## Dependencies and licenses
 
-MimirSynth se publica bajo Apache-2.0. Graphiti es Apache-2.0. **FalkorDB es *source-available* (SSPL)**, no una licencia open source permisiva: revisa sus condiciones antes de ofrecer MimirSynth como servicio. El acceso al grafo pasa por una capa propia para poder sustituir el motor en el futuro.
+MimirSynth is published under Apache-2.0. Graphiti is Apache-2.0. **FalkorDB is *source-available* (SSPL)**, not a permissive open-source license: review its terms before offering MimirSynth as a service. Graph access goes through our own layer so the engine can be replaced in the future.

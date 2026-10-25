@@ -98,11 +98,11 @@ export default function Proposals({ graph, role }: { graph: string; role: string
               {d.review_kind === "direct" && <Text size="xs" c="dimmed">{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</Text>}
               {d.review_kind === "human" && <Text size="xs" c="dimmed">{d.status === "rejected" ? t("Rechazada") : t("Aprobada")} {t("por un curador ·")} {fmt(d.reviewed_at)}{d.review_note ? ` · «${d.review_note}»` : ""}</Text>}
               {d.decision && !d.decision.error && <Stack gap={2}>
-                <Text size="xs" c="dimmed">{t("Decisor «")}{d.decision.engine}» ({d.decision.model}{t("), umbral")} {d.decision.threshold}:</Text>
-                <Text size="xs" c="dimmed">{t("· ¿Es factual?")} {d.decision.factual.letter === "A" ? t("sí") : "no"} {t("(confianza")} {d.decision.factual.prob})</Text>
-                <Text size="xs" c="dimmed">{t("· Acción:")} {["aprobar", "revisar", "rechazar"][d.decision.action.index]} {t("(confianza")} {d.decision.action.prob})</Text>
+                <Text size="xs" c="dimmed">{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: d.decision.threshold })}</Text>
+                <Text size="xs" c="dimmed">{t("· ¿Es factual? {{answer}} (confianza {{prob}})", { answer: d.decision.factual.letter === "A" ? t("sí") : t("no"), prob: d.decision.factual.prob })}</Text>
+                <Text size="xs" c="dimmed">{t("· Acción: {{action}} (confianza {{prob}})", { action: [t("aprobar"), t("revisar"), t("rechazar")][d.decision.action.index], prob: d.decision.action.prob })}</Text>
                 <Text size="xs" fw={600}>{d.decision.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}: {d.decision.note}</Text></Stack>}
-              {d.decision?.error && <Notice tone="warn">{t("Decisor «")}{d.decision.engine}{t("» no disponible:")} {d.decision.error}</Notice>}
+              {d.decision?.error && <Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: d.decision.engine, error: d.decision.error })}</Notice>}
               {!d.review_kind && !d.decision && d.status === "pending" && <Text size="xs" c="dimmed">{t("Pendiente de un curador.")}</Text>}
               {!d.review_kind && !d.decision && d.status !== "pending" && d.review_note && <Text size="xs" c="dimmed">{d.review_note}</Text>}
             </Step>

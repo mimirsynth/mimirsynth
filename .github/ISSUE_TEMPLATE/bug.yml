@@ -1,18 +1,18 @@
-name: Error
-description: Algo no funciona como debería
+name: Bug
+description: Something does not work as it should
 labels: [bug]
 body:
   - type: textarea
     id: what
-    attributes: {label: Qué ocurre, description: Qué esperabas y qué pasó en realidad}
+    attributes: {label: What happens, description: What you expected and what actually happened}
     validations: {required: true}
   - type: textarea
     id: steps
-    attributes: {label: Pasos para reproducirlo}
+    attributes: {label: Steps to reproduce}
     validations: {required: true}
   - type: input
     id: version
-    attributes: {label: Versión de MimirSynth, description: "Aparece al pie del menú lateral"}
+    attributes: {label: MimirSynth version, description: "Shown at the bottom of the side menu"}
   - type: textarea
     id: logs
-    attributes: {label: Registros o capturas, description: "Revisa que no contengan secretos ni datos privados", render: shell}
+    attributes: {label: Logs or screenshots, description: "Check that they contain no secrets or private data", render: shell}

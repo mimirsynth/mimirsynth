@@ -2,56 +2,58 @@
 
 # MimirSynth
 
-Memoria para agentes de IA basada en el marco cognitivo CoALA, construida sobre un grafo de conocimiento temporal (Graphiti) y con UI propia. Los hechos no se sobrescriben: se invalidan y se conserva el historial.
+**English** · [Español](README.es.md)
 
-Estado: **en desarrollo activo** (0.x). Funciona de extremo a extremo, pero la API y el esquema pueden cambiar entre versiones.
+Memory for AI agents, based on the CoALA cognitive framework and built on a temporal knowledge graph ([Graphiti](https://github.com/getzep/graphiti)), with its own web UI. Facts are never overwritten: they are invalidated and their history is kept.
 
-## Qué ofrece
-- **Memoria temporal:** hechos con fechas de validez, historial y línea temporal; nada se sobrescribe.
-- **Brains:** dominios de conocimiento aislados, cada uno con su grafo, su ontología, sus miembros y sus tokens.
-- **Cuarentena de propuestas:** lo que escriben los agentes lo revisa un curador (o un decisor automático) antes de entrar al grafo.
-- **Recall híbrido** (hechos, texto de episodios y documentos) pensado para inyectarse en el prompt de un agente.
-- **Memoria documental:** subida de ficheros, carpetas y wikis (Outline) como fuentes, con búsqueda semántica.
-- **Usuarios:** cuentas propias con doble factor, invitaciones y recuperación por correo; OIDC opcional; roles por brain; auditoría.
-- **Interfaz web** para explorar el grafo, curar el vocabulario, revisar propuestas y administrar la instancia.
-- **Integración con Claude Code:** hook de recall y escritura como propuesta ([`integrations/claude-code`](integrations/claude-code)).
+Status: **under active development** (0.x). It works end to end, but the API and the schema may change between versions.
 
-**Guía de usuario completa en la [wiki](https://github.com/MimirSynth/mimirsynth/wiki).** Resumen técnico: [instalación](docs/INSTALL.md), [configuración](docs/CONFIGURATION.md), [conectar agentes](docs/AGENTS.md), [arquitectura](docs/ARCHITECTURE.md) y [memoria documental](docs/DOCUMENTS.md).
+## What it offers
+- **Temporal memory:** facts with validity dates, history and a timeline; nothing is overwritten.
+- **Brains:** isolated knowledge domains, each with its own graph, ontology, members and tokens.
+- **Proposal quarantine:** what agents write is reviewed by a curator (or an automatic decider) before it enters the graph.
+- **Hybrid recall** (facts, episode text and documents) designed to be injected into an agent's prompt.
+- **Document memory:** upload files, or connect folders and wikis (Outline) as sources, with semantic search.
+- **Users:** own accounts with two-factor, invitations and email recovery; optional OIDC; per-brain roles; audit log.
+- **Web interface** to explore the graph, curate the vocabulary, review proposals and administer the instance. English and Spanish.
+- **Claude Code integration:** recall hook and proposal-based writing ([`integrations/claude-code`](integrations/claude-code)).
 
-## Inicio rápido
-Necesitas Docker con Compose y un endpoint compatible con OpenAI para embeddings (p. ej. Ollama con `nomic-embed-text`) y otro para el LLM de extracción.
+**Full user guide in the [wiki](https://github.com/MimirSynth/mimirsynth/wiki).** Technical summary: [installation](docs/INSTALL.md), [configuration](docs/CONFIGURATION.md), [connecting agents](docs/AGENTS.md), [architecture](docs/ARCHITECTURE.md) and [document memory](docs/DOCUMENTS.md).
+
+## Quick start
+You need Docker with Compose, an OpenAI-compatible endpoint for embeddings (e.g. Ollama with `nomic-embed-text`) and another for the extraction LLM.
 ```bash
 git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
-cp .env.example .env     # define POSTGRES_PASSWORD y MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
-docker compose --profile bundled up -d --build    # incluye FalkorDB; sin el perfil, apunta MIMIRSYNTH_FALKOR_HOST a uno tuyo
-docker compose logs mimirsynth | grep -A3 "PRIMER ARRANQUE"    # código del asistente de instalación
+cp .env.example .env     # set POSTGRES_PASSWORD and MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
+docker compose --profile bundled up -d --build    # includes FalkorDB; without the profile, point MIMIRSYNTH_FALKOR_HOST at your own
+docker compose logs mimirsynth | grep -A3 "FIRST START"    # installation wizard code
 ```
-Abre `http://localhost:8000`, introduce el código y crea la cuenta de administrador. Después configura los proveedores de IA en **Administración**.
+Open `http://localhost:8000`, enter the code and create the administrator account. Then set up the AI providers under **Administration**.
 
-## Configuración
-El entorno solo lleva lo necesario para arrancar y conectar (tabla de abajo). Todo lo demás —límites de documentos, recall, retención de trabajos, proveedores de IA, carpetas— se cambia en **Administración → Ajustes** (y las demás pestañas) y se aplica sin reiniciar; si una de esas variables existe, solo hace de valor por defecto.
+## Configuration
+The environment only carries what is needed to start and connect (table below). Everything else — document limits, recall, job retention, AI providers, folders — is changed under **Administration** and applies without a restart; if one of those variables exists, it only acts as the default value.
 
-### Variables de entorno
-| Variable | Por defecto | Descripción |
+### Environment variables
+| Variable | Default | Description |
 |---|---|---|
-| `MIMIRSYNTH_FALKOR_HOST` | `localhost` | Host de FalkorDB |
-| `MIMIRSYNTH_FALKOR_PORT` | `6379` | Puerto |
-| `MIMIRSYNTH_DATABASE_URL` | SQLite local | Plano de control (PostgreSQL en producción) |
-| `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | _(vacío)_ | Grafos existentes a adoptar como brains |
-| `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, más OIDC si se configura). `off` solo para desarrollo: sin inicio de sesión |
-| `MIMIRSYNTH_STATIC_DIR` | _(vacío)_ | Directorio del build de la web (lo fija la imagen Docker) |
+| `MIMIRSYNTH_FALKOR_HOST` | `localhost` | FalkorDB host |
+| `MIMIRSYNTH_FALKOR_PORT` | `6379` | Port |
+| `MIMIRSYNTH_DATABASE_URL` | local SQLite | Control plane (PostgreSQL in production) |
+| `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | _(empty)_ | Existing graphs to adopt as brains |
+| `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (own accounts, plus OIDC if configured). `off` for development only: no sign-in |
+| `MIMIRSYNTH_STATIC_DIR` | _(empty)_ | Directory with the web build (set by the Docker image) |
 
-## Desarrollo
+## Development
 ```bash
 cd api && uv venv && uv pip install -e . && .venv/bin/uvicorn mimirsynth.main:app --port 8010
-cd web && npm install && npm run dev      # http://localhost:5173 (proxy /api -> :8010)
+cd web && npm install && npm run dev      # http://localhost:5173 (proxies /api -> :8010)
 ```
 
-## El nombre
-Mímir es el guardián del pozo del conocimiento (Mímisbrunnr) en la mitología nórdica. Según la Ynglinga saga, Odín conserva su cabeza y la consulta para pedirle consejo: una memoria externa que se consulta. «Synth» alude a la memoria sintética y a la síntesis: el sistema consolida episodios en conocimiento. No tiene relación con Grafana Mimir ni con otros proyectos llamados Mimir.
+## The name
+Mímir is the guardian of the well of knowledge (Mímisbrunnr) in Norse mythology. According to the Ynglinga saga, Odin keeps his head and consults it for advice: an external memory that is queried. "Synth" alludes to synthetic memory and to synthesis: the system consolidates episodes into knowledge. It has no relation to Grafana Mimir or to other projects called Mimir.
 
-## Licencia
-Apache-2.0. Ver [LICENSE](LICENSE) y [NOTICE](NOTICE). Las dependencias tienen sus propias licencias; FalkorDB, por ejemplo, es *source-available* (SSPL): ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dependencias-y-licencias).
+## License
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Dependencies have their own licenses; FalkorDB, for example, is *source-available* (SSPL): see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dependencies-and-licenses).
 
-## Contribuir
-Lee [CONTRIBUTING.md](CONTRIBUTING.md). Para vulnerabilidades, [SECURITY.md](SECURITY.md).
+## Contributing
+Read [CONTRIBUTING.md](CONTRIBUTING.md). For vulnerabilities, see [SECURITY.md](SECURITY.md).

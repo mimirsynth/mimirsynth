@@ -1,11 +1,13 @@
-# Documentación de MimirSynth
+**English** · [Español](es/README.md)
 
-> La **guía de usuario completa** (cada pantalla, administración, agentes, solución de problemas) está en la [wiki del proyecto](https://github.com/MimirSynth/mimirsynth/wiki). Esta carpeta contiene la documentación técnica que acompaña al código.
+# MimirSynth documentation
 
-| Documento | Para qué |
+> The **complete user guide** (every screen, administration, agents, troubleshooting) is in the [project wiki](https://github.com/MimirSynth/mimirsynth/wiki). This folder holds the technical documentation that accompanies the code.
+
+| Document | Purpose |
 |---|---|
-| [INSTALL.md](INSTALL.md) | Instalar, actualizar y hacer copias de seguridad |
-| [CONFIGURATION.md](CONFIGURATION.md) | Variables de entorno y todo lo que se configura desde la interfaz |
-| [AGENTS.md](AGENTS.md) | Conectar agentes: tokens, recall, propuestas y documentos |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Cómo encaja todo: brains, roles, cuarentena y recall |
-| [DOCUMENTS.md](DOCUMENTS.md) | Diseño de la memoria documental |
+| [INSTALL.md](INSTALL.md) | Install, upgrade and back up |
+| [CONFIGURATION.md](CONFIGURATION.md) | Environment variables and everything configured from the interface |
+| [AGENTS.md](AGENTS.md) | Connect agents: tokens, recall, proposals and documents |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How it fits together: brains, roles, quarantine and recall |
+| [DOCUMENTS.md](DOCUMENTS.md) | Document memory design |
