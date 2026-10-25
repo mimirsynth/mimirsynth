@@ -211,7 +211,7 @@ def forgot(body: ForgotIn, request: Request, db: Session = Depends(get_db)):
         u = db.scalar(select(User).where(User.email == email))
         if u and u.status in ("active", "invited"):
             raw = userlib.new_token(db, u, "invite" if u.status == "invited" else "reset", None)
-            userlib.email_invite(email, u.name, userlib.link(request, raw), "invite" if u.status == "invited" else "reset")
+            userlib.email_invite(email, u.name, userlib.link(request, raw), "invite" if u.status == "invited" else "reset", u)
             audit(db, u, "password.forgot")
     return {"ok": True}
 
@@ -365,5 +365,5 @@ def logout(request: Request):
 def me(request: Request, user: User = Depends(current_user)):
     from .account import avatar_url
     return {"id": user.id, "name": user.display_name or user.name, "email": user.email, "is_admin": user.is_admin, "auth_mode": settings.auth_mode,
-            "avatar": avatar_url(user), "account_url": appsettings.get("account_url"), "has_password": bool(user.password_hash), "must_change_password": user.must_change_password,
+            "avatar": avatar_url(user), "account_url": appsettings.get("account_url"), "has_password": bool(user.password_hash), "locale": user.locale, "must_change_password": user.must_change_password,
             "totp_enabled": user.totp_enabled, "must_setup_2fa": settings.auth_mode != "off" and needs_2fa_setup(request, user)}

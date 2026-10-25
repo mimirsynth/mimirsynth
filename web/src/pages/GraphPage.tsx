@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, Slider, TextField, NODE_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem } from "../ui";
 import { useQuery } from "@tanstack/react-query";
@@ -12,6 +13,7 @@ const download = (name: string, type: string, data: string) => { const a = docum
 const id = (x: any) => (typeof x === "object" ? x.uuid ?? x.id : x);
 
 export default function GraphPage({ graph }: { graph: string }) {
+  const { t } = useTranslation();
   const ov = useQuery({ queryKey: ["overview", graph], queryFn: () => get<Overview>("overview", { graph }) });
   const [params] = useSearchParams();
   const nodo = params.get("nodo") ?? "";  // llega desde Conocimiento: centra el grafo en esa entidad
@@ -34,7 +36,7 @@ export default function GraphPage({ graph }: { graph: string }) {
   const cv = useRef<any>(null);
   const box = useRef<HTMLDivElement>(null);
   const colorOf = useRef(new Map<string, string>());
-  const color = (l?: string) => { const k = l ?? "(sin tipo)"; if (!colorOf.current.has(k)) colorOf.current.set(k, PALETTE[colorOf.current.size % PALETTE.length]); return colorOf.current.get(k)!; };
+  const color = (l?: string) => { const k = l ?? t("(sin tipo)"); if (!colorOf.current.has(k)) colorOf.current.set(k, PALETTE[colorOf.current.size % PALETTE.length]); return colorOf.current.get(k)!; };
 
   const t0 = ov.data?.first_episode_at ? new Date(ov.data.first_episode_at).getTime() : Date.now() - 90 * DAY;
   const total = Math.max(1, Math.ceil((Date.now() - t0) / DAY));
@@ -56,17 +58,17 @@ export default function GraphPage({ graph }: { graph: string }) {
     return { nodes: [...ns.values()], links: [...ls.values()].filter((l) => ns.has(id(l.source)) && ns.has(id(l.target))) };
   }, [base.data, extra]);
 
-  const legendLabels = useMemo(() => { const m = new Map<string, number>(); nodes.forEach((n) => { const k = n.labels[0] ?? "(sin tipo)"; m.set(k, (m.get(k) ?? 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]); }, [nodes]);
+  const legendLabels = useMemo(() => { const m = new Map<string, number>(); nodes.forEach((n) => { const k = n.labels[0] ?? t("(sin tipo)"); m.set(k, (m.get(k) ?? 0) + 1); }); return [...m.entries()].sort((a, b) => b[1] - a[1]); }, [nodes]);
   const legendRels = useMemo(() => { const m = new Map<string, number>(); links.forEach((l) => m.set(l.name, (m.get(l.name) ?? 0) + 1)); return [...m.entries()].sort((a, b) => b[1] - a[1]); }, [links]);
 
-  const nodeVisible = useCallback((n: GNode) => !hiddenLabels.has(n.labels[0] ?? "(sin tipo)") && (n.degree ?? 0) >= minDeg, [hiddenLabels, minDeg]);
+  const nodeVisible = useCallback((n: GNode) => !hiddenLabels.has(n.labels[0] ?? t("(sin tipo)")) && (n.degree ?? 0) >= minDeg, [hiddenLabels, minDeg]);
 
   // datos -> canvas
   useEffect(() => {
     const c = cv.current; if (!c) return;
     const vis = new Set(nodes.filter(nodeVisible).map((n) => n.uuid));
     c.setData({
-      nodes: nodes.map((n) => ({ id: n.uuid, labels: n.labels.length ? n.labels : ["(sin tipo)"], color: color(n.labels[0]), visible: vis.has(n.uuid), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: "name", data: { name: n.name, summary: n.summary, degree: n.degree } })),
+      nodes: nodes.map((n) => ({ id: n.uuid, labels: n.labels.length ? n.labels : [t("(sin tipo)")], color: color(n.labels[0]), visible: vis.has(n.uuid), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: "name", data: { name: n.name, summary: n.summary, degree: n.degree } })),
       links: links.map((l) => ({ id: l.uuid, source: id(l.source), target: id(l.target), relationship: l.name, color: l.status === "invalidated" ? CANVAS.linkInvalid : CANVAS.link, visible: vis.has(id(l.source)) && vis.has(id(l.target)) && !hiddenRels.has(l.name), data: { fact: l.fact, status: l.status } })),
     });
   }, [nodes, links]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,25 +127,25 @@ export default function GraphPage({ graph }: { graph: string }) {
 
   return (
     <Page>
-      <PageHeader title="Grafo" description="Entidades y hechos del brain como mapa. Elige cuántas semillas y saltos cargar; pulsa un nodo para ver sus hechos y los documentos que lo mencionan." />
+      <PageHeader title={t("Grafo")} description={t("Entidades y hechos del brain como mapa. Elige cuántas semillas y saltos cargar; pulsa un nodo para ver sus hechos y los documentos que lo mencionan.")} />
       <Group gap="sm" align="flex-end" wrap="wrap">
-        <NumberField label="Semillas" value={seeds} min={5} max={100} onChange={(v) => setSeeds(Number(v) || 15)} w={90} size="xs" />
-        <NumberField label="Saltos" value={depth} min={0} max={2} onChange={(v) => setDepth(Number(v) || 0)} w={70} size="xs" />
-        <NumberField label="Grado mín." value={minDeg} min={0} max={20} onChange={(v) => setMinDeg(Number(v) || 0)} w={85} size="xs" />
-        <TextField label="Buscar nodo" placeholder="Nextcloud…" value={search} onChange={(e) => doSearch(e.currentTarget.value)} size="xs" w={170} />
-        <Segments size="xs" value={layout} onChange={setLayout} data={[{ value: "force", label: "Fuerza" }, { value: "radial", label: "Radial" }, { value: "tree", label: "Árbol" }]} />
+        <NumberField label={t("Semillas")} value={seeds} min={5} max={100} onChange={(v) => setSeeds(Number(v) || 15)} w={90} size="xs" />
+        <NumberField label={t("Saltos")} value={depth} min={0} max={2} onChange={(v) => setDepth(Number(v) || 0)} w={70} size="xs" />
+        <NumberField label={t("Grado mín.")} value={minDeg} min={0} max={20} onChange={(v) => setMinDeg(Number(v) || 0)} w={85} size="xs" />
+        <TextField label={t("Buscar nodo")} placeholder={t("Nextcloud…")} value={search} onChange={(e) => doSearch(e.currentTarget.value)} size="xs" w={170} />
+        <Segments size="xs" value={layout} onChange={setLayout} data={[{ value: "force", label: t("Fuerza") }, { value: "radial", label: t("Radial") }, { value: "tree", label: t("Árbol") }]} />
         <Segments size="xs" value={dim} onChange={setDim} data={["2d", "3d"]} />
-        <IconButton icon={paused ? "play" : "pause"} label={paused ? "Reanudar simulación" : "Pausar simulación"} onClick={() => setPaused(!paused)} />
-        <IconButton icon="undo" label="Deshacer última expansión" disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
-        <IconButton icon="download" label="Exportar JSON" onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
-        <IconButton icon="image" label="Exportar imagen" onClick={() => { const cn = cv.current?.shadowRoot?.querySelector("canvas") ?? cv.current?.querySelector?.("canvas"); if (cn) { const a = document.createElement("a"); a.href = cn.toDataURL("image/png"); a.download = "grafo.png"; a.click(); } }} />
-        <IconButton icon="fit" label="Ajustar a la vista" onClick={() => cv.current?.zoomToFit?.(1)} />
-        <Check size="xs" label="Invalidados" checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
-        <Check size="xs" label="Viajar en el tiempo" checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
+        <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} onClick={() => setPaused(!paused)} />
+        <IconButton icon="undo" label={t("Deshacer última expansión")} disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
+        <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
+        <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const cn = cv.current?.shadowRoot?.querySelector("canvas") ?? cv.current?.querySelector?.("canvas"); if (cn) { const a = document.createElement("a"); a.href = cn.toDataURL("image/png"); a.download = "grafo.png"; a.click(); } }} />
+        <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => cv.current?.zoomToFit?.(1)} />
+        <Check size="xs" label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
+        <Check size="xs" label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
       </Group>
       {useTime && day !== null && (
         <Group gap="md" wrap="nowrap">
-          <Text size="xs" w={190}>Qué sabíamos el <b>{fmt(new Date(t0 + day * DAY).toISOString()).split(",")[0]}</b></Text>
+          <Text size="xs" w={190}>{t("Qué sabíamos el {{date}}", { date: fmt(new Date(t0 + day * DAY).toISOString()).split(",")[0] })}</Text>
           <Slider className="ms-grow" min={0} max={total} value={day} onChange={setDay} />
         </Group>
       )}
@@ -151,9 +153,9 @@ export default function GraphPage({ graph }: { graph: string }) {
         <div ref={box} className="ms-canvas">
           <falkordb-canvas ref={cv} />
           <Legend open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)}>
-            <LegendSection>Tipos</LegendSection>
-            {legendLabels.map(([l, n]) => <LegendItem key={l} label={l} count={n} dot={color(l === "(sin tipo)" ? undefined : l)} off={hiddenLabels.has(l)} onClick={() => toggle(hiddenLabels, setHiddenLabels, l)} />)}
-            <LegendSection>Relaciones</LegendSection>
+            <LegendSection>{t("Tipos")}</LegendSection>
+            {legendLabels.map(([l, n]) => <LegendItem key={l} label={l} count={n} dot={color(l === t("(sin tipo)") ? undefined : l)} off={hiddenLabels.has(l)} onClick={() => toggle(hiddenLabels, setHiddenLabels, l)} />)}
+            <LegendSection>{t("Relaciones")}</LegendSection>
             {legendRels.map(([r, n]) => <LegendItem key={r} label={r} count={n} off={hiddenRels.has(r)} onClick={() => toggle(hiddenRels, setHiddenRels, r)} />)}
           </Legend>
         </div></>} aside={
@@ -162,31 +164,31 @@ export default function GraphPage({ graph }: { graph: string }) {
             {sel ? (
               <Stack gap="xs">
                 <Text fw={700}>{sel.name}</Text>
-                <Group gap={4}>{sel.labels.map((l) => <Pill key={l} size="xs">{l}</Pill>)}<Pill size="xs">grado {sel.degree}</Pill></Group>
+                <Group gap={4}>{sel.labels.map((l) => <Pill key={l} size="xs">{l}</Pill>)}<Pill size="xs">{t("grado")} {sel.degree}</Pill></Group>
                 <Text size="xs" c="dimmed" className="ms-prose">{sel.summary}</Text>
-                <Text size="xs" fw={700}>Hechos ({nodeFacts.length})</Text>
+                <Text size="xs" fw={700}>{t("Hechos ({{count}})", { count: nodeFacts.length })}</Text>
                 {nodeFacts.map((l) => <Text key={l.uuid} size="xs" td={l.status === "invalidated" ? "line-through" : undefined}>• {l.fact}</Text>)}
                 {(mentions.data?.documents.length ?? 0) > 0 && <>
-                  <Text size="xs" fw={700}>Documentos que la mencionan ({mentions.data!.documents.length})</Text>
+                  <Text size="xs" fw={700}>{t("Documentos que la mencionan ({{count}})", { count: mentions.data!.documents.length })}</Text>
                   {mentions.data!.documents.map((d) => (
                     <Stack key={d.document_id} gap={0}>
-                      <Text size="xs" component={Link} to={`/conocimiento?doc=${d.document_id}`}>{d.title}{d.chunks > 1 ? ` · ${d.chunks} pasajes` : ""}</Text>
+                      <Text size="xs" component={Link} to={`/conocimiento?doc=${d.document_id}`}>{d.title}{d.chunks > 1 ? t(" · {{chunks}} pasajes", { chunks: d.chunks }) : ""}</Text>
                       <Text size="xs" c="dimmed" lineClamp={2}>…{d.snippet}…</Text>
                     </Stack>))}</>}
-                <Text size="xs" c="dimmed">Clic derecho en un nodo: expandir vecindad.</Text>
+                <Text size="xs" c="dimmed">{t("Clic derecho en un nodo: expandir vecindad.")}</Text>
               </Stack>
             ) : selLink ? (
               <Stack gap="xs">
                 <Pill>{selLink.name}</Pill>
                 <Text size="sm">{selLink.fact}</Text>
                 <Text size="xs" c="dimmed">{nameOf(selLink.source)} → {nameOf(selLink.target)}</Text>
-                <Text size="xs">Válido desde {fmt(selLink.valid_at)}</Text>
-                {selLink.invalid_at && <Text size="xs" c="dimmed">Dejó de ser cierto {fmt(selLink.invalid_at)}</Text>}
+                <Text size="xs">{t("Válido desde")} {fmt(selLink.valid_at)}</Text>
+                {selLink.invalid_at && <Text size="xs" c="dimmed">{t("Dejó de ser cierto")} {fmt(selLink.invalid_at)}</Text>}
               </Stack>
-            ) : <Text size="sm" c="dimmed">Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.</Text>}
+            ) : <Text size="sm" c="dimmed">{t("Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.")}</Text>}
           </FillArea>
         </Panel>} />
-      <Text size="xs" c="dimmed">{nodes.length} nodos · {links.length} hechos{base.data?.truncated ? " · recortado por el tope de nodos" : ""}</Text>
+      <Text size="xs" c="dimmed">{t("{{nodes}} nodos · {{links}} hechos", { nodes: nodes.length, links: links.length })}{base.data?.truncated ? t(" · recortado por el tope de nodos") : ""}</Text>
     </Page>
   );
 }

@@ -34,6 +34,7 @@ class User(Base):
     invited_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     totp_secret: Mapped[str] = mapped_column(Text, default="")  # secreto TOTP sellado (secretbox); con totp_enabled falso es una alta a medias
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    locale: Mapped[str] = mapped_column(String(5), default="")  # idioma elegido (es, en…); vacío = el de la instancia
     totp_last_step: Mapped[int] = mapped_column(Integer, default=0)  # último intervalo de 30 s aceptado: un código no se puede reutilizar
 
 

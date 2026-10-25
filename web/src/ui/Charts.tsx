@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { T, locale } from "../i18n";
 import { Text } from "@mantine/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -22,6 +24,7 @@ function useBox<T extends HTMLElement>() {
 
 /** Líneas con relleno suave, una por serie, sobre el mismo eje. Ocupa todo el ancho y el alto disponibles de su contenedor: el SVG se dibuja al tamaño real, sin deformar el texto. */
 export function AreaChart({ series, labels, height = 220 }: { series: AreaSeries[]; labels: string[]; height?: number }) {
+  const { t } = useTranslation();
   const [ref, box] = useBox<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
   const W = Math.max(box.w, 240), H = Math.max(box.h, height), P = { l: 36, r: 10, t: 10, b: 26 };
@@ -32,7 +35,7 @@ export function AreaChart({ series, labels, height = 220 }: { series: AreaSeries
   const x = (i: number) => P.l + (i * (W - P.l - P.r)) / (n - 1);
   const y = (v: number) => P.t + (1 - v / nice) * (H - P.t - P.b);
   const ticks = Array.from({ length: Math.floor(nice / step) + 1 }, (_, i) => i * step).filter((t) => t <= nice);
-  const fmtD = (d: string) => new Date(d).toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  const fmtD = (d: string) => new Date(d).toLocaleDateString(locale(), { day: "numeric", month: "short" });
   const nLabels = Math.max(2, Math.min(8, Math.floor((W - P.l) / 90)));
   const xi = Array.from({ length: nLabels }, (_, k) => Math.round((k * (n - 1)) / (nLabels - 1)));
   return (
@@ -40,7 +43,7 @@ export function AreaChart({ series, labels, height = 220 }: { series: AreaSeries
       <div ref={ref} className="ms-chart-box" style={{ minHeight: height }}>
         {hover !== null && box.w > 0 && (
           <div className="ms-chart-tip" style={{ left: Math.min(Math.max(x(hover) + 12, 4), W - 190), top: 8 }}>
-            <div className="ms-chart-tip-title">Semana del {fmtD(labels[hover])}</div>
+            <div className="ms-chart-tip-title">{t("Semana del")} {fmtD(labels[hover])}</div>
             {series.map((s, k) => <div key={s.name}><i style={{ background: s.color ?? SERIES[k % SERIES.length] }} />{s.name}<b>{s.values[hover] ?? 0}</b></div>)}
           </div>)}
         {box.w > 0 && (
@@ -97,9 +100,10 @@ export function Donut({ slices, center }: { slices: Slice[]; center?: ReactNode 
 export type BarItem = { label: string; value: number; hint?: string };
 
 /** Lista de barras horizontales proporcionales al mayor valor. */
-export function BarList({ items, color = SERIES[0], empty = "Sin datos" }: { items: BarItem[]; color?: string; empty?: string }) {
+export function BarList({ items, color = SERIES[0], empty = T("Sin datos") }: { items: BarItem[]; color?: string; empty?: string }) {
+  const { t } = useTranslation();
   const max = Math.max(1, ...items.map((i) => i.value));
-  if (items.length === 0) return <Text size="sm" c="dimmed">{empty}</Text>;
+  if (items.length === 0) return <Text size="sm" c="dimmed">{t(empty)}</Text>;
   return (
     <div className="ms-bars">
       {items.map((i) => (

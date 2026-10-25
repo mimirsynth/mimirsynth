@@ -74,7 +74,7 @@ def create(body: CreateIn, request: Request, admin: User = Depends(require_admin
     db.add(u); db.commit()
     if body.mode == "invite":
         url = userlib.link(request, userlib.new_token(db, u, "invite", admin))
-        out = {"link": url, "emailed": userlib.email_invite(email, u.name, url, "invite") if mail.configured() else False}
+        out = {"link": url, "emailed": userlib.email_invite(email, u.name, url, "invite", u) if mail.configured() else False}
     audit(db, admin, "user.create", email=email, mode=body.mode, is_admin=body.is_admin)
     return {**_out(db, u), **out}
 
@@ -119,7 +119,7 @@ def new_link(uid: int, request: Request, send_email: bool = True, admin: User = 
         raise HTTPException(409, "la cuenta está deshabilitada")
     purpose = "invite" if u.status == "invited" else "reset"
     url = userlib.link(request, userlib.new_token(db, u, purpose, admin))
-    emailed = bool(send_email and u.email and mail.configured() and userlib.email_invite(u.email, u.name, url, purpose))
+    emailed = bool(send_email and u.email and mail.configured() and userlib.email_invite(u.email, u.name, url, purpose, u))
     audit(db, admin, "user.link", user_id=u.id, email=u.email, purpose=purpose, emailed=emailed)
     return {"link": url, "purpose": purpose, "emailed": emailed}
 

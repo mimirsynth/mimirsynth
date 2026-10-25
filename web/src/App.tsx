@@ -1,3 +1,6 @@
+import { applyInstanceDefault, setLanguage, type Lang } from "./i18n";
+import { T } from "./i18n";
+import { useTranslation } from "react-i18next";
 import { AppShell, Burger, Center, Group, Stack, Text, Title } from "@mantine/core";
 import { Avatar, Btn, Icon, NavItem, Notice, Panel, Pill, RoundLink, SelectField, ThemeButton, EmptyState } from "./ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,28 +23,31 @@ import Account from "./pages/Account";
 import Jobs from "./pages/Jobs";
 
 const NAV = [
-  { section: "Memoria", items: [
-    { to: "/", icon: "overview" as const, label: "Resumen" },
-    { to: "/diario", icon: "journal" as const, label: "Diario" },
-    { to: "/hechos", icon: "facts" as const, label: "Hechos" },
-    { to: "/conocimiento", icon: "knowledge" as const, label: "Conocimiento" },
+  { section: T("Memoria"), items: [
+    { to: "/", icon: "overview" as const, label: T("Resumen") },
+    { to: "/diario", icon: "journal" as const, label: T("Diario") },
+    { to: "/hechos", icon: "facts" as const, label: T("Hechos") },
+    { to: "/conocimiento", icon: "knowledge" as const, label: T("Conocimiento") },
   ] },
-  { section: "Explorar", items: [
-    { to: "/preguntar", icon: "ask" as const, label: "Preguntar" },
-    { to: "/grafo", icon: "graph" as const, label: "Grafo" },
-    { to: "/consulta", icon: "query" as const, label: "Consulta" },
+  { section: T("Explorar"), items: [
+    { to: "/preguntar", icon: "ask" as const, label: T("Preguntar") },
+    { to: "/grafo", icon: "graph" as const, label: T("Grafo") },
+    { to: "/consulta", icon: "query" as const, label: T("Consulta") },
   ] },
-  { section: "Curación", items: [
-    { to: "/propuestas", icon: "proposals" as const, label: "Propuestas" },
-    { to: "/vocabulario", icon: "vocabulary" as const, label: "Vocabulario" },
-    { to: "/trabajos", icon: "jobs" as const, label: "Trabajos" },
+  { section: T("Curación"), items: [
+    { to: "/propuestas", icon: "proposals" as const, label: T("Propuestas") },
+    { to: "/vocabulario", icon: "vocabulary" as const, label: T("Vocabulario") },
+    { to: "/trabajos", icon: "jobs" as const, label: T("Trabajos") },
   ] },
 ];
 
 export default function App() {
+  const { t } = useTranslation();
   const qc = useQueryClient();
   const cfg = useQuery({ queryKey: ["config"], queryFn: () => get<{ name: string; auth_mode: string; version?: string; links?: { docs: string; repo: string; feedback: string } }>("config") });
   const me = useQuery({ queryKey: ["me"], queryFn: () => get<Me>("me"), retry: false });
+  useEffect(() => { if (cfg.data) applyInstanceDefault((cfg.data as { default_language?: string }).default_language); }, [cfg.data]);
+  useEffect(() => { if (me.data?.locale) setLanguage(me.data.locale as Lang); }, [me.data?.locale]);
   const brains = useQuery({ queryKey: ["brains"], enabled: !!me.data, queryFn: () => get<Brain[]>("brains") });
   const KEY = "mimirsynth.brain";
   const [brain, setBrainState] = useState(() => { try { return localStorage.getItem(KEY) ?? ""; } catch { return ""; } });
@@ -67,18 +73,18 @@ export default function App() {
   if (me.error) {
     return (
       <Center className="ms-fullh"><Panel withBorder p="xl" w={420}><Stack>
-        <Notice tone="danger" title="No se pudo cargar tu sesión">{(me.error as Error).message}</Notice>
-        <Btn onClick={() => void me.refetch()} loading={me.isFetching}>Reintentar</Btn>
+        <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>{(me.error as Error).message}</Notice>
+        <Btn onClick={() => void me.refetch()} loading={me.isFetching}>{t("Reintentar")}</Btn>
       </Stack></Panel></Center>
     );
   }
-  if (!me.data) return <Center className="ms-fullh"><EmptyState>Cargando…</EmptyState></Center>;
+  if (!me.data) return <Center className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
   const cur = brains.data?.find((b) => b.slug === brain);
 
   return (
     <AppShell header={{ height: { base: 52, sm: 0 } }} navbar={{ width: 240, breakpoint: "sm", collapsed: { mobile: !menu } }} padding="md">
       <AppShell.Header hiddenFrom="sm" className="ms-mobilebar">
-        <Burger opened={menu} onClick={() => setMenu((o) => !o)} size="sm" aria-label={menu ? "Cerrar menú" : "Abrir menú"} />
+        <Burger opened={menu} onClick={() => setMenu((o) => !o)} size="sm" aria-label={menu ? t("Cerrar menú") : t("Abrir menú")} />
         <Logo size={26} name={name} />
       </AppShell.Header>
       <AppShell.Navbar p="xs" className="ms-navbar">
@@ -86,22 +92,22 @@ export default function App() {
         <div className="ms-nav-scroll">
           {NAV.map((g) => (
             <div key={g.section} className="ms-nav-group">
-              <div className="ms-nav-section">{g.section}</div>
-              {g.items.map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={n.label} end={n.to === "/"}
-                rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title="trabajos en cola o en marcha">{active.data!.active}</Pill> : undefined} />)}
+              <div className="ms-nav-section">{t(g.section)}</div>
+              {g.items.map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"}
+                rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("trabajos en cola o en marcha")}>{active.data!.active}</Pill> : undefined} />)}
             </div>))}
         </div>
         <div className="ms-nav-bottom">
           <div>
-            <SelectField size="xs" aria-label="Brain activo" value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
+            <SelectField size="xs" aria-label={t("Brain activo")} value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
           </div>
           <div className="ms-iconrow">
-            <RoundLink to="/cuenta" label={`Mi cuenta · ${me.data.name}${cur ? ` · rol ${cur.role}` : ""}`}><Avatar src={me.data.avatar} name={me.data.name} size={26} /></RoundLink>
-            {cfg.data?.links?.docs && <RoundLink href={cfg.data.links.docs} label="Documentación"><Icon name="docs" /></RoundLink>}
-            {cfg.data?.links?.repo && <RoundLink href={cfg.data.links.repo} label="Código fuente"><Icon name="repo" /></RoundLink>}
-            {cfg.data?.links?.feedback && <RoundLink href={cfg.data.links.feedback} label="Comentarios y errores"><Icon name="feedback" /></RoundLink>}
+            <RoundLink to="/cuenta" label={`Mi cuenta · ${me.data.name}${cur ? t(" · rol {{role}}", { role: cur.role }) : ""}`}><Avatar src={me.data.avatar} name={me.data.name} size={26} /></RoundLink>
+            {cfg.data?.links?.docs && <RoundLink href={cfg.data.links.docs} label={t("Documentación")}><Icon name="docs" /></RoundLink>}
+            {cfg.data?.links?.repo && <RoundLink href={cfg.data.links.repo} label={t("Código fuente")}><Icon name="repo" /></RoundLink>}
+            {cfg.data?.links?.feedback && <RoundLink href={cfg.data.links.feedback} label={t("Comentarios y errores")}><Icon name="feedback" /></RoundLink>}
             <ThemeButton />
-            <RoundLink to="/admin" label="Administración"><Icon name="admin" /></RoundLink>
+            <RoundLink to="/admin" label={t("Administración")}><Icon name="admin" /></RoundLink>
           </div>
           <div className="ms-version">{name} v{cfg.data?.version ?? ""}</div>
         </div>
@@ -125,7 +131,7 @@ export default function App() {
               <Route path="/vocabulario" element={<Vocabulary graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/consulta" element={<Query graph={brain} />} />
             </>
-          ) : <Route path="*" element={<Text c="dimmed">No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.</Text>} />}
+          ) : <Route path="*" element={<Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}
         </Routes>
       </AppShell.Main>
     </AppShell>

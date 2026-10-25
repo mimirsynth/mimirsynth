@@ -1,3 +1,4 @@
+import { tr } from "../i18n";
 import { useMemo, useState } from "react";
 import type { ColFilter, ColSort, SortDir } from "./ColHead";
 
@@ -27,7 +28,7 @@ export function useTableView<T>(rows: T[], cols: Record<string, Col<T>>, initial
     const counts = new Map<string, number>();
     rows.forEach((r) => { const v = String(cols[key].get(r)); counts.set(v, (counts.get(v) ?? 0) + 1); });
     return { kind: "select", value: filters[key] ?? "", onChange: (v) => setFilters((f) => ({ ...f, [key]: v })),
-      options: [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], "es")).map(([value, count]) => ({ value, label: cols[key].label?.(value) ?? (value || "(vacío)"), count })) };
+      options: [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], "es")).map(([value, count]) => ({ value, label: cols[key].label?.(value) ?? (value || tr("(vacío)")), count })) };
   };
   const active = Object.values(filters).some(Boolean);
   return { rows: view, sortProps, text, select, active, clear: () => setFilters({}), total: rows.length };

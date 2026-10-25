@@ -56,13 +56,28 @@ def identities(db: Session, user: User) -> list[str]:
     return [i.provider for i in db.scalars(select(Identity).where(Identity.user_id == user.id))]
 
 
-def email_invite(to: str, name: str, url: str, purpose: str) -> bool:
-    days = appsettings.get("invite_days")
-    if purpose == "invite":
-        subject, body = f"Te han invitado a {brand.NAME}", f"Hola {name or to},\n\nTe han creado una cuenta en {brand.NAME}. Para elegir tu contraseña abre este enlace (válido {days} días, un solo uso):\n\n{url}\n"
-    else:
-        subject, body = f"Restablece tu contraseña de {brand.NAME}", f"Hola {name or to},\n\nPara elegir una contraseña nueva abre este enlace (válido {days} días, un solo uso):\n\n{url}\n\nSi no lo has pedido tú, ignora este mensaje.\n"
-    return mail.try_send(to, subject, body)
+_MAILS = {
+    "es": {
+        "invite": ("Te han invitado a {app}", "Hola {name},\n\nTe han creado una cuenta en {app}. Para elegir tu contraseña abre este enlace (válido {days} días, un solo uso):\n\n{url}\n"),
+        "reset": ("Restablece tu contraseña de {app}", "Hola {name},\n\nPara elegir una contraseña nueva abre este enlace (válido {days} días, un solo uso):\n\n{url}\n\nSi no lo has pedido tú, ignora este mensaje.\n"),
+    },
+    "en": {
+        "invite": ("You have been invited to {app}", "Hello {name},\n\nAn account has been created for you on {app}. To choose your password open this link (valid for {days} days, single use):\n\n{url}\n"),
+        "reset": ("Reset your {app} password", "Hello {name},\n\nTo choose a new password open this link (valid for {days} days, single use):\n\n{url}\n\nIf you did not ask for this, ignore this message.\n"),
+    },
+}
+
+
+def mail_language(user: User | None = None) -> str:
+    """Idioma de los correos: el elegido por la persona o, si no, el de la instancia."""
+    lang = (user.locale if user else "") or appsettings.get("default_language")
+    return lang if lang in _MAILS else "es"
+
+
+def email_invite(to: str, name: str, url: str, purpose: str, user: User | None = None) -> bool:
+    subject, body = _MAILS[mail_language(user)][purpose]
+    fields = {"app": brand.NAME, "name": name or to, "days": appsettings.get("invite_days"), "url": url}
+    return mail.try_send(to, subject.format(**fields), body.format(**fields))
 
 
 def require_not_last_admin(db: Session, target: User) -> None:

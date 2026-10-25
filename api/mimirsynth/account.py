@@ -42,7 +42,8 @@ def _avatar_dir() -> Path:
 
 
 class ProfileIn(BaseModel):
-    display_name: str = Field("", max_length=80)
+    display_name: str | None = Field(None, max_length=80)
+    locale: str | None = Field(None, pattern="^(es|en)?$")
 
 
 @router.get("/me/profile")
@@ -54,13 +55,16 @@ def profile(user: User = Depends(current_user), db: Session = Depends(get_db)):
         if role:
             brains.append({"slug": b.slug, "name": b.name, "role": role})
     return {"id": user.id, "name": user.display_name or user.name, "idp_name": user.name, "display_name": user.display_name, "email": user.email,
-            "is_admin": user.is_admin, "auth_mode": settings.auth_mode, "has_password": bool(user.password_hash), "avatar": avatar_url(user), "has_custom_avatar": bool(user.avatar_ref),
+            "is_admin": user.is_admin, "auth_mode": settings.auth_mode, "has_password": bool(user.password_hash), "locale": user.locale, "avatar": avatar_url(user), "has_custom_avatar": bool(user.avatar_ref),
             "account_url": appsettings.get("account_url"), "created_at": user.created_at, "last_login": user.last_login, "brains": brains}
 
 
 @router.patch("/me/profile")
 def update_profile(body: ProfileIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    user.display_name = " ".join(body.display_name.split())
+    if body.display_name is not None:
+        user.display_name = " ".join(body.display_name.split())
+    if body.locale is not None:
+        user.locale = body.locale
     db.commit()
     audit(db, user, "account.profile")
     return {"ok": True, "name": user.display_name or user.name}

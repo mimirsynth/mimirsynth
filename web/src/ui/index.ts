@@ -32,5 +32,6 @@ export { FilePicker } from "./FilePicker";
 export { Legend, LegendSection, LegendItem } from "./Legend";
 export { ColGrid } from "./ColGrid";
 export { Form } from "./Form";
+export { LanguageSelect } from "./LanguageSelect";
 export { QrCode } from "./QrCode";
 export { SettingsLayout, SubNav, SettingsGroup, SettingsRow, SettingsBody } from "./SettingsLayout";

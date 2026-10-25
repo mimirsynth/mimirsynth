@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, ClearFilters, ColHead, ComboField, DataTable, FillArea, Modal, Notice, Page, Panel, Pill, StatCard, Tabs, Toggle, useTableView, MutationError, ConfirmDialog, DataState, EmptyState, PageHeader, useTabParam, StatGrid } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,45 +19,48 @@ type Alias = { id: number; alias: string; canonical: string };
 type RelRow = { name: string; facts: number; generic?: boolean; variants: { raw: string; facts: number }[] };
 const REL_COLS = { name: { get: (r: RelRow) => r.name }, facts: { get: (r: RelRow) => r.facts }, variants: { get: (r: RelRow) => r.variants.map((v) => v.raw).join(" ") } };
 function RelationsTable({ rows, isAdmin, onUnify }: { rows: RelRow[]; isAdmin: boolean; onUnify: (name: string) => void }) {
+  const { t } = useTranslation();
   const v = useTableView(rows, REL_COLS, { key: "facts", dir: "desc" });
   return (
     <Stack gap="xs">
       <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
       <FillArea><DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr>
-          <ColHead sort={v.sortProps("name")} filter={v.text("name")}>Relación (normalizada)</ColHead>
-          <ColHead sort={v.sortProps("facts")}>Hechos</ColHead>
-          <ColHead filter={v.text("variants", "Variante cruda…")}>Variantes crudas</ColHead>
+          <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Relación (normalizada)")}</ColHead>
+          <ColHead sort={v.sortProps("facts")}>{t("Hechos")}</ColHead>
+          <ColHead filter={v.text("variants", t("Variante cruda…"))}>{t("Variantes crudas")}</ColHead>
           {isAdmin && <DataTable.Th />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((r) => (
           <DataTable.Tr key={r.name}>
-            <DataTable.Td><Group gap={6}><Text fw={500}>{r.name}</Text>{r.generic && <Pill size="xs" tone="warn">genérica</Pill>}</Group></DataTable.Td>
+            <DataTable.Td><Group gap={6}><Text fw={500}>{r.name}</Text>{r.generic && <Pill size="xs" tone="warn">{t("genérica")}</Pill>}</Group></DataTable.Td>
             <DataTable.Td>{r.facts}</DataTable.Td>
             <DataTable.Td>{r.variants.length > 1 ? r.variants.map((x) => `${x.raw} (${x.facts})`).join(" · ") : <Text span c="dimmed">—</Text>}</DataTable.Td>
-            {isAdmin && <DataTable.Td><Btn size="row" icon="refresh" onClick={() => onUnify(r.name)}>Unificar con…</Btn></DataTable.Td>}
+            {isAdmin && <DataTable.Td><Btn size="row" icon="refresh" onClick={() => onUnify(r.name)}>{t("Unificar con…")}</Btn></DataTable.Td>}
           </DataTable.Tr>))}</DataTable.Tbody></DataTable></FillArea>
     </Stack>
   );
 }
 
 function AliasesTable({ rows, isAdmin, onDelete }: { rows: Alias[]; isAdmin: boolean; onDelete: (a: Alias) => void }) {
+  const { t } = useTranslation();
   const v = useTableView(rows, { alias: { get: (a: Alias) => a.alias }, canonical: { get: (a: Alias) => a.canonical } }, { key: "alias", dir: "asc" });
   return (
     <Stack gap="xs">
       <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
       <DataTable fz="sm" w={560}><DataTable.Thead><DataTable.Tr>
-        <ColHead sort={v.sortProps("alias")} filter={v.text("alias")}>Alias</ColHead>
-        <ColHead sort={v.sortProps("canonical")} filter={v.text("canonical")}>Se lee como</ColHead>
+        <ColHead sort={v.sortProps("alias")} filter={v.text("alias")}>{t("Alias")}</ColHead>
+        <ColHead sort={v.sortProps("canonical")} filter={v.text("canonical")}>{t("Se lee como")}</ColHead>
         {isAdmin && <DataTable.Th />}</DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((a) => (
           <DataTable.Tr key={a.id}><DataTable.Td>{a.alias}</DataTable.Td><DataTable.Td>{a.canonical}</DataTable.Td>
-            {isAdmin && <DataTable.Td><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(a)}>Quitar</Btn></DataTable.Td>}</DataTable.Tr>))}</DataTable.Tbody></DataTable>
+            {isAdmin && <DataTable.Td><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(a)}>{t("Quitar")}</Btn></DataTable.Td>}</DataTable.Tr>))}</DataTable.Tbody></DataTable>
     </Stack>
   );
 }
 
 export default function Vocabulary({ graph, role }: { graph: string; role: string }) {
+  const { t } = useTranslation();
   const isAdmin = ["admin", "owner"].includes(role);
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["vocab", graph], queryFn: () => get<Vocab>("vocabulary", { graph }) });
@@ -75,25 +79,25 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
   const rels = data.relations.filter((r) => !tail || r.facts <= 2);
   return (
     <Page>
-      <PageHeader title="Vocabulario" description={<>Qué tipos de relación y de entidad existen en el grafo, para decidir qué normalizar o fusionar. Unificar una relación con otra es un alias: se aplica al leer y no modifica los datos del grafo (se puede deshacer).</>} />
+      <PageHeader title={t("Vocabulario")} description={<>{t("Qué tipos de relación y de entidad existen en el grafo, para decidir qué normalizar o fusionar. Unificar una relación con otra es un alias: se aplica al leer y no modifica los datos del grafo (se puede deshacer).")}</>} />
       <StatGrid>
-        <StatCard label="Tipos de relación" value={`${s.relation_types_raw} → ${s.relation_types_canonical}`} hint="crudos → tras normalizar formato" />
-        <StatCard label="Hechos genéricos" value={`${s.generic_pct} %`} hint="RELATES_TO, MENTIONED_IN…" />
-        <StatCard label="Cola larga" value={s.long_tail_types} hint={`${s.long_tail_facts} hechos en tipos con ≤2 usos`} />
-        <StatCard label="Entidades" value={s.entities} />
-        <StatCard label="Posibles duplicados" value={s.duplicate_groups} hint="mismo nombre salvo versión/mayúsculas" />
+        <StatCard label={t("Tipos de relación")} value={`${s.relation_types_raw} → ${s.relation_types_canonical}`} hint={t("crudos → tras normalizar formato")} />
+        <StatCard label={t("Hechos genéricos")} value={`${s.generic_pct} %`} hint={t("RELATES_TO, MENTIONED_IN…")} />
+        <StatCard label={t("Cola larga")} value={s.long_tail_types} hint={t("{{long_tail_facts}} hechos en tipos con ≤2 usos", { long_tail_facts: s.long_tail_facts })} />
+        <StatCard label={t("Entidades")} value={s.entities} />
+        <StatCard label={t("Posibles duplicados")} value={s.duplicate_groups} hint={t("mismo nombre salvo versión/mayúsculas")} />
       </StatGrid>
       <Tabs value={tab} onChange={setTab} className="ms-tabs-fill">
         <Tabs.List>
-          <Tabs.Tab value="rel">Relaciones ({data.relations.length})</Tabs.Tab>
-          <Tabs.Tab value="ent">Tipos de entidad ({data.labels.length})</Tabs.Tab>
-          {isAdmin && <Tabs.Tab value="corrector">Corrector de tipos</Tabs.Tab>}
-          <Tabs.Tab value="onto">Ontología</Tabs.Tab>
-          <Tabs.Tab value="ali">Alias ({aliases.length})</Tabs.Tab>
-          <Tabs.Tab value="dup">Duplicados ({data.duplicates.length})</Tabs.Tab>
+          <Tabs.Tab value="rel">{t("Relaciones (")}{data.relations.length})</Tabs.Tab>
+          <Tabs.Tab value="ent">{t("Tipos de entidad (")}{data.labels.length})</Tabs.Tab>
+          {isAdmin && <Tabs.Tab value="corrector">{t("Corrector de tipos")}</Tabs.Tab>}
+          <Tabs.Tab value="onto">{t("Ontología")}</Tabs.Tab>
+          <Tabs.Tab value="ali">{t("Alias (")}{aliases.length})</Tabs.Tab>
+          <Tabs.Tab value="dup">{t("Duplicados (")}{data.duplicates.length})</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="rel" pt="sm">
-          <Toggle mb="xs" label="Solo cola larga (≤2 hechos)" checked={tail} onChange={(e) => setTail(e.currentTarget.checked)} />
+          <Toggle mb="xs" label={t("Solo cola larga (≤2 hechos)")} checked={tail} onChange={(e) => setTail(e.currentTarget.checked)} />
           <RelationsTable rows={rels} isAdmin={isAdmin} onUnify={(n) => { setFrom(n); setTo(""); }} />
         </Tabs.Panel>
         <Tabs.Panel value="ent" pt="sm"><VocabTypes graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
@@ -101,20 +105,20 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
         <Tabs.Panel value="onto" pt="sm"><VocabOntology graph={graph} role={role} /></Tabs.Panel>
         <Tabs.Panel value="ali" pt="sm">
           <FillArea>
-            {aliases.length === 0 ? <EmptyState>Sin alias. Usa «Unificar con…» en la pestaña Relaciones.</EmptyState> : (
+            {aliases.length === 0 ? <EmptyState>{t("Sin alias. Usa «Unificar con…» en la pestaña Relaciones.")}</EmptyState> : (
               <AliasesTable rows={aliases} isAdmin={isAdmin} onDelete={setDelAlias} />)}
           </FillArea>
         </Tabs.Panel>
         <Tabs.Panel value="dup" pt="sm"><VocabDuplicates graph={graph} groups={data.duplicates} ignored={data.ignored_duplicates ?? []} isAdmin={isAdmin} /></Tabs.Panel>
       </Tabs>
-      <ConfirmDialog opened={!!delAlias} onClose={() => setDelAlias(null)} title="Quitar alias" action="Quitar alias" subject={delAlias && `${delAlias.alias} → ${delAlias.canonical}`}
-        warning="La relación vuelve a leerse con su nombre propio. Los hechos del grafo no se modifican." onConfirm={() => del.mutateAsync(delAlias!.id)} />
-      <Modal opened={!!from} onClose={() => setFrom(null)} title="Unificar relación" centered>
+      <ConfirmDialog opened={!!delAlias} onClose={() => setDelAlias(null)} title={t("Quitar alias")} action={t("Quitar alias")} subject={delAlias && `${delAlias.alias} → ${delAlias.canonical}`}
+        warning={t("La relación vuelve a leerse con su nombre propio. Los hechos del grafo no se modifican.")} onConfirm={() => del.mutateAsync(delAlias!.id)} />
+      <Modal opened={!!from} onClose={() => setFrom(null)} title={t("Unificar relación")} centered>
         <Stack>
-          <Text size="sm"><b>{from}</b> se leerá como el nombre que elijas. Los hechos del grafo no se modifican y puedes quitar el alias después.</Text>
-          <ComboField label="Se lee como" data={data.relations.map((r) => r.name).filter((n) => n !== from)} limit={50} value={to} onChange={setTo} placeholder="Elige una relación o escribe un nombre nuevo" />
+          <Text size="sm"><b>{from}</b> {t("se leerá como el nombre que elijas. Los hechos del grafo no se modifican y puedes quitar el alias después.")}</Text>
+          <ComboField label={t("Se lee como")} data={data.relations.map((r) => r.name).filter((n) => n !== from)} limit={50} value={to} onChange={setTo} placeholder={t("Elige una relación o escribe un nombre nuevo")} />
           <MutationError error={add.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setFrom(null)}>Cancelar</Btn><Btn kind="primary" icon="check" disabled={!to.trim()} loading={add.isPending} onClick={() => add.mutate()}>Crear alias</Btn></Group>
+          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setFrom(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!to.trim()} loading={add.isPending} onClick={() => add.mutate()}>{t("Crear alias")}</Btn></Group>
         </Stack>
       </Modal>
     </Page>

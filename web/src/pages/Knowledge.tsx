@@ -1,3 +1,5 @@
+import { T, locale } from "../i18n";
+import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -17,7 +19,7 @@ type Adapter = { id: string; label: string; collection_label: string; fields: { 
 type Up = { key: string; name: string; size: number; done: number; state: "subiendo" | "listo" | "duplicado" | "error"; msg?: string };
 
 const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger" };
-const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: "en cola", error: "error" };
+const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: T("en cola"), error: "error" };
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const PART = 32 * 1024 * 1024; // las partes son más pequeñas que el límite habitual de los proxies (~100 MB)
 
@@ -33,6 +35,7 @@ async function uploadFile(slug: string, file: File, progress: (done: number) => 
 }
 
 export default function Knowledge({ graph, role, instanceAdmin = false }: { graph: string; role: string; instanceAdmin?: boolean }) {
+  const { t } = useTranslation();
   const canUpload = ["contributor", "curator", "admin", "owner"].includes(role);
   const isAdmin = ["admin", "owner"].includes(role);
   const qc = useQueryClient();
@@ -62,7 +65,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
     refetchInterval: (qr) => (qr.state.data?.sources.some((x) => x.status === "scanning") ? 3000 : false) });
   const sv = useTableView(sources.data?.sources ?? [], {
     name: { get: (x: Source) => x.name }, kind: { get: (x: Source) => (x.kind === "upload" ? "subidas" : x.kind === "wiki" ? "wiki" : "carpeta"), exact: true }, docs: { get: (x: Source) => x.documents },
-    state: { get: (x: Source) => (x.status === "scanning" ? "escaneando" : x.status === "error" ? "con error" : !x.enabled ? "pausada" : "al día"), exact: true }, last: { get: (x: Source) => x.last_sync_at ?? "" } });
+    state: { get: (x: Source) => (x.status === "scanning" ? "escaneando" : x.status === "error" ? t("con error") : !x.enabled ? "pausada" : t("al día")), exact: true }, last: { get: (x: Source) => x.last_sync_at ?? "" } });
   const [editSrc, setEditSrc] = useState<{ s: Source; name: string; interval: number | ""; subpath: string; values: Record<string, string> } | null>(null);
   const hits = useQuery({ queryKey: ["docs-search", graph, query], enabled: query.length >= 2, queryFn: () => get<{ enabled: boolean; results: Hit[] }>("docs/search", { graph, q: query, k: 8 }) });
   const detail = useQuery({ queryKey: ["doc", graph, open], enabled: open !== null, queryFn: () => get<Doc & { chunk_list: Chunk[] }>(`docs/${open}`, { graph, chunks: 200 }) });
@@ -96,7 +99,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const start = async (files: FileList | File[]) => {
     for (const f of Array.from(files)) {
       const key = `${f.name}-${f.size}-${Date.now()}-${Math.random()}`;
-      if (f.size === 0) { setUps((u) => [...u, { key, name: f.name, size: 0, done: 0, state: "error", msg: "el fichero está vacío" }]); continue; }
+      if (f.size === 0) { setUps((u) => [...u, { key, name: f.name, size: 0, done: 0, state: "error", msg: t("el fichero está vacío") }]); continue; }
       setUps((u) => [...u, { key, name: f.name, size: f.size, done: 0, state: "subiendo" }]);
       try {
         const r = await uploadFile(graph, f, (done) => patch(key, { done }));
@@ -109,28 +112,28 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const enabled = sources.data?.enabled !== false;
   return (
     <Page>
-      <PageHeader title="Conocimiento" description={<>Documentos del brain: se guardan sus originales, se trocean y se buscan por significado y por texto. Cada pasaje se muestra con su procedencia.</>} />
-      {!enabled && <Notice tone="warn">El índice documental necesita PostgreSQL con pgvector; esta instancia no lo tiene y no se pueden indexar documentos.</Notice>}
+      <PageHeader title={t("Conocimiento")} description={<>{t("Documentos del brain: se guardan sus originales, se trocean y se buscan por significado y por texto. Cada pasaje se muestra con su procedencia.")}</>} />
+      {!enabled && <Notice tone="warn">{t("El índice documental necesita PostgreSQL con pgvector; esta instancia no lo tiene y no se pueden indexar documentos.")}</Notice>}
         <Tabs value={tab} onChange={(v) => setTab(v)} className="ms-tabs-fill">
           <Tabs.List>
-            <Tabs.Tab value="docs">Documentos ({Object.values(docs.data?.status_counts ?? {}).reduce((a, b) => a + b, 0)})</Tabs.Tab>
-            <Tabs.Tab value="src">Fuentes ({sources.data?.sources.length ?? 0})</Tabs.Tab>
+            <Tabs.Tab value="docs">{t("Documentos (")}{Object.values(docs.data?.status_counts ?? {}).reduce((a, b) => a + b, 0)})</Tabs.Tab>
+            <Tabs.Tab value="src">{t("Fuentes (")}{sources.data?.sources.length ?? 0})</Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="docs" pt="sm">
             <Stack gap="sm">
-              <SearchBar mode="submit" value={q} onChange={setQ} placeholder="Busca en los documentos por significado o por texto…" onSubmit={setQuery} onClear={() => { setQ(""); setQuery(""); }} submitted={!!query} loading={hits.isLoading} disabled={!enabled} />
+              <SearchBar mode="submit" value={q} onChange={setQ} placeholder={t("Busca en los documentos por significado o por texto…")} onSubmit={setQuery} onClear={() => { setQ(""); setQuery(""); }} submitted={!!query} loading={hits.isLoading} disabled={!enabled} />
               {query ? (
                   <FillArea><Stack gap="xs">
-                    {hits.isLoading && <EmptyState>Buscando…</EmptyState>}
+                    {hits.isLoading && <EmptyState>{t("Buscando…")}</EmptyState>}
                     <MutationError error={hits.error} />
-                    {hits.data && hits.data.results.length === 0 && <EmptyState>Sin resultados para «{query}».</EmptyState>}
+                    {hits.data && hits.data.results.length === 0 && <EmptyState>{t("Sin resultados para «{{query}}».", { query })}</EmptyState>}
                     {(hits.data?.results ?? []).map((h) => (
                       <ListCard key={`${h.document_id}-${h.chunk}`} title={h.citation}
-                        aside={<><Pill size="xs" title="similitud del embedding (0 si solo coincide por texto)">{h.similarity ? `${Math.round(h.similarity * 100)} %` : "texto"}</Pill>{fmt(h.updated_at)}</>}
+                        aside={<><Pill size="xs" title={t("similitud del embedding (0 si solo coincide por texto)")}>{h.similarity ? `${Math.round(h.similarity * 100)} %` : "texto"}</Pill>{fmt(h.updated_at)}</>}
                         actions={<>
-                          <Btn size="row" icon="info" onClick={() => setCtxOf(h)}>Ver contexto</Btn>
-                          <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${h.document_id}/file`}>Original</Btn>
-                          {canUpload && <Btn size="row" icon="plus" onClick={() => { promote.reset(); setPromo({ doc: h.document_id, chunk: h.chunk, title: h.citation, text: h.text, name: "" }); }}>Promover a memoria</Btn>}</>}>
+                          <Btn size="row" icon="info" onClick={() => setCtxOf(h)}>{t("Ver contexto")}</Btn>
+                          <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${h.document_id}/file`}>{t("Original")}</Btn>
+                          {canUpload && <Btn size="row" icon="plus" onClick={() => { promote.reset(); setPromo({ doc: h.document_id, chunk: h.chunk, title: h.citation, text: h.text, name: "" }); }}>{t("Promover a memoria")}</Btn>}</>}>
                         {h.text}
                       </ListCard>))}
                   </Stack></FillArea>
@@ -140,8 +143,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                   onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
                   onDrop={(e) => { e.preventDefault(); setOver(false); if (enabled) void start(e.dataTransfer.files); }}>
                   <Group justify="center" gap="md">
-                    <Text size="sm">Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf) o</Text>
-                    <FilePicker label="Elegir ficheros" accept=".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf" multiple disabled={!enabled} onFiles={(fl) => void start(fl)} />
+                    <Text size="sm">{t("Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf) o")}</Text>
+                    <FilePicker label={t("Elegir ficheros")} accept=".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf" multiple disabled={!enabled} onFiles={(fl) => void start(fl)} />
                   </Group>
                 </div>)}
               {ups.length > 0 && (
@@ -149,21 +152,21 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                   {ups.map((u) => u.state === "subiendo"
                     ? <ProgressBar key={u.key} done={u.done} total={u.size} text={`${u.name} · ${human(u.done)} de ${human(u.size)}`} />
                     : <Group key={u.key} gap={6}><Pill size="xs" tone={u.state === "error" ? "danger" : u.state === "listo" ? "success" : "neutral"}>{u.state}</Pill><Text size="sm">{u.name}</Text>{u.msg && <Text size="xs" c="dimmed">{u.msg}</Text>}</Group>)}
-                  <Group><Btn size="row" onClick={() => setUps((u) => u.filter((x) => x.state === "subiendo"))}>Limpiar lista</Btn></Group>
+                  <Group><Btn size="row" onClick={() => setUps((u) => u.filter((x) => x.state === "subiendo"))}>{t("Limpiar lista")}</Btn></Group>
                 </Stack>)}
-              <Segments label="Estado" value={f.status || "all"} onChange={(v) => setFilter({ status: v === "all" ? "" : v })}
-                data={[{ value: "all", label: "Todos", count: Object.values(docs.data?.status_counts ?? {}).reduce((a, b) => a + b, 0) }, ...Object.entries(LABEL).filter(([k]) => (docs.data?.status_counts[k] ?? 0) > 0 || f.status === k).map(([k, v]) => ({ value: k, label: v[0].toUpperCase() + v.slice(1), count: docs.data?.status_counts[k] ?? 0 }))]} />
+              <Segments label={t("Estado")} value={f.status || "all"} onChange={(v) => setFilter({ status: v === "all" ? "" : v })}
+                data={[{ value: "all", label: t("Todos"), count: Object.values(docs.data?.status_counts ?? {}).reduce((a, b) => a + b, 0) }, ...Object.entries(LABEL).filter(([k]) => (docs.data?.status_counts[k] ?? 0) > 0 || f.status === k).map(([k, v]) => ({ value: k, label: v[0].toUpperCase() + v.slice(1), count: docs.data?.status_counts[k] ?? 0 }))]} />
               <ClearFilters active={active} onClear={clear} />
               <FillArea>
                 <DataTable fz="sm">
                   <DataTable.Thead><DataTable.Tr>
-                    <ColHead sort={sortProps("title")} filter={{ kind: "text", value: f.q, onChange: (v) => setFilter({ q: v }), placeholder: "Título o nombre de fichero…" }}>Documento</ColHead>
-                    <ColHead filter={{ kind: "select", value: f.source, onChange: (v) => setFilter({ source: v, path: "" }), allLabel: "Todas las fuentes", options: (sources.data?.sources ?? []).map((x) => ({ value: String(x.id), label: x.name, count: x.documents })),
-                      extra: f.source && sources.data?.sources.find((x) => String(x.id) === f.source)?.kind !== "upload" ? <TextField size="xs" mt={8} label="Carpeta" placeholder="p. ej. fix" value={f.path} onChange={(e) => setFilter({ path: e.currentTarget.value })} /> : undefined }}>Fuente</ColHead>
-                    <ColHead sort={sortProps("size")}>Tamaño</ColHead>
-                    <ColHead sort={sortProps("chunks")}>Trozos</ColHead>
-                    <ColHead>Estado</ColHead>
-                    <ColHead sort={sortProps("updated")}>Actualizado</ColHead>
+                    <ColHead sort={sortProps("title")} filter={{ kind: "text", value: f.q, onChange: (v) => setFilter({ q: v }), placeholder: t("Título o nombre de fichero…") }}>{t("Documento")}</ColHead>
+                    <ColHead filter={{ kind: "select", value: f.source, onChange: (v) => setFilter({ source: v, path: "" }), allLabel: t("Todas las fuentes"), options: (sources.data?.sources ?? []).map((x) => ({ value: String(x.id), label: x.name, count: x.documents })),
+                      extra: f.source && sources.data?.sources.find((x) => String(x.id) === f.source)?.kind !== "upload" ? <TextField size="xs" mt={8} label={t("Carpeta")} placeholder={t("p. ej. fix")} value={f.path} onChange={(e) => setFilter({ path: e.currentTarget.value })} /> : undefined }}>{t("Fuente")}</ColHead>
+                    <ColHead sort={sortProps("size")}>{t("Tamaño")}</ColHead>
+                    <ColHead sort={sortProps("chunks")}>{t("Trozos")}</ColHead>
+                    <ColHead>{t("Estado")}</ColHead>
+                    <ColHead sort={sortProps("updated")}>{t("Actualizado")}</ColHead>
                     <DataTable.Th />
                   </DataTable.Tr></DataTable.Thead>
                   <DataTable.Tbody>{(docs.data?.items ?? []).map((d) => (
@@ -172,14 +175,14 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                       <DataTable.Td>{d.source}</DataTable.Td>
                       <DataTable.Td>{human(d.size)}</DataTable.Td>
                       <DataTable.Td>{d.status === "indexing" && d.progress ? `${d.progress.done}/${d.progress.total}` : d.chunks}</DataTable.Td>
-                      <DataTable.Td><Pill size="xs" tone={TONE[d.status] ?? "neutral"} title={d.error || undefined}>{LABEL[d.status] ?? d.status}</Pill></DataTable.Td>
+                      <DataTable.Td><Pill size="xs" tone={TONE[d.status] ?? "neutral"} title={d.error || undefined}>{t(LABEL[d.status] ?? d.status)}</Pill></DataTable.Td>
                       <DataTable.Td>{fmt(d.updated_at)}</DataTable.Td>
-                      <DataTable.Td><Btn size="row" onClick={() => setOpen(d.id)}>Ver</Btn></DataTable.Td>
+                      <DataTable.Td><Btn size="row" onClick={() => setOpen(d.id)}>{t("Ver")}</Btn></DataTable.Td>
                     </DataTable.Tr>))}</DataTable.Tbody>
                 </DataTable>
                 {docs.data?.items.length === 0 && (active
-                  ? <Text c="dimmed" mt="sm">Ningún documento coincide con los filtros.</Text>
-                  : <EmptyState>Aún no hay documentos. {canUpload ? "Sube el primero arrastrándolo a la zona de arriba." : "Un colaborador puede subir ficheros."}</EmptyState>)}
+                  ? <Text c="dimmed" mt="sm">{t("Ningún documento coincide con los filtros.")}</Text>
+                  : <EmptyState>{t("Aún no hay documentos.")} {canUpload ? t("Sube el primero arrastrándolo a la zona de arriba.") : t("Un colaborador puede subir ficheros.")}</EmptyState>)}
               </FillArea>
               <Pager total={docs.data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} />
               </>)}
@@ -188,43 +191,43 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
           <Tabs.Panel value="src" pt="sm">
             <Stack gap="sm">
               <Group justify="space-between">
-                <Text size="sm" c="dimmed">De dónde salen los documentos. Las carpetas se referencian sin copiar los originales y las wikis se leen por su API (solo lectura); ambas se reescanean solas: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en <Link to="/trabajos">Trabajos</Link>.</Text>
+                <Text size="sm" c="dimmed">{t("De dónde salen los documentos. Las carpetas se referencian sin copiar los originales y las wikis se leen por su API (solo lectura); ambas se reescanean solas: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en")} <Link to="/trabajos">{t("Trabajos")}</Link>.</Text>
                 {isAdmin && (
                   <Group gap={6} wrap="nowrap">
-                    {instanceAdmin && <Btn icon="docs" disabled={!enabled || !adapters.data?.adapters.length} onClick={() => { connect.reset(); addWiki.reset(); setWiki({ adapter: adapters.data?.adapters[0]?.id ?? "outline", name: "", values: {}, cols: null, picked: [], interval: 60 }); }}>Añadir wiki</Btn>}
-                    <Btn kind="primary" icon="folder" disabled={!enabled || !roots.data?.roots.length} onClick={() => setNewSrc({ name: "", root: roots.data?.roots[0]?.name ?? "", subpath: "", interval: 60 })}>Añadir carpeta</Btn>
+                    {instanceAdmin && <Btn icon="docs" disabled={!enabled || !adapters.data?.adapters.length} onClick={() => { connect.reset(); addWiki.reset(); setWiki({ adapter: adapters.data?.adapters[0]?.id ?? "outline", name: "", values: {}, cols: null, picked: [], interval: 60 }); }}>{t("Añadir wiki")}</Btn>}
+                    <Btn kind="primary" icon="folder" disabled={!enabled || !roots.data?.roots.length} onClick={() => setNewSrc({ name: "", root: roots.data?.roots[0]?.name ?? "", subpath: "", interval: 60 })}>{t("Añadir carpeta")}</Btn>
                   </Group>)}
               </Group>
-              {isAdmin && roots.data && roots.data.roots.length === 0 && <Notice tone="info">No hay carpetas autorizadas. El administrador de la instancia las registra en Administración → Carpetas.</Notice>}
+              {isAdmin && roots.data && roots.data.roots.length === 0 && <Notice tone="info">{t("No hay carpetas autorizadas. El administrador de la instancia las registra en Administración → Carpetas.")}</Notice>}
               <ClearFilters active={sv.active} onClear={sv.clear} shown={sv.rows.length} total={sv.total} />
               <DataTable fz="sm">
                 <DataTable.Thead><DataTable.Tr>
-                  <ColHead sort={sv.sortProps("name")} filter={sv.text("name")}>Fuente</ColHead>
-                  <ColHead filter={sv.select("kind")}>Tipo</ColHead>
-                  <ColHead sort={sv.sortProps("docs")}>Documentos</ColHead>
-                  <ColHead filter={sv.select("state")}>Estado</ColHead>
-                  <ColHead sort={sv.sortProps("last")}>Último escaneo</ColHead>
+                  <ColHead sort={sv.sortProps("name")} filter={sv.text("name")}>{t("Fuente")}</ColHead>
+                  <ColHead filter={sv.select("kind")}>{t("Tipo")}</ColHead>
+                  <ColHead sort={sv.sortProps("docs")}>{t("Documentos")}</ColHead>
+                  <ColHead filter={sv.select("state")}>{t("Estado")}</ColHead>
+                  <ColHead sort={sv.sortProps("last")}>{t("Último escaneo")}</ColHead>
                   <DataTable.Th />
                 </DataTable.Tr></DataTable.Thead>
                 <DataTable.Tbody>{sv.rows.map((s) => (
                   <DataTable.Tr key={s.id}>
-                    <DataTable.Td><Text size="sm" fw={500}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? ` · cada ${s.sync_interval} min` : " · solo manual"}</Text>}</DataTable.Td>
+                    <DataTable.Td><Text size="sm" fw={500}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
                     <DataTable.Td><Pill size="xs">{s.kind === "upload" ? "subidas" : s.kind === "wiki" ? "wiki" : "carpeta"}</Pill></DataTable.Td>
                     <DataTable.Td>{s.documents}</DataTable.Td>
                     <DataTable.Td>
-                      {s.status === "scanning" ? <Pill size="xs" tone="warn">escaneando</Pill>
-                        : s.status === "error" ? <Pill size="xs" tone="danger" title={s.last_error}>error</Pill>
-                        : !s.enabled ? <Pill size="xs">pausada</Pill>
-                        : Object.entries(s.by_status).map(([k, v]) => <Pill key={k} size="xs" tone={TONE[k] ?? "neutral"}>{`${v} ${LABEL[k] ?? k}`}</Pill>)}
+                      {s.status === "scanning" ? <Pill size="xs" tone="warn">{t("escaneando")}</Pill>
+                        : s.status === "error" ? <Pill size="xs" tone="danger" title={s.last_error}>{t("error")}</Pill>
+                        : !s.enabled ? <Pill size="xs">{t("pausada")}</Pill>
+                        : Object.entries(s.by_status).map(([k, v]) => <Pill key={k} size="xs" tone={TONE[k] ?? "neutral"}>{`${v} ${t(LABEL[k] ?? k)}`}</Pill>)}
                       {s.status === "error" && <Text size="xs" className="ms-text-danger" lineClamp={2}>{s.last_error}</Text>}
                     </DataTable.Td>
                     <DataTable.Td>{s.kind !== "upload" ? fmt(s.last_sync_at) : "—"}</DataTable.Td>
                     <DataTable.Td>{isAdmin && s.kind !== "upload" && (
                       <Group gap={6} wrap="nowrap">
-                        <Btn size="row" icon="refresh" loading={scanSrc.isPending && scanSrc.variables === s.id} disabled={s.status === "scanning"} onClick={() => scanSrc.mutate(s.id)}>Escanear</Btn>
-                        <Btn size="row" icon="edit" onClick={() => { saveSrc.reset(); setEditSrc({ s, name: s.name, interval: s.sync_interval ?? "", subpath: s.config.subpath ?? "", values: {} }); }}>Editar</Btn>
-                        <Btn size="row" icon={s.enabled ? "pause" : "play"} onClick={() => toggleSrc.mutate(s)}>{s.enabled ? "Pausar" : "Reanudar"}</Btn>
-                        <Btn kind="danger" size="row" icon="trash" onClick={() => setDelSrc(s)}>Quitar</Btn>
+                        <Btn size="row" icon="refresh" loading={scanSrc.isPending && scanSrc.variables === s.id} disabled={s.status === "scanning"} onClick={() => scanSrc.mutate(s.id)}>{t("Escanear")}</Btn>
+                        <Btn size="row" icon="edit" onClick={() => { saveSrc.reset(); setEditSrc({ s, name: s.name, interval: s.sync_interval ?? "", subpath: s.config.subpath ?? "", values: {} }); }}>{t("Editar")}</Btn>
+                        <Btn size="row" icon={s.enabled ? "pause" : "play"} onClick={() => toggleSrc.mutate(s)}>{s.enabled ? t("Pausar") : t("Reanudar")}</Btn>
+                        <Btn kind="danger" size="row" icon="trash" onClick={() => setDelSrc(s)}>{t("Quitar")}</Btn>
                       </Group>)}</DataTable.Td>
                   </DataTable.Tr>))}</DataTable.Tbody>
               </DataTable>
@@ -236,107 +239,107 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
       <SidePanel opened={open !== null} onClose={() => setOpen(null)} title={detail.data?.title}>
         {detail.data && (
           <Stack>
-            <Group gap={6}><Pill size="xs" tone={TONE[detail.data.status] ?? "neutral"}>{LABEL[detail.data.status] ?? detail.data.status}</Pill><Pill size="xs">{human(detail.data.size)}</Pill><Pill size="xs">{detail.data.chunks} trozos</Pill></Group>
-            <Text size="xs" c="dimmed" className="ms-data">{detail.data.filename} · sha256 {detail.data.sha256.slice(0, 12)}… · subido {fmt(detail.data.created_at)}</Text>
+            <Group gap={6}><Pill size="xs" tone={TONE[detail.data.status] ?? "neutral"}>{t(LABEL[detail.data.status] ?? detail.data.status)}</Pill><Pill size="xs">{human(detail.data.size)}</Pill><Pill size="xs">{detail.data.chunks} {t("trozos")}</Pill></Group>
+            <Text size="xs" c="dimmed" className="ms-data">{t("{{filename}} · sha256 {{hash}}… · subido {{date}}", { filename: detail.data.filename, hash: detail.data.sha256.slice(0, 12), date: fmt(detail.data.created_at) })}</Text>
             {detail.data.error && <Notice tone="danger">{detail.data.error}</Notice>}
             <Group gap={6}>
-              <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>Descargar original</Btn>
-              <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>Ver texto completo</Btn>
-              {detail.data.url && <Btn size="row" icon="docs" component="a" href={detail.data.url} target="_blank" rel="noreferrer">Abrir en la wiki</Btn>}
-              {isAdmin && <Btn size="row" icon="refresh" loading={reindex.isPending} onClick={() => reindex.mutate(detail.data!.id)}>Reindexar</Btn>}
-              {(isAdmin || canUpload) && detail.data.source !== undefined && !sources.data?.sources.some((x) => x.name === detail.data!.source && x.kind === "directory") && <Btn kind="danger" size="row" icon="trash" onClick={() => setDel(detail.data!)}>Borrar</Btn>}
+              <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>{t("Descargar original")}</Btn>
+              <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>{t("Ver texto completo")}</Btn>
+              {detail.data.url && <Btn size="row" icon="docs" component="a" href={detail.data.url} target="_blank" rel="noreferrer">{t("Abrir en la wiki")}</Btn>}
+              {isAdmin && <Btn size="row" icon="refresh" loading={reindex.isPending} onClick={() => reindex.mutate(detail.data!.id)}>{t("Reindexar")}</Btn>}
+              {(isAdmin || canUpload) && detail.data.source !== undefined && !sources.data?.sources.some((x) => x.name === detail.data!.source && x.kind === "directory") && <Btn kind="danger" size="row" icon="trash" onClick={() => setDel(detail.data!)}>{t("Borrar")}</Btn>}
             </Group>
             <MutationError error={reindex.error} />
-            <Title order={5}>Entidades mencionadas</Title>
-            {entities.isLoading ? <EmptyState>Buscando en el grafo…</EmptyState>
-              : (entities.data?.entities.length ?? 0) === 0 ? <EmptyState>No menciona ninguna entidad conocida del grafo.</EmptyState>
+            <Title order={5}>{t("Entidades mencionadas")}</Title>
+            {entities.isLoading ? <EmptyState>{t("Buscando en el grafo…")}</EmptyState>
+              : (entities.data?.entities.length ?? 0) === 0 ? <EmptyState>{t("No menciona ninguna entidad conocida del grafo.")}</EmptyState>
               : <Group gap={6}>{entities.data!.entities.map((e) => (
-                  <Link key={e.uuid} to={`/grafo?nodo=${e.uuid}`} className="ms-nolink"><Pill size="xs" title={`${e.type || "entidad"} · ${e.count} ${e.count === 1 ? "mención" : "menciones"}`}>{e.name}{e.count > 1 ? ` ×${e.count}` : ""}</Pill></Link>))}</Group>}
-            <Title order={5}>Trozos</Title>
+                  <Link key={e.uuid} to={`/grafo?nodo=${e.uuid}`} className="ms-nolink"><Pill size="xs" title={`${e.type || "entidad"} · ${e.count} ${e.count === 1 ? t("mención") : "menciones"}`}>{e.name}{e.count > 1 ? ` ×${e.count}` : ""}</Pill></Link>))}</Group>}
+            <Title order={5}>{t("Trozos")}</Title>
             {detail.data.chunk_list.map((c) => (
               <ListCard key={c.chunk_idx} title={`#${c.chunk_idx}${c.heading_path ? ` · ${c.heading_path}` : ""}${c.page ? ` · p. ${c.page}` : ""}`}
-                actions={<>{c.text.length > 400 && <Btn size="row" onClick={() => setOpenChunks((o) => { const n = new Set(o); n.has(c.chunk_idx) ? n.delete(c.chunk_idx) : n.add(c.chunk_idx); return n; })}>{openChunks.has(c.chunk_idx) ? "Mostrar menos" : "Mostrar más"}</Btn>}
-                  {canUpload && <Btn size="row" icon="plus" onClick={() => { promote.reset(); setPromo({ doc: detail.data!.id, chunk: c.chunk_idx, title: `${detail.data!.title}${c.heading_path ? ` › ${c.heading_path}` : ""}`, text: c.text, name: "" }); }}>Promover a memoria</Btn>}</>}>
+                actions={<>{c.text.length > 400 && <Btn size="row" onClick={() => setOpenChunks((o) => { const n = new Set(o); n.has(c.chunk_idx) ? n.delete(c.chunk_idx) : n.add(c.chunk_idx); return n; })}>{openChunks.has(c.chunk_idx) ? t("Mostrar menos") : t("Mostrar más")}</Btn>}
+                  {canUpload && <Btn size="row" icon="plus" onClick={() => { promote.reset(); setPromo({ doc: detail.data!.id, chunk: c.chunk_idx, title: `${detail.data!.title}${c.heading_path ? ` › ${c.heading_path}` : ""}`, text: c.text, name: "" }); }}>{t("Promover a memoria")}</Btn>}</>}>
                 <Text className="ms-prose" lineClamp={openChunks.has(c.chunk_idx) ? undefined : 6}>{c.text}</Text>
               </ListCard>))}
           </Stack>)}
       </SidePanel>
-      <SidePanel opened={fullText !== null} onClose={() => setFullText(null)} title={full.data?.title ?? "Texto completo"}>
-        {full.isLoading && <EmptyState>Cargando…</EmptyState>}
+      <SidePanel opened={fullText !== null} onClose={() => setFullText(null)} title={full.data?.title ?? t("Texto completo")}>
+        {full.isLoading && <EmptyState>{t("Cargando…")}</EmptyState>}
         <MutationError error={full.error} />
-        {full.data && <Stack>{full.data.truncated && <Notice tone="warn">El documento tiene {full.data.chars.toLocaleString("es-ES")} caracteres: se muestra el primer megabyte. Descarga el original para verlo entero.</Notice>}
+        {full.data && <Stack>{full.data.truncated && <Notice tone="warn">{t("El documento tiene {{chars}} caracteres: se muestra el primer megabyte. Descarga el original para verlo entero.", { chars: full.data.chars.toLocaleString(locale()) })}</Notice>}
           <Text className="ms-prose">{full.data.text}</Text></Stack>}
       </SidePanel>
       <SidePanel opened={!!ctxOf} onClose={() => setCtxOf(null)} title={ctxOf?.citation}>
-        {context.isLoading && <EmptyState>Cargando…</EmptyState>}
-        {context.data && <Stack><Text size="xs" c="dimmed">Trozos {context.data.from_chunk}–{context.data.to_chunk} de «{context.data.title}»</Text><Text className="ms-prose">{context.data.text}</Text></Stack>}
+        {context.isLoading && <EmptyState>{t("Cargando…")}</EmptyState>}
+        {context.data && <Stack><Text size="xs" c="dimmed">{t("Trozos {{from}}–{{to}} de «{{title}}»", { from: context.data.from_chunk, to: context.data.to_chunk, title: context.data.title })}</Text><Text className="ms-prose">{context.data.text}</Text></Stack>}
       </SidePanel>
-      <Modal opened={!!newSrc} onClose={() => setNewSrc(null)} title="Añadir carpeta">
+      <Modal opened={!!newSrc} onClose={() => setNewSrc(null)} title={t("Añadir carpeta")}>
         {newSrc && (
           <Stack>
-            <TextField label="Nombre" value={newSrc.name} onChange={(e) => setNewSrc({ ...newSrc, name: e.currentTarget.value })} />
-            <SelectField label="Raíz autorizada" value={newSrc.root} onChange={(v) => v && setNewSrc({ ...newSrc, root: v })} allowDeselect={false}
-              data={(roots.data?.roots ?? []).map((r) => ({ value: r.name, label: r.available ? r.name : `${r.name} (no disponible)` }))} />
-            <TextField label="Subcarpeta (opcional)" description="Relativa a la raíz. Se recorre entera, subcarpetas incluidas; se ignoran los ocultos." value={newSrc.subpath} onChange={(e) => setNewSrc({ ...newSrc, subpath: e.currentTarget.value })} />
-            <NumberField label="Reescanear cada (minutos)" description="Vacío = solo cuando pulses «Escanear»." min={5} value={newSrc.interval} onChange={(v) => setNewSrc({ ...newSrc, interval: v === "" ? "" : Number(v) })} />
+            <TextField label={t("Nombre")} value={newSrc.name} onChange={(e) => setNewSrc({ ...newSrc, name: e.currentTarget.value })} />
+            <SelectField label={t("Raíz autorizada")} value={newSrc.root} onChange={(v) => v && setNewSrc({ ...newSrc, root: v })} allowDeselect={false}
+              data={(roots.data?.roots ?? []).map((r) => ({ value: r.name, label: r.available ? r.name : t("{{name}} (no disponible)", { name: r.name }) }))} />
+            <TextField label={t("Subcarpeta (opcional)")} description={t("Relativa a la raíz. Se recorre entera, subcarpetas incluidas; se ignoran los ocultos.")} value={newSrc.subpath} onChange={(e) => setNewSrc({ ...newSrc, subpath: e.currentTarget.value })} />
+            <NumberField label={t("Reescanear cada (minutos)")} description={t("Vacío = solo cuando pulses «Escanear».")} min={5} value={newSrc.interval} onChange={(v) => setNewSrc({ ...newSrc, interval: v === "" ? "" : Number(v) })} />
             <MutationError error={addSrc.error} />
-            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setNewSrc(null)}>Cancelar</Btn><Btn kind="primary" icon="plus" loading={addSrc.isPending} disabled={!newSrc.name.trim() || !newSrc.root} onClick={() => addSrc.mutate(newSrc)}>Añadir y escanear</Btn></Group>
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setNewSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="plus" loading={addSrc.isPending} disabled={!newSrc.name.trim() || !newSrc.root} onClick={() => addSrc.mutate(newSrc)}>{t("Añadir y escanear")}</Btn></Group>
           </Stack>)}
       </Modal>
-      <Modal opened={!!editSrc} onClose={() => setEditSrc(null)} title="Editar fuente">
+      <Modal opened={!!editSrc} onClose={() => setEditSrc(null)} title={t("Editar fuente")}>
         {editSrc && (
           <Stack>
-            <TextField label="Nombre" value={editSrc.name} onChange={(e) => setEditSrc({ ...editSrc, name: e.currentTarget.value })} />
-            <NumberField label="Reescanear cada (minutos)" description="Vacío = solo cuando pulses «Escanear». Mínimo 5." min={5} value={editSrc.interval} onChange={(v) => setEditSrc({ ...editSrc, interval: v === "" ? "" : Number(v) })} />
-            {editSrc.s.kind === "directory" && <TextField label="Subcarpeta" description={`Dentro de la raíz «${editSrc.s.config.root}». Cambiarla reindexa lo que quede fuera o dentro en el próximo escaneo.`} value={editSrc.subpath} onChange={(e) => setEditSrc({ ...editSrc, subpath: e.currentTarget.value })} />}
+            <TextField label={t("Nombre")} value={editSrc.name} onChange={(e) => setEditSrc({ ...editSrc, name: e.currentTarget.value })} />
+            <NumberField label={t("Reescanear cada (minutos)")} description={t("Vacío = solo cuando pulses «Escanear». Mínimo 5.")} min={5} value={editSrc.interval} onChange={(v) => setEditSrc({ ...editSrc, interval: v === "" ? "" : Number(v) })} />
+            {editSrc.s.kind === "directory" && <TextField label={t("Subcarpeta")} description={t("Dentro de la raíz «{{root}}». Cambiarla reindexa lo que quede fuera o dentro en el próximo escaneo.", { root: editSrc.s.config.root })} value={editSrc.subpath} onChange={(e) => setEditSrc({ ...editSrc, subpath: e.currentTarget.value })} />}
             {editSrc.s.kind === "wiki" && instanceAdmin && (adapters.data?.adapters.find((a) => a.id === editSrc.s.config.adapter)?.fields ?? []).filter((f) => f.secret).map((f) => (
-              <PasswordField key={f.name} label={`${f.label} (opcional)`} description="Vacío = conservar la guardada. Si escribes una nueva se comprueba la conexión antes de guardar." value={editSrc.values[f.name] ?? ""} onChange={(e) => setEditSrc({ ...editSrc, values: { ...editSrc.values, [f.name]: e.currentTarget.value } })} />))}
+              <PasswordField key={f.name} label={t("{{label}} (opcional)", { label: f.label })} description={t("Vacío = conservar la guardada. Si escribes una nueva se comprueba la conexión antes de guardar.")} value={editSrc.values[f.name] ?? ""} onChange={(e) => setEditSrc({ ...editSrc, values: { ...editSrc.values, [f.name]: e.currentTarget.value } })} />))}
             <MutationError error={saveSrc.error} />
-            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>Cancelar</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5)} onClick={() => saveSrc.mutate(editSrc)}>Guardar</Btn></Group>
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5)} onClick={() => saveSrc.mutate(editSrc)}>{t("Guardar")}</Btn></Group>
           </Stack>)}
       </Modal>
-      <Modal opened={!!wiki} onClose={() => setWiki(null)} title="Añadir wiki">
+      <Modal opened={!!wiki} onClose={() => setWiki(null)} title={t("Añadir wiki")}>
         {wiki && ad && (
           <Stack>
-            {(adapters.data?.adapters.length ?? 0) > 1 && <SelectField label="Tipo de wiki" allowDeselect={false} value={wiki.adapter} disabled={!!wiki.cols} onChange={(v) => v && setWiki({ ...wiki, adapter: v, values: {} })} data={adapters.data!.adapters.map((a) => ({ value: a.id, label: a.label }))} />}
-            <TextField label="Nombre de la fuente" value={wiki.name} onChange={(e) => setWiki({ ...wiki, name: e.currentTarget.value })} />
+            {(adapters.data?.adapters.length ?? 0) > 1 && <SelectField label={t("Tipo de wiki")} allowDeselect={false} value={wiki.adapter} disabled={!!wiki.cols} onChange={(v) => v && setWiki({ ...wiki, adapter: v, values: {} })} data={adapters.data!.adapters.map((a) => ({ value: a.id, label: a.label }))} />}
+            <TextField label={t("Nombre de la fuente")} value={wiki.name} onChange={(e) => setWiki({ ...wiki, name: e.currentTarget.value })} />
             {ad.fields.map((f) => {
               const P = f.secret ? PasswordField : TextField;
-              return <P key={f.name} label={f.label} placeholder={f.placeholder} description={f.help ? `${f.help}${f.secret ? " Se guarda cifrada y no se vuelve a mostrar." : ""}` : f.secret ? "Se guarda cifrada y no se vuelve a mostrar." : undefined}
+              return <P key={f.name} label={f.label} placeholder={f.placeholder} description={f.help ? `${f.help}${f.secret ? t(" Se guarda cifrada y no se vuelve a mostrar.") : ""}` : f.secret ? t("Se guarda cifrada y no se vuelve a mostrar.") : undefined}
                 value={wiki.values[f.name] ?? ""} disabled={!!wiki.cols} onChange={(e) => setWiki({ ...wiki, values: { ...wiki.values, [f.name]: e.currentTarget.value } })} />;
             })}
             {!wiki.cols
               ? <><MutationError error={connect.error} />
-                  <Group justify="flex-end"><Btn kind="ghost" onClick={() => setWiki(null)}>Cancelar</Btn><Btn kind="primary" icon="check" loading={connect.isPending} disabled={ad.fields.some((f) => f.required && !(wiki.values[f.name] ?? "").trim())} onClick={() => connect.mutate(wiki)}>Conectar</Btn></Group></>
+                  <Group justify="flex-end"><Btn kind="ghost" onClick={() => setWiki(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={connect.isPending} disabled={ad.fields.some((f) => f.required && !(wiki.values[f.name] ?? "").trim())} onClick={() => connect.mutate(wiki)}>{t("Conectar")}</Btn></Group></>
               : <>
-                  <Text size="sm" fw={500}>{ad.collection_label} a indexar</Text>
+                  <Text size="sm" fw={500}>{ad.collection_label} {t("a indexar")}</Text>
                   <Stack gap={4}>{wiki.cols.map((c) => (
                     <Check key={c.id} label={c.name} description={c.description || undefined} checked={wiki.picked.includes(c.id)}
                       onChange={(e) => setWiki({ ...wiki, picked: e.currentTarget.checked ? [...wiki.picked, c.id] : wiki.picked.filter((x) => x !== c.id) })} />))}</Stack>
-                  <NumberField label="Resincronizar cada (minutos)" description="Vacío = solo cuando pulses «Escanear»." min={5} value={wiki.interval} onChange={(v) => setWiki({ ...wiki, interval: v === "" ? "" : Number(v) })} />
+                  <NumberField label={t("Resincronizar cada (minutos)")} description={t("Vacío = solo cuando pulses «Escanear».")} min={5} value={wiki.interval} onChange={(v) => setWiki({ ...wiki, interval: v === "" ? "" : Number(v) })} />
                   <MutationError error={addWiki.error} />
-                  <Group justify="flex-end"><Btn kind="ghost" onClick={() => setWiki(null)}>Cancelar</Btn><Btn kind="primary" icon="plus" loading={addWiki.isPending} disabled={!wiki.name.trim() || wiki.picked.length === 0} onClick={() => addWiki.mutate(wiki)}>Añadir y sincronizar</Btn></Group>
+                  <Group justify="flex-end"><Btn kind="ghost" onClick={() => setWiki(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="plus" loading={addWiki.isPending} disabled={!wiki.name.trim() || wiki.picked.length === 0} onClick={() => addWiki.mutate(wiki)}>{t("Añadir y sincronizar")}</Btn></Group>
                 </>}
           </Stack>)}
       </Modal>
-      <Modal opened={!!promo} onClose={() => setPromo(null)} title="Promover a memoria" size="lg">
+      <Modal opened={!!promo} onClose={() => setPromo(null)} title={t("Promover a memoria")} size="lg">
         {promo && (
           <Stack>
-            <Text size="sm" c="dimmed">El pasaje se envía como propuesta con su procedencia (documento y sección). {canUpload && ["curator", "admin", "owner"].includes(role) ? "Como curador, se aprueba directamente y se extraen los hechos al grafo." : "Entra en cuarentena hasta que un curador la apruebe."} El documento no cambia.</Text>
+            <Text size="sm" c="dimmed">{t("El pasaje se envía como propuesta con su procedencia (documento y sección).")} {canUpload && ["curator", "admin", "owner"].includes(role) ? t("Como curador, se aprueba directamente y se extraen los hechos al grafo.") : t("Entra en cuarentena hasta que un curador la apruebe.")} {t("El documento no cambia.")}</Text>
             <Text size="xs" fw={500}>{promo.title}</Text>
-            <TextArea label="Texto a recordar" description="Puedes recortarlo o reescribirlo: conviene que sea una afirmación autocontenida." autosize minRows={5} maxRows={14} value={promo.text} onChange={(e) => setPromo({ ...promo, text: e.currentTarget.value })} />
-            <TextField label="Título de la propuesta (opcional)" value={promo.name} onChange={(e) => setPromo({ ...promo, name: e.currentTarget.value })} />
+            <TextArea label={t("Texto a recordar")} description={t("Puedes recortarlo o reescribirlo: conviene que sea una afirmación autocontenida.")} autosize minRows={5} maxRows={14} value={promo.text} onChange={(e) => setPromo({ ...promo, text: e.currentTarget.value })} />
+            <TextField label={t("Título de la propuesta (opcional)")} value={promo.name} onChange={(e) => setPromo({ ...promo, name: e.currentTarget.value })} />
             <MutationError error={promote.error} />
-            {promote.data && <Notice tone="info">Propuesta #{promote.data.id} creada ({promote.data.status === "pending" ? "en cuarentena" : "aprobada; la ingesta está en Trabajos"}). <Link to="/propuestas">Ver propuestas</Link></Notice>}
-            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setPromo(null)}>{promote.data ? "Cerrar" : "Cancelar"}</Btn>
-              {!promote.data && <Btn kind="primary" icon="plus" loading={promote.isPending} disabled={!promo.text.trim()} onClick={() => promote.mutate(promo)}>Enviar propuesta</Btn>}</Group>
+            {promote.data && <Notice tone="info">{t("Propuesta #{{id}} creada ({{state}}).", { id: promote.data.id, state: promote.data.status === "pending" ? t("en cuarentena") : t("aprobada; la ingesta está en Trabajos") })} <Link to="/propuestas">{t("Ver propuestas")}</Link></Notice>}
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setPromo(null)}>{promote.data ? t("Cerrar") : t("Cancelar")}</Btn>
+              {!promote.data && <Btn kind="primary" icon="plus" loading={promote.isPending} disabled={!promo.text.trim()} onClick={() => promote.mutate(promo)}>{t("Enviar propuesta")}</Btn>}</Group>
           </Stack>)}
       </Modal>
-      <ConfirmDialog opened={!!delSrc} onClose={() => setDelSrc(null)} title="Quitar fuente" action="Quitar fuente" subject={delSrc?.name}
-        warning={`Se quitan la fuente y sus ${delSrc?.documents} documentos del índice. Los ficheros de la carpeta o las páginas de la wiki no se tocan.`}
+      <ConfirmDialog opened={!!delSrc} onClose={() => setDelSrc(null)} title={t("Quitar fuente")} action={t("Quitar fuente")} subject={delSrc?.name}
+        warning={t("Se quitan la fuente y sus {{documents}} documentos del índice. Los ficheros de la carpeta o las páginas de la wiki no se tocan.", { documents: delSrc?.documents })}
         onConfirm={() => removeSrc.mutateAsync(delSrc!)} />
-      <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title="Borrar documento" action="Borrar documento" subject={del?.title}
-        warning="Se eliminan el original, el texto extraído y todos sus trozos del índice. No se puede deshacer."
+      <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Borrar documento")} action={t("Borrar documento")} subject={del?.title}
+        warning={t("Se eliminan el original, el texto extraído y todos sus trozos del índice. No se puede deshacer.")}
         onConfirm={() => remove.mutateAsync(del!)} />
     </Page>
   );

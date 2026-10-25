@@ -1,3 +1,4 @@
+import { locale, translateServer } from "./i18n";
 export type Fact = {
   uuid: string; name: string; fact: string; status: "current" | "invalidated" | "future";
   valid_at: string | null; invalid_at: string | null; expired_at: string | null; created_at: string;
@@ -29,7 +30,7 @@ function url(path: string, params: Record<string, string | number | boolean | un
 export class ApiError extends Error { constructor(public status: number, msg: string) { super(msg); } }
 
 async function check(r: Response) {
-  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail ?? m; } catch { /* sin cuerpo */ } throw new ApiError(r.status, m); }
+  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail ?? m; } catch { /* sin cuerpo */ } throw new ApiError(r.status, translateServer(m)); }
   return r.json();
 }
 
@@ -41,6 +42,6 @@ export async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path:
 }
 
 export type Brain = { slug: string; name: string; description: string; graph_name: string; role: string };
-export type Me = { id: number; name: string; email: string | null; is_admin: boolean; auth_mode: string; avatar?: string; account_url?: string; has_password?: boolean; must_change_password?: boolean; totp_enabled?: boolean; must_setup_2fa?: boolean };
+export type Me = { id: number; name: string; email: string | null; is_admin: boolean; auth_mode: string; avatar?: string; account_url?: string; has_password?: boolean; must_change_password?: boolean; totp_enabled?: boolean; must_setup_2fa?: boolean; locale?: string };
 
-export const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }) : "—");
+export const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) : "—");

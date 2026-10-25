@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { ActionIcon as MActionIcon, Drawer as MDrawer, type DrawerProps, Modal as MModal, NavLink as MNavLink, Tooltip as MTooltip, Tabs as MTabs, type ModalProps, type TabsProps } from "@mantine/core";
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import { NavLink as RouterNavLink } from "react-router-dom";
@@ -64,6 +65,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
   opened: boolean; onClose: () => void; title: string; warning?: ReactNode; subject?: ReactNode; action: string;
   tone?: "danger" | "primary"; requireText?: string; onConfirm: () => Promise<unknown>; children?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [typed, setTyped] = useState("");
@@ -78,10 +80,10 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
         {warning && <Notice tone={tone === "danger" ? "warn" : "info"}>{warning}</Notice>}
         {subject && <div className="ms-confirm-subject">{subject}</div>}
         {children}
-        {requireText && <TextField label={`Escribe «${requireText}» para confirmar`} value={typed} onChange={(e) => setTyped(e.currentTarget.value)} />}
+        {requireText && <TextField label={t("Escribe «{{requireText}}» para confirmar", { requireText: requireText })} value={typed} onChange={(e) => setTyped(e.currentTarget.value)} />}
         <MutationError error={error} />
         <div className="ms-confirm-actions">
-          <Btn kind="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>
           <Btn kind={tone} icon={tone === "danger" ? "trash" : "check"} loading={busy} disabled={!!requireText && typed !== requireText} onClick={run}>{action}</Btn>
         </div>
       </div>

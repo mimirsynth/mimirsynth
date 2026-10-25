@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { T } from "../i18n";
 import { Alert as MAlert, Autocomplete as MAutocomplete, Card as MCard, Checkbox as MCheckbox, CopyButton as MCopyButton, NumberInput as MNumberInput, PasswordInput as MPasswordInput,
   Select as MSelect, Switch as MSwitch, Textarea as MTextarea, TextInput as MTextInput,
   type AlertProps, type AutocompleteProps, type CardProps, type CheckboxProps, type NumberInputProps, type PasswordInputProps, type SelectProps, type SwitchProps, type TextareaProps, type TextInputProps } from "@mantine/core";
@@ -30,10 +32,11 @@ export function Panel({ children, className, ...rest }: CardProps & ComponentPro
 }
 
 /** Botón que copia un texto al portapapeles y avisa de que lo ha hecho. */
-export function CopyBtn({ value, label = "Copiar", doneLabel = "Copiado" }: { value: string; label?: string; doneLabel?: string }) {
+export function CopyBtn({ value, label = T("Copiar"), doneLabel = T("Copiado") }: { value: string; label?: string; doneLabel?: string }) {
+  const { t } = useTranslation();
   return (
     <MCopyButton value={value}>
-      {({ copied, copy }) => <Btn icon="copy" onClick={copy}>{copied ? doneLabel : label}</Btn>}
+      {({ copied, copy }) => <Btn icon="copy" onClick={copy}>{t(copied ? doneLabel : label)}</Btn>}
     </MCopyButton>
   );
 }
@@ -51,10 +54,11 @@ export function EmptyState({ children }: { children: ReactNode }) {
 
 /** Estado de una consulta sin datos: cargando, o error con «Reintentar». Con datos y `children`, los pinta. */
 export function DataState<T>({ query, children }: { query: { data?: T; isError: boolean; error: unknown; refetch: () => unknown }; children?: (data: T) => ReactNode }) {
+  const { t } = useTranslation();
   if (query.isError && query.data === undefined) {
-    return <Notice tone="danger" title="No se han podido cargar los datos">{query.error instanceof Error ? query.error.message : String(query.error)} <Btn kind="link" onClick={() => query.refetch()}>Reintentar</Btn></Notice>;
+    return <Notice tone="danger" title={t("No se han podido cargar los datos")}>{query.error instanceof Error ? query.error.message : String(query.error)} <Btn kind="link" onClick={() => query.refetch()}>{t("Reintentar")}</Btn></Notice>;
   }
-  if (query.data === undefined) return <div className="ms-empty" role="status">Cargando…</div>;
+  if (query.data === undefined) return <div className="ms-empty" role="status">{t("Cargando…")}</div>;
   return <>{children?.(query.data)}</>;
 }
 

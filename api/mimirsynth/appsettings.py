@@ -29,6 +29,7 @@ class Def:
 
 
 GROUPS = {
+    "general": "General",
     "security": "Seguridad de cuentas",
     "mail": "Correo (SMTP)",
     "identity": "Identidad (OIDC)",
@@ -38,6 +39,7 @@ GROUPS = {
 }
 
 REGISTRY: list[Def] = [
+    Def("default_language", "general", "Idioma por defecto", "Idioma de la interfaz y de los correos para quien no haya elegido uno propio en «Mi cuenta». Cada persona puede cambiarlo.", "choice", choices=(("es", "Español"), ("en", "English"))),
     Def("public_url", "identity", "URL pública", "Dirección con la que se accede a la aplicación; se usa para construir la URL de retorno del inicio de sesión (p. ej. https://mimirsynth.ejemplo.com).", "url"),
     Def("oidc_issuer", "identity", "Emisor OIDC (issuer)", "URL base del proveedor de identidad; debe publicar /.well-known/openid-configuration.", "url"),
     Def("oidc_client_id", "identity", "Client ID", "Identificador de la aplicación registrada en el proveedor.", "str"),

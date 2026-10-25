@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+import { T } from "../i18n";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, ClearFilters, ColHead, DataTable, FillArea, Notice, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, NODE_PALETTE, CANVAS } from "../ui";
 import { useEffect, useRef, useState } from "react";
@@ -7,13 +9,13 @@ type QNode = { id: string; labels: string[]; properties: Record<string, any> };
 type QEdge = { id: string; relation: string; source: string; target: string; properties: Record<string, any> };
 type QRes = { columns: string[]; rows: any[][]; truncated: boolean; total: number; nodes: QNode[]; edges: QEdge[]; ms: number };
 
-const EXAMPLES: Record<string, string> = {
-  "Hechos invalidados recientes": "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NOT NULL RETURN a, r, b ORDER BY r.invalid_at DESC LIMIT 25",
-  "Vecindad de una entidad": "MATCH (a:Entity)-[r:RELATES_TO]-(b:Entity) WHERE a.name CONTAINS 'Nextcloud' RETURN a, r, b LIMIT 40",
-  "Entidades por grado": "MATCH (n:Entity) OPTIONAL MATCH (n)-[r:RELATES_TO]-() RETURN n.name AS entidad, count(r) AS grado ORDER BY grado DESC LIMIT 30",
-  "Episodios recientes": "MATCH (e:Episodic) RETURN e.name AS nombre, e.created_at AS creado ORDER BY e.created_at DESC LIMIT 20",
-  "Hechos por tipo de relación": "MATCH ()-[r:RELATES_TO]->() RETURN r.name AS relacion, count(*) AS n ORDER BY n DESC",
-};
+const EXAMPLES: [string, string][] = [
+  [T("Hechos invalidados recientes"), "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NOT NULL RETURN a, r, b ORDER BY r.invalid_at DESC LIMIT 25"],
+  [T("Vecindad de una entidad"), "MATCH (a:Entity)-[r:RELATES_TO]-(b:Entity) WHERE a.name CONTAINS 'Nextcloud' RETURN a, r, b LIMIT 40"],
+  [T("Entidades por grado"), "MATCH (n:Entity) OPTIONAL MATCH (n)-[r:RELATES_TO]-() RETURN n.name AS entidad, count(r) AS grado ORDER BY grado DESC LIMIT 30"],
+  [T("Episodios recientes"), "MATCH (e:Episodic) RETURN e.name AS nombre, e.created_at AS creado ORDER BY e.created_at DESC LIMIT 20"],
+  [T("Hechos por tipo de relación"), "MATCH ()-[r:RELATES_TO]->() RETURN r.name AS relacion, count(*) AS n ORDER BY n DESC"],
+];
 const PALETTE = NODE_PALETTE;
 const cell = (v: any) => (v && typeof v === "object" ? (v._type === "node" ? `(${v.properties?.name ?? v.id}:${(v.labels ?? []).join(":")})` : v._type === "edge" ? `[${v.relation}]` : JSON.stringify(v).slice(0, 120)) : String(v ?? ""));
 
@@ -32,7 +34,8 @@ function ResultTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
 }
 
 export default function Query({ graph }: { graph: string }) {
-  const [q, setQ] = useState(EXAMPLES["Vecindad de una entidad"]);
+  const { t } = useTranslation();
+  const [q, setQ] = useState(EXAMPLES[1][1]);
   const [res, setRes] = useState<QRes | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -55,7 +58,7 @@ export default function Query({ graph }: { graph: string }) {
   useEffect(() => {
     if (tab !== "grafo" || !res || !cv.current) return;
     const colors = new Map<string, string>(); const col = (l: string) => { if (!colors.has(l)) colors.set(l, PALETTE[colors.size % PALETTE.length]); return colors.get(l)!; };
-    const lab = (n: QNode) => n.labels.filter((l) => l !== "Entity")[0] ?? n.labels[0] ?? "Nodo";
+    const lab = (n: QNode) => n.labels.filter((l) => l !== "Entity")[0] ?? n.labels[0] ?? t("Nodo");
     cv.current.setData({
       nodes: res.nodes.map((n) => ({ id: n.id, labels: n.labels, color: col(lab(n)), visible: true, size: 8, caption: "name", data: { name: n.properties.name ?? n.properties.fact ?? n.id, ...n.properties } })),
       links: res.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, relationship: e.relation, color: e.properties.invalid_at ? CANVAS.linkInvalid : CANVAS.link, visible: true, data: e.properties })),
@@ -66,22 +69,22 @@ export default function Query({ graph }: { graph: string }) {
 
   return (
     <Page>
-      <PageHeader title="Consulta" description="Consultas Cypher de solo lectura contra el grafo del brain (Ctrl+Enter para ejecutar). Cualquier escritura se rechaza." />
+      <PageHeader title={t("Consulta")} description={t("Consultas Cypher de solo lectura contra el grafo del brain (Ctrl+Enter para ejecutar). Cualquier escritura se rechaza.")} />
       <div className="ms-querybox">
         <TextArea autosize minRows={3} maxRows={8} value={q} onChange={(e) => setQ(e.currentTarget.value)} className="ms-mono-input"
-          onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) run(); }} placeholder="MATCH (n) RETURN n LIMIT 25   (Ctrl+Enter para ejecutar)" />
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) run(); }} placeholder={t("MATCH (n) RETURN n LIMIT 25   (Ctrl+Enter para ejecutar)")} />
         <Stack gap={6} className="ms-querybox-side">
-          <Btn kind="primary" onClick={run} loading={busy}>Ejecutar (Ctrl+Enter)</Btn>
-          <SelectField placeholder="Ejemplos" data={Object.keys(EXAMPLES)} onChange={(v) => v && setQ(EXAMPLES[v])} clearable />
-          <SelectField placeholder="Historial" data={hist.map((h, i) => ({ value: String(i), label: h.slice(0, 60) }))} onChange={(v) => v !== null && setQ(hist[Number(v)])} clearable />
+          <Btn kind="primary" onClick={run} loading={busy}>{t("Ejecutar (Ctrl+Enter)")}</Btn>
+          <SelectField placeholder={t("Ejemplos")} data={EXAMPLES.map(([title]) => ({ value: title, label: t(title) }))} onChange={(v) => v && setQ(EXAMPLES.find(([title]) => title === v)![1])} clearable />
+          <SelectField placeholder={t("Historial")} data={hist.map((h, i) => ({ value: String(i), label: h.slice(0, 60) }))} onChange={(v) => v !== null && setQ(hist[Number(v)])} clearable />
         </Stack>
       </div>
       {err && <Notice tone="danger" p="xs">{err}</Notice>}
       {res && (
         <Tabs value={tab} onChange={(v) => setTab(v ?? "tabla")} className="ms-tabs-fill">
           <Tabs.List>
-            <Tabs.Tab value="tabla">Tabla ({res.total})</Tabs.Tab>
-            <Tabs.Tab value="grafo" disabled={!res.nodes.length}>Grafo ({res.nodes.length} nodos · {res.edges.length} aristas)</Tabs.Tab>
+            <Tabs.Tab value="tabla">{t("Tabla (")}{res.total})</Tabs.Tab>
+            <Tabs.Tab value="grafo" disabled={!res.nodes.length}>{t("Grafo (")}{res.nodes.length} {t("nodos ·")} {res.edges.length} {t("aristas)")}</Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value="tabla" className="ms-tabpanel-fill" pt="xs">
             <ResultTable key={res.ms + res.total} columns={res.columns} rows={res.rows} />
@@ -93,7 +96,7 @@ export default function Query({ graph }: { graph: string }) {
           </Tabs.Panel>
         </Tabs>
       )}
-      {res && <Text size="xs" c="dimmed">{res.total} filas · {res.ms} ms{res.truncated ? " · resultado recortado a 500 filas" : ""}</Text>}
+      {res && <Text size="xs" c="dimmed">{t("{{total}} filas · {{ms}} ms", { total: res.total, ms: res.ms })}{res.truncated ? t(" · resultado recortado a 500 filas") : ""}</Text>}
     </Page>
   );
 }

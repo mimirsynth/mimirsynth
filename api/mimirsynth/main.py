@@ -108,7 +108,7 @@ app.include_router(proposals.router)
 
 @app.get("/api/config")
 def get_config():
-    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links()}
+    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links(), "default_language": appsettings.get("default_language")}
 
 
 @app.get("/api/health")
