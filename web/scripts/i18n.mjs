@@ -4,7 +4,7 @@
 // Además prohíbe texto sin traducir en la interfaz: todo texto visible pasa por t()/tr()/T(). Excepción justificada: `// i18n-ok: motivo` en la línea.
 import fs from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import { parseSync } from "oxc-parser";
 
 const ROOT = new URL("../src", import.meta.url).pathname;
 const files = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? files(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []);
@@ -13,19 +13,26 @@ const literal = [];
 const TEXT_ATTRS = new Set(["label", "title", "description", "placeholder", "warning", "hint", "aria-label", "alt", "action"]);
 for (const f of files(ROOT)) {
   if (f.includes(`${path.sep}i18n${path.sep}`)) continue;
-  const sf = ts.createSourceFile(f, fs.readFileSync(f, "utf8"), ts.ScriptTarget.Latest, true, f.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
-  const lines = sf.text.split("\n");
+  const text = fs.readFileSync(f, "utf8");
+  const { program, errors } = parseSync(f, text, { lang: f.endsWith("x") ? "tsx" : "ts" });
+  if (errors.length) { literal.push(`${path.relative(ROOT, f)}  no se pudo analizar: ${errors[0].message}`); continue; }
+  const lines = text.split("\n");
+  const lineOf = (pos) => text.slice(0, pos).split("\n").length - 1;
+  const flag = (node, what) => { const ln = lineOf(node.start); if (!/i18n-ok/.test(lines[ln])) literal.push(`${path.relative(ROOT, f)}:${ln + 1}  ${what}`); };
+  const isStr = (a) => a && ((a.type === "Literal" && typeof a.value === "string") || (a.type === "TemplateLiteral" && a.expressions.length === 0));
+  const strOf = (a) => (a.type === "Literal" ? a.value : a.quasis[0].value.cooked);
   const visit = (n) => {
-    const flag = (node, what) => { const ln = sf.getLineAndCharacterOfPosition(node.getStart()).line; if (!/i18n-ok/.test(lines[ln])) literal.push(`${path.relative(ROOT, f)}:${ln + 1}  ${what}`); };
-    if (ts.isJsxText(n) && /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(n.getText().replace(/&[a-z]+;/g, ""))) flag(n, `texto sin traducir en JSX: ${JSON.stringify(n.getText().trim().slice(0, 50))}`);
-    if (ts.isJsxAttribute(n) && n.initializer && ts.isStringLiteral(n.initializer) && TEXT_ATTRS.has(n.name.getText()) && /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(n.initializer.text)) flag(n, `${n.name.getText()}="${n.initializer.text.slice(0, 40)}" sin traducir`);
-    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && ["t", "tr", "T"].includes(n.expression.text)) {
-      const a = n.arguments[0];
-      if (a && (ts.isStringLiteral(a) || ts.isNoSubstitutionTemplateLiteral(a))) keys.add(a.text);
+    if (!n || typeof n.type !== "string") return;
+    if (n.type === "JSXText" && /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(text.slice(n.start, n.end).replace(/&[a-z]+;/g, ""))) flag(n, `texto sin traducir en JSX: ${JSON.stringify(text.slice(n.start, n.end).trim().slice(0, 50))}`);
+    if (n.type === "JSXAttribute" && n.value && n.value.type === "Literal" && typeof n.value.value === "string" && n.name.type === "JSXIdentifier" && TEXT_ATTRS.has(n.name.name) && /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(n.value.value)) flag(n, `${n.name.name}="${n.value.value.slice(0, 40)}" sin traducir`);
+    if (n.type === "CallExpression" && n.callee.type === "Identifier" && ["t", "tr", "T"].includes(n.callee.name) && isStr(n.arguments[0])) keys.add(strOf(n.arguments[0]));
+    for (const k in n) {
+      if (k === "parent") continue;
+      const v = n[k];
+      if (Array.isArray(v)) v.forEach(visit); else if (v && typeof v === "object") visit(v);
     }
-    ts.forEachChild(n, visit);
   };
-  visit(sf);
+  visit(program);
 }
 const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "i18n", "en.json"), "utf8"));
 const missing = [...keys].filter((k) => !(k in catalog)).sort();
