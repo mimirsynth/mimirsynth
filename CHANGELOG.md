@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Changed
+- The request limiter (sign-in, two-factor, password recovery and setup) now keeps its attempts in the database (migration `0018`): it is shared between processes and survives restarts, so restarting the service no longer resets the counters. If the database fails it falls back to an in-memory counter, so access is never left unprotected.
 
 ## [0.5.0] - 2026-10-25
 ### Added

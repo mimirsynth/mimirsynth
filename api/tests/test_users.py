@@ -438,3 +438,27 @@ def test_identity_linking_and_unlinking(client, local, monkeypatch):  # noqa: F8
 def passwords_hash():
     from mimirsynth import passwords
     return passwords.hash_password(PW)
+
+
+def test_ratelimit_is_persistent_and_sliding(client):  # noqa: F811
+    """Los intentos viven en la base de datos (los ve otro proceso y sobreviven al reinicio) y salen de la ventana con el tiempo."""
+    from datetime import datetime, timedelta, timezone
+    from mimirsynth.models import RateHit
+    ratelimit.reset()
+    assert [ratelimit.allow("k1", 3, 600) for _ in range(5)] == [True, True, True, False, False]
+    ratelimit._HITS.clear()  # «otro proceso» o reinicio: la memoria no cuenta, la base de datos sí
+    assert ratelimit.allow("k1", 3, 600) is False
+    assert ratelimit.allow("k2", 3, 600) is True  # otra clave, otro cubo
+    with _factory()() as db:  # envejecer los intentos de k1 más allá de la ventana
+        db.query(RateHit).filter(RateHit.key == "k1").update({"at": datetime.now(timezone.utc) - timedelta(seconds=601)}); db.commit()
+    assert ratelimit.allow("k1", 3, 600) is True
+    with _factory()() as db:
+        assert db.query(RateHit).filter(RateHit.key == "k1").count() == 1  # los caducados se borran
+
+
+def test_ratelimit_falls_back_to_memory_when_db_fails(client, monkeypatch):  # noqa: F811
+    """Si la base de datos no responde no se deja el acceso sin protección: manda el contador en memoria."""
+    ratelimit.reset()
+    monkeypatch.setattr(ratelimit, "_allow_db", lambda *a: (_ for _ in ()).throw(RuntimeError("caída")))
+    assert [ratelimit.allow("k3", 2, 600) for _ in range(3)] == [True, True, False]
+    ratelimit.reset()
