@@ -7,11 +7,32 @@ permissions:
 jobs:
   api:
     runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:v4.22.0
+        ports: ["6379:6379"]
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: mimirsynth
+          POSTGRES_PASSWORD: mimirsynth
+          POSTGRES_DB: mimirsynth_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mimirsynth"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
       - run: cd api && uv venv && uv pip install -e . pytest
-      - run: cd api && .venv/bin/pytest -q
+      - name: Tests (con FalkorDB real)
+        env:
+          MIMIRSYNTH_TEST_FALKOR: localhost
+        run: cd api && .venv/bin/pytest -q --ignore=tests/test_docs_pg.py
+      - name: Tests de memoria documental (PostgreSQL + pgvector real)
+        env:
+          MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
+        run: cd api && .venv/bin/pytest -q tests/test_docs_pg.py
   web:
     runs-on: ubuntu-latest
     steps:
