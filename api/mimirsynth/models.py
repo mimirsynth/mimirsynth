@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -138,6 +138,15 @@ class Audit(Base):
     brain_id: Mapped[int | None] = mapped_column(ForeignKey("brains.id", ondelete="SET NULL"), nullable=True)
     action: Mapped[str] = mapped_column(String(64))
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class RateHit(Base):
+    """Intento registrado por el limitador de peticiones (compartido entre procesos y reinicios)."""
+    __tablename__ = "rate_hits"
+    __table_args__ = (Index("ix_rate_hits_key_at", "key", "at"),)
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(255))
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class AppSetting(Base):

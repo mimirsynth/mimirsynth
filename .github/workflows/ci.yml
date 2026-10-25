@@ -33,6 +33,10 @@ jobs:
         env:
           MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
         run: cd api && .venv/bin/pytest -q tests/test_docs_pg.py
+      - name: Limitador de peticiones (PostgreSQL real, concurrencia)
+        env:
+          MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
+        run: cd api && .venv/bin/pytest -q tests/test_ratelimit_pg.py
   web:
     runs-on: ubuntu-latest
     steps:
