@@ -7,7 +7,7 @@ import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, 
 
 type T = { name: string; description: string };
 type Rule = { source: string; target: string; edge_types: string[] };
-type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rule[]; instructions?: string }; configured: boolean; presets: string[] };
+type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rule[]; instructions?: string }; configured: boolean; presets: string[]; presets_info?: { name: string; title: string; description: string; version: number; standards: string[]; entity_types: number; edge_types: number }[]; preset_update?: { name: string; installed: number; available: number } | null };
 type Done = { op: number; summary: string };
 type Dlg = { kind: "rel"; item?: T } | { kind: "rel-del"; item: T } | { kind: "rule"; item?: Rule } | { kind: "rule-del"; item: Rule } | { kind: "instr" } | null;
 
@@ -77,7 +77,12 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
 
   const refresh = () => { qc.invalidateQueries({ queryKey: ["ontology", graph] }); qc.invalidateQueries({ queryKey: ["vocab-types", graph] }); };
   const finished = (r: Done) => { setDone(r); setDlg(null); refresh(); };
-  const apply = useMutation({ mutationFn: (n: string) => send("POST", `brains/${graph}/ontology/preset/${n}`), onSuccess: () => { setPreset(null); setDone(null); refresh(); } });
+  const [askReplace, setAskReplace] = useState(false);
+  const apply = useMutation({ mutationFn: (a: { name: string; mode: "replace" | "merge" }) => send("POST", `brains/${graph}/ontology/preset/${a.name}`, undefined, { mode: a.mode }), onSuccess: () => { setPreset(null); setDone(null); refresh(); } });
+  const info = q.data?.presets_info ?? [];
+  const chosen = info.find((i) => i.name === preset);
+  const upd = q.data?.preset_update;
+  const updInfo = info.find((i) => i.name === upd?.name);
   const saveRel = useMutation({
     mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc }, { graph })),
     onSuccess: finished });
@@ -101,12 +106,20 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
         <Text size="sm" c="dimmed">{t("La ontología guía qué tipos de entidad y de relación extrae el ingestor al escribir. Sin ella, el modelo inventa tipos y relaciones libremente. Los tipos de entidad se editan en su pestaña; aquí, las relaciones, las reglas del mapa y las instrucciones. Los cambios guían las ingestas futuras y no modifican lo que ya está en el grafo.")}</Text>
         {done && <Notice tone="info">{done.summary}. <Btn kind="link" onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn>{undo.error && ` — ${(undo.error as Error).message}`}</Notice>}
         {q.data && !q.data.configured && <Notice tone="warn">{t("Este brain no tiene ontología: la extracción es libre. Aplica un paquete o crea tipos para empezar.")}</Notice>}
+        {canEdit && upd && <Notice tone="info" title={t("Hay una versión nueva del paquete «{{name}}»", { name: updInfo?.title ?? upd.name })}>
+          {t("Tienes la versión {{installed}} y está disponible la {{available}}. Actualizar añade lo que falta (tipos, relaciones y reglas) sin tocar nada de lo que ya tienes ni lo que cambiaste a mano.", { installed: upd.installed, available: upd.available })}{" "}
+          <Btn kind="link" loading={apply.isPending} onClick={() => apply.mutate({ name: upd.name, mode: "merge" })}>{t("Actualizar")}</Btn></Notice>}
         {canEdit && (
           <Group align="flex-end" gap="xs">
-            <SelectField label={t("Aplicar paquete")} w={220} data={q.data?.presets ?? []} value={preset} onChange={setPreset} placeholder={t("Elige un paquete")} />
-            <Btn kind="primary" disabled={!preset} loading={apply.isPending} onClick={() => preset && apply.mutate(preset)} icon="check">{q.data?.configured ? t("Sustituir ontología") : t("Aplicar")}</Btn>
+            <SelectField label={t("Aplicar paquete")} w={300} data={info.map((i) => ({ value: i.name, label: i.title }))} value={preset} onChange={setPreset} placeholder={t("Elige un paquete")} />
+            <Btn kind="primary" disabled={!preset} loading={apply.isPending} onClick={() => preset && (q.data?.configured ? setAskReplace(true) : apply.mutate({ name: preset, mode: "replace" }))} icon="check">{q.data?.configured ? t("Sustituir ontología") : t("Aplicar")}</Btn>
+            {q.data?.configured && preset && <Btn onClick={() => apply.mutate({ name: preset, mode: "merge" })} loading={apply.isPending} icon="plus">{t("Añadir lo que falta")}</Btn>}
           </Group>)}
-        {q.data?.configured && canEdit && <Text size="xs" c="dimmed">{t("Sustituir la ontología reemplaza los tipos, las relaciones, el mapa y las instrucciones actuales, incluidos los cambios hechos a mano.")}</Text>}
+        {canEdit && chosen && <Text size="xs" c="dimmed" maw={760}>{chosen.description} {t("{{e}} tipos de entidad y {{r}} de relación, versión {{v}}.", { e: chosen.entity_types, r: chosen.edge_types, v: chosen.version })}{chosen.standards.length > 0 && <> {t("Basado en:")} {chosen.standards.join("; ")}.</>}</Text>}
+        {q.data?.configured && canEdit && <Text size="xs" c="dimmed">{t("Sustituir la ontología reemplaza los tipos, las relaciones, el mapa y las instrucciones actuales, incluidos los cambios hechos a mano. «Añadir lo que falta» solo suma lo que no tienes.")}</Text>}
+        <ConfirmDialog opened={askReplace} onClose={() => setAskReplace(false)} title={t("Sustituir la ontología")} action={t("Sustituir")}
+          warning={t("Se reemplazan los tipos, las relaciones, el mapa y las instrucciones actuales por los del paquete, incluidos los cambios hechos a mano. Las entidades que ya están en el grafo no cambian.")}
+          onConfirm={() => apply.mutateAsync({ name: preset!, mode: "replace" })} />
         <MutationError error={apply.error} />
         {o && (
           <>

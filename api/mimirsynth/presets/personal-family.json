@@ -1,0 +1,292 @@
+{
+ "title": "Personal and family",
+ "version": 1,
+ "description": "Family members and relationships, pets, homes and places, trips, appointments, belongings, subscriptions and documents of daily life. Never store passwords, card numbers or other secrets here.",
+ "standards": [
+  "schema.org (Person, Place, Event, Trip, Product)",
+  "FOAF (knows)"
+ ],
+ "entity_types": [
+  {
+   "name": "Person",
+   "description": "An individual: family member, friend, doctor, neighbour. Use for: people by name or relation. Not for: companies (Organization). Examples: 'Lucía (daughter)', 'Dr. Pérez'."
+  },
+  {
+   "name": "Household",
+   "description": "A home and the people who live together in it. Use for: a family unit or a residence as a group. Not for: the building as a place (Place). Examples: 'our flat in Madrid', 'the García family'."
+  },
+  {
+   "name": "Pet",
+   "description": "An animal that belongs to the household. Not for: wild animals or animals of other people's households unless they matter. Examples: 'Luna the cat', 'Rex the dog'."
+  },
+  {
+   "name": "Place",
+   "description": "A named place or address: home, school, shop, city, venue. Not for: websites. Examples: 'Parque del Retiro', 'Grandma's house'."
+  },
+  {
+   "name": "Event",
+   "description": "A dated occurrence: birthday, celebration, school event, outage at home. Not for: scheduled health or admin visits (Appointment) or journeys (Trip). Examples: 'Lucía's birthday 2026-05-04'."
+  },
+  {
+   "name": "Trip",
+   "description": "A journey or holiday with a destination and dates. Not for: a single outing with no travel, or a place itself (Place). Examples: 'Summer in Asturias 2026', 'Weekend in Lisbon'."
+  },
+  {
+   "name": "Appointment",
+   "description": "A scheduled visit or meeting with a professional or service: medical, school, administrative, repair. Not for: family or social occasions (Event). Examples: 'Dentist 2026-11-03', 'ITV inspection'."
+  },
+  {
+   "name": "Item",
+   "description": "A belonging or product worth remembering: appliance, vehicle, device, furniture, with its model or warranty. Not for: recurring contracts (Subscription) or documents about it (Document). Examples: 'Samsung washing machine', 'Seat Ibiza 2019'."
+  },
+  {
+   "name": "Subscription",
+   "description": "A recurring service or contract: streaming, insurance, utilities, memberships. Record provider and renewal date, never credentials. Not for: one-off purchases (Item). Examples: 'Netflix', 'Home insurance'."
+  },
+  {
+   "name": "Document",
+   "description": "A paper or digital document that can be cited: contract, invoice, warranty, recipe, certificate. Not for: the thing it is about (Item, Subscription). Examples: 'Rental contract', 'Car insurance policy'."
+  },
+  {
+   "name": "Organization",
+   "description": "A company or institution: school, bank, employer, shop, clinic. Not for: a person, or a place where it is located (Place). Examples: 'CEIP San José', 'Banco X'."
+  },
+  {
+   "name": "Topic",
+   "description": "A subject, hobby or interest. LAST RESORT: only when nothing more specific fits. Not for: people, places, events or things. Examples: 'sourdough baking'."
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "FamilyOf",
+   "description": "Family relation between two people (parent, child, sibling, partner); state the relation in the fact."
+  },
+  {
+   "name": "FriendOf",
+   "description": "Friendship or acquaintance between two people."
+  },
+  {
+   "name": "LivesAt",
+   "description": "A person, household or pet lives at a place."
+  },
+  {
+   "name": "MemberOf",
+   "description": "A person belongs to a household or organization."
+  },
+  {
+   "name": "Owns",
+   "description": "A person or household owns an item, pet or subscription."
+  },
+  {
+   "name": "Attends",
+   "description": "A person attends an event, trip or appointment, or a school or organization."
+  },
+  {
+   "name": "LocatedAt",
+   "description": "An event, appointment, trip or item takes place or is kept at a place."
+  },
+  {
+   "name": "SubscribedTo",
+   "description": "A person or household holds a subscription or contract."
+  },
+  {
+   "name": "Provides",
+   "description": "An organization provides a subscription, product or appointment."
+  },
+  {
+   "name": "MentionedIn",
+   "description": "An entity appears in a document."
+  },
+  {
+   "name": "RelatesTo",
+   "description": "LAST RESORT. Use only when two entities are clearly associated and no other relation type in the list fits. Never use it when a more specific type applies."
+  }
+ ],
+ "edge_type_map": [
+  {
+   "source": "Person",
+   "target": "Person",
+   "edge_types": [
+    "FamilyOf",
+    "FriendOf"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Household",
+   "edge_types": [
+    "MemberOf"
+   ]
+  },
+  {
+   "source": "Pet",
+   "target": "Household",
+   "edge_types": [
+    "MemberOf"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Place",
+   "edge_types": [
+    "LivesAt"
+   ]
+  },
+  {
+   "source": "Household",
+   "target": "Place",
+   "edge_types": [
+    "LivesAt"
+   ]
+  },
+  {
+   "source": "Pet",
+   "target": "Place",
+   "edge_types": [
+    "LivesAt"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Organization",
+   "edge_types": [
+    "MemberOf",
+    "Attends"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Item",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Household",
+   "target": "Item",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Pet",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Household",
+   "target": "Pet",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Event",
+   "edge_types": [
+    "Attends"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Trip",
+   "edge_types": [
+    "Attends"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Appointment",
+   "edge_types": [
+    "Attends"
+   ]
+  },
+  {
+   "source": "Event",
+   "target": "Place",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Trip",
+   "target": "Place",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Appointment",
+   "target": "Place",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Item",
+   "target": "Place",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Subscription",
+   "edge_types": [
+    "SubscribedTo"
+   ]
+  },
+  {
+   "source": "Household",
+   "target": "Subscription",
+   "edge_types": [
+    "SubscribedTo"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Subscription",
+   "edge_types": [
+    "Provides"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Appointment",
+   "edge_types": [
+    "Provides"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Item",
+   "edge_types": [
+    "Provides"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Document",
+   "edge_types": [
+    "MentionedIn"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Topic",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Entity",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  }
+ ],
+ "instructions": "Personal and family notes. Use the MOST SPECIFIC type: family and friends are Person, a home as a family unit is Household, a scheduled visit is Appointment, a journey is Trip, a recurring contract is Subscription. State family relations explicitly in the fact (e.g. 'Lucía is the daughter of Ana'). Record dates, renewal dates and warranty periods when stated. NEVER extract passwords, PINs, card or account numbers or other secrets: skip them. Use only the listed relation types and prefer a specific one over RelatesTo."
+}

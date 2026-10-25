@@ -15,8 +15,16 @@ PRESETS_DIR = Path(__file__).parent / "presets"
 NAME = re.compile(r"^[A-Z][A-Za-z0-9]{1,40}$")
 
 
+ALIASES = {"generic": "general"}  # nombre del paquete de base anterior (retirado en la 0.6)
+
+
 def presets() -> dict[str, dict]:
     return {p.stem: json.loads(p.read_text()) for p in sorted(PRESETS_DIR.glob("*.json"))}
+
+
+def preset_info() -> list[dict]:
+    return [{"name": n, "title": p.get("title", n), "description": p.get("description", ""), "version": p.get("version", 1), "standards": p.get("standards", []),
+             "entity_types": len(p["entity_types"]), "edge_types": len(p["edge_types"])} for n, p in presets().items()]
 
 
 class TypeDef(BaseModel):
@@ -42,6 +50,7 @@ class OntologyIn(BaseModel):
     edge_types: list[TypeDef] = []
     edge_type_map: list[MapDef] = []
     instructions: str = Field("", max_length=4000)  # guía libre para la extracción (custom_extraction_instructions)
+    preset: dict | None = None  # {"name", "version"} del paquete aplicado: permite avisar de actualizaciones
 
 
 def validate_ontology(o: OntologyIn) -> None:
@@ -82,7 +91,11 @@ def to_graphiti(o: dict) -> dict:
 def read_ontology(ctx: BrainCtx = Depends(reader)):
     row = ctx.db.get(BrainOntology, ctx.brain.id)
     data = row.data if row else {"entity_types": [], "edge_types": [], "edge_type_map": [], "instructions": ""}
-    return {"ontology": data, "configured": bool(data.get("entity_types") or data.get("edge_types")), "presets": sorted(presets())}
+    info = preset_info()
+    applied = data.get("preset")
+    update = next(({"name": i["name"], "installed": applied["version"], "available": i["version"]} for i in info
+                   if applied and i["name"] == applied.get("name") and i["version"] > applied.get("version", 0)), None)
+    return {"ontology": data, "configured": bool(data.get("entity_types") or data.get("edge_types")), "presets": [i["name"] for i in info], "presets_info": info, "preset_update": update}
 
 
 @router.put("/brains/{slug}/ontology")
@@ -90,6 +103,8 @@ def write_ontology(body: OntologyIn, ctx: BrainCtx = Depends(admin_of_brain)):
     validate_ontology(body)
     data = body.model_dump()
     row = ctx.db.get(BrainOntology, ctx.brain.id)
+    if body.preset is None and row and row.data.get("preset"):
+        data["preset"] = row.data["preset"]  # editar a mano no borra de dónde viene la ontología
     if row:
         row.data = data
     else:
@@ -99,9 +114,37 @@ def write_ontology(body: OntologyIn, ctx: BrainCtx = Depends(admin_of_brain)):
     return {"ok": True}
 
 
+def _merge(current: dict, pack: dict) -> dict:
+    """Añade lo que le falta al brain según el paquete (tipos, relaciones, reglas) sin tocar nada de lo que ya existe, y fija la versión instalada."""
+    out = {k: list(current.get(k, [])) for k in ("entity_types", "edge_types", "edge_type_map")}
+    for key in ("entity_types", "edge_types"):
+        have = {t["name"] for t in out[key]}
+        out[key] += [t for t in pack[key] if t["name"] not in have]
+    rules = {(m["source"], m["target"]): m for m in out["edge_type_map"]}
+    for m in pack["edge_type_map"]:
+        if (m["source"], m["target"]) in rules:
+            have = rules[(m["source"], m["target"])]["edge_types"]
+            rules[(m["source"], m["target"])] = {**rules[(m["source"], m["target"])], "edge_types": have + [e for e in m["edge_types"] if e not in have]}
+        else:
+            rules[(m["source"], m["target"])] = m
+    out["edge_type_map"] = list(rules.values())
+    out["instructions"] = current.get("instructions") or pack.get("instructions", "")
+    return out
+
+
 @router.post("/brains/{slug}/ontology/preset/{name}")
-def apply_preset(name: str, ctx: BrainCtx = Depends(admin_of_brain)):
+def apply_preset(name: str, mode: str = "replace", ctx: BrainCtx = Depends(admin_of_brain)):
+    """mode=replace sustituye la ontología entera por el paquete; mode=merge solo añade lo que falta (actualizar sin perder los cambios a mano)."""
+    name = ALIASES.get(name, name)
     p = presets().get(name)
     if not p:
         raise HTTPException(404, "paquete de ontología no encontrado")
-    return write_ontology(OntologyIn(**p), ctx)
+    if mode not in ("replace", "merge"):
+        raise HTTPException(422, "modo no válido (replace o merge)")
+    ref = {"name": name, "version": p.get("version", 1)}
+    if mode == "merge":
+        row = ctx.db.get(BrainOntology, ctx.brain.id)
+        data = _merge(row.data if row else {}, p)
+    else:
+        data = {k: p.get(k, [] if k != "instructions" else "") for k in ("entity_types", "edge_types", "edge_type_map", "instructions")}
+    return write_ontology(OntologyIn(**data, preset=ref), ctx)

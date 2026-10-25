@@ -1,118 +1,137 @@
 {
+ "title": "Infrastructure and IT operations",
+ "version": 2,
+ "description": "Servers, virtual machines and containers, services, networks, storage, workflows, incidents, changes and runbooks, with where each one runs and what depends on what. Aligned with the configuration-item model of ITIL/CMDB.",
+ "standards": [
+  "ITIL / CMDB configuration items and relationships",
+  "schema.org (SoftwareApplication, Place, Organization)"
+ ],
  "entity_types": [
   {
    "name": "Host",
-   "description": "A Proxmox node or physical server that runs guests, e.g. pve-01, node-02, 'host db01'. Proxmox nodes are Hosts, never Locations."
+   "description": "A physical server or hypervisor node that runs guests or services. Use for: bare-metal machines, Proxmox/ESXi/Kubernetes nodes, NAS and appliances that host workloads. Not for: a VM or container (Guest) or a site (Location). Examples: 'pve-01', 'node-02', 'nas-main'."
   },
   {
    "name": "Guest",
-   "description": "An LXC container, VM or Docker container, e.g. 'LXC 104', 'CT 210', 'VM 100'. Anything named LXC/CT/VM plus a number is a Guest, never a Location or Object."
+   "description": "A virtual machine or container running on a host. Use for: VMs, LXC and Docker containers identified by name or ID. Not for: the application that runs inside it (Service) or the machine it runs on (Host). Examples: 'LXC 104 vaultwarden', 'VM 100 homeassistant'."
   },
   {
    "name": "Service",
-   "description": "A software application or service running on a host or guest, e.g. Nextcloud, Grafana, Postgres, Home Assistant. ANY named application is a Service, never an Organization or Object."
+   "description": "A running application or software service that provides something to users or other systems. Use for: web apps, databases, daemons, APIs, SaaS in use. Not for: the machine or container it runs in (Host/Guest) or its domain name (Network). Examples: 'Grafana', 'PostgreSQL', 'Vaultwarden'."
   },
   {
    "name": "Workflow",
-   "description": "An automation workflow or scheduled job (n8n workflow, Semaphore job, cron)"
+   "description": "An automated sequence of steps or a scheduled job. Use for: n8n/Ansible/cron/CI pipelines and backup jobs. Not for: a manual procedure (Runbook). Examples: 'nightly backup job', 'n8n DHCP cleanup'."
   },
   {
    "name": "Network",
-   "description": "A VLAN, subnet, IP range, DNS domain or public hostname, e.g. docs.example.com, VLAN 20, 192.168.10.0/24. Domains and hostnames are Networks, never Locations."
+   "description": "A network, address space, domain or hostname. Use for: VLANs, subnets, VPNs, DNS names, reverse proxies and ingress endpoints. Not for: a physical site (Location) or a device. Examples: 'VLAN 3 services', 'grafana.example.com', 'Tailscale tailnet'."
   },
   {
    "name": "Storage",
-   "description": "A storage pool, NFS/SMB share, dataset or backup datastore"
+   "description": "A storage pool, volume, share or backup repository. Use for: ZFS pools, NFS/SMB shares, object buckets, PBS datastores. Not for: the server that exports it (Host). Examples: 'pool tank', 'NFS share media', 'datastore main'."
   },
   {
    "name": "Incident",
-   "description": "A failure, outage or malfunction affecting infrastructure"
+   "description": "An unplanned interruption or degradation of a service, with its time and impact. Use for: outages, failures, alerts that required action. Not for: planned maintenance (Change). Examples: 'DNS outage 2026-10-12', 'backup failed on node-03'."
+  },
+  {
+   "name": "Change",
+   "description": "A planned modification of the infrastructure: upgrade, migration, configuration change, decommissioning. Use for: things that were done on purpose, with a date. Not for: failures (Incident) or general how-tos (Runbook). Examples: 'Migrate Vaultwarden to Docker', 'Upgrade to Debian 13'."
+  },
+  {
+   "name": "Runbook",
+   "description": "A documented procedure or recipe to do or fix something. Use for: step-by-step guides, checklists, known fixes. Not for: an automated job (Workflow) or a decision (Decision). Examples: 'How to restore from PBS', 'Fix: restart zigbee bridge'."
   },
   {
    "name": "Decision",
-   "description": "A design or architecture decision together with its rationale"
-  },
-  {
-   "name": "Procedure",
-   "description": "Standard operating procedures and sequential instructions"
+   "description": "A design or operational decision with its rationale. Use for: 'we chose X over Y because Z'. Not for: plans not yet decided. Examples: 'Use Pangolin for public ingress', 'Keep AdGuard on three nodes'."
   },
   {
    "name": "Location",
-   "description": "A real-world physical place (a city, a house, a room, a rack). NEVER a server, node, guest or domain."
-  },
-  {
-   "name": "Event",
-   "description": "Time-bound activities, occurrences, or experiences"
+   "description": "A physical site or place where equipment is installed. Use for: rooms, racks, data centers, regions. Not for: servers (Host) or networks. Examples: 'server room', 'rack U20', 'Hetzner Falkenstein'."
   },
   {
    "name": "Organization",
-   "description": "A real-world company, institution or formal group of people. NEVER a software service, host or guest."
-  },
-  {
-   "name": "Document",
-   "description": "Information content in various forms (books, articles, reports, etc.)"
+   "description": "A company or provider outside the infrastructure itself. Use for: vendors, hosting and SaaS providers, ISPs. Not for: the services they provide (Service). Examples: 'Hetzner', 'Cloudflare'."
   },
   {
    "name": "Person",
-   "description": "An individual human referenced in the content"
+   "description": "A person involved in operating or using the infrastructure. Not for: teams or providers (Organization). Examples: 'Rafa', 'the on-call engineer'."
+  },
+  {
+   "name": "Document",
+   "description": "A manual, specification or note about the infrastructure that can be cited. Not for: a step-by-step procedure (Runbook). Examples: 'UPS manual', 'network diagram'."
+  },
+  {
+   "name": "Event",
+   "description": "A dated occurrence that is neither an incident nor a change. Not for: outages (Incident) or planned work (Change). Examples: 'power cut 2026-09-03', 'certificate expiry'."
   },
   {
    "name": "Topic",
-   "description": "Subject or knowledge domain (use as last resort, never for infrastructure)."
-  },
-  {
-   "name": "Object",
-   "description": "A physical item or device that is not a server or guest (use as last resort)."
+   "description": "A subject or concept. LAST RESORT: only when nothing more specific fits. Not for: any host, guest, service, network or storage. Examples: 'high availability'."
   }
  ],
  "edge_types": [
   {
-   "name": "RelatesTo",
-   "description": "LAST RESORT: only when two entities are clearly associated and NO other edge type fits. Never use it when the text says where something runs, what it depends on, what it monitors or exposes."
-  },
-  {
-   "name": "Requires",
-   "description": "A dependency: the source needs the target in order to work. Source = dependent, target = dependency. Not for where something runs (HostedOn) or monitoring (Monitors)."
-  },
-  {
    "name": "HostedOn",
-   "description": "A guest or service RUNS ON a host, or a service runs inside a guest. Source = the hosted thing, target = where it runs. Extract one fact for EVERY guest or service whose host is stated."
+   "description": "A guest or service runs on a host, guest or platform (where it lives right now)."
   },
   {
-   "name": "MigratedTo",
-   "description": "A guest or service was MOVED from one host or guest to another at a specific time. Source = the moved thing, target = the NEW location. Set the event date as the fact's valid time."
+   "name": "DependsOn",
+   "description": "An entity needs another to work (a service needing a database, a guest needing a storage pool)."
   },
   {
-   "name": "Monitors",
-   "description": "The source (a monitoring service or a Workflow) watches, checks or alerts on the target (Host, Guest, Service or Network)."
+   "name": "ConnectsTo",
+   "description": "An entity is attached to or reachable through a network."
   },
   {
    "name": "Exposes",
-   "description": "A service is reachable through a Network, domain name, VLAN or public hostname. Source = the service, target = the network or hostname."
+   "description": "A service is reachable through a domain, hostname or ingress."
+  },
+  {
+   "name": "Monitors",
+   "description": "A service or workflow watches or alerts about another entity."
   },
   {
    "name": "BacksUpTo",
-   "description": "A host or guest is backed up to a Storage target. Source = what is backed up, target = the storage."
+   "description": "An entity is backed up to a storage target or backup service."
+  },
+  {
+   "name": "MigratedTo",
+   "description": "An entity moved from one host or platform to another (record the date)."
   },
   {
    "name": "CausedBy",
-   "description": "An Incident was caused by the target (a Service, Host, Guest, Decision, change or event). Only when the text states or implies the cause."
+   "description": "An incident or problem was caused by an entity, change or event."
   },
   {
    "name": "ResolvedBy",
-   "description": "An Incident was resolved by the target (a Decision, action, fix or change). Source = the Incident, target = the fix."
+   "description": "An incident was resolved by a change or a runbook."
+  },
+  {
+   "name": "Affects",
+   "description": "An incident or change impacts a service, guest or host."
   },
   {
    "name": "LocatedAt",
-   "description": "An entity is situated at or within a location"
+   "description": "A host or device is installed at a location."
+  },
+  {
+   "name": "DecidedBy",
+   "description": "A decision was made by a person or organization."
   },
   {
    "name": "Owns",
-   "description": "An ownership or possession relationship between an entity and an object"
+   "description": "A person or organization owns or is responsible for an entity."
   },
   {
    "name": "MentionedIn",
-   "description": "An entity is referenced or described within a source document or message"
+   "description": "An entity is referenced in a document."
+  },
+  {
+   "name": "RelatesTo",
+   "description": "LAST RESORT. Use only when two entities are clearly associated and no other relation type in the list fits. Never use it when a more specific type applies."
   }
  ],
  "edge_type_map": [
@@ -137,7 +156,8 @@
    "target": "Host",
    "edge_types": [
     "HostedOn",
-    "MigratedTo"
+    "MigratedTo",
+    "Monitors"
    ]
   },
   {
@@ -145,44 +165,229 @@
    "target": "Guest",
    "edge_types": [
     "HostedOn",
-    "MigratedTo"
-   ]
-  },
-  {
-   "source": "Service",
-   "target": "Network",
-   "edge_types": [
-    "Exposes"
-   ]
-  },
-  {
-   "source": "Service",
-   "target": "Entity",
-   "edge_types": [
+    "MigratedTo",
     "Monitors"
    ]
   },
   {
    "source": "Workflow",
-   "target": "Entity",
+   "target": "Host",
    "edge_types": [
-    "Monitors"
+    "HostedOn"
    ]
   },
   {
-   "source": "Host",
-   "target": "Storage",
+   "source": "Workflow",
+   "target": "Guest",
    "edge_types": [
-    "BacksUpTo"
+    "HostedOn"
+   ]
+  },
+  {
+   "source": "Service",
+   "target": "Service",
+   "edge_types": [
+    "DependsOn",
+    "Monitors"
    ]
   },
   {
    "source": "Guest",
    "target": "Storage",
    "edge_types": [
+    "DependsOn",
     "BacksUpTo"
+   ]
+  },
+  {
+   "source": "Service",
+   "target": "Storage",
+   "edge_types": [
+    "DependsOn",
+    "BacksUpTo"
+   ]
+  },
+  {
+   "source": "Workflow",
+   "target": "Service",
+   "edge_types": [
+    "DependsOn",
+    "Monitors"
+   ]
+  },
+  {
+   "source": "Host",
+   "target": "Network",
+   "edge_types": [
+    "ConnectsTo"
+   ]
+  },
+  {
+   "source": "Guest",
+   "target": "Network",
+   "edge_types": [
+    "ConnectsTo"
+   ]
+  },
+  {
+   "source": "Service",
+   "target": "Network",
+   "edge_types": [
+    "Exposes",
+    "ConnectsTo"
+   ]
+  },
+  {
+   "source": "Workflow",
+   "target": "Storage",
+   "edge_types": [
+    "BacksUpTo"
+   ]
+  },
+  {
+   "source": "Storage",
+   "target": "Storage",
+   "edge_types": [
+    "BacksUpTo"
+   ]
+  },
+  {
+   "source": "Incident",
+   "target": "Change",
+   "edge_types": [
+    "CausedBy",
+    "ResolvedBy"
+   ]
+  },
+  {
+   "source": "Incident",
+   "target": "Runbook",
+   "edge_types": [
+    "ResolvedBy"
+   ]
+  },
+  {
+   "source": "Incident",
+   "target": "Event",
+   "edge_types": [
+    "CausedBy"
+   ]
+  },
+  {
+   "source": "Incident",
+   "target": "Service",
+   "edge_types": [
+    "Affects",
+    "CausedBy"
+   ]
+  },
+  {
+   "source": "Incident",
+   "target": "Host",
+   "edge_types": [
+    "Affects",
+    "CausedBy"
+   ]
+  },
+  {
+   "source": "Incident",
+   "target": "Guest",
+   "edge_types": [
+    "Affects",
+    "CausedBy"
+   ]
+  },
+  {
+   "source": "Change",
+   "target": "Service",
+   "edge_types": [
+    "Affects"
+   ]
+  },
+  {
+   "source": "Change",
+   "target": "Host",
+   "edge_types": [
+    "Affects"
+   ]
+  },
+  {
+   "source": "Change",
+   "target": "Guest",
+   "edge_types": [
+    "Affects"
+   ]
+  },
+  {
+   "source": "Host",
+   "target": "Location",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Storage",
+   "target": "Location",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Person",
+   "edge_types": [
+    "DecidedBy"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Organization",
+   "edge_types": [
+    "DecidedBy"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Service",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Host",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Service",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Document",
+   "edge_types": [
+    "MentionedIn"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Topic",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Entity",
+   "edge_types": [
+    "RelatesTo"
    ]
   }
  ],
- "instructions": "Infrastructure and IT operations notes. Classify every entity with the MOST SPECIFIC infrastructure type: applications = Service, LXC/VM/container = Guest, Proxmox nodes = Host, domains/hostnames/VLANs = Network, storage pools/shares = Storage. Use Organization, Location, Object or Topic only for things that are not infrastructure. Extract HostedOn for every guest or service with a stated host, MigratedTo for moves (with the date), Monitors for monitoring relations and Exposes for services reachable through a domain or hostname. Use only the listed relation types."
+ "instructions": "Infrastructure and IT operations notes. Classify every entity with the MOST SPECIFIC infrastructure type: applications = Service, VM or container = Guest, physical servers and hypervisor nodes = Host, domains/hostnames/VLANs = Network, pools and shares = Storage. Use Organization, Location, Person, Document, Event or Topic only for things that are not infrastructure. Extract HostedOn for every guest or service with a stated host, MigratedTo for moves (with the date), DependsOn for requirements, Exposes for services reachable through a domain, Monitors and BacksUpTo for monitoring and backups, and CausedBy/ResolvedBy/Affects for incidents and changes. Use only the listed relation types and prefer a specific one over RelatesTo."
 }

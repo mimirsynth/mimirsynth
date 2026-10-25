@@ -67,7 +67,7 @@ A query combines, without calling an LLM:
 
 ## Vocabulary
 
-The ontology is defined per brain (starter packages in `api/mimirsynth/presets/`). The interface lets you normalise aliases, merge duplicates, retype entities and edit relation types; every change is reversible and audited.
+The ontology is defined per brain (standard packages in `api/mimirsynth/presets/`, see [ONTOLOGY.md](ONTOLOGY.md)). The interface lets you normalise aliases, merge duplicates, retype entities and edit relation types; every change is reversible and audited.
 
 ## Jobs
 

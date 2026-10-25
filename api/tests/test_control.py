@@ -368,14 +368,14 @@ def test_ontology_api_and_graphiti_conversion(client):
     r = client.post("/api/brains/onto/ontology/preset/infrastructure")
     assert r.status_code == 200
     got = client.get("/api/brains/onto/ontology").json()
-    assert got["configured"] and {"infrastructure", "generic"} <= set(got["presets"]) and any(t["name"] == "HostedOn" for t in got["ontology"]["edge_types"])
+    assert got["configured"] and {"infrastructure", "general"} <= set(got["presets"]) and any(t["name"] == "HostedOn" for t in got["ontology"]["edge_types"])
     assert client.post("/api/brains/onto/ontology/preset/nope").status_code == 404
     bad = {"entity_types": [{"name": "host", "description": "minúscula inválida"}], "edge_types": [], "edge_type_map": []}
     assert client.put("/api/brains/onto/ontology", json=bad).status_code == 422
     bad2 = {"entity_types": [{"name": "Host", "description": "un servidor"}], "edge_types": [], "edge_type_map": [{"source": "Host", "target": "Nada", "edge_types": []}]}
     assert client.put("/api/brains/onto/ontology", json=bad2).status_code == 400
     args = ont.to_graphiti(got["ontology"])
-    assert "Host" in args["entity_types"] and args["entity_types"]["Host"].__doc__.startswith("A Proxmox node")
+    assert "Host" in args["entity_types"] and args["entity_types"]["Host"].__doc__.startswith("A physical server")
     assert args["edge_type_map"][("Guest", "Host")] == ["HostedOn", "MigratedTo"]
     assert args["custom_extraction_instructions"] and "Service" in args["custom_extraction_instructions"]
     assert ont.canon("HostedOn") == "HOSTED_ON" and ont.canon("RELATES_TO") == "RELATES_TO"

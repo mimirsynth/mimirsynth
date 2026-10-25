@@ -1,0 +1,207 @@
+{
+ "title": "General",
+ "version": 1,
+ "description": "A small, domain-neutral base: people, organizations, places, events, documents, projects, decisions and topics. Start here for a mixed or personal notebook.",
+ "standards": [
+  "schema.org (Person, Organization, Place, Event, CreativeWork, Project)",
+  "FOAF",
+  "Dublin Core (dcterms:creator, isPartOf)"
+ ],
+ "entity_types": [
+  {
+   "name": "Person",
+   "description": "An individual human being, named or identified by role. Use for: people the notes talk about. Not for: teams or companies (Organization), job titles on their own, or software accounts. Examples: 'Ana García', 'the plumber Luis'."
+  },
+  {
+   "name": "Organization",
+   "description": "A company, institution, team or formal group of people. Use for: employers, vendors, public bodies, departments, associations. Not for: a single person, or a product or service made by the organization. Examples: 'Acme Corp', 'City Council', 'the finance team'."
+  },
+  {
+   "name": "Place",
+   "description": "A physical location or geographic area with a name or address. Use for: cities, buildings, rooms, regions. Not for: servers or websites, and not for abstract 'places' such as a topic area. Examples: 'Madrid', 'Office HQ', 'the garage'."
+  },
+  {
+   "name": "Event",
+   "description": "Something that happens at a specific time or over a bounded period. Use for: meetings, trips, incidents, launches, appointments. Not for: ongoing work (Project) or a recurring routine with no date. Examples: 'Q3 planning meeting', 'Moving day 2026-03-14'."
+  },
+  {
+   "name": "Document",
+   "description": "A piece of written or recorded information that can be cited: article, manual, contract, spec, note, file. Use for: things that have a title and content of their own. Not for: the idea it describes (Topic) or its author (Person). Examples: 'Lease agreement', 'Router manual v2'."
+  },
+  {
+   "name": "Project",
+   "description": "A bounded piece of work with a goal, an owner or participants, and an expected end. Use for: initiatives with a name. Not for: single tasks, open-ended areas of interest (Topic) or the team doing it. Examples: 'Kitchen renovation', 'Website redesign'."
+  },
+  {
+   "name": "Decision",
+   "description": "A decision that was made, together with its reason. Use for: explicit choices ('we chose X because Y'). Not for: plans not yet decided, or general facts. Examples: 'Use PostgreSQL instead of MySQL', 'Postpone the launch to May'."
+  },
+  {
+   "name": "Topic",
+   "description": "A subject, concept or knowledge domain. LAST RESORT: use only when nothing more specific fits. Not for: anything that is a person, place, organization, event, document or project. Examples: 'Data privacy', 'Sourdough baking'."
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "WorksFor",
+   "description": "A person is employed by or works for an organization."
+  },
+  {
+   "name": "MemberOf",
+   "description": "A person or organization belongs to an organization or group, without being an employee."
+  },
+  {
+   "name": "LocatedAt",
+   "description": "An entity is situated at, or an event takes place at, a place."
+  },
+  {
+   "name": "ParticipatesIn",
+   "description": "A person or organization takes part in an event or project."
+  },
+  {
+   "name": "Owns",
+   "description": "A person or organization owns or is responsible for something."
+  },
+  {
+   "name": "Authored",
+   "description": "A person or organization wrote or created a document."
+  },
+  {
+   "name": "DecidedBy",
+   "description": "A decision was made by a person or organization."
+  },
+  {
+   "name": "PartOf",
+   "description": "An entity is a component or subdivision of another of the same kind (a project of a larger project, a team of an organization, a place within a place)."
+  },
+  {
+   "name": "MentionedIn",
+   "description": "An entity is referenced or described in a document."
+  },
+  {
+   "name": "RelatesTo",
+   "description": "LAST RESORT. Use only when two entities are clearly associated and no other relation type in the list fits. Never use it when a more specific type applies."
+  }
+ ],
+ "edge_type_map": [
+  {
+   "source": "Person",
+   "target": "Organization",
+   "edge_types": [
+    "WorksFor",
+    "MemberOf"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Organization",
+   "edge_types": [
+    "MemberOf",
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Place",
+   "edge_types": [
+    "LocatedAt"
+   ]
+  },
+  {
+   "source": "Place",
+   "target": "Place",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Event",
+   "edge_types": [
+    "ParticipatesIn"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Event",
+   "edge_types": [
+    "ParticipatesIn"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Project",
+   "edge_types": [
+    "ParticipatesIn",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Project",
+   "edge_types": [
+    "ParticipatesIn",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Project",
+   "target": "Project",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Document",
+   "edge_types": [
+    "Authored",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Document",
+   "edge_types": [
+    "Authored",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Person",
+   "edge_types": [
+    "DecidedBy"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Organization",
+   "edge_types": [
+    "DecidedBy"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Document",
+   "edge_types": [
+    "MentionedIn"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Topic",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Entity",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  }
+ ],
+ "instructions": "General notes. Give every entity the MOST SPECIFIC type from the list: use Topic only when nothing else fits. Extract WorksFor/MemberOf for affiliations, LocatedAt for where something is or happens, ParticipatesIn for involvement in events or projects, DecidedBy for decisions with their author. Record dates when stated. Use only the listed relation types and prefer a specific one over RelatesTo."
+}
