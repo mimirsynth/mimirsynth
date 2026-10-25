@@ -6,6 +6,13 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-25
+### Changed
+- Web toolchain moved to current majors: Vite 8, React 19, Mantine 9 and TypeScript 7. Node 26 for the web build stage.
+- The i18n guard (`npm run i18n`) parses the sources with `oxc-parser` instead of the TypeScript compiler API.
+- Release workflow actions updated (Docker buildx/QEMU/metadata/build-push v4–v7, build-provenance v4).
+- Dependabot now proposes major updates, one pull request each; `graphiti-core` stays pinned.
+
 ## [0.3.1] - 2026-10-25
 ### Changed
 - Installation uses only the official artefacts: each release attaches `docker-compose.yml` and `env.example`, and the Compose file no longer builds (`docker-compose.build.yml` is the contributor override). Documentation is written for users; building from source lives in `CONTRIBUTING.md`.
