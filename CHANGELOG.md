@@ -5,6 +5,13 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- Several OIDC providers at once. Administration → Identity is now a list (add, edit, test, delete); each provider has its own issuer, credentials, scopes, automatic sign-up policy and group-based roles, and its own button on the sign-in screen. New routes `/api/auth/login/{slug}` and `/api/auth/callback/{slug}`.
+- The CI now runs the test suite against a real FalkorDB and a real PostgreSQL with pgvector, so those tests are no longer skipped.
+
+### Changed
+- Migration `0016` imports the previous single OIDC configuration (settings and `MIMIRSYNTH_OIDC_*`) as the provider `oidc`, which keeps its return URL (`/api/auth/callback`): nothing to change at your identity provider. The old settings are removed afterwards.
+- Deleting a provider is refused if someone would be left with no way to sign in.
 
 ## [0.4.0] - 2026-10-25
 ### Changed

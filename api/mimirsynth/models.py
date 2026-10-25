@@ -50,6 +50,27 @@ class Identity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class OidcProvider(Base):
+    """Proveedor de identidad externo (OIDC). Cada uno trae su propia política de alta y de roles por grupo."""
+    __tablename__ = "oidc_providers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(32), unique=True)  # va en las URLs de inicio de sesión y de retorno, y en identities.provider
+    name: Mapped[str] = mapped_column(String(80))  # texto del botón de inicio de sesión
+    issuer: Mapped[str] = mapped_column(Text, default="")
+    client_id: Mapped[str] = mapped_column(Text, default="")
+    client_secret: Mapped[str] = mapped_column(Text, default="")  # sellado (secretbox)
+    scopes: Mapped[str] = mapped_column(String(255), default="openid profile email")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    trust_unverified_email: Mapped[bool] = mapped_column(Boolean, default=False)
+    auto_provision: Mapped[bool] = mapped_column(Boolean, default=False)
+    allowed_domains: Mapped[str] = mapped_column(Text, default="")  # dominios (coma) permitidos para el alta automática
+    groups_claim: Mapped[str] = mapped_column(String(64), default="groups")
+    admin_group: Mapped[str] = mapped_column(String(255), default="")
+    group_roles: Mapped[str] = mapped_column(Text, default="")  # grupo=brain:rol, ...
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 class RecoveryCode(Base):
     """Código de recuperación del doble factor: de un solo uso, se guarda solo el hash."""
     __tablename__ = "recovery_codes"

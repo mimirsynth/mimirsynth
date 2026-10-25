@@ -15,13 +15,13 @@ from sqlalchemy.orm import Session
 from . import appsettings, passwords, ratelimit, userlib
 from .config import settings
 from .deps import audit, current_user, needs_2fa_setup
-from .models import Identity, User, now
+from .models import Identity, OidcProvider, User, now
+from .oidc_providers import LEGACY, redirect_uri
 from .store import get_db
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger("mimirsynth.auth")
-_client = None
-_client_key: tuple = ()
+_clients: dict[str, tuple[tuple, object]] = {}  # slug -> (configuración con la que se creó, cliente)
 _SETUP_TOKEN = ""  # primer arranque sin administradores: se imprime en el log y hay que pegarlo en el asistente
 
 
@@ -40,8 +40,8 @@ def ensure_setup_token(db: Session) -> None:
         _SETUP_TOKEN = ""
 
 
-def oidc_enabled() -> bool:
-    return bool(appsettings.get("oidc_issuer") and appsettings.get("oidc_client_id"))
+def enabled_providers(db: Session) -> list[OidcProvider]:
+    return list(db.scalars(select(OidcProvider).where(OidcProvider.enabled.is_(True)).order_by(OidcProvider.position, OidcProvider.id)))
 
 
 def _ip(request: Request) -> str:
@@ -50,7 +50,8 @@ def _ip(request: Request) -> str:
 
 @router.get("/auth/options")
 def auth_options(db: Session = Depends(get_db)):
-    return {"local": True, "oidc": oidc_enabled(), "setup": setup_required(db), "password_min_length": int(appsettings.get("password_min_length"))}
+    provs = [{"slug": p.slug, "name": p.name} for p in enabled_providers(db)]
+    return {"local": True, "oidc": bool(provs), "providers": provs, "setup": setup_required(db), "password_min_length": int(appsettings.get("password_min_length"))}
 
 
 class SetupIn(BaseModel):
@@ -238,53 +239,65 @@ def change_password(body: PasswordIn, request: Request, user: User = Depends(cur
 
 # --- OIDC ----------------------------------------------------------------------------------------
 
-def _oidc():
-    """Cliente OIDC con la configuración vigente (la de Administración → Ajustes o, en su defecto, la del entorno); se recrea si cambia."""
-    global _client, _client_key
-    cfg = (appsettings.get("oidc_issuer"), appsettings.get("oidc_client_id"), appsettings.get_secret("oidc_client_secret"), appsettings.get("oidc_scopes"))
-    if _client is None or cfg != _client_key:
+def _oidc(p: OidcProvider):
+    """Cliente OIDC del proveedor con su configuración vigente; se recrea si cambia."""
+    from .secretbox import unseal
+    cfg = (p.issuer, p.client_id, p.client_secret, p.scopes)
+    hit = _clients.get(p.slug)
+    if hit is None or hit[0] != cfg:
         from authlib.integrations.starlette_client import OAuth
 
-        if not (cfg[0] and cfg[1]):
-            raise HTTPException(404, "el inicio de sesión con OIDC no está configurado")
         o = OAuth()
         o.register(
-            name="oidc",
-            server_metadata_url=cfg[0].rstrip("/") + "/.well-known/openid-configuration",
-            client_id=cfg[1],
-            client_secret=cfg[2],
-            client_kwargs={"scope": cfg[3], "code_challenge_method": "S256"},
+            name=p.slug,
+            server_metadata_url=p.issuer.rstrip("/") + "/.well-known/openid-configuration",
+            client_id=p.client_id,
+            client_secret=unseal(p.client_secret),
+            client_kwargs={"scope": p.scopes, "code_challenge_method": "S256"},
         )
-        _client, _client_key = o.oidc, cfg
-    return _client
+        hit = _clients[p.slug] = (cfg, getattr(o, p.slug))
+    return hit[1]
 
 
-def _redirect_uri(request: Request) -> str:
-    return (appsettings.get("public_url").rstrip("/") or str(request.base_url).rstrip("/")) + "/api/auth/callback"
+def _provider(db: Session, slug: str) -> OidcProvider:
+    p = db.scalar(select(OidcProvider).where(OidcProvider.slug == slug, OidcProvider.enabled.is_(True)))
+    if not p:
+        raise HTTPException(404, "el inicio de sesión con ese proveedor no está configurado")
+    return p
+
+
+def _redirect_uri(request: Request, slug: str) -> str:
+    return redirect_uri(slug, appsettings.get("public_url").rstrip("/") or str(request.base_url).rstrip("/"))
+
+
+@router.get("/auth/login/{slug}")
+async def login(slug: str, request: Request, db: Session = Depends(get_db)):
+    if settings.auth_mode == "off":
+        return RedirectResponse("/")
+    p = _provider(db, slug)
+    return await _oidc(p).authorize_redirect(request, _redirect_uri(request, p.slug))
 
 
 @router.get("/auth/login")
-async def login(request: Request):
-    if settings.auth_mode == "off":
-        return RedirectResponse("/")
-    return await _oidc().authorize_redirect(request, _redirect_uri(request))
+async def login_legacy(request: Request, db: Session = Depends(get_db)):
+    return await login(LEGACY, request, db)
 
 
 def _csv(value: str) -> list[str]:
     return [x.strip() for x in value.split(",") if x.strip()]
 
 
-def apply_groups(db: Session, user: User, info: dict) -> None:
+def apply_groups(db: Session, user: User, info: dict, p: OidcProvider) -> None:
     """Concede (nunca retira ni rebaja) el rol de instancia y los roles de brain que correspondan a los grupos que trae el proveedor."""
     from .models import Brain, Membership
     from .roles import ROLES, rank
-    claim = info.get(appsettings.get("oidc_groups_claim") or "groups") or []
+    claim = info.get(p.groups_claim or "groups") or []
     groups = {str(g) for g in (claim if isinstance(claim, list) else [claim])}
-    admin_group = appsettings.get("oidc_admin_group").strip()
+    admin_group = p.admin_group.strip()
     if admin_group and admin_group in groups and not user.is_admin:
         user.is_admin = True
-        audit(db, user, "user.role", via="oidc-group", is_admin=True)
-    for rule in _csv(appsettings.get("oidc_group_roles")):
+        audit(db, user, "user.role", via=f"oidc-group:{p.slug}", is_admin=True)
+    for rule in _csv(p.group_roles):
         group, _, target = rule.partition("=")
         slug, _, role = target.strip().partition(":")
         if group.strip() not in groups or role.strip() not in ROLES[:4]:  # por grupo nunca se concede «owner»
@@ -295,36 +308,36 @@ def apply_groups(db: Session, user: User, info: dict) -> None:
         m = db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.brain_id == brain.id))
         if not m:
             db.add(Membership(user_id=user.id, brain_id=brain.id, role=role.strip()))
-            audit(db, user, "member.set", brain, via="oidc-group", role=role.strip())
+            audit(db, user, "member.set", brain, via=f"oidc-group:{p.slug}", role=role.strip())
         elif rank(role.strip()) > rank(m.role):
             m.role = role.strip()
-            audit(db, user, "member.set", brain, via="oidc-group", role=role.strip())
+            audit(db, user, "member.set", brain, via=f"oidc-group:{p.slug}", role=role.strip())
     db.commit()
 
 
-def resolve_oidc_user(db: Session, info: dict) -> tuple[User | None, str]:
+def resolve_oidc_user(db: Session, info: dict, p: OidcProvider) -> tuple[User | None, str]:
     """Persona a la que corresponde la identidad del proveedor, o (None, motivo). Entra quien ya está vinculado, quien fue invitado con el mismo
     email verificado, un administrador declarado en Ajustes o, si se activó, quien tenga un email verificado de un dominio permitido."""
     sub = info["sub"]
     email = (info.get("email") or info.get("preferred_username") or "").lower() or None
-    verified = info.get("email_verified") is True or appsettings.get("oidc_trust_unverified_email") == "yes"
-    ident = db.scalar(select(Identity).where(Identity.provider == "oidc", Identity.sub == sub))
+    verified = info.get("email_verified") is True or p.trust_unverified_email
+    ident = db.scalar(select(Identity).where(Identity.provider == p.slug, Identity.sub == sub))
     user = db.get(User, ident.user_id) if ident else None
     if not user and email and verified:
         user = db.scalar(select(User).where(User.email == email))
         if user and user.status in ("invited", "active"):
-            db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email))
+            db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
             if user.status == "invited":
                 user.status = "active"
         elif not user and email in {e.lower() for e in _csv(appsettings.get("admin_emails"))}:
             user = User(email=email, name=info.get("name") or email, is_admin=True, status="active")  # administrador declarado en Ajustes
             db.add(user); db.flush()
-            db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email))
-        elif not user and info.get("email_verified") is True and appsettings.get("oidc_auto_provision") == "yes" and email.rpartition("@")[2] in {d.lower().lstrip("@") for d in _csv(appsettings.get("oidc_allowed_domains"))}:
+            db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
+        elif not user and info.get("email_verified") is True and p.auto_provision and email.rpartition("@")[2] in {d.lower().lstrip("@") for d in _csv(p.allowed_domains)}:
             user = User(email=email, name=info.get("name") or email, is_admin=False, status="active")
             db.add(user); db.flush()
-            db.add(Identity(user_id=user.id, provider="oidc", sub=sub, email=email))
-            audit(db, user, "user.autoprovision", email=email)
+            db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
+            audit(db, user, "user.autoprovision", email=email, provider=p.slug)
         else:
             user = None
     if not user:
@@ -334,14 +347,16 @@ def resolve_oidc_user(db: Session, info: dict) -> tuple[User | None, str]:
     return user, ""
 
 
-@router.get("/auth/callback")
-async def callback(request: Request, db: Session = Depends(get_db)):
+@router.get("/auth/callback/{slug}")
+async def callback(slug: str, request: Request, db: Session = Depends(get_db)):
     """Inicio de sesión por el proveedor de identidad (ver resolve_oidc_user para quién puede entrar)."""
     if settings.auth_mode == "off":
         return RedirectResponse("/")
-    token = await _oidc().authorize_access_token(request)
-    info = token.get("userinfo") or await _oidc().userinfo(token=token)
-    user, why = resolve_oidc_user(db, info)
+    p = _provider(db, slug)
+    client = _oidc(p)
+    token = await client.authorize_access_token(request)
+    info = token.get("userinfo") or await client.userinfo(token=token)
+    user, why = resolve_oidc_user(db, info, p)
     if not user:
         return RedirectResponse(f"/?auth_error={why}")
     user.last_login = now()
@@ -349,10 +364,15 @@ async def callback(request: Request, db: Session = Depends(get_db)):
     if not user.name:
         user.name = info.get("name") or user.email or info["sub"]
     db.commit()
-    apply_groups(db, user, info)
-    audit(db, user, "login", method="oidc")
+    apply_groups(db, user, info, p)
+    audit(db, user, "login", method="oidc", provider=p.slug)
     userlib.start_session(request, user, "oidc")
     return RedirectResponse("/")
+
+
+@router.get("/auth/callback")
+async def callback_legacy(request: Request, db: Session = Depends(get_db)):
+    return await callback(LEGACY, request, db)
 
 
 @router.post("/auth/logout")

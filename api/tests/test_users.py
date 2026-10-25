@@ -28,6 +28,15 @@ def local(monkeypatch):
     yield
 
 
+def _provider(slug="oidc", **kw):
+    """Crea (o reemplaza) un proveedor OIDC de pruebas directamente en la base de datos."""
+    from mimirsynth.models import OidcProvider
+    with _factory()() as db:
+        db.query(OidcProvider).filter(OidcProvider.slug == slug).delete()
+        db.add(OidcProvider(slug=slug, name=kw.pop("name", slug.upper()), issuer="https://id.example.com", client_id="cid", **kw)); db.commit()
+        return db.query(OidcProvider).filter(OidcProvider.slug == slug).one()
+
+
 def _admin(c):
     r = c.post("/api/auth/setup", json={"code": auth._SETUP_TOKEN, "email": f"root@example.com", "name": "Root", "password": PW})
     assert r.status_code == 200, r.text
@@ -121,7 +130,8 @@ def test_oidc_only_for_invited(client, local, monkeypatch):  # noqa: F811
     class FakeOidc:
         async def authorize_access_token(self, request):
             return {"userinfo": {"sub": "sub-1", "email": "intruso@example.com", "email_verified": True, "name": "X"}}
-    monkeypatch.setattr(auth, "_oidc", lambda: FakeOidc())
+    monkeypatch.setattr(auth, "_oidc", lambda p: FakeOidc())
+    _provider()
     _admin(client)
     r = client.get("/api/auth/callback", follow_redirects=False)
     assert r.status_code == 307 and "auth_error=not_invited" in r.headers["location"]
@@ -130,7 +140,7 @@ def test_oidc_only_for_invited(client, local, monkeypatch):  # noqa: F811
     class FakeOk(FakeOidc):
         async def authorize_access_token(self, request):
             return {"userinfo": {"sub": "sub-2", "email": "invitada@example.com", "email_verified": True, "name": "Inv"}}
-    monkeypatch.setattr(auth, "_oidc", lambda: FakeOk())
+    monkeypatch.setattr(auth, "_oidc", lambda p: FakeOk())
     c2 = TestClient(app)
     r = c2.get("/api/auth/callback", follow_redirects=False)
     assert r.headers["location"] == "/" and c2.get("/api/me").json()["email"] == "invitada@example.com"
@@ -231,26 +241,107 @@ def test_oidc_resolution_autoprovision_and_groups(client, local, monkeypatch):  
     from sqlalchemy import select
     from mimirsynth import appsettings
     from mimirsynth.models import Brain, Membership
-    sets = {"oidc_auto_provision": "no", "oidc_allowed_domains": "", "oidc_admin_group": "", "oidc_group_roles": "", "admin_emails": "", "oidc_trust_unverified_email": "no", "oidc_groups_claim": "groups"}
+    sets = {"admin_emails": ""}
     monkeypatch.setattr(appsettings, "get", lambda k: sets[k])
+    p = _provider()
     with _factory()() as db:
+        p = db.merge(p)
         db.add(Brain(slug="grp", name="Grp", graph_name="grp-g")); db.commit()
         info = {"sub": "s1", "email": "nueva@corp.example", "email_verified": True, "name": "Nueva", "groups": ["curadores", "admins"]}
-        assert auth.resolve_oidc_user(db, info) == (None, "not_invited")  # sin alta automática solo entran invitados
-        sets["oidc_auto_provision"], sets["oidc_allowed_domains"] = "yes", "corp.example, otra.example"
-        assert auth.resolve_oidc_user(db, {**info, "email": "x@evil.example", "sub": "s2"}) == (None, "not_invited")  # dominio no permitido
-        assert auth.resolve_oidc_user(db, {**info, "email_verified": False, "sub": "s3"}) == (None, "not_invited")  # sin verificar, nunca se da de alta
-        sets["oidc_trust_unverified_email"] = "yes"
-        assert auth.resolve_oidc_user(db, {**info, "email_verified": False, "sub": "s3"}) == (None, "not_invited")  # ni confiando en emails sin verificar
-        u, why = auth.resolve_oidc_user(db, info)
+        assert auth.resolve_oidc_user(db, info, p) == (None, "not_invited")  # sin alta automática solo entran invitados
+        p.auto_provision, p.allowed_domains = True, "corp.example, otra.example"
+        assert auth.resolve_oidc_user(db, {**info, "email": "x@evil.example", "sub": "s2"}, p) == (None, "not_invited")  # dominio no permitido
+        assert auth.resolve_oidc_user(db, {**info, "email_verified": False, "sub": "s3"}, p) == (None, "not_invited")  # sin verificar, nunca se da de alta
+        p.trust_unverified_email = True
+        assert auth.resolve_oidc_user(db, {**info, "email_verified": False, "sub": "s3"}, p) == (None, "not_invited")  # ni confiando en emails sin verificar
+        u, why = auth.resolve_oidc_user(db, info, p)
         assert u and not why and u.status == "active" and not u.is_admin and not u.password_hash
-        assert auth.resolve_oidc_user(db, info)[0].id == u.id  # la segunda vez entra por su identidad vinculada
+        assert auth.resolve_oidc_user(db, info, p)[0].id == u.id  # la segunda vez entra por su identidad vinculada
 
-        sets["oidc_admin_group"], sets["oidc_group_roles"] = "admins", "curadores=grp:curator, lectores=grp:reader, curadores=grp:owner, x=nope:reader"
-        auth.apply_groups(db, u, info)
+        p.admin_group, p.group_roles = "admins", "curadores=grp:curator, lectores=grp:reader, curadores=grp:owner, x=nope:reader"
+        auth.apply_groups(db, u, info, p)
         assert u.is_admin
         assert db.scalar(select(Membership.role).where(Membership.user_id == u.id, Membership.brain_id == db.scalar(select(Brain.id).where(Brain.slug == "grp")))) == "curator"
-        auth.apply_groups(db, u, {**info, "groups": ["lectores"]})  # nunca rebaja
+        auth.apply_groups(db, u, {**info, "groups": ["lectores"]}, p)  # nunca rebaja
         assert db.scalar(select(Membership.role).where(Membership.user_id == u.id)) == "curator"
         u.status = "disabled"; db.commit()
-        assert auth.resolve_oidc_user(db, info) == (None, "disabled")
+        assert auth.resolve_oidc_user(db, info, p) == (None, "disabled")
+
+
+def test_oidc_providers_are_independent_and_listed(client, local, monkeypatch):  # noqa: F811
+    """Cada proveedor trae su política: la misma persona externa en otro proveedor es otra identidad, y los desactivados no se ofrecen."""
+    from mimirsynth.models import OidcProvider
+    a, b = _provider("alfa", name="Alfa", auto_provision=True, allowed_domains="corp.example"), _provider("beta", name="Beta")
+    c = TestClient(app)
+    opts = c.get("/api/auth/options").json()
+    assert {x["slug"] for x in opts["providers"]} >= {"alfa", "beta"} and opts["oidc"]
+    with _factory()() as db:
+        a, b = db.merge(a), db.merge(b)
+        info = {"sub": "same", "email": "p@corp.example", "email_verified": True, "name": "P"}
+        u, _ = auth.resolve_oidc_user(db, info, a)
+        assert u  # alfa da de alta por dominio
+        assert auth.resolve_oidc_user(db, {**info, "sub": "same-b", "email": "q@corp.example"}, b) == (None, "not_invited")  # beta no
+        db.query(OidcProvider).filter(OidcProvider.slug == "beta").update({"enabled": False}); db.commit()
+    assert "beta" not in {x["slug"] for x in c.get("/api/auth/options").json()["providers"]}
+    assert c.get("/api/auth/login/beta", follow_redirects=False).status_code == 404
+    assert c.get("/api/auth/login/no-existe", follow_redirects=False).status_code == 404
+
+
+def test_oidc_provider_admin_api(client, local, monkeypatch):  # noqa: F811
+    """CRUD de proveedores: solo el administrador, el secreto no vuelve, el emisor se comprueba y no se deja a nadie sin acceso."""
+    from mimirsynth import settings_admin
+    from mimirsynth.models import Identity, OidcProvider
+    monkeypatch.setattr("mimirsynth.oidc_providers.discover", lambda issuer: {"authorization_endpoint": "x", "token_endpoint": "y", "issuer": issuer})
+    _admin(client)
+    body = {"slug": "pocket", "name": "PocketID", "issuer": "https://id.example.com", "client_id": "cid", "client_secret": "s3cr3t", "group_roles": "a=docs:reader"}
+    assert client.post("/api/oidc-providers", json={**body, "slug": "Mal Slug"}).status_code == 422
+    assert client.post("/api/oidc-providers", json={**body, "client_secret": ""}).status_code == 422
+    r = client.post("/api/oidc-providers", json=body)
+    assert r.status_code == 201 and r.json()["secret_set"] is True and "s3cr3t" not in r.text
+    assert r.json()["redirect_uri"].endswith("/api/auth/callback/pocket")
+    assert client.post("/api/oidc-providers", json=body).status_code == 409
+    with _factory()() as db:
+        assert "s3cr3t" not in db.query(OidcProvider).filter_by(slug="pocket").one().client_secret  # sellado
+    r = client.put("/api/oidc-providers/pocket", json={**body, "name": "Pocket", "client_secret": None, "slug": None})
+    assert r.status_code == 200 and r.json()["name"] == "Pocket" and r.json()["secret_set"] is True  # sin secreto nuevo se conserva
+    assert [x["slug"] for x in client.get("/api/oidc-providers").json()].count("pocket") == 1
+    # borrar no deja a nadie sin forma de entrar
+    with _factory()() as db:
+        uid = db.query(User).filter_by(email="root@example.com").one().id
+        solo = User(email="solo@example.com", name="Solo", status="active"); db.add(solo); db.flush()
+        db.add(Identity(user_id=solo.id, provider="pocket", sub="x", email="solo@example.com")); db.commit()
+    r = client.delete("/api/oidc-providers/pocket")
+    assert r.status_code == 409 and "solo@example.com" in r.text
+    with _factory()() as db:
+        db.query(User).filter_by(email="solo@example.com").update({"password_hash": "algo"}); db.commit()
+    assert client.delete("/api/oidc-providers/pocket").status_code == 200
+    with _factory()() as db:
+        assert db.query(Identity).filter_by(provider="pocket").count() == 0
+    # no administradores
+    anon = TestClient(app)
+    assert anon.get("/api/oidc-providers").status_code in (401, 403)
+
+
+def test_migration_imports_legacy_oidc_config(tmp_path, monkeypatch):
+    """La migración 0016 convierte la configuración OIDC única (Ajustes + entorno) en el proveedor «oidc» y limpia los ajustes antiguos."""
+    import json
+    import sqlalchemy as sa
+    from alembic import command
+    from alembic.config import Config
+    from pathlib import Path
+    from mimirsynth import secretbox
+    monkeypatch.setattr(settings, "oidc_issuer", "https://env.example.com")
+    monkeypatch.setattr(settings, "oidc_client_id", "env-cid")
+    monkeypatch.setattr(settings, "oidc_client_secret", "env-secret")
+    eng = sa.create_engine(f"sqlite:///{tmp_path}/m.db")
+    cfg = Config(); cfg.set_main_option("script_location", str(Path(auth.__file__).parent / "migrations"))
+    with eng.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "0015")
+        conn.execute(sa.text("INSERT INTO app_settings (key, value, updated_at) VALUES ('oidc_client_id', :v, CURRENT_TIMESTAMP), ('oidc_auto_provision', :y, CURRENT_TIMESTAMP), ('oidc_client_secret', :s, CURRENT_TIMESTAMP)"),
+                     {"v": json.dumps({"v": "ui-cid"}), "y": json.dumps({"v": "yes"}), "s": json.dumps({"v": secretbox.seal("ui-secret")})})
+        command.upgrade(cfg, "0016")
+        row = conn.execute(sa.text("SELECT slug, name, issuer, client_id, client_secret, auto_provision, enabled FROM oidc_providers")).one()
+        assert (row.slug, row.issuer, row.client_id, bool(row.auto_provision), bool(row.enabled)) == ("oidc", "https://env.example.com", "ui-cid", True, True)  # lo de Ajustes manda sobre el entorno
+        assert secretbox.unseal(row.client_secret) == "ui-secret"
+        assert conn.execute(sa.text("SELECT count(*) FROM app_settings WHERE key LIKE 'oidc%'")).scalar() == 0
