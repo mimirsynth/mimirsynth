@@ -6,6 +6,8 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 ### Changed
+- Type corrector: applying or rejecting in bulk now asks for confirmation with a summary by proposed type, there is a «Reject all visible» action, the result of each action is reported (including how many did not fit the ontology), the confidence is shown as a percentage and a filter can no longer apply rows it has hidden.
+### Changed
 - The request limiter (sign-in, two-factor, password recovery and setup) now keeps its attempts in the database (migration `0018`): it is shared between processes and survives restarts, so restarting the service no longer resets the counters. If the database fails it falls back to an in-memory counter, so access is never left unprotected.
 
 ## [0.5.0] - 2026-10-25
