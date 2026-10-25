@@ -32,7 +32,7 @@ GROUPS = {
     "general": "General",
     "security": "Seguridad de cuentas",
     "mail": "Correo (SMTP)",
-    "identity": "Identidad (OIDC)",
+    "identity": "Identidad",
     "docs": "Documentos",
     "recall": "Recuerdo (recall)",
     "ingest": "Ingesta y trabajos",
@@ -41,16 +41,7 @@ GROUPS = {
 REGISTRY: list[Def] = [
     Def("default_language", "general", "Idioma por defecto", "Idioma de la interfaz y de los correos para quien no haya elegido uno propio en «Mi cuenta». Cada persona puede cambiarlo.", "choice", choices=(("es", "Español"), ("en", "English"))),
     Def("public_url", "identity", "URL pública", "Dirección con la que se accede a la aplicación; se usa para construir la URL de retorno del inicio de sesión (p. ej. https://mimirsynth.ejemplo.com).", "url"),
-    Def("oidc_issuer", "identity", "Emisor OIDC (issuer)", "URL base del proveedor de identidad; debe publicar /.well-known/openid-configuration.", "url"),
-    Def("oidc_client_id", "identity", "Client ID", "Identificador de la aplicación registrada en el proveedor.", "str"),
-    Def("oidc_scopes", "identity", "Scopes", "Permisos que se piden al proveedor, separados por espacios.", "str"),
     Def("admin_emails", "identity", "Administradores de la instancia", "Emails (separados por comas) que son administradores al iniciar sesión.", "str"),
-    Def("oidc_trust_unverified_email", "identity", "Aceptar emails sin verificar", "Si el proveedor no marca el email como verificado (algunos no lo envían), solo se aceptará con «Sí». Más cómodo, pero quien pueda registrar un email ajeno en el proveedor podría entrar como esa persona.", "choice", choices=(("no", "No (recomendado)"), ("yes", "Sí"))),
-    Def("oidc_auto_provision", "identity", "Alta automática", "Con «Sí», quien entre por el proveedor con un email verificado de uno de los dominios permitidos se da de alta solo, sin invitación, con rol de usuario y sin acceso a ningún brain (salvo el que le den sus grupos). Con «No», solo entra quien ya tiene cuenta o invitación.", "choice", choices=(("no", "No (solo invitados)"), ("yes", "Sí, para los dominios permitidos"))),
-    Def("oidc_allowed_domains", "identity", "Dominios permitidos", "Dominios de email (separados por comas, p. ej. example.com) a los que se aplica el alta automática. Vacío = ninguno.", "str"),
-    Def("oidc_groups_claim", "identity", "Claim de grupos", "Nombre del campo con los grupos de la persona en la identidad del proveedor (suele ser «groups»; el proveedor debe incluirlo con el scope adecuado).", "str"),
-    Def("oidc_admin_group", "identity", "Grupo de administradores", "Los miembros de este grupo son administradores de la instancia. Solo concede: quitar a alguien del grupo no le retira el rol; hazlo en Usuarios.", "str"),
-    Def("oidc_group_roles", "identity", "Roles por grupo", "Una regla por grupo, separadas por comas, con el formato grupo=brain:rol (roles: reader, contributor, curator, admin). Al iniciar sesión se concede el rol si la persona no tiene ya uno igual o mayor; nunca se rebaja ni se retira. Ejemplo: curadores=docs:curator, lectores=docs:reader.", "str"),
     Def("account_url", "identity", "Gestión de la cuenta", "Página de tu proveedor donde se gestionan contraseña, llaves de acceso y doble factor; se enlaza desde «Mi cuenta».", "url"),
     Def("password_min_length", "security", "Longitud mínima de contraseña", "Se aplica al crear o cambiar contraseñas.", "int", "caracteres", 8, 64),
     Def("login_max_attempts", "security", "Intentos fallidos antes de bloquear", "Tras este número de contraseñas incorrectas seguidas la cuenta se bloquea temporalmente.", "int", "", 3, 20),
@@ -93,7 +84,7 @@ def _overrides() -> dict:
     return data
 
 
-SECRET_KEYS = {"oidc_client_secret", "smtp_password"}
+SECRET_KEYS = {"smtp_password"}
 
 
 def get_secret(key: str) -> str:

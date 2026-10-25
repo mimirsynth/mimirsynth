@@ -9,7 +9,7 @@ import Logo from "../Logo";
 import { TwoFactor } from "./TwoFactor";
 import { Btn, EmptyState, Form, LanguageSelect, MutationError, Notice, Panel, PasswordField, TextField } from "../ui";
 
-type Options = { local: boolean; oidc: boolean; setup: boolean; password_min_length?: number };
+type Options = { local: boolean; oidc: boolean; providers?: { slug: string; name: string }[]; setup: boolean; password_min_length?: number };
 const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada de alta en esta instancia. Pide a un administrador que te invite."), disabled: T("Tu cuenta está deshabilitada. Contacta con un administrador.") };
 
 function Card({ name, subtitle, children }: { name: string; subtitle?: string; children: React.ReactNode }) {
@@ -106,7 +106,7 @@ export function AuthScreen({ name }: { name: string }) {
         <Btn kind="primary" type="submit" fullWidth icon="login" loading={login.isPending} disabled={!email || !password}>{t("Entrar")}</Btn>
       </Form>
       <Btn kind="link" onClick={() => setMode("forgot")}>{t("¿Has olvidado la contraseña?")}</Btn>
-      {opts.data.oidc && <><Divider label="o" /><Btn component="a" href="/api/auth/login" fullWidth icon="login">{t("Entrar con tu proveedor de identidad")}</Btn></>}
+      {!!opts.data.providers?.length && <><Divider label="o" />{opts.data.providers.map((p) => <Btn key={p.slug} component="a" href={`/api/auth/login/${p.slug}`} fullWidth icon="login">{t("Entrar con {{name}}", { name: p.name })}</Btn>)}</>}
     </Card>
   );
 }

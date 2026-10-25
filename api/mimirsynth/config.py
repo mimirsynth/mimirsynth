@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     session_secret: str = "change-me"
     cookie_secure: bool = False
     public_url: str = ""  # URL pública para el redirect de OIDC, p. ej. https://mimirsynth.example.com
+    # oidc_*: solo se importan una vez, en la migración 0016, como el proveedor «oidc»; después se gestionan en Administración → Identidad
     oidc_issuer: str = ""
     oidc_client_id: str = ""
     oidc_client_secret: str = ""

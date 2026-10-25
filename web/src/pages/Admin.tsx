@@ -191,7 +191,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const nav: ({ value: string; label: string } | { heading: string })[] = [
     { heading: t("Brain") }, { value: "brains", label: t("Acceso al brain") },
     ...(me.is_admin ? [
-      { heading: t("Cuentas") }, { value: "users", label: t("Usuarios") }, { value: "security", label: t("Seguridad") }, { value: "identity", label: t("Identidad (OIDC)") }, { value: "mail", label: t("Correo (SMTP)") },
+      { heading: t("Cuentas") }, { value: "users", label: t("Usuarios") }, { value: "security", label: t("Seguridad") }, { value: "identity", label: t("Identidad") }, { value: "mail", label: t("Correo (SMTP)") },
       { heading: t("Modelos de IA") }, { value: "llm", label: t("Modelo LLM") }, { value: "embedding", label: t("Embeddings") }, { value: "decision", label: t("Decisor") },
       { heading: t("Documentos") }, { value: "folders", label: t("Carpetas") }, { value: "docs", label: t("Límites") },
       { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "audit", label: t("Auditoría") },

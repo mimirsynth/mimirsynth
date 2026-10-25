@@ -4,7 +4,8 @@ import { Group, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { get, send } from "../api";
-import { Btn, CopyBtn, DataState, MutationError, Notice, NumberField, PasswordField, SelectField, SettingsGroup, SettingsRow, TextField } from "../ui";
+import AdminProviders from "./AdminProviders";
+import { Btn, DataState, MutationError, Notice, NumberField, PasswordField, SelectField, SettingsGroup, SettingsRow, TextField } from "../ui";
 
 type Item = { key: string; group: string; group_label: string; label: string; help: string; type: "int" | "float" | "str" | "url" | "choice"; choices?: { value: string; label: string }[]; unit: string; min: number | null; max: number | null; value: string | number; default: string | number; changed: boolean };
 type Data = { groups: { key: string; label: string }[]; items: Item[]; secrets: Record<string, { set: boolean; changed: boolean }> };
@@ -13,7 +14,7 @@ const GROUP_HELP: Record<string, string> = {
   general: T("Preferencias generales de la instancia."),
   security: T("Cómo se protegen las cuentas con contraseña: longitud mínima, bloqueo tras intentos fallidos y caducidad de los enlaces."),
   mail: T("Servidor de correo saliente. Se usa para enviar invitaciones y enlaces de recuperación de contraseña."),
-  identity: T("Inicio de sesión con un proveedor externo (OIDC). Es opcional. Por defecto solo entran las personas que ya tienen cuenta; puedes permitir el alta automática por dominio y asignar roles según los grupos del proveedor."),
+  identity: T("Datos comunes a todos los proveedores de inicio de sesión."),
   docs: T("Límites de la memoria documental: qué se acepta al subir o escanear."),
   recall: T("Cómo se buscan y mezclan los pasajes de documentos con los hechos cuando un agente pide contexto."),
   ingest: T("Reintentos de la ingesta y cuánto tiempo se conservan los trabajos."),
@@ -65,25 +66,6 @@ function SecretItem({ k, label, help, state, onDone }: { k: string; label: strin
   );
 }
 
-/** Prueba el emisor guardado y enseña la URL de retorno que hay que registrar en el proveedor. */
-function OidcCheck({ publicUrl }: { publicUrl: string }) {
-  const { t } = useTranslation();
-  const test = useMutation({ mutationFn: () => send<{ issuer: string; authorization_endpoint: string; pkce: boolean }>("POST", "settings/oidc/test", {}) });
-  const redirect = `${(publicUrl || window.location.origin).replace(/\/$/, "")}/api/auth/callback`;
-  return (
-    <>
-      <SettingsRow label={t("URL de retorno")} help={t("Regístrala en el proveedor como URL de redirección de la aplicación.")}>
-        <Group gap={6} wrap="nowrap"><Text size="sm" className="ms-data ms-breakall ms-grow">{redirect}</Text><CopyBtn value={redirect} /></Group>
-      </SettingsRow>
-      <SettingsRow label={t("Comprobar el proveedor")} help={t("Lee el documento de descubrimiento del emisor guardado.")}>
-        <Group gap={6}><Btn size="row" icon="refresh" loading={test.isPending} onClick={() => test.mutate()}>{t("Probar conexión")}</Btn></Group>
-        <MutationError error={test.error} />
-        {test.data && <Notice tone={test.data.pkce ? "success" : "warn"}>{t("Proveedor alcanzable:")} {test.data.issuer}. {test.data.pkce ? t("Admite PKCE.") : t("No anuncia PKCE (S256); el inicio de sesión puede fallar.")}</Notice>}
-      </SettingsRow>
-    </>
-  );
-}
-
 /** Envía un correo de prueba con la configuración guardada. */
 function MailCheck() {
   const { t } = useTranslation();
@@ -109,18 +91,15 @@ export default function AdminSettings({ group }: { group: string }) {
     <DataState query={q}>
       {(d) => {
         const g = d.groups.find((x) => x.key === group) ?? d.groups[0];
-        return (
+        return (<>
+          {g.key === "identity" && <AdminProviders />}
           <SettingsGroup key={g.key} title={t(g.label)} description={t(GROUP_HELP[g.key])}>
             {d.items.filter((i) => i.group === g.key).map((it) => <ItemRow key={`${it.key}:${String(it.value)}`} it={it} onDone={refresh} />)}
             {g.key === "mail" && <>
               <SecretItem k="smtp_password" label={t("Contraseña SMTP")} help={t("Se guarda cifrada y no se vuelve a mostrar.")} state={d.secrets.smtp_password} onDone={refresh} />
               <MailCheck />
             </>}
-            {g.key === "identity" && <>
-              <SecretItem k="oidc_client_secret" label={t("Client secret")} help={t("Se guarda cifrado y no se vuelve a mostrar.")} state={d.secrets.oidc_client_secret} onDone={refresh} />
-              <OidcCheck publicUrl={String(d.items.find((i) => i.key === "public_url")?.value ?? "")} />
-            </>}
-          </SettingsGroup>);
+          </SettingsGroup></>);
       }}
     </DataState>
   );

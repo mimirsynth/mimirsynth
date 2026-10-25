@@ -347,7 +347,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert {"users", "brains", "proposals", "decision_engines", "alembic_version"} <= set(inspect(e1).get_table_names())
     with e1.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0015"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0016"
     store.init_db()  # idempotente
     # BD heredada (create_all sin alembic_version y sin columnas nuevas): se completa y se marca
     e2 = create_engine(f"sqlite:///{tmp_path}/legacy.db")
@@ -358,7 +358,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert "ingest_error" in {c["name"] for c in inspect(e2).get_columns("proposals")}
     with e2.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0015"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0016"
 
 
 def test_ontology_api_and_graphiti_conversion(client):
@@ -707,19 +707,16 @@ def test_settings_admin(client):  # noqa: F811
     assert {i["key"]: i for i in client.get("/api/settings").json()["items"]}["doc_passages"]["changed"] is False
 
 
-def test_settings_oidc_secret_and_issuer_check(client, monkeypatch):  # noqa: F811
-    """Un emisor que no responde se rechaza; el secreto se guarda cifrado y nunca vuelve en claro."""
-    from mimirsynth import appsettings, settings_admin
-    assert client.put("/api/settings/oidc_issuer", json={"value": "http://127.0.0.1:1"}).status_code == 422
-    monkeypatch.setattr(settings_admin, "discover", lambda iss: {"issuer": iss, "authorization_endpoint": "x", "token_endpoint": "y"})
-    assert client.put("/api/settings/oidc_issuer", json={"value": "https://id.example.com"}).status_code == 200
-    assert appsettings.get("oidc_issuer") == "https://id.example.com"
-    assert client.put("/api/settings/secret/oidc_client_secret", json={"value": "s3cr3t"}).status_code == 200
+def test_settings_secret_is_sealed_and_never_returned(client):  # noqa: F811
+    """El secreto se guarda cifrado y nunca vuelve en claro."""
+    from mimirsynth import appsettings
+    assert client.put("/api/settings/secret/smtp_password", json={"value": "s3cr3t"}).status_code == 200
     body = client.get("/api/settings").json()
-    assert body["secrets"]["oidc_client_secret"]["set"] is True and "s3cr3t" not in str(body)
-    assert appsettings.get_secret("oidc_client_secret") == "s3cr3t"
+    assert body["secrets"]["smtp_password"]["set"] is True and "s3cr3t" not in str(body)
+    assert appsettings.get_secret("smtp_password") == "s3cr3t"
     from mimirsynth.models import AppSetting
     from mimirsynth.store import _factory
     with _factory()() as db:
-        assert "s3cr3t" not in str(db.get(AppSetting, "oidc_client_secret").value)
-    client.delete("/api/settings/oidc_issuer"); client.delete("/api/settings/oidc_client_secret")
+        assert "s3cr3t" not in str(db.get(AppSetting, "smtp_password").value)
+    assert client.put("/api/settings/secret/oidc_client_secret", json={"value": "x"}).status_code == 404  # ahora vive en cada proveedor
+    client.delete("/api/settings/smtp_password")
