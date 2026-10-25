@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+
+## [0.5.0] - 2026-10-25
 ### Added
 - Roles granted by a provider group are now revoked when the person leaves that group (instance administrator and brain roles). Every grant is recorded with its origin: roles set by hand by an administrator, and roles that existed before, are never touched; a role raised by a group goes back to the previous one. The last active administrator is never revoked, and nothing is revoked if the provider does not send the groups claim.
 - My account → Security → Linked identities: link and unlink external providers (several per person). Unlinking is refused if it would leave no way to sign in.
