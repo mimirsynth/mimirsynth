@@ -1,5 +1,5 @@
 # The compiled web is static: it is built once and shared by every architecture.
-FROM --platform=$BUILDPLATFORM node:22-slim AS web
+FROM --platform=$BUILDPLATFORM node:26-slim AS web
 WORKDIR /w
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
