@@ -83,7 +83,7 @@ type Engine = { threshold?: number; dim?: number; id: number; name: string; base
 type EngineForm = { threshold?: number; id?: number; name: string; base_url: string; model: string; small_model: string; api_key: string; enabled: boolean };
 const EMPTY: EngineForm = { name: "", base_url: "", model: "", small_model: "", api_key: "", enabled: true };
 
-function Engines({ kind }: { kind: "llm" | "embedding" | "decision" }) {
+function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "decision"; title: string; description: string }) {
   const { t } = useTranslation();
   const emb = kind === "embedding"; const dec = kind === "decision"; const path = emb ? "embedding-engines" : dec ? "decision-engines" : "llm-engines";
   const qc = useQueryClient();
@@ -105,9 +105,9 @@ function Engines({ kind }: { kind: "llm" | "embedding" | "decision" }) {
   const open = (f: EngineForm | null) => { setForm(f); setModels([]); setMErr(""); if (f?.id) loadModels.mutate(f); };
   const set = (k: keyof EngineForm, v: string | boolean) => setForm((f) => f && { ...f, [k]: v });
   return (
-    <Stack gap="xs">
-      <Group justify="flex-end">
-        <Btn kind="primary" onClick={() => open({ ...EMPTY })} icon="plus">{t("Añadir motor")}</Btn></Group>
+    <SettingsGroup title={title} description={description} action={<Btn kind="primary" onClick={() => open({ ...EMPTY })} icon="plus">{t("Añadir motor")}</Btn>}>
+    <SettingsBody><Stack gap="xs">
+      <AiStatus kind={kind} />
       <ClearFilters active={ev.active} onClear={ev.clear} shown={ev.rows.length} total={ev.total} />
       <DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr><ColHead sort={ev.sortProps("name")} filter={ev.text("name")}>{t("Nombre")}</ColHead><ColHead filter={ev.text("url")}>{t("Endpoint")}</ColHead><ColHead sort={ev.sortProps("model")} filter={ev.text("model")}>{t("Modelo")}</ColHead><ColHead filter={ev.select("state")}>{t("Estado")}</ColHead><DataTable.Th /></DataTable.Tr></DataTable.Thead>
@@ -145,23 +145,22 @@ function Engines({ kind }: { kind: "llm" | "embedding" | "decision" }) {
             <Btn kind="primary" disabled={!form.name || !form.base_url || !form.model} loading={save.isPending} onClick={() => save.mutate(form)} icon="save">{t("Guardar")}</Btn></Group>
         </Stack>}
       </Modal>
-    </Stack>
+    </Stack></SettingsBody>
+    </SettingsGroup>
   );
 }
 
 type AiSt = { configured: boolean; source: string | null; name: string | null; healthy?: boolean; error?: string };
-function AiStatus() {
+function AiStatus({ kind }: { kind: "llm" | "embedding" | "decision" }) {
   const { t } = useTranslation();
   const st = useQuery({ queryKey: ["ai-status", "check"], queryFn: () => get<Record<string, AiSt>>("ai-status", { check: true }), refetchOnWindowFocus: false });
-  const items: [string, string][] = [["llm", "LLM"], ["embedding", t("Embeddings")], ["decider", t("Decisor")]];
+  const k = kind === "decision" ? "decider" : kind;
+  const e = st.data?.[k];
+  const tone: Tone = !e ? "neutral" : !e.configured ? "neutral" : e.healthy === undefined ? (k === "embedding" ? "neutral" : "warn") : e.healthy ? "success" : "danger";
+  const text = !e ? t("comprobando…") : !e.configured ? t("sin configurar") : e.healthy === undefined ? (e.source === "env" ? t("por variables de entorno") : t("configurado")) : e.healthy ? `OK · ${e.name ?? e.source}` : t("caído · {{error}}", { error: e.error ?? "" });
   return (
-    <Group gap="xs" mb="sm">
-      {items.map(([k, label]) => {
-        const e = st.data?.[k];
-        const tone: Tone = !e ? "neutral" : !e.configured ? "neutral" : e.healthy === undefined ? (k === "embedding" ? "neutral" : "warn") : e.healthy ? "success" : "danger";
-        const text = !e ? "comprobando…" : !e.configured ? t("sin configurar") : e.healthy === undefined ? (e.source === "env" ? t("por variables de entorno") : "configurado") : e.healthy ? `OK · ${e.name ?? e.source}` : t("caído · {{error}}", { error: e.error ?? "" });
-        return <Pill key={k} tone={tone} size="md">{label}: {text}</Pill>;
-      })}
+    <Group gap="xs">
+      <Pill tone={tone} size="md">{t("Estado")}: {text}</Pill>
       <Btn size="row" loading={st.isFetching} onClick={() => st.refetch()} icon="refresh">{t("Comprobar")}</Btn>
     </Group>
   );
@@ -255,9 +254,9 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
             </>}
           </>}
           {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
-          {section === "llm" && <SettingsGroup title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")}><SettingsBody><AiStatus /><Engines kind="llm" /></SettingsBody></SettingsGroup>}
-          {section === "embedding" && <SettingsGroup title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Modelo y dimensión no se pueden cambiar una vez creado: los vectores guardados dependen de él.")}><SettingsBody><AiStatus /><Engines kind="embedding" /></SettingsBody></SettingsGroup>}
-          {section === "decision" && <SettingsGroup title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")}><SettingsBody><AiStatus /><Engines kind="decision" /></SettingsBody></SettingsGroup>}
+          {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}
+          {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Modelo y dimensión no se pueden cambiar una vez creado: los vectores guardados dependen de él.")} />}
+          {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
           {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
           {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}
           {["general", "security", "mail", "identity", "docs", "recall", "ingest"].includes(section) && <AdminSettings group={section} />}

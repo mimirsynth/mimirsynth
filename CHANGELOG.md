@@ -12,6 +12,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - The CI now runs the test suite against a real FalkorDB and a real PostgreSQL with pgvector, so those tests are no longer skipped.
 
 ### Changed
+- Administration → LLM model, Embeddings and Decider: the «Add engine» button moves to the card header and the AI status is shown once (only the one for that section) instead of three times.
 - Migration `0016` imports the previous single OIDC configuration (settings and `MIMIRSYNTH_OIDC_*`) as the provider `oidc`, which keeps its return URL (`/api/auth/callback`): nothing to change at your identity provider. The old settings are removed afterwards.
 - Deleting a provider is refused if someone would be left with no way to sign in.
 
