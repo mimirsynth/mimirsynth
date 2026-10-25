@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { ActionIcon as MActionIcon, Drawer as MDrawer, type DrawerProps, Modal as MModal, NavLink as MNavLink, Tooltip as MTooltip, Tabs as MTabs, type ModalProps, type TabsProps } from "@mantine/core";
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { NavLink as RouterNavLink } from "react-router-dom";
+import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { Btn } from "./Btn";
 import { Icon, type IconName } from "./Icon";
 import { MutationError, Notice, TextField } from "./Fields";
@@ -33,10 +33,12 @@ export function IconButton({ icon, label, onClick, disabled }: { icon: IconName;
 
 /** Botón cuadrado de la barra lateral: enlaza a una página de la aplicación (`to`) o a una dirección externa (`href`, otra pestaña). */
 export function RoundLink({ label, to, href, children }: { label: string; to?: string; href?: string; children: ReactNode }) {
+  const { pathname } = useLocation();
+  const isActive = !!to && (pathname === to || pathname.startsWith(`${to}/`));  // className como texto: Mantine 9 no admite la función de NavLink dentro de un Tooltip
   return (
     <MTooltip label={label} position="top">
       {to
-        ? <RouterNavLink to={to} aria-label={label} className={({ isActive }) => `ms-roundbtn${isActive ? " active" : ""}`}>{children}</RouterNavLink>
+        ? <RouterNavLink to={to} aria-label={label} className={`ms-roundbtn${isActive ? " active" : ""}`}>{children}</RouterNavLink>
         : <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} className="ms-roundbtn">{children}</a>}
     </MTooltip>
   );
