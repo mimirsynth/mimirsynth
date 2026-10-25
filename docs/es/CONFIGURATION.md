@@ -8,7 +8,7 @@ La configuración tiene dos niveles:
 2. **Interfaz (Administración → Ajustes y demás secciones):** todo lo demás. Se aplica sin reiniciar y cada cambio queda en la auditoría. Si una variable de entorno equivalente existe, hace de valor por defecto, y «Restaurar» en la interfaz vuelve a él.
 
 ## Variables de entorno
-Plantilla comentada en [`.env.example`](../../.env.example).
+Plantilla comentada: `env.example` en la [última release](https://github.com/MimirSynth/mimirsynth/releases/latest) (o [`.env.example`](../../.env.example) en el repositorio).
 
 | Variable | Por defecto | Descripción |
 |---|---|---|

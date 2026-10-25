@@ -7,15 +7,17 @@
 - Un endpoint compatible con OpenAI para **embeddings** (p. ej. [Ollama](https://ollama.com) con `nomic-embed-text`) y otro para el **LLM** que extrae los hechos. Pueden ser locales o de un proveedor en la nube. Se configuran después, en la interfaz.
 
 ## Primera instalación
+Todo sale de la release oficial: un fichero de Compose y una plantilla de entorno. No necesitas el código fuente.
 ```bash
-git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
-cp .env.example .env
+mkdir mimirsynth && cd mimirsynth
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/docker-compose.yml
+curl -fsSL  https://github.com/MimirSynth/mimirsynth/releases/latest/download/env.example -o .env
 ```
 Edita `.env` y define, como mínimo, `POSTGRES_PASSWORD` y `MIMIRSYNTH_SESSION_SECRET` (genera ambos con `openssl rand -hex 32`). Después:
 ```bash
 docker compose --profile bundled up -d
 ```
-Descarga la imagen publicada (`ghcr.io/mimirsynth/mimirsynth`). Para construirla desde el código de tu copia, añade `--build`; para fijar una versión, pon `MIMIRSYNTH_VERSION=0.3.0` en `.env`.
+Descarga la imagen oficial (`ghcr.io/mimirsynth/mimirsynth`, para amd64 y arm64). Para fijar una versión, pon `MIMIRSYNTH_VERSION=0.3.1` en `.env` (por defecto, `latest`).
 - `--profile bundled` arranca también un FalkorDB incluido. Si ya tienes uno, omite el perfil y pon su dirección en `MIMIRSYNTH_FALKOR_HOST`.
 - La aplicación queda en `http://localhost:8000` (cambia el puerto con `MIMIRSYNTH_PORT`).
 
@@ -39,7 +41,7 @@ PostgreSQL y FalkorDB no publican puertos fuera de la red de Compose. No los exp
 
 ## Actualizar
 ```bash
-docker compose pull        # o `git pull` + `--build` si construyes desde el código
+docker compose pull
 docker compose --profile bundled up -d
 ```
 Las migraciones de la base de datos se aplican solas al arrancar. Haz una copia de seguridad antes de actualizar.
@@ -53,8 +55,8 @@ Guarda también tu `.env`.
 
 Restaurar es el camino inverso: arranca los servicios, restaura la base de datos (`psql`) y devuelve los volúmenes. El índice de texto se puede reconstruir desde el grafo y el de documentos desde los originales.
 
-## Desarrollo
-Ver [CONTRIBUTING.md](CONTRIBUTING.md).
+## Contribuir
+Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Problemas frecuentes
 - **«define POSTGRES_PASSWORD» o «define MIMIRSYNTH_SESSION_SECRET» al arrancar:** faltan en `.env`.

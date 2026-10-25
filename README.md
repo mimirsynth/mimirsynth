@@ -23,8 +23,10 @@ Status: **under active development** (0.x). It works end to end, but the API and
 ## Quick start
 You need Docker with Compose, an OpenAI-compatible endpoint for embeddings (e.g. Ollama with `nomic-embed-text`) and another for the extraction LLM.
 ```bash
-git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
-cp .env.example .env     # set POSTGRES_PASSWORD and MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
+mkdir mimirsynth && cd mimirsynth
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/docker-compose.yml
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/env.example -o .env
+# edit .env: set POSTGRES_PASSWORD and MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
 docker compose --profile bundled up -d    # pulls the published image; includes FalkorDB (without the profile, point MIMIRSYNTH_FALKOR_HOST at your own)
 docker compose logs mimirsynth | grep -A3 "FIRST START"    # installation wizard code
 ```
@@ -42,12 +44,6 @@ The environment only carries what is needed to start and connect (table below). 
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | _(empty)_ | Existing graphs to adopt as brains |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (own accounts, plus OIDC if configured). `off` for development only: no sign-in |
 | `MIMIRSYNTH_STATIC_DIR` | _(empty)_ | Directory with the web build (set by the Docker image) |
-
-## Development
-```bash
-cd api && uv venv && uv pip install -e . && .venv/bin/uvicorn mimirsynth.main:app --port 8010
-cd web && npm install && npm run dev      # http://localhost:5173 (proxies /api -> :8010)
-```
 
 ## The name
 Mímir is the guardian of the well of knowledge (Mímisbrunnr) in Norse mythology. According to the Ynglinga saga, Odin keeps his head and consults it for advice: an external memory that is queried. "Synth" alludes to synthetic memory and to synthesis: the system consolidates episodes into knowledge. It has no relation to Grafana Mimir or to other projects called Mimir.

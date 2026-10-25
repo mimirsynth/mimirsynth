@@ -83,6 +83,7 @@ jobs:
           {
             echo
             echo "**Image:** \`ghcr.io/${GITHUB_REPOSITORY,,}:${v}\` (linux/amd64, linux/arm64)"
+            echo "**Install:** download \`docker-compose.yml\` and \`env.example\` from this release's assets (see the installation guide)."
           } >> notes.md
       - name: Create the release
         env:
@@ -90,4 +91,5 @@ jobs:
         run: |
           flags=""
           case "$GITHUB_REF_NAME" in *-*) flags="--prerelease";; esac
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md $flags
+          cp .env.example env.example
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md $flags docker-compose.yml env.example

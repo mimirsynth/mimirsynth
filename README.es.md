@@ -23,8 +23,10 @@ Estado: **en desarrollo activo** (0.x). Funciona de extremo a extremo, pero la A
 ## Inicio rápido
 Necesitas Docker con Compose y un endpoint compatible con OpenAI para embeddings (p. ej. Ollama con `nomic-embed-text`) y otro para el LLM de extracción.
 ```bash
-git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
-cp .env.example .env     # define POSTGRES_PASSWORD y MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
+mkdir mimirsynth && cd mimirsynth
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/docker-compose.yml
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/env.example -o .env
+# edita .env: define POSTGRES_PASSWORD y MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
 docker compose --profile bundled up -d    # descarga la imagen publicada; incluye FalkorDB (sin el perfil, apunta MIMIRSYNTH_FALKOR_HOST a uno tuyo)
 docker compose logs mimirsynth | grep -A3 "FIRST START"    # código del asistente de instalación
 ```
@@ -42,12 +44,6 @@ El entorno solo lleva lo necesario para arrancar y conectar (tabla de abajo). To
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | _(vacío)_ | Grafos existentes a adoptar como brains |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, más OIDC si se configura). `off` solo para desarrollo: sin inicio de sesión |
 | `MIMIRSYNTH_STATIC_DIR` | _(vacío)_ | Directorio del build de la web (lo fija la imagen Docker) |
-
-## Desarrollo
-```bash
-cd api && uv venv && uv pip install -e . && .venv/bin/uvicorn mimirsynth.main:app --port 8010
-cd web && npm install && npm run dev      # http://localhost:5173 (proxy /api -> :8010)
-```
 
 ## El nombre
 Mímir es el guardián del pozo del conocimiento (Mímisbrunnr) en la mitología nórdica. Según la Ynglinga saga, Odín conserva su cabeza y la consulta para pedirle consejo: una memoria externa que se consulta. «Synth» alude a la memoria sintética y a la síntesis: el sistema consolida episodios en conocimiento. No tiene relación con Grafana Mimir ni con otros proyectos llamados Mimir.

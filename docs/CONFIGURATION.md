@@ -8,7 +8,7 @@ Configuration has two levels:
 2. **Interface (Administration → Settings and the other sections):** everything else. Applied without a restart; every change is recorded in the audit log. If an equivalent environment variable exists, it acts as the default, and "Restore" in the interface goes back to it.
 
 ## Environment variables
-Commented template in [`.env.example`](../.env.example).
+Commented template: `env.example` in the [latest release](https://github.com/MimirSynth/mimirsynth/releases/latest) (or [`.env.example`](../.env.example) in the repository).
 
 | Variable | Default | Description |
 |---|---|---|

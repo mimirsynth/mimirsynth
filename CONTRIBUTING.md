@@ -10,6 +10,11 @@ git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
 cd api && uv venv && uv pip install -e . pytest && .venv/bin/pytest -q     # API: tests use SQLite; those needing PostgreSQL or FalkorDB skip themselves
 cd ../web && npm install && npm run build                                   # web: includes the interface guardians (check:ui and i18n)
 ```
+To run the full stack from your checkout (builds the image locally instead of pulling the official one):
+```bash
+cp .env.example .env     # set POSTGRES_PASSWORD and MIMIRSYNTH_SESSION_SECRET
+docker compose -f docker-compose.yml -f docker-compose.build.yml --profile bundled up -d --build
+```
 For hot reload: `uvicorn mimirsynth.main:app --port 8010` (with `MIMIRSYNTH_AUTH_MODE=off`, development only) and `npm run dev` in `web/`.
 
 ## Rules

@@ -27,7 +27,6 @@ services:
       retries: 5
 
   mimirsynth:
-    build: .
     image: ghcr.io/mimirsynth/mimirsynth:${MIMIRSYNTH_VERSION:-latest}
     restart: unless-stopped
     depends_on:
