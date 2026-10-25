@@ -33,6 +33,24 @@ curl -s -X POST "$URL/api/brains/my-brain/proposals" \
 ```
 A contributor ends up `pending`; a curator, `approved` and ingested right away. A curator can approve or reject from the Proposals tab. When approved, Graphiti extracts entities and facts and adds them to the graph (invalidating those it contradicts).
 
+## MCP server
+Agents that speak the **Model Context Protocol** can use the same memory without writing HTTP calls. Each brain exposes an MCP endpoint (Streamable HTTP, stateless, tools only) at:
+
+```
+POST $URL/api/brains/my-brain/mcp        Authorization: Bearer $TOKEN
+```
+
+| Tool | Role | What it does |
+|---|---|---|
+| `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars` |
+| `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` |
+
+The token decides the brain and the role, so the tools take no brain argument. Only API tokens are accepted (never the browser session). Example with Claude Code:
+
+```bash
+claude mcp add --transport http mimirsynth "$URL/api/brains/my-brain/mcp" --header "Authorization: Bearer $TOKEN"
+```
+
 ## Documents
 `GET /api/brains/{slug}/docs/search?q=…` searches by meaning. `GET /api/brains/{slug}/docs/{id}/context?chunk={n}` returns more context for a passage and `/docs/{id}/file` the original.
 
