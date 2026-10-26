@@ -27,7 +27,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
 - **Modelo LLM:** extrae entidades y hechos al ingerir propuestas. Para modelos que «razonan» y devuelven JSON vacío, usa un proxy que desactive el *thinking*.
 - **Embeddings:** modelo y dimensión **no se pueden cambiar** una vez creados el índice (los vectores dependen del modelo). Debe ser el mismo que use Graphiti sobre ese FalkorDB.
-- **Decisor:** modelo de decisión cerrada (con probabilidades) para el triaje de propuestas y el corrector de tipos. Solo aprueba lo factual con confianza suficiente; nunca rechaza por su cuenta.
+- **Decisor:** modelo de decisión cerrada (con probabilidades) para el triaje de propuestas y el corrector de tipos. Solo aprueba lo factual con confianza suficiente; nunca rechaza por su cuenta. No supone ningún dominio: juzga cada propuesta frente al ámbito del brain, hecho con su **descripción** (Administración → Acceso al brain → Editar) y los tipos de entidad y de relación de su ontología. Lo que no encaja en ese ámbito va a un curador. Sin descripción ni ontología, solo comprueba que sea una afirmación factual sin instrucciones dirigidas al sistema.
 
 ## Cuentas y seguridad
 - **Usuarios:** Administración → Usuarios. Alta por invitación (enlace de un solo uso) o con contraseña temporal; roles, brains, deshabilitar, restablecer y eliminar.

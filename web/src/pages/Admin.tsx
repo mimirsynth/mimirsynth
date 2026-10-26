@@ -1,7 +1,7 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
+import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Brain, fmt, get, Me, send } from "../api";
@@ -173,15 +173,15 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const qc = useQueryClient();
   const brains = useQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains") });
   const [open, setOpen] = useState(false); const [editing, setEditing] = useState(false);
-  const [slug, setSlug] = useState(""); const [name, setName] = useState(""); const [graph, setGraph] = useState("");
+  const [slug, setSlug] = useState(""); const [name, setName] = useState(""); const [graph, setGraph] = useState(""); const [desc, setDesc] = useState("");
   const [del, setDel] = useState(false); const [delGraph, setDelGraph] = useState(false);
   const remove = useMutation({ mutationFn: () => send<{ deleted: string; graph: string; graph_deleted: boolean }>("POST", `brains/${brain}/delete`, { confirm: cur?.slug, delete_graph: delGraph }),
     onSuccess: async (r) => { setDel(false); setDelGraph(false); const left = (await qc.fetchQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains"), staleTime: 0 })).filter((b) => b.slug !== r.deleted); qc.setQueryData(["brains"], left); setBrain(left[0]?.slug ?? ""); } });
-  const [newName, setNewName] = useState(""); const [newSlug, setNewSlug] = useState(""); const [newGraph, setNewGraph] = useState("");
-  const create = useMutation({ mutationFn: () => send<Brain>("POST", "brains", { slug, name, graph_name: graph || undefined }),
-    onSuccess: (b) => { setSlug(""); setName(""); setGraph(""); setOpen(false); qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(b.slug); } });
+  const [newName, setNewName] = useState(""); const [newSlug, setNewSlug] = useState(""); const [newGraph, setNewGraph] = useState(""); const [newDesc, setNewDesc] = useState("");
+  const create = useMutation({ mutationFn: () => send<Brain>("POST", "brains", { slug, name, description: desc, graph_name: graph || undefined }),
+    onSuccess: (b) => { setSlug(""); setName(""); setGraph(""); setDesc(""); setOpen(false); qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(b.slug); } });
   const rename = useMutation({
-    mutationFn: () => send<Brain & { old_graph_kept?: string }>("PATCH", `brains/${brain}`, { name: newName, slug: newSlug, graph_name: newGraph }),
+    mutationFn: () => send<Brain & { old_graph_kept?: string }>("PATCH", `brains/${brain}`, { name: newName, description: newDesc, slug: newSlug, graph_name: newGraph }),
     onSuccess: (r) => { setEditing(false); setDone(r.old_graph_kept ?? ""); if (r.slug !== brain) setBrain(r.slug); qc.invalidateQueries(); } });
   const [done, setDone] = useState("");
   const users = useQuery({ queryKey: ["users"], enabled: me.is_admin, queryFn: () => get<any[]>("users") });
@@ -207,6 +207,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
         <Stack gap="xs">
           <TextField label={t("Slug")} description={t("Identificador permanente (minúsculas, números y guiones)")} placeholder={t("familia")} value={slug} onChange={(e) => setSlug(e.currentTarget.value)} />
           <TextField label={t("Nombre")} placeholder={t("Familia")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
+          <TextArea label={t("Descripción")} description={t("De qué trata este brain. El decisor la usa para juzgar si una propuesta encaja en él.")} autosize minRows={2} value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
           <TextField label={t("Grafo existente (opcional)")} description={t("Vacío = grafo nuevo con el nombre del slug")} value={graph} onChange={(e) => setGraph(e.currentTarget.value)} />
           <MutationError error={create.error} />
           <Group justify="flex-end"><Btn kind="ghost" onClick={() => setOpen(false)}>{t("Cancelar")}</Btn><Btn kind="primary" disabled={!slug || !name} loading={create.isPending} onClick={() => create.mutate()} icon="plus">{t("Crear")}</Btn></Group>
@@ -215,6 +216,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
       <Modal opened={editing} onClose={() => setEditing(false)} title={t("Editar brain")} centered>
         <Stack gap="xs">
           <TextField label={t("Nombre")} value={newName} onChange={(e) => setNewName(e.currentTarget.value)} data-autofocus />
+          <TextArea label={t("Descripción")} description={t("De qué trata este brain. El decisor la usa para juzgar si una propuesta encaja en él.")} autosize minRows={2} value={newDesc} onChange={(e) => setNewDesc(e.currentTarget.value)} />
           <TextField label={t("Slug")} description={t("Va en las URLs de la API. Los tokens siguen funcionando; actualiza la URL de tus hooks y plugins.")} value={newSlug} onChange={(e) => setNewSlug(e.currentTarget.value)} />
           <TextField label={t("Grafo")} disabled={!me.is_admin} value={newGraph} onChange={(e) => setNewGraph(e.currentTarget.value)}
             description={me.is_admin ? t("Cambiarlo copia el grafo con el nuevo nombre, reescribe el group_id de cada nodo y arista, y verifica los conteos. El original se conserva.") : t("Solo el administrador de la instancia puede cambiar el grafo.")} />
@@ -244,7 +246,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
                       <Text size="xs" c="dimmed" className="ms-data">{cur.slug} {t("· grafo")} {cur.graph_name}</Text>
                     </Stack>
                     <Group gap={6}>
-                      {canAdmin && <Btn size="row" icon="edit" onClick={() => { setNewName(cur.name); setNewSlug(cur.slug); setNewGraph(cur.graph_name); rename.reset(); setEditing(true); }}>{t("Editar")}</Btn>}
+                      {canAdmin && <Btn size="row" icon="edit" onClick={() => { setNewName(cur.name); setNewSlug(cur.slug); setNewGraph(cur.graph_name); setNewDesc(cur.description); rename.reset(); setEditing(true); }}>{t("Editar")}</Btn>}
                       {cur.role === "owner" && <Btn kind="danger" size="row" icon="trash" onClick={() => { setDelGraph(false); setDel(true); }}>{t("Borrar")}</Btn>}
                     </Group>
                   </Group>) : <EmptyState>{t("No hay ningún brain seleccionado.")}</EmptyState>}

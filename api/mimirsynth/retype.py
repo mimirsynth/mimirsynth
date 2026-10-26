@@ -13,7 +13,7 @@ from . import decider, jobs
 from .db import graph, rows
 from .deciders_admin import default_decider
 from .deps import BrainCtx, admin_of_brain, audit
-from .models import RetypeSuggestion
+from .models import Brain, RetypeSuggestion
 from .ontology import NAME, get_ontology
 from .secretbox import unseal
 from .store import _factory
@@ -85,6 +85,8 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
             return
         types, labels = _options(onto)
         skip = set(db.scalars(select(RetypeSuggestion.entity_uuid).where(RetypeSuggestion.brain_id == brain_id)))
+        brain = db.get(Brain, brain_id)
+        context = decider.scope(brain.name, brain.description, onto) if brain else ""
         cands = _candidates(graph_name, skip, limit)
         _PROGRESS[brain_id] = {"running": True, "done": 0, "total": len(cands), "error": None}
         key = unseal(d.api_key_enc)
@@ -104,15 +106,15 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
                     _PROGRESS[brain_id]["done"] += 1
                     continue
                 facts = _facts(graph_name, c["uuid"])
-                state = f"Entidad: {c['name']}\nResumen: {c['summary'][:300]}\nHechos:\n" + "\n".join(f"- {f[:160]}" for f in facts)
-                ent = decider.decide(d.base_url, d.model, key, state, "¿Es una entidad concreta con nombre propio (un servicio, equipo, red, almacenamiento, persona, lugar…), y no una frase, un fichero, una opción, un error o un procedimiento?", ["Sí", "No"])
+                state = decider.with_scope(f"Entidad: {c['name']}\nResumen: {c['summary'][:300]}\nHechos:\n" + "\n".join(f"- {f[:160]}" for f in facts), context)
+                ent = decider.decide(d.base_url, d.model, key, state, "¿Es una entidad concreta con nombre propio (una persona, organización, lugar, objeto, servicio, proyecto…), y no una frase, un fichero, una opción, un error o un procedimiento?", ["Sí", "No"])
                 if ent["letter"] == "B" and ent["prob"] >= 0.7:
                     db.add(RetypeSuggestion(brain_id=brain_id, entity_uuid=c["uuid"], name=c["name"][:500], current_type=c["type"], status="doubtful",
                                             reason=f"el decisor no la ve como una entidad concreta ({ent['prob']})", confidence=ent["prob"]))
                     db.commit()
                     _PROGRESS[brain_id]["done"] += 1
                     continue
-                r = decider.decide(d.base_url, d.model, key, state, "¿Qué tipo de entidad de infraestructura es?", labels)
+                r = decider.decide(d.base_url, d.model, key, state, "¿Qué tipo de entidad es, según los tipos de la ontología de este brain?", labels)
                 sug = types[r["index"]] if r["index"] < len(types) else ""
                 status = "pending" if sug and sug != c["type"] else "same"
                 db.add(RetypeSuggestion(brain_id=brain_id, entity_uuid=c["uuid"], name=c["name"][:500], current_type=c["type"], suggested_type=sug,

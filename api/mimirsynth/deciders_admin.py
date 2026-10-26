@@ -112,6 +112,7 @@ def triage_proposal(pid: int) -> None:
     from . import ingest
     from .deps import audit as _audit
     from .models import Brain, Proposal
+    from .ontology import get_ontology
     from .store import _factory
     from datetime import datetime, timezone
     with _factory()() as db:
@@ -120,7 +121,8 @@ def triage_proposal(pid: int) -> None:
             return
         brain = db.get(Brain, p.brain_id)
         try:
-            res = decider.triage(d.base_url, d.model, unseal(d.api_key_enc), p.name, p.body, p.confidence, d.threshold)
+            context = decider.scope(brain.name, brain.description, get_ontology(db, brain.id))  # el decisor no supone ningún dominio
+            res = decider.triage(d.base_url, d.model, unseal(d.api_key_enc), p.name, p.body, p.confidence, d.threshold, context=context)
         except Exception as e:  # noqa: BLE001
             log.exception("triaje fallido de la propuesta %s", pid)
             p.decision = {"engine": d.name, "error": str(e)[:200]}; db.commit()
