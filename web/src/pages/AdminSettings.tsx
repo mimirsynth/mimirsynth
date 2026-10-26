@@ -18,6 +18,7 @@ const GROUP_HELP: Record<string, string> = {
   docs: T("Límites de la memoria documental: qué se acepta al subir o escanear."),
   recall: T("Cómo se buscan y mezclan los pasajes de documentos con los hechos cuando un agente pide contexto."),
   ingest: T("Reintentos de la ingesta y cuánto tiempo se conservan los trabajos."),
+  notifications: T("Cómo se agrupan los avisos, cuándo callar y qué comprueba la instancia por sí sola."),
 };
 
 /** Un ajuste: el control se guarda con «Guardar» (solo aparece si ha cambiado) y «Restaurar» vuelve al valor por defecto. */

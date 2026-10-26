@@ -36,6 +36,7 @@ GROUPS = {
     "docs": "Documentos",
     "recall": "Recuerdo (recall)",
     "ingest": "Ingesta y trabajos",
+    "notifications": "Notificaciones",
 }
 
 REGISTRY: list[Def] = [
@@ -63,6 +64,13 @@ REGISTRY: list[Def] = [
     Def("ingest_retries", "ingest", "Reintentos de la ingesta", "Intentos cuando el modelo responde con límite de tasa o un error transitorio.", "int", "", 1, 20),
     Def("jobs_keep_days", "ingest", "Conservar trabajos terminados", "Pasado este plazo se borran los trabajos terminados, fallidos y cancelados.", "int", "días", 1, 3650),
     Def("jobs_keep_scheduled_days", "ingest", "Conservar reescaneos programados", "Los reescaneos automáticos sin incidencias son ruido (uno cada pocos minutos): se borran antes.", "int", "días", 1, 365),
+    Def("notify_cooldown_minutes", "notifications", "Aviso repetido", "Mientras un problema siga abierto no se vuelve a avisar por los canales hasta pasado este plazo (en la campana solo suma una repetición). Un problema resuelto avisa de la recuperación.", "int", "min", 1, 10080),
+    Def("notify_quiet_start", "notifications", "Silencio desde", "Hora (HH:MM) a partir de la cual solo se envían los avisos críticos; el resto espera al final del silencio. Vacío = sin horas de silencio.", "str"),
+    Def("notify_quiet_end", "notifications", "Silencio hasta", "Hora (HH:MM) en que termina el silencio. Se usa la hora del servidor.", "str"),
+    Def("notify_health_minutes", "notifications", "Comprobar el estado cada", "Cada cuántos minutos se comprueba que el grafo y los modelos de IA responden (un modelo con clave de pago recibe una llamada mínima). 0 = no comprobar.", "int", "min", 0, 1440),
+    Def("notify_update_check", "notifications", "Avisar de versiones nuevas", "Una vez al día consulta en GitHub si hay una versión más reciente. Es la única conexión de salida que hace la instancia por su cuenta; está desactivada por defecto.", "choice", choices=(("no", "No"), ("yes", "Sí"))),
+    Def("notify_block_private", "notifications", "Prohibir redes privadas", "Impide que los canales apunten a direcciones privadas o locales (protege de que se use un canal para llegar a servicios internos). Déjalo en «No» si tu ntfy o Gotify están en la red local.", "choice", choices=(("no", "No"), ("yes", "Sí"))),
+    Def("notify_keep_days", "notifications", "Conservar avisos", "Pasado este plazo se borran los avisos y su historial de envíos.", "int", "días", 1, 3650),
 ]
 _BY_KEY = {d.key: d for d in REGISTRY}
 

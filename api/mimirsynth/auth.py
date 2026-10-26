@@ -109,6 +109,8 @@ def login_local(body: LoginIn, request: Request, db: Session = Depends(get_db)):
         if u.failed_attempts >= int(appsettings.get("login_max_attempts")):
             u.locked_until, u.failed_attempts = now() + timedelta(minutes=int(appsettings.get("lockout_minutes"))), 0
             audit(db, u, "login.locked")
+            from . import notify
+            notify.emit("security.lockout", "Cuenta bloqueada por intentos fallidos", f"{u.email} (bloqueo de {int(appsettings.get('lockout_minutes'))} min)", key=f"user:{u.id}")
         db.commit()
         raise generic
     if passwords.needs_rehash(u.password_hash):

@@ -147,6 +147,9 @@ def _run(jid: int) -> None:
     except Exception as e:  # noqa: BLE001
         log.exception("trabajo %s (%s) fallido", jid, kind)
         status, error = "failed", (str(e) or e.__class__.__name__)[:1000]
+        if kind not in ("doc.scan", "proposal.ingest"):  # esos dos avisan por su cuenta, con su propia clave
+            from . import notify
+            notify.emit("job.failed", f"Trabajo fallido: {label_of(kind)}", error[:300], brain_id=brain_id, key=f"{kind}:{jid}")
     _CANCEL.discard(jid)
     ctx.flush()
     with _factory()() as db:

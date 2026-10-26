@@ -109,6 +109,11 @@ def ingest_proposal(pid: int, job=None) -> str:
             p.status, p.ingest_error = "failed", str(e)[:500]
         db.commit()
         err = p.ingest_error if p.status == "failed" else ""
+        from . import notify
+        if err:
+            notify.emit("ingest.failed", f"No se pudo ingerir la propuesta #{p.id}", f"«{p.name[:80]}»: {err[:250]}", brain_id=p.brain_id, key=f"proposal:{p.id}")
+        else:
+            notify.resolve("ingest.failed", f"proposal:{p.id}")
         audit(db, None, f"proposal.{p.status}", brain, id=p.id)
         return err
 

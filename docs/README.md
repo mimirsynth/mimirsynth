@@ -12,3 +12,4 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it fits together: brains, roles, quarantine and recall |
 | [DOCUMENTS.md](DOCUMENTS.md) | Document memory design |
 | [FEDERATION.md](FEDERATION.md) | Lending read access between brains |
+| [NOTIFICATIONS.md](NOTIFICATIONS.md) | Alerts: the bell and Telegram, ntfy, Gotify, webhook and email channels |

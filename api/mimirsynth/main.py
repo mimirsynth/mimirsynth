@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import appsettings, brand, settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys
+from . import appsettings, brand, settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
@@ -68,9 +68,11 @@ async def lifespan(_: FastAPI):
         pass
     task = asyncio.create_task(memory.periodic_sync())
     task2 = asyncio.create_task(docsources.periodic())
+    task3 = asyncio.create_task(notify.worker(VERSION))
     yield
     task.cancel()
     task2.cancel()
+    task3.cancel()
 
 
 try:
@@ -111,6 +113,7 @@ app.include_router(oidc_providers.router)
 app.include_router(users_admin.router)
 app.include_router(mfa.router)
 app.include_router(passkeys.router)
+app.include_router(notifications.router)
 app.include_router(proposals.router)
 
 

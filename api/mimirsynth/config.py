@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_small_model: str = ""  # opcional; por defecto llm_model
     jobs_keep_days: int = 60  # días que se conservan los trabajos terminados
+    notify_cooldown_minutes: int = 60  # no repetir por los canales un aviso del mismo problema abierto antes de este plazo
+    notify_quiet_start: str = ""  # HH:MM; con notify_quiet_end define las horas en que solo salen los avisos críticos
+    notify_quiet_end: str = ""
+    notify_health_minutes: int = 10  # comprobación periódica del grafo y los modelos de IA (0 = no)
+    notify_update_check: str = "no"  # consultar GitHub una vez al día por versiones nuevas
+    notify_block_private: str = "no"  # prohibir que los canales apunten a redes privadas
+    notify_keep_days: int = 30
     jobs_keep_scheduled_days: int = 7  # días que se conservan los reescaneos programados terminados sin incidencias (son ruido: uno cada pocos minutos por fuente)
     doc_store: str = "/data/documents"  # volumen con los originales de la memoria documental (la BD solo guarda referencias y trozos)
     doc_roots_base: str = "/sources"  # las raíces de fuentes de documentos solo pueden estar bajo esta carpeta (un único bind de solo lectura en el contenedor)

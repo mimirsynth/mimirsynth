@@ -21,6 +21,7 @@ import Proposals from "./pages/Proposals";
 import Knowledge from "./pages/Knowledge";
 import Account from "./pages/Account";
 import Jobs from "./pages/Jobs";
+import Notifications, { Summary } from "./pages/Notifications";
 
 const NAV = [
   { section: T("Memoria"), items: [
@@ -65,6 +66,7 @@ export default function App() {
   // Trabajos activos del brain: contador junto a «Trabajos»; se consulta más a menudo mientras haya alguno en marcha.
   const active = useQuery({ queryKey: ["jobs-summary", brain], enabled: !!me.data && !!brain, queryFn: () => get<{ active: number }>("jobs/summary", { graph: brain }),
     refetchInterval: (q) => ((q.state.data?.active ?? 0) > 0 ? 3000 : 20000) });
+  const bell = useQuery({ queryKey: ["notifications-summary"], enabled: !!me.data, queryFn: () => get<Summary>("notifications/summary"), refetchInterval: 30000 });
   const name = cfg.data?.name ?? "…";
 
   if (loc.pathname.startsWith("/acceso/")) return <AcceptScreen token={loc.pathname.slice("/acceso/".length)} name={name} />;
@@ -99,6 +101,9 @@ export default function App() {
             </div>))}
         </div>
         <div className="ms-nav-bottom">
+          <NavItem icon="bell" component={RouterLink} to="/notificaciones" label={t("Notificaciones")}
+            rightSection={bell.data?.unread ? <Pill size="xs" tone={bell.data.worst === "critical" ? "danger" : "warn"} title={t("avisos sin leer")}>{bell.data.unread}</Pill>
+              : bell.data?.open ? <Pill size="xs" title={t("problemas abiertos")}>{bell.data.open}</Pill> : undefined} />
           <div>
             <SelectField size="xs" aria-label={t("Brain activo")} value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
           </div>
@@ -119,6 +124,7 @@ export default function App() {
         <Routes>
           <Route path="/admin" element={<Admin me={me.data} brain={brain} setBrain={setBrain} />} />
           <Route path="/cuenta" element={<Account />} />
+          <Route path="/notificaciones" element={<Notifications />} />
           {brain ? (
             <>
               <Route path="/" element={<Overview graph={brain} />} />
