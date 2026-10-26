@@ -395,7 +395,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-subnav-head { margin: 14px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
 .ms-subnav-head:first-child { margin-top: 0; }
 .ms-setgroup-head > :not(:first-child) { flex-shrink: 0; }
-.ms-setgroup-head h3 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
+.ms-setgroup-head h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
 .ms-setgroup-head p { margin: 6px 0 0; font-size: 13px; color: var(--ms-muted); }
 .ms-setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 340px); gap: 8px 32px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--ms-line); }
 .ms-setrow-label { font-size: 14px; font-weight: 600; }
@@ -409,3 +409,6 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 }
 /* Código QR del doble factor: siempre sobre blanco para que lo lea la cámara, también en tema oscuro */
 .ms-qr { display: block; background: #fff; padding: 8px; border-radius: 8px; align-self: center; max-width: 100%; height: auto; } 
+
+/* Texto solo para lectores de pantalla (cabeceras de columna de acciones, título de las pantallas de acceso) */
+.ms-sr { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }

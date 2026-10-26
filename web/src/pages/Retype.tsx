@@ -79,7 +79,7 @@ export default function Retype({ graph, role }: { graph: string; role: string })
           <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Entidad")}</ColHead>
           <ColHead sort={v.sortProps("cur")} filter={v.select("cur")}>{t("Tipo actual")}</ColHead>
           {status === "doubtful" || status === "none" ? <ColHead filter={v.text("reason", t("Motivo…"))}>{t("Motivo")}</ColHead> : <><ColHead sort={v.sortProps("sug")} filter={v.select("sug")}>{t("Tipo propuesto")}</ColHead><ColHead sort={v.sortProps("conf")}>{t("Confianza")}</ColHead></>}
-          {status === "applied" && <DataTable.Th />}</DataTable.Tr></DataTable.Thead>
+          {status === "applied" && <DataTable.ActionsHead />}</DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>
           {items.map((i) => (
             <DataTable.Tr key={i.id}>

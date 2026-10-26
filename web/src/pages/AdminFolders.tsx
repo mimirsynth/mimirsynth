@@ -27,7 +27,7 @@ export default function AdminFolders() {
       {d && !d.base_available && <Notice tone="warn">{t("La carpeta base {{base}} no existe dentro del contenedor: revisa el bind MIMIRSYNTH_SOURCES_DIR en docker-compose.yml.", { base: d.base })}</Notice>}
       <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
       <DataTable fz="sm">
-        <DataTable.Thead><DataTable.Tr><ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Nombre")}</ColHead><ColHead filter={v.text("path")}>{t("Ruta en el contenedor")}</ColHead><ColHead filter={v.select("state")}>{t("Estado")}</ColHead><ColHead sort={v.sortProps("sources")}>{t("Fuentes")}</ColHead><DataTable.Th /></DataTable.Tr></DataTable.Thead>
+        <DataTable.Thead><DataTable.Tr><ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Nombre")}</ColHead><ColHead filter={v.text("path")}>{t("Ruta en el contenedor")}</ColHead><ColHead filter={v.select("state")}>{t("Estado")}</ColHead><ColHead sort={v.sortProps("sources")}>{t("Fuentes")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((r) => (
           <DataTable.Tr key={r.id}>
             <DataTable.Td><Text size="sm" fw={500}>{r.name}</Text>{r.description && <Text size="xs" c="dimmed">{r.description}</Text>}</DataTable.Td>

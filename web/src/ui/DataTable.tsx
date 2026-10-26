@@ -1,4 +1,5 @@
 import { Table } from "@mantine/core";
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef, type ComponentProps } from "react";
 
 type P = Omit<ComponentProps<typeof Table>, "striped" | "highlightOnHover" | "withTableBorder" | "withRowBorders" | "variant">;
@@ -13,7 +14,13 @@ function DataTableRoot(props: P) {
   });
   return <div ref={box} className="ms-tablewrap"><Table striped highlightOnHover withTableBorder withRowBorders fz="sm" {...props} className={`ms-table${props.className ? ` ${props.className}` : ""}`} /></div>;
 }
-export const DataTable = Object.assign(DataTableRoot, { Thead: Table.Thead, Tbody: Table.Tbody, Tr: Table.Tr, Th: Table.Th, Td: Table.Td });
+/** Cabecera de la columna de acciones de una fila: sin título visible, pero con texto para lectores de pantalla (una cabecera vacía es un error de accesibilidad). */
+function ActionsHead(props: ComponentProps<typeof Table.Th>) {
+  const { t } = useTranslation();
+  return <Table.Th {...props}><span className="ms-sr">{t("Acciones")}</span></Table.Th>;
+}
+
+export const DataTable = Object.assign(DataTableRoot, { Thead: Table.Thead, Tbody: Table.Tbody, Tr: Table.Tr, Th: Table.Th, Td: Table.Td, ActionsHead });
 
 /** Props para una fila que se abre al pulsarla: también con teclado (Tab, Intro, Espacio). `<DataTable.Tr {...rowOpen(() => abrir(id))}>`. */
 export function rowOpen(onOpen: () => void) {

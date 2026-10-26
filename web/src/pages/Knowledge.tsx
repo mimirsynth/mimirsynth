@@ -169,7 +169,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                     <ColHead sort={sortProps("chunks")}>{t("Trozos")}</ColHead>
                     <ColHead>{t("Estado")}</ColHead>
                     <ColHead sort={sortProps("updated")}>{t("Actualizado")}</ColHead>
-                    <DataTable.Th />
+                    <DataTable.ActionsHead />
                   </DataTable.Tr></DataTable.Thead>
                   <DataTable.Tbody>{(docs.data?.items ?? []).map((d) => (
                     <DataTable.Tr key={d.id}>
@@ -209,7 +209,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                   <ColHead sort={sv.sortProps("docs")}>{t("Documentos")}</ColHead>
                   <ColHead filter={sv.select("state")}>{t("Estado")}</ColHead>
                   <ColHead sort={sv.sortProps("last")}>{t("Último escaneo")}</ColHead>
-                  <DataTable.Th />
+                  <DataTable.ActionsHead />
                 </DataTable.Tr></DataTable.Thead>
                 <DataTable.Tbody>{sv.rows.map((s) => (
                   <DataTable.Tr key={s.id}>

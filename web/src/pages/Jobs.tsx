@@ -74,7 +74,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
             <ColHead sort={sortProps("start")}>{t("Inicio")}</ColHead>
             <ColHead>{t("Duración")}</ColHead>
             <ColHead>{t("Lanzado por")}</ColHead>
-            <DataTable.Th />
+            <DataTable.ActionsHead />
           </DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{groupRuns(list.data?.items ?? []).flatMap(({ job: j, rest }) => {
             const row = (x: Job, child = false) => (

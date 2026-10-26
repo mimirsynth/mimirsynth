@@ -22,7 +22,7 @@ function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: 
           <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Relación")}</ColHead>
           <ColHead filter={v.text("desc", t("Buscar en la descripción…"))}>{t("Descripción")}</ColHead>
           <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
-          {canEdit && <DataTable.Th />}
+          {canEdit && <DataTable.ActionsHead />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((ty) => (
           <DataTable.Tr key={ty.name}>
@@ -47,7 +47,7 @@ function RuleTable({ rows, canEdit, onEdit, onDelete }: { rows: Rule[]; canEdit:
           <ColHead sort={v.sortProps("source")} filter={v.select("source")}>{t("Origen")}</ColHead>
           <ColHead sort={v.sortProps("target")} filter={v.select("target")}>{t("Destino")}</ColHead>
           <ColHead filter={v.text("edges", t("Relación…"))}>{t("Relaciones permitidas")}</ColHead>
-          {canEdit && <DataTable.Th />}
+          {canEdit && <DataTable.ActionsHead />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((m) => (
           <DataTable.Tr key={`${m.source}>${m.target}`}>
