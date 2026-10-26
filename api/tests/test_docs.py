@@ -199,7 +199,7 @@ def test_overview_activity_buckets_and_counts(client, monkeypatch):
 
     def fake_rows(q):
         if "Episodic" in q:
-            return [{"t": iso(1)}, {"t": iso(2)}, {"t": iso(9)}, {"t": iso(900)}]            # el último queda fuera de la ventana
+            return [{"t": iso(0)}, {"t": iso(2)}, {"t": iso(9)}, {"t": iso(900)}]            # el último queda fuera de la ventana
         if "RELATES_TO]->() RETURN r.name" in q:
             return [{"name": "RunsOn", "v": iso(30), "i": None, "x": None, "c": iso(3)}, {"name": "runs-on", "v": iso(30), "i": iso(1), "x": None, "c": iso(10)},
                     {"name": "HostedOn", "v": iso(30), "i": None, "x": None, "c": iso(3)}]
