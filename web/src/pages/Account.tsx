@@ -127,7 +127,8 @@ export default function Account() {
       <PageHeader title={t("Mi cuenta")} description={t("Tu perfil, tus tokens de API en todos los brains, tus sesiones y tu actividad reciente.")} />
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
       <FillArea>
-        <SettingsLayout nav={<SubNav label={t("Secciones de Mi cuenta")} value={section} onChange={setSection} items={nav} />}>
+        <SettingsLayout nav={<><SubNav label={t("Secciones de Mi cuenta")} value={section} onChange={setSection} items={nav} />
+          {p.auth_mode !== "off" && <div className="ms-subnav-exit"><Btn fullWidth icon="logout" loading={logout.isPending} onClick={() => logout.mutate()}>{t("Cerrar sesión")}</Btn></div>}</>}>
           {section === "perfil" && <>
             <SettingsGroup title={t("Perfil")} description={t("Cómo te ven el resto de personas en la aplicación.")}>
               <SettingsBody><Stack gap="sm">

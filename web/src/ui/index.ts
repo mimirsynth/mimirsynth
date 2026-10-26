@@ -7,7 +7,7 @@ export { Slider, SliderField, ProgressBar, StatCard } from "./Controls";
 export { ThemeToggle, ThemeButton } from "./ThemeToggle";
 export { Icon } from "./Icon";
 export type { IconName } from "./Icon";
-export { Tabs, Modal, NavItem, IconButton, RoundLink, Page, FillArea, SidePanel, ConfirmDialog, PageHeader, StatGrid, SplitView } from "./Layout";
+export { Tabs, Modal, NavItem, IconButton, RoundLink, RoundButton, UserCard, Page, FillArea, SidePanel, ConfirmDialog, PageHeader, StatGrid, SplitView } from "./Layout";
 export { TextField, NumberField, PasswordField, TextArea, SelectField, ComboField, Check, Toggle, Notice, Panel, CopyBtn, MutationError, EmptyState, DataState, Section } from "./Fields";
 export { AreaChart, BarList, Donut } from "./Charts";
 export { SERIES } from "./palette";

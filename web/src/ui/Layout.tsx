@@ -44,6 +44,29 @@ export function RoundLink({ label, to, href, children }: { label: string; to?: s
   );
 }
 
+/** Botón cuadrado de la barra lateral que ejecuta una acción (cerrar sesión): mismo aspecto que `RoundLink`. */
+export function RoundButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <MTooltip label={label} position="top">
+      <button type="button" aria-label={label} className="ms-roundbtn" onClick={onClick}>{children}</button>
+    </MTooltip>
+  );
+}
+
+/** Tarjeta de la persona en la barra lateral: su avatar y su nombre llevan a «Mi cuenta», y a su lado va el botón de cerrar sesión (children). */
+export function UserCard({ to, label, avatar, name, children }: { to: string; label: string; avatar: ReactNode; name: string; children?: ReactNode }) {
+  const { pathname } = useLocation();
+  const isActive = pathname === to || pathname.startsWith(`${to}/`);
+  return (
+    <div className="ms-usercard">
+      <MTooltip label={label} position="top">
+        <RouterNavLink to={to} aria-label={label} className={`ms-usercard-link${isActive ? " active" : ""}`}>{avatar}<span className="ms-usercard-name">{name}</span></RouterNavLink>
+      </MTooltip>
+      {children}
+    </div>
+  );
+}
+
 /** Página que ocupa todo el alto disponible; su zona `FillArea` crece y desplaza por dentro. */
 export function Page({ children }: { children: ReactNode }) {
   return <div className="ms-page">{children}</div>;

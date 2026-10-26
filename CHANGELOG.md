@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Changed
+- Sign out is now one click away: the sidebar shows the person's avatar and name (linking to My account) with a sign-out button next to it, and My account has a highlighted «Sign out» button under its section menu. It used to be a small button in My account → Security → Sessions.
 
 ## [0.6.0] - 2026-10-26
 ### Added

@@ -144,6 +144,7 @@
  "Carpetas que los administradores de cada brain pueden usar como fuente de documentos (Conocimiento → Fuentes). Solo se lee de ellas, nunca se escribe. Deben estar dentro de": "Folders that each brain's administrators can use as a document source (Knowledge → Sources). They are only read, never written. They must be inside",
  "Cerrar": "Close",
  "Cerrar menú": "Close menu",
+ "Cerrar sesión": "Sign out",
  "Cerrar sesión en otros dispositivos": "Sign out on other devices",
  "Cerrar sus sesiones": "Sign out its sessions",
  "Claim de grupos": "Groups claim",

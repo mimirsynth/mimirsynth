@@ -240,6 +240,11 @@ circle.ms-chart-grid { stroke-width: 16; opacity: 0.35; }
 .ms-roundbtn { width: 34px; height: 34px; flex: 0 0 34px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--ms-radius); background: transparent; color: var(--ms-muted); cursor: pointer; text-decoration: none; padding: 0; }
 .ms-roundbtn:hover { color: var(--ms-accent); background: transparent; }
 .ms-roundbtn.active { color: var(--ms-accent); }
+.ms-usercard { display: flex; align-items: center; gap: 4px; }
+.ms-usercard-link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 8px; border-radius: var(--ms-radius); color: var(--ms-ink); text-decoration: none; font-size: 13px; font-weight: 600; }
+.ms-usercard-link:hover, .ms-usercard-link.active { background: var(--ms-hover); color: var(--ms-accent); }
+.ms-usercard-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-subnav-exit { margin: 16px 12px 0; padding-top: 12px; border-top: 1px solid var(--ms-line); }
 .ms-version { text-align: center; font-size: 11px; color: var(--ms-muted); letter-spacing: 0.04em; padding-top: 2px; }
 
 /* Cabecera de columna con orden y filtro (ColHead) */
