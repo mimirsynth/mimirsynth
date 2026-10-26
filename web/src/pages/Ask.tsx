@@ -5,8 +5,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { fmt, get, send } from "../api";
 
-type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; score: number };
-type Chunk = { id: number; name: string; text: string; valid_at: string | null; score: number; rrf: number };
+type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; score: number; origin?: string };
+type Chunk = { id: number; origin?: string; name: string; text: string; valid_at: string | null; score: number; rrf: number };
 type Res = { facts: Fact[]; chunks: Chunk[]; context: string; index: boolean; ms: Record<string, number> };
 
 export default function Ask({ graph, role }: { graph: string; role: string }) {
@@ -42,11 +42,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             <Title order={5}>{t("Hechos (")}{r.facts.length})</Title>
             {r.facts.map((f) => (
               <ListCard key={f.uuid} invalid={f.status === "invalidated"}
-                tags={<><Pill size="xs">{f.source}</Pill><Text size="xs" className="ms-data">{f.name}</Text><Pill size="xs">{f.target}</Pill></>}
+                tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Pill size="xs">{f.source}</Pill><Text size="xs" className="ms-data">{f.name}</Text><Pill size="xs">{f.target}</Pill></>}
                 meta={<>{t("sim")} {f.score} · {fmt(f.valid_at)}{f.invalid_at ? ` → ${fmt(f.invalid_at)}` : ""}</>}>{f.fact}</ListCard>))}
             <Title order={5} mt="xs">{t("Fragmentos de episodios (")}{r.chunks.length})</Title>
             {r.chunks.map((c) => (
-              <ListCard key={c.id} title={c.name} aside={`${fmt(c.valid_at)} · sim ${c.score}`}>{c.text}</ListCard>))}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={`${fmt(c.valid_at)} · sim ${c.score}`}>{c.text}</ListCard>))}
           </Stack>
           <Stack gap="xs" className="ms-ask-side">
             <Title order={6}>{t("Contexto inyectado")}</Title>

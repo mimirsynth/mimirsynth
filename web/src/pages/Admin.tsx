@@ -9,6 +9,7 @@ import AdminFolders from "./AdminFolders";
 import AdminSettings from "./AdminSettings";
 import AdminUsers from "./AdminUsers";
 import TokensPanel from "./TokensPanel";
+import Federation from "./Federation";
 
 type AuditRow = { ts: string; action: string; detail: unknown };
 const AUDIT_COLS = { ts: { get: (a: AuditRow) => a.ts }, action: { get: (a: AuditRow) => a.action, exact: true }, detail: { get: (a: AuditRow) => JSON.stringify(a.detail ?? "") } };
@@ -250,6 +251,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
             </SettingsGroup>
             {cur && <>
               <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>
+              <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>
               <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>
             </>}
           </>}

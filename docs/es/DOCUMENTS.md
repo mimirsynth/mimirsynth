@@ -97,7 +97,7 @@ Es idempotente y reanudable: si falla a mitad, la siguiente pasada continúa. Co
 
 Todo queda en la auditoría (qué fuente, quién, cuántos documentos). Borrar una fuente pide confirmación escrita y elimina sus documentos y trozos, como el borrado de un brain.
 
-La **federación** futura tratará los documentos como un recurso concedible aparte del grafo («solo grafo», «solo documentos», «ambos»). Por eso conviene tener el módulo antes de implementarla.
+La **federación** ([FEDERATION.md](FEDERATION.md)) trata los documentos como un recurso concedible aparte del grafo («solo grafo», «solo documentos», «ambos»).
 
 ## Seguridad
 

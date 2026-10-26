@@ -136,7 +136,7 @@ def delete_brain(body: DeleteIn, ctx: BrainCtx = Depends(owner_of_brain)):
     from sqlalchemy import delete, text
 
     from .index import enabled as index_enabled
-    from .models import ApiToken, BrainOntology, Proposal, RetypeSuggestion
+    from .models import ApiToken, BrainGrant, BrainOntology, Proposal, RetypeSuggestion
     b, db = ctx.brain, ctx.db
     if body.confirm != b.slug:
         raise HTTPException(400, "la confirmación no coincide con el slug del brain")
@@ -145,6 +145,7 @@ def delete_brain(body: DeleteIn, ctx: BrainCtx = Depends(owner_of_brain)):
         raise HTTPException(409, "otro brain usa el mismo grafo; no se puede borrar")
     for model in (ApiToken, Proposal, BrainOntology, RetypeSuggestion, Membership):
         db.execute(delete(model).where(model.brain_id == b.id))
+    db.execute(delete(BrainGrant).where((BrainGrant.source_brain_id == b.id) | (BrainGrant.target_brain_id == b.id)))  # las concesiones, de ida y de vuelta
     if index_enabled():
         db.execute(text("DELETE FROM episode_chunks WHERE brain_id = :b"), {"b": b.id})
         db.execute(text("DELETE FROM doc_chunks WHERE brain_id = :b"), {"b": b.id})

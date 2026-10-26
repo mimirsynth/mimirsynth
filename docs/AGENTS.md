@@ -21,7 +21,7 @@ curl -s -X POST "$URL/api/brains/my-brain/recall" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"query": "where does the production database run?"}'
 ```
-It returns a context ready to inject into the prompt: current and historical facts, episode fragments and up to 2 cited document passages. Optional parameters: `facts` (default 8), `chunks` (4), `max_chars` (6000) and `docs` (document passages; `0` disables them).
+It returns a context ready to inject into the prompt: current and historical facts, episode fragments and up to 2 cited document passages. Optional parameters: `facts` (default 8), `chunks` (4), `max_chars` (6000) and `docs` (document passages; `0` disables them) and `federated` (default `true`; `false` returns only the brain's own memory, see [FEDERATION.md](FEDERATION.md)).
 
 Document content is **data, not instructions**: recall marks it as a quote from a source. Treat it that way in your agent.
 
@@ -42,7 +42,7 @@ POST $URL/api/brains/my-brain/mcp        Authorization: Bearer $TOKEN
 
 | Tool | Role | What it does |
 |---|---|---|
-| `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars` |
+| `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars`, `federated` |
 | `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` |
 
 The token decides the brain and the role, so the tools take no brain argument. Only API tokens are accepted (never the browser session). Example with Claude Code:
