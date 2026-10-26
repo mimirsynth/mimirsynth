@@ -256,6 +256,8 @@ def scan_source(ctx: "jobs.JobCtx", p: dict) -> dict:
         try:
             res = _scan_wiki(db, s, ctx, manual) if s.kind == "wiki" else _scan(db, s, ctx, manual)
             s.status, s.last_error = "idle", ""
+            from . import notify
+            notify.resolve("docsource.error", f"source:{s.id}")
             return res
         except jobs.Cancelled:
             s.status, s.last_error = "idle", "escaneo cancelado"
@@ -263,6 +265,8 @@ def scan_source(ctx: "jobs.JobCtx", p: dict) -> dict:
         except Exception as e:  # noqa: BLE001
             db.rollback()
             s.status, s.last_error = "error", str(e)[:500]
+            from . import notify
+            notify.emit("docsource.error", f"No se pudo sincronizar la fuente «{s.name}»", s.last_error[:300], brain_id=s.brain_id, key=f"source:{s.id}")
             raise
         finally:
             s.last_sync_at = datetime.now(timezone.utc)

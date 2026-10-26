@@ -403,3 +403,58 @@ class DocRoot(Base):
     description: Mapped[str] = mapped_column(String(200), default="")
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class NotifyChannel(Base):
+    """Canal de salida de las notificaciones (email, ntfy, Gotify, webhook, Telegram). Lo configura el administrador de la instancia; el secreto va sellado."""
+    __tablename__ = "notify_channels"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True)
+    kind: Mapped[str] = mapped_column(String(16))  # email | ntfy | gotify | webhook | telegram
+    config: Mapped[dict] = mapped_column(JSON, default=dict)  # lo que no es secreto: URL, tema, destinatarios…
+    secret: Mapped[str] = mapped_column(Text, default="")  # token / clave HMAC, sellado con secretbox
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    min_severity: Mapped[str] = mapped_column(String(8), default="warning")  # info | warning | critical
+    events: Mapped[list] = mapped_column(JSON, default=list)  # eventos que recibe; vacío = todos
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Notification(Base):
+    """Aviso del sistema: aparece en la campana de la interfaz y se envía por los canales. Un problema que se repite se agrupa en una sola fila."""
+    __tablename__ = "notifications"
+    __table_args__ = (Index("ix_notifications_event_key", "event", "key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    event: Mapped[str] = mapped_column(String(48))
+    severity: Mapped[str] = mapped_column(String(8), default="warning")
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, default="")
+    brain_id: Mapped[int | None] = mapped_column(ForeignKey("brains.id", ondelete="SET NULL"), nullable=True)
+    key: Mapped[str] = mapped_column(String(120), default="")  # identifica el problema concreto (p. ej. el motor o la fuente) para agrupar y para resolverlo
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NotifyDelivery(Base):
+    """Envío de un aviso por un canal, con reintentos."""
+    __tablename__ = "notify_deliveries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notification_id: Mapped[int] = mapped_column(ForeignKey("notifications.id", ondelete="CASCADE"), index=True)
+    channel_id: Mapped[int] = mapped_column(ForeignKey("notify_channels.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(8), default="alert")  # alert | recovery
+    status: Mapped[str] = mapped_column(String(8), default="pending")  # pending | sent | failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str] = mapped_column(Text, default="")
+    next_try_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    notification: Mapped[Notification] = relationship()
+    channel: Mapped[NotifyChannel] = relationship()
+
+
+class NotifyRead(Base):
+    """Hasta qué aviso ha leído cada persona (la campana cuenta los posteriores)."""
+    __tablename__ = "notify_reads"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    last_id: Mapped[int] = mapped_column(Integer, default=0)

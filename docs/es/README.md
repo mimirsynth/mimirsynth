@@ -12,3 +12,4 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Cómo encaja todo: brains, roles, cuarentena y recall |
 | [DOCUMENTS.md](DOCUMENTS.md) | Diseño de la memoria documental |
 | [FEDERATION.md](FEDERATION.md) | Prestar lectura entre brains |
+| [NOTIFICATIONS.md](NOTIFICATIONS.md) | Avisos: la campana y los canales Telegram, ntfy, Gotify, webhook y correo |
