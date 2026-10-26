@@ -64,3 +64,66 @@ def test_promote_creates_quarantined_or_direct_proposal_with_provenance(client, 
     edited = client.post(f"{base}/docs/{did}/promote", json={"chunk": 0, "text": "  Solo esta frase editada.  ", "name": "Mi nombre"}).json()
     body = client.get(f"{base}/proposals/{edited['id']}").json()["body"]
     assert edited["name"] == "Mi nombre" and body.startswith("Solo esta frase editada.\n\nFuente:")
+
+
+# ---- relaciones entre las entidades mencionadas ----
+class _FakeGraph:
+    """Sustituto mínimo del grafo: devuelve filas fijas con la cabecera de FACT_RETURN y recuerda la consulta."""
+    HEADER = ["uuid", "name", "fact", "valid_at", "invalid_at", "expired_at", "created_at", "reference_time", "episodes", "source", "source_uuid", "target", "target_uuid"]
+
+    def __init__(self, facts):
+        self.facts, self.queries = facts, []
+
+    def query(self, q, params=None):
+        self.queries.append((q, params))
+        res = type("R", (), {})()
+        res.header = [[1, h] for h in self.HEADER]
+        res.result_set = self.facts
+        return res
+
+
+def _fact(uid, rel, fact, a, b, valid="2026-01-01T00:00:00Z", invalid=None):
+    return [uid, rel, fact, valid, invalid, None, valid, None, [], a[1], a[0], b[1], b[0]]
+
+
+MIR, LXC, SIR = ("e1", "MimirSynth"), ("e2", "LXC132"), ("e3", "Sirio")
+
+
+def test_relations_between_current_expired_aliases_and_limit(monkeypatch):
+    g = _FakeGraph([
+        _fact("r1", "RUNS_ON", "MimirSynth corre en el LXC132", MIR, LXC, valid="2026-10-01T00:00:00Z"),
+        _fact("r2", "MOUNTED_ON", "Sirio está montado en el LXC132", SIR, LXC, valid="2026-09-01T00:00:00Z"),
+        _fact("r3", "RUNS_ON", "MimirSynth corría en el LXC120", MIR, LXC, valid="2026-05-01T00:00:00Z", invalid="2026-09-30T00:00:00Z"),
+    ])
+    monkeypatch.setattr(docbridge, "graph", lambda name: g)
+    out = docbridge.relations_between("g", ["e1", "e2", "e3"], {"MOUNTED_ON": "STORED_ON"})
+    assert [(r["source"], r["name"], r["target"]) for r in out["relations"]] == [("MimirSynth", "RUNS_ON", "LXC132"), ("Sirio", "STORED_ON", "LXC132")]   # vigentes; alias aplicado
+    assert out["total"] == 2 and out["expired_count"] == 1                                                  # hay un hecho caducado que se puede mostrar
+    assert out["relations"][0]["fact"] == "MimirSynth corre en el LXC132" and out["relations"][0]["status"] == "current"
+    q, params = g.queries[0]
+    assert "a.uuid IN $ids AND b.uuid IN $ids" in q and params == {"ids": ["e1", "e2", "e3"]}                 # una sola consulta, solo entre las entidades mencionadas
+    both = docbridge.relations_between("g", ["e1", "e2", "e3"], expired=True)
+    assert both["total"] == 3 and [r["status"] for r in both["relations"]].count("invalidated") == 1
+    assert len(docbridge.relations_between("g", ["e1", "e2", "e3"], limit=1)["relations"]) == 1 and docbridge.relations_between("g", ["e1", "e2", "e3"], limit=1)["total"] == 2
+    assert docbridge.relations_between("g", ["e1"]) == {"relations": [], "total": 0, "expired_count": 0} and len(g.queries) == 4     # con una sola entidad no se consulta
+
+
+def test_doc_entities_endpoint_returns_relations_and_survives_graph_errors(client, fake_index, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(docbridge, "entities", lambda g: [{"uuid": "e1", "name": "Guía", "type": "Doc", "aliases": []}, {"uuid": "e2", "name": "CPU", "type": "HW", "aliases": []}])
+    slug = _slug(client)
+    _, r = _upload(client, slug, "guia.md", MD.encode())
+    did = r.json()["id"]
+    seen = {}
+    def fake(graph_name, uuids, amap=None, expired=False, limit=30):
+        seen.update(uuids=sorted(uuids), expired=expired, limit=limit)
+        return {"relations": [{"uuid": "r1", "source_uuid": "e1", "source": "Guía", "target_uuid": "e2", "target": "CPU", "name": "mentions", "fact": "La guía habla de la CPU", "valid_at": None, "invalid_at": None, "status": "current"}], "total": 1, "expired_count": 2}
+    monkeypatch.setattr(docbridge, "relations_between", fake)
+    out = client.get(f"/api/brains/{slug}/docs/{did}/entities", params={"expired": "true", "relations": 5}).json()
+    assert out["relations"][0]["fact"] == "La guía habla de la CPU" and out["total"] == 1 and out["expired_count"] == 2
+    assert seen == {"uuids": ["e1", "e2"], "expired": True, "limit": 5}
+    assert {e["name"] for e in out["entities"]} == {"Guía", "CPU"}
+    monkeypatch.setattr(docbridge, "relations_between", lambda *a, **k: (_ for _ in ()).throw(ConnectionError("FalkorDB caído")))
+    out = client.get(f"/api/brains/{slug}/docs/{did}/entities").json()
+    assert out["relations"] == [] and {e["name"] for e in out["entities"]} == {"Guía", "CPU"}                  # un fallo al leer relaciones no esconde las entidades
+    seen.clear(); monkeypatch.setattr(docbridge, "relations_between", fake)
+    assert client.get(f"/api/brains/{slug}/docs/{did}/entities", params={"relations": 0}).json()["relations"] == [] and not seen
