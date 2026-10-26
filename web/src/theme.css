@@ -167,7 +167,7 @@ h1, h2, h3, h4, .mantine-Title-root { font-family: var(--ms-display); font-weigh
 .ms-fill { flex: 1; min-height: 0; overflow: auto; }
 .ms-tabs-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ms-tabs-fill > .mantine-Tabs-panel { flex: 1; min-height: 0; overflow: auto; }
-.ms-drawer-body { height: calc(100dvh - 110px); overflow: auto; }
+.ms-drawer-body { height: calc(100dvh - 110px); overflow: auto; padding-top: var(--mantine-spacing-xs); }
 .ms-stat, .ms-panel, .ms-table, .ms-notice, .ms-iconbtn, .ms-toggle-field .mantine-Switch-track { border-radius: var(--ms-radius); }
 .ms-table { overflow: hidden; }
 

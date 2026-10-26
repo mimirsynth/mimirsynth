@@ -5,6 +5,11 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- Knowledge → document viewer: under «Mentioned entities», a new **Relations** section shows how those entities relate in the graph («A —relation→ B», with the fact and the date it holds from). Only current facts by default, with a switch to include the ones that are no longer true, and «Show more». One graph query, no LLM or embeddings; `GET /docs/{id}/entities` now also returns `relations`, `total` and `expired_count`.
+
+### Fixed
+- Knowledge → document viewer: the status tags (indexed, size, chunks) no longer sit flush against the panel header.
 ### Changed
 - The decider no longer assumes an infrastructure domain. Triage used to ask whether a proposal was "a factual statement about the infrastructure"; it now judges it against the brain's scope (its description and the entity and relation types of its ontology), and without either only checks that it is factual. The type corrector's questions are generic too. It still never rejects on its own: what does not fit goes to a curator. The brain description can now be edited when creating or editing a brain.
 

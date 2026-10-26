@@ -202,6 +202,7 @@ progreso en Trabajos, protección contra vaciados) es común. La configuración 
 
 El documento sigue siendo la fuente de verdad; enlazar es señalar, no escribe nada en el grafo.
 - **Entidades mencionadas** (`GET /docs/{id}/entities`): se buscan en el texto del documento los nombres y alias de las entidades vivas del grafo (palabra completa, sin
+- **Relaciones entre ellas** (misma ruta): el grafo ya sabe cómo se relacionan las entidades mencionadas. Con una sola consulta (`MATCH (a)-[r:RELATES_TO]->(b)` entre las entidades detectadas, sin LLM ni embeddings) el visor muestra «A —relación→ B» con el hecho y la fecha desde la que vale. Por defecto solo los vigentes; `expired=true` añade los que dejaron de ser ciertos (`expired_count` dice cuántos hay) y `relations=N` limita cuántos se devuelven (`total` cuenta los que cumplen el filtro). Los alias de relación del brain se aplican al nombre. Solo el grafo del propio brain: lo que prestan otros brains (ver `FEDERATION.md`) no entra aquí. Si el grafo falla, el visor sigue mostrando las entidades.
   distinguir mayúsculas; las fusionadas no cuentan, y su nombre antiguo funciona como alias de la principal). Sin LLM ni tablas nuevas: la lista de entidades se cachea un minuto y se
   calcula al abrir el documento, así que siempre está al día. Se ignoran los nombres de menos de 4 caracteres (salvo siglas en mayúsculas de 3, como PBS) y los numéricos.
   En Conocimiento, cada entidad del detalle lleva al Grafo centrado en ella (`/grafo?nodo=<uuid>`).

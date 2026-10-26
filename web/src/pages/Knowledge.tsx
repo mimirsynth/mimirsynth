@@ -34,6 +34,9 @@ async function uploadFile(slug: string, file: File, progress: (done: number) => 
   return send("POST", `docs/uploads/${init.upload_id}/complete`, undefined, { graph: slug });
 }
 
+type Relation = { uuid: string; source_uuid: string; source: string; target_uuid: string; target: string; name: string; fact: string; valid_at: string | null; invalid_at: string | null; status: string };
+type EntitiesOut = { entities: { uuid: string; name: string; type: string; count: number }[]; relations: Relation[]; total: number; expired_count: number };
+
 export default function Knowledge({ graph, role, instanceAdmin = false }: { graph: string; role: string; instanceAdmin?: boolean }) {
   const { t } = useTranslation();
   const canUpload = ["contributor", "curator", "admin", "owner"].includes(role);
@@ -72,7 +75,10 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const context = useQuery({ queryKey: ["doc-ctx", graph, ctxOf?.document_id, ctxOf?.chunk], enabled: !!ctxOf,
     queryFn: () => get<{ title: string; text: string; from_chunk: number; to_chunk: number }>(`docs/${ctxOf!.document_id}/context`, { graph, chunk: ctxOf!.chunk, radius: 1 }) });
   const full = useQuery({ queryKey: ["doc-text", graph, fullText], enabled: fullText !== null, queryFn: () => get<{ title: string; chars: number; truncated: boolean; text: string }>(`docs/${fullText}/text`, { graph }) });
-  const entities = useQuery({ queryKey: ["doc-entities", graph, open], enabled: open !== null, staleTime: 60_000, queryFn: () => get<{ entities: { uuid: string; name: string; type: string; count: number }[] }>(`docs/${open}/entities`, { graph }) });
+  const [relMax, setRelMax] = useState(30); const [relExpired, setRelExpired] = useState(false);
+  useEffect(() => { setRelMax(30); setRelExpired(false); }, [open]);   // cada documento empieza con sus relaciones vigentes
+  const entities = useQuery({ queryKey: ["doc-entities", graph, open, relMax, relExpired], enabled: open !== null, staleTime: 60_000, placeholderData: keepPreviousData,
+    queryFn: () => get<EntitiesOut>(`docs/${open}/entities`, { graph, relations: relMax, expired: relExpired ? "true" : undefined }) });
   const promote = useMutation({ mutationFn: (p: NonNullable<typeof promo>) => send<{ id: number; status: string }>("POST", `docs/${p.doc}/promote`, { chunk: p.chunk, text: p.text, name: p.name || undefined }, { graph }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["proposals", graph] }); qc.invalidateQueries({ queryKey: ["jobs", graph] }); } });
   const remove = useMutation({ mutationFn: (d: Doc) => send("DELETE", `docs/${d.id}`, undefined, { graph }), onSuccess: () => { setDel(null); setOpen(null); qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } });
@@ -257,6 +263,20 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               : (entities.data?.entities.length ?? 0) === 0 ? <EmptyState>{t("No menciona ninguna entidad conocida del grafo.")}</EmptyState>
               : <Group gap={6}>{entities.data!.entities.map((e) => (
                   <Link key={e.uuid} to={`/grafo?nodo=${e.uuid}`} className="ms-nolink"><Pill size="xs" title={`${e.type || "entidad"} · ${e.count} ${e.count === 1 ? t("mención") : "menciones"}`}>{e.name}{e.count > 1 ? ` ×${e.count}` : ""}</Pill></Link>))}</Group>}
+            {((entities.data?.relations.length ?? 0) > 0 || (entities.data?.expired_count ?? 0) > 0) && <>
+              <Title order={5}>{t("Relaciones")}</Title>
+              <Text size="xs" c="dimmed">{t("Hechos del grafo que unen a las entidades de este documento.")}</Text>
+              {(entities.data?.expired_count ?? 0) > 0 && <Check label={t("Incluir hechos que dejaron de ser ciertos")} checked={relExpired} onChange={(e) => { setRelExpired(e.currentTarget.checked); setRelMax(30); }} />}
+              {entities.data!.relations.map((r) => (
+                <ListCard key={r.uuid} invalid={r.status === "invalidated"}
+                  tags={<>
+                    <Link to={`/grafo?nodo=${r.source_uuid}`} className="ms-nolink"><Pill size="xs">{r.source}</Pill></Link>
+                    <Text size="xs" className="ms-data">{r.name} →</Text>
+                    <Link to={`/grafo?nodo=${r.target_uuid}`} className="ms-nolink"><Pill size="xs">{r.target}</Pill></Link>
+                    {r.status === "invalidated" && <Pill size="xs" tone="warn">{t("ya no es cierto")}</Pill>}</>}
+                  meta={`${t("desde")} ${fmt(r.valid_at)}${r.invalid_at ? ` → ${fmt(r.invalid_at)}` : ""}`}>{r.fact}</ListCard>))}
+              {(entities.data?.total ?? 0) > (entities.data?.relations.length ?? 0) && <Group><Btn size="row" onClick={() => setRelMax((n) => n + 30)}>{t("Mostrar más")} ({entities.data!.total - entities.data!.relations.length})</Btn></Group>}
+            </>}
             <Title order={5}>{t("Trozos")}</Title>
             {detail.data.chunk_list.map((c) => (
               <ListCard key={c.chunk_idx} title={`#${c.chunk_idx}${c.heading_path ? ` · ${c.heading_path}` : ""}${c.page ? ` · p. ${c.page}` : ""}`}

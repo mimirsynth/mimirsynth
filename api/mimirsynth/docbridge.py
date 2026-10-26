@@ -1,6 +1,7 @@
 """Puentes entre la memoria documental y el grafo: qué entidades menciona un documento, qué documentos mencionan una entidad,
 y «promover a memoria» (convertir un pasaje en una propuesta en cuarentena para extraer hechos con Graphiti).
 El documento sigue siendo la fuente de verdad: enlazar es solo señalar, no escribe nada en el grafo."""
+import logging
 import re
 import time
 from datetime import timezone
@@ -10,10 +11,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from . import docindex, docstore, index
-from .db import graph, rows
+from .db import fact_status, graph, rows
 from .deps import BrainCtx, contributor_of_brain, reader
+from .graphapi import FACT_RETURN
 from .models import Document, Proposal
 from .proposals import ProposalIn, _out, create
+from .vocab import alias_map, resolve
+
+log = logging.getLogger("mimirsynth.docbridge")
 
 router = APIRouter(prefix="/api/brains/{slug}/docs")
 _CACHE: dict[str, tuple[float, list[dict]]] = {}
@@ -59,6 +64,26 @@ def find_mentions(text: str, ents: list[dict]) -> list[dict]:
     return sorted(out.values(), key=lambda x: (-x["count"], x["name"]))
 
 
+def relations_between(graph_name: str, uuids: list[str], amap: dict | None = None, expired: bool = False, limit: int = 30) -> dict:
+    """Hechos del grafo que unen dos de las entidades dadas («A —relación→ B»). Una sola consulta, sin LLM ni embeddings.
+    Por defecto solo los vigentes; `expired_count` dice cuántos hechos caducados hay, para ofrecer verlos. `total` cuenta los que cumplen el filtro."""
+    if len(uuids) < 2:
+        return {"relations": [], "total": 0, "expired_count": 0}
+    res = graph(graph_name).query(
+        f"MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE a.uuid IN $ids AND b.uuid IN $ids AND a.uuid <> b.uuid RETURN {FACT_RETURN} "
+        "ORDER BY coalesce(r.valid_at, r.created_at) DESC LIMIT 500", {"ids": uuids})
+    out, expired_count = [], 0
+    for r in rows(res):
+        status = fact_status(r["valid_at"], r["invalid_at"], r["expired_at"])
+        if status == "invalidated":
+            expired_count += 1
+            if not expired:
+                continue
+        out.append({"uuid": r["uuid"], "source_uuid": r["source_uuid"], "source": r["source"], "target_uuid": r["target_uuid"], "target": r["target"],
+                    "name": resolve(r["name"], amap), "fact": r["fact"] or "", "valid_at": r["valid_at"], "invalid_at": r["invalid_at"], "status": status})
+    return {"relations": out[:limit], "total": len(out), "expired_count": expired_count}
+
+
 def _doc(ctx: BrainCtx, doc_id: int) -> Document:
     d = ctx.db.get(Document, doc_id)
     if not d or d.brain_id != ctx.brain.id:
@@ -67,14 +92,23 @@ def _doc(ctx: BrainCtx, doc_id: int) -> Document:
 
 
 @router.get("/{doc_id:int}/entities")
-def doc_entities(doc_id: int, limit: int = Query(40, ge=1, le=200), ctx: BrainCtx = Depends(reader)):
-    """Entidades del grafo que el documento menciona, de más a menos citadas."""
+def doc_entities(doc_id: int, limit: int = Query(40, ge=1, le=200), relations: int = Query(30, ge=0, le=200), expired: bool = False, ctx: BrainCtx = Depends(reader)):
+    """Entidades del grafo que el documento menciona, de más a menos citadas, y los hechos del grafo que relacionan a unas con otras
+    (solo los vigentes salvo `expired`; un fallo al leerlas no impide ver las entidades)."""
     d = _doc(ctx, doc_id)
+    empty = {"entities": [], "relations": [], "total": 0, "expired_count": 0}
     if not d.text_ref:
-        return {"entities": []}
+        return empty
     p = docstore.resolve(d.text_ref)
     text = p.read_text(encoding="utf-8")[:MAX_TEXT] if p.is_file() else ""
-    return {"entities": find_mentions(text, entities(ctx.brain.graph_name))[:limit]}
+    ents = find_mentions(text, entities(ctx.brain.graph_name))[:limit]
+    rel = {"relations": [], "total": 0, "expired_count": 0}
+    if relations > 0 and len(ents) > 1:
+        try:
+            rel = relations_between(ctx.brain.graph_name, [e["uuid"] for e in ents], alias_map(ctx.db, ctx.brain.id), expired, relations)
+        except Exception as e:  # noqa: BLE001
+            log.warning("no se pudieron leer las relaciones del documento %s: %s", doc_id, e)
+    return {"entities": ents, **rel}
 
 
 @router.get("/mentions")
