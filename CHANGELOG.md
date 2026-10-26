@@ -5,9 +5,11 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- Own MCP server: `POST /api/brains/{slug}/mcp` (Streamable HTTP, stateless) exposes the tools `recall` (reader) and `remember` (contributor) with the same API tokens and roles as the REST API. Only API tokens are accepted, browser origins other than the instance's are rejected, and tool failures are returned to the model as tool errors. See `docs/AGENTS.md`.
+
 ### Changed
 - Type corrector: applying or rejecting in bulk now asks for confirmation with a summary by proposed type, there is a «Reject all visible» action, the result of each action is reported (including how many did not fit the ontology), the confidence is shown as a percentage and a filter can no longer apply rows it has hidden.
-### Changed
 - The request limiter (sign-in, two-factor, password recovery and setup) now keeps its attempts in the database (migration `0018`): it is shared between processes and survives restarts, so restarting the service no longer resets the counters. If the database fails it falls back to an in-memory counter, so access is never left unprotected.
 
 ## [0.5.0] - 2026-10-25
