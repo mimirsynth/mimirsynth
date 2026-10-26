@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+
+## [0.7.0] - 2026-10-26
 ### Added
 - **Notifications**: a bell in the sidebar with the alerts you can see (instance administrators see all; curators see their brains') and, for administrators, channels to send them to: **Telegram**, **ntfy**, **Gotify**, **webhook** (optionally signed with HMAC-SHA256) and **email**. Events: AI model or graph not responding, failed ingestion after its retries, failed job, document source error, account lockout, and new versions (opt-in). Repeated problems are grouped, recoveries are announced, channels filter by severity and event, quiet hours hold non-critical alerts, and failed deliveries retry with growing waits and can be retried by hand. Alerts never include memory content. Channel secrets are stored encrypted; links to the cloud metadata address are always refused. Migration `0021`. See `docs/NOTIFICATIONS.md`.
 - **Passkeys (WebAuthn)**: add them in My account → Security and sign in with your device's fingerprint, face or PIN, or use them as the second step after the password. They require user verification, so a passkey counts as two-factor, also when the administrator makes two-factor mandatory. Only the public key is stored; the sign counter detects cloned keys; challenges are single-use. Removing one asks for the password and never leaves an account without a way in; an administrator's two-factor reset also removes the person's passkeys. New dependency `webauthn` and migration `0020`. Needs `MIMIRSYNTH_PUBLIC_URL` over HTTPS. See `docs/CONFIGURATION.md`.
