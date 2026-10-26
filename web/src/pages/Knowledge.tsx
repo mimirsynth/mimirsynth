@@ -66,7 +66,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const sv = useTableView(sources.data?.sources ?? [], {
     name: { get: (x: Source) => x.name }, kind: { get: (x: Source) => (x.kind === "upload" ? "subidas" : x.kind === "wiki" ? "wiki" : "carpeta"), exact: true }, docs: { get: (x: Source) => x.documents },
     state: { get: (x: Source) => (x.status === "scanning" ? "escaneando" : x.status === "error" ? t("con error") : !x.enabled ? "pausada" : t("al día")), exact: true }, last: { get: (x: Source) => x.last_sync_at ?? "" } });
-  const [editSrc, setEditSrc] = useState<{ s: Source; name: string; interval: number | ""; subpath: string; values: Record<string, string> } | null>(null);
+  const [editSrc, setEditSrc] = useState<{ s: Source; name: string; interval: number | ""; subpath: string; values: Record<string, string>; picked: string[] | null } | null>(null);
   const hits = useQuery({ queryKey: ["docs-search", graph, query], enabled: query.length >= 2, queryFn: () => get<{ enabled: boolean; results: Hit[] }>("docs/search", { graph, q: query, k: 8 }) });
   const detail = useQuery({ queryKey: ["doc", graph, open], enabled: open !== null, queryFn: () => get<Doc & { chunk_list: Chunk[] }>(`docs/${open}`, { graph, chunks: 200 }) });
   const context = useQuery({ queryKey: ["doc-ctx", graph, ctxOf?.document_id, ctxOf?.chunk], enabled: !!ctxOf,
@@ -83,13 +83,15 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const addSrc = useMutation({ mutationFn: (b: NonNullable<typeof newSrc>) => send("POST", "docs/sources", { name: b.name, root: b.root, subpath: b.subpath, sync_interval: b.interval === "" ? null : b.interval }, { graph }), onSuccess: () => { setNewSrc(null); refreshSrc(); } });
   const adapters = useQuery({ queryKey: ["wiki-adapters", graph], enabled: isAdmin && instanceAdmin, queryFn: () => get<{ adapters: Adapter[] }>("docs/wiki/adapters", { graph }) });
   const ad = adapters.data?.adapters.find((a) => a.id === wiki?.adapter);
+  const srcCols = useQuery({ queryKey: ["wiki-src-cols", graph, editSrc?.s.id], enabled: !!editSrc && editSrc.s.kind === "wiki" && instanceAdmin, retry: false, staleTime: 0,
+    queryFn: () => get<{ collections: { id: string; name: string; description: string }[]; selected: string[] }>(`docs/sources/${editSrc!.s.id}/wiki/collections`, { graph }) });
   const connect = useMutation({ mutationFn: (w: NonNullable<typeof wiki>) => send<{ collections: { id: string; name: string; description: string }[] }>("POST", "docs/wiki/collections", { adapter: w.adapter, values: w.values }, { graph }),
     onSuccess: (r) => setWiki((w) => (w ? { ...w, cols: r.collections, picked: r.collections.map((c) => c.id) } : w)) });
   const addWiki = useMutation({ mutationFn: (w: NonNullable<typeof wiki>) => send("POST", "docs/sources/wiki", { adapter: w.adapter, values: w.values, name: w.name, collection_ids: w.picked, sync_interval: w.interval === "" ? null : w.interval }, { graph }),
     onSuccess: () => { setWiki(null); refreshSrc(); } });
   const saveSrc = useMutation({ mutationFn: (e: NonNullable<typeof editSrc>) => send("PATCH", `docs/sources/${e.s.id}`, {
       name: e.name.trim(), ...(e.interval === "" ? { clear_interval: true } : { sync_interval: Number(e.interval) }), ...(e.s.kind === "directory" ? { subpath: e.subpath } : {}),
-      ...(e.s.kind === "wiki" && Object.values(e.values).some((v) => v.trim()) ? { values: e.values } : {}) }, { graph }),
+      ...(e.s.kind === "wiki" && Object.values(e.values).some((v) => v.trim()) ? { values: e.values } : {}), ...(e.s.kind === "wiki" && e.picked ? { collection_ids: e.picked } : {}) }, { graph }),
     onSuccess: () => { setEditSrc(null); refreshSrc(); } });
   const scanSrc = useMutation({ mutationFn: (id: number) => send("POST", `docs/sources/${id}/scan`, undefined, { graph }), onSuccess: refreshSrc });
   const toggleSrc = useMutation({ mutationFn: (s: Source) => send("PATCH", `docs/sources/${s.id}`, { enabled: !s.enabled }, { graph }), onSuccess: refreshSrc });
@@ -225,7 +227,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                     <DataTable.Td>{isAdmin && s.kind !== "upload" && (
                       <Group gap={6} wrap="nowrap">
                         <Btn size="row" icon="refresh" loading={scanSrc.isPending && scanSrc.variables === s.id} disabled={s.status === "scanning"} onClick={() => scanSrc.mutate(s.id)}>{t("Escanear")}</Btn>
-                        <Btn size="row" icon="edit" onClick={() => { saveSrc.reset(); setEditSrc({ s, name: s.name, interval: s.sync_interval ?? "", subpath: s.config.subpath ?? "", values: {} }); }}>{t("Editar")}</Btn>
+                        <Btn size="row" icon="edit" onClick={() => { saveSrc.reset(); setEditSrc({ s, name: s.name, interval: s.sync_interval ?? "", subpath: s.config.subpath ?? "", values: {}, picked: null }); }}>{t("Editar")}</Btn>
                         <Btn size="row" icon={s.enabled ? "pause" : "play"} onClick={() => toggleSrc.mutate(s)}>{s.enabled ? t("Pausar") : t("Reanudar")}</Btn>
                         <Btn kind="danger" size="row" icon="trash" onClick={() => setDelSrc(s)}>{t("Quitar")}</Btn>
                       </Group>)}</DataTable.Td>
@@ -294,8 +296,24 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             {editSrc.s.kind === "directory" && <TextField label={t("Subcarpeta")} description={t("Dentro de la raíz «{{root}}». Cambiarla reindexa lo que quede fuera o dentro en el próximo escaneo.", { root: editSrc.s.config.root })} value={editSrc.subpath} onChange={(e) => setEditSrc({ ...editSrc, subpath: e.currentTarget.value })} />}
             {editSrc.s.kind === "wiki" && instanceAdmin && (adapters.data?.adapters.find((a) => a.id === editSrc.s.config.adapter)?.fields ?? []).filter((f) => f.secret).map((f) => (
               <PasswordField key={f.name} label={t("{{label}} (opcional)", { label: f.label })} description={t("Vacío = conservar la guardada. Si escribes una nueva se comprueba la conexión antes de guardar.")} value={editSrc.values[f.name] ?? ""} onChange={(e) => setEditSrc({ ...editSrc, values: { ...editSrc.values, [f.name]: e.currentTarget.value } })} />))}
+            {editSrc.s.kind === "wiki" && instanceAdmin && (() => {
+              const label = adapters.data?.adapters.find((a) => a.id === editSrc.s.config.adapter)?.collection_label ?? t("Colecciones");
+              const all = srcCols.data?.collections.map((c) => c.id) ?? [];
+              const current = editSrc.picked ?? (srcCols.data?.selected.length ? srcCols.data.selected : all);
+              return (
+                <Stack gap={4}>
+                  <Text size="sm" fw={600}>{label}</Text>
+                  <Text size="xs" c="dimmed">{t("Cuáles se indexan. Las que quites dejan de indexarse y sus páginas se retiran en el próximo escaneo.")}</Text>
+                  {srcCols.isLoading && <Text size="xs" c="dimmed">{t("Conectando con la wiki…")}</Text>}
+                  {srcCols.error && <Notice tone="warn">{(srcCols.error as Error).message}</Notice>}
+                  {srcCols.data?.collections.map((c) => (
+                    <Check key={c.id} label={c.name} description={c.description || undefined} checked={current.includes(c.id)}
+                      onChange={(e) => setEditSrc({ ...editSrc, picked: e.currentTarget.checked ? [...current, c.id] : current.filter((x) => x !== c.id) })} />))}
+                  {editSrc.picked && editSrc.picked.length === 0 && <Notice tone="warn">{t("Elige al menos una.")}</Notice>}
+                </Stack>);
+            })()}
             <MutationError error={saveSrc.error} />
-            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5)} onClick={() => saveSrc.mutate(editSrc)}>{t("Guardar")}</Btn></Group>
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5) || (!!editSrc.picked && editSrc.picked.length === 0)} onClick={() => saveSrc.mutate(editSrc)}>{t("Guardar")}</Btn></Group>
           </Stack>)}
       </Modal>
       <Modal opened={!!wiki} onClose={() => setWiki(null)} title={t("Añadir wiki")}>

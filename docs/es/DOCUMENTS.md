@@ -158,7 +158,7 @@ Un documento de carpeta no se borra suelto (reaparecería): se quita la fuente, 
 ## Wikis
 
 Una fuente de tipo `wiki` lee las páginas de una wiki por su API, en solo lectura, y las trata como cualquier otro documento (troceado, índice, recall, cola de trabajos).
-La primera implementación es Outline (`wikis.Outline`).
+Las implementaciones son Outline (`wikis.Outline`, medida contra una instancia real), Confluence (Cloud y Data Center) y Notion (`wikis.Confluence`, `wikis.Notion`). Estas dos están escritas contra el formato documentado de cada API y cubiertas por tests con respuestas simuladas, **sin validar aún contra una instancia real**: si usas una, revisa el primer escaneo y avisa de cualquier problema. Docmost no tiene todavía una API pública documentada en la que apoyarse y queda sin escribir.
 - **Conexión:** URL de la instancia y clave de API. La clave se guarda cifrada (`secretbox`) y no se devuelve nunca por la API. Se recomienda una clave de Outline limitada a
   `documents.list` y `collections.list`. Se eligen las colecciones a indexar tras comprobar la conexión.
 - **Solo el administrador de la instancia** conecta o cambia una wiki (nunca un token): el servidor hace peticiones a la URL que se le da.
@@ -182,6 +182,8 @@ class Confluence(Adapter):
     def documents(self, ids): ...         # yield WikiDoc(id, title, content, updated_at, url, collection, format="markdown"|"html")
 ```
 
+El `content` de un `WikiDoc` puede ser una función en vez de un texto: el escaneo la llama solo para las páginas nuevas o cambiadas, así los adaptadores cuyo contenido cuesta una petición por página (Notion) no lo descargan todo en cada escaneo.
+
 Reglas del contrato: solo lectura; sin estado; `updated_at` es la fecha de última modificación de la página (es lo que decide si se reindexa); `format` es `markdown` o `html`
 (el extractor ya lee ambos, así que Confluence puede devolver su HTML tal cual); un error de conexión o de permisos se lanza como `WikiError` con un mensaje legible,
 y cortar la lista a mitad nunca borra nada. Lo demás (cifrado de los campos `secret`, elección de colecciones, sincronización incremental, instantánea del original,
@@ -191,9 +193,10 @@ progreso en Trabajos, protección contra vaciados) es común. La configuración 
 - **Outline:** hecho y probado con una instancia real.
 - **Obsidian:** no necesita adaptador. Un vault es una carpeta de Markdown: se usa como fuente de directorio. El extractor entiende sus convenciones: quita el frontmatter YAML
   (usa su `title:`), deja el texto de los `[[enlaces]]` y `[[destino|alias]]`, y descarta `![[incrustaciones]]`, `%%comentarios%%` y marcas `^bloque`. `.obsidian/` se ignora por ser oculta.
-- **Confluence (Cloud y Data Center), Docmost, Notion:** previstos y no escritos. Cada uno encaja en el contrato; hace falta una instancia o token de prueba para validarlos antes de darlos por buenos.
-  Notas de diseño: Confluence devuelve HTML (`body.storage`) y pagina con `_links.next`; Notion no tiene páginas en Markdown y exige convertir bloques recursivamente (más trabajo);
-  la API de Docmost no está documentada de forma estable.
+- **Confluence (Cloud y Data Center) y Notion:** escritos contra el formato documentado de cada API y cubiertos por tests con respuestas simuladas; **sin validar aún contra una instancia real**.
+  Confluence usa la API REST v1 (`/rest/api`): Cloud con correo + token de API, Data Center con un token de acceso personal sin correo; las colecciones son los espacios y las páginas llegan como HTML (`body.storage`).
+  Notion no tiene espacios: las colecciones son las bases de datos compartidas con la integración más «Páginas sueltas»; los bloques de cada página se convierten a Markdown y el contenido solo se pide cuando cambió la fecha de modificación.
+- **Docmost:** sin escribir; su API pública no está documentada de forma estable. Se añadirá cuando lo esté o haya una instancia de prueba.
 
 ## Puentes con el grafo
 

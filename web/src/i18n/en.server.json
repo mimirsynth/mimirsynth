@@ -167,6 +167,7 @@
  "la entidad principal no puede estar entre las que se fusionan": "the primary entity cannot be among those being merged",
  "la fuente de subidas no se edita": "the uploads source cannot be edited",
  "la fuente de subidas no se elimina": "the uploads source cannot be removed",
+ "la fuente no es una wiki": "the source is not a wiki",
  "la fusión falló: {{e}}": "the merge failed: {{e}}",
  "la instancia ya tiene un administrador": "the instance already has an administrator",
  "la parte supera el tamaño máximo": "the part exceeds the maximum size",

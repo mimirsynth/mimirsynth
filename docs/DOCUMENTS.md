@@ -106,4 +106,7 @@ Contract rules: read-only; stateless; `updated_at` is the page's last modificati
 **Adapter status**
 - **Outline:** done and tested against a real instance.
 - **Obsidian:** needs no adapter. A vault is a folder of Markdown: use it as a directory source. The extractor understands its conventions (frontmatter, `[[links]]`, `![[embeds]]`, comments).
-- **Confluence, Docmost, Notion:** planned, not written yet. Each fits the contract; a test instance or token is needed to validate them.
+- **Confluence** (Cloud and Data Center) and **Notion:** written against each API's documented format and covered by tests with simulated responses, **not yet validated against a live instance**: if you use one, check the first scan and report problems. Confluence uses the REST v1 API (`/rest/api`): Cloud takes email + API token, Data Center a personal access token with no email; collections are spaces and pages come as storage-format HTML. Notion has no spaces, so the collections are the databases shared with the integration plus «Loose pages»; each page's blocks are converted to Markdown, and page content is only fetched when its modification date changed.
+- **Docmost:** not written. It has no documented public API to build on yet; it will be added when one is stable or a test instance is available.
+
+A `WikiDoc.content` may be a function instead of a string: the scan calls it only for pages that are new or changed, so adapters whose content costs one request per page (Notion) do not re-download everything on every scan.
