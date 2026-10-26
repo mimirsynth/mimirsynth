@@ -186,6 +186,20 @@ def wiki_collections(body: WikiConn, request: Request, ctx: BrainCtx = Depends(a
         raise HTTPException(400, str(e))
 
 
+@router.get("/sources/{sid:int}/wiki/collections")
+def source_wiki_collections(sid: int, request: Request, ctx: BrainCtx = Depends(admin_of_brain)):
+    """Colecciones disponibles ahora en una wiki ya conectada (con las credenciales guardadas), para cambiar cuáles se indexan sin volver a escribirlas."""
+    _need_instance_admin(ctx, request)
+    s = _src(ctx, sid)
+    if s.kind != "wiki":
+        raise HTTPException(409, "la fuente no es una wiki")
+    cfg = s.config or {}
+    try:
+        return {"collections": wikis.make(cfg.get("adapter", ""), wiki_values(cfg)).collections(), "selected": cfg.get("collection_ids") or []}
+    except wikis.WikiError as e:
+        raise HTTPException(400, str(e))
+
+
 @router.post("/sources/wiki", status_code=201)
 def create_wiki(body: WikiIn, request: Request, ctx: BrainCtx = Depends(admin_of_brain)):
     _need_instance_admin(ctx, request)
@@ -371,10 +385,11 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
                 to_index.append(d.id)
             continue
         html = pg.format == "html"
-        text = f"<h1>{_esc(pg.title)}</h1>\n{pg.content.strip()}\n" if html else f"# {pg.title}\n\n{pg.content.strip()}\n"
+        body = pg.read().strip()  # solo ahora se descarga el contenido: una página sin cambios no cuesta ninguna petición
+        text = f"<h1>{_esc(pg.title)}</h1>\n{body}\n" if html else f"# {pg.title}\n\n{body}\n"
         data = text.encode("utf-8")
         sha = hashlib.sha256(data).hexdigest()
-        if not pg.content.strip():
+        if not body:
             unchanged += 1  # página vacía: no hay nada que indexar
             continue
         meta = {"collection": pg.collection, "title_auto": False}
