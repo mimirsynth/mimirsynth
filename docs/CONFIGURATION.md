@@ -27,7 +27,7 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.
 - **LLM model:** extracts entities and facts when proposals are ingested. For "reasoning" models that return empty JSON, use a proxy that disables *thinking*.
 - **Embeddings:** model and dimension **cannot be changed** once the index exists (vectors depend on the model). It must be the same one Graphiti uses on that FalkorDB.
-- **Decider:** closed-decision model (with probabilities) for proposal triage and the type corrector. It only approves what is factual with enough confidence; it never rejects on its own.
+- **Decider:** closed-decision model (with probabilities) for proposal triage and the type corrector. It only approves what is factual with enough confidence; it never rejects on its own. It assumes no domain: it judges each proposal against the brain's scope, built from the brain's **description** (Administration → Brain access → Edit) and the entity and relation types of its ontology. A proposal that does not fit that scope goes to a curator. Without description or ontology, it only checks that the proposal is a factual statement with no instructions for the system.
 
 ## Accounts and security
 - **Users:** Administration → Users. Sign-up by invitation (single-use link) or with a temporary password; roles, brains, disable, reset and delete.

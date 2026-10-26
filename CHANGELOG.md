@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Changed
+- The decider no longer assumes an infrastructure domain. Triage used to ask whether a proposal was "a factual statement about the infrastructure"; it now judges it against the brain's scope (its description and the entity and relation types of its ontology), and without either only checks that it is factual. The type corrector's questions are generic too. It still never rejects on its own: what does not fit goes to a curator. The brain description can now be edited when creating or editing a brain.
 
 ## [0.7.0] - 2026-10-26
 ### Added
