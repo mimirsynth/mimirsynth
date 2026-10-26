@@ -5,6 +5,9 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- First step towards changing the embedding model (#48): a resumable background job computes, with the new engine and without touching the vectors in use, every vector of every brain in shadow (entity and fact embeddings in FalkorDB, `episode_chunks` and `doc_chunks` in pgvector with their own HNSW index). API only for now: estimate (pending items, engine calls, memory; refuses to start without enough free memory in FalkorDB), start, progress, cancel, retry and discard. Batch size and pause between batches are configurable and `Retry-After` is honoured on 429. Cancelling or discarding removes every shadow property, column and index. Swapping the vectors and the interface will come in later steps. See `docs/CONFIGURATION.md`.
+
 ### Changed
 - The decider no longer assumes an infrastructure domain. Triage used to ask whether a proposal was "a factual statement about the infrastructure"; it now judges it against the brain's scope (its description and the entity and relation types of its ontology), and without either only checks that it is factual. The type corrector's questions are generic too. It still never rejects on its own: what does not fit goes to a curator. The brain description can now be edited when creating or editing a brain.
 

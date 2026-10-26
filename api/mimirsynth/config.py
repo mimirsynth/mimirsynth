@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     embedding_dim: int = 768
     ingest_concurrency: int = 2  # llamadas simultáneas al LLM por ingesta (graphiti SEMAPHORE_LIMIT); bajo para respetar el límite de tasa del gateway
     ingest_retries: int = 4  # intentos si el LLM responde con límite de tasa
+    reindex_batch: int = 64  # textos por lote al recalcular embeddings con otro modelo
+    reindex_pause: float = 0.0  # segundos de pausa entre lotes al recalcular embeddings (para respetar el límite de tasa del proveedor)
     llm_base_url: str = ""  # OpenAI-compatible; vacío = ingesta desactivada
     llm_api_key: str = ""
     llm_model: str = ""

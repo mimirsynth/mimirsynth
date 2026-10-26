@@ -62,6 +62,8 @@ REGISTRY: list[Def] = [
     Def("doc_search_timeout", "recall", "Tiempo máximo de la búsqueda documental", "Si tarda más, el recall responde sin documentos.", "float", "s", 0.1, 10),
     Def("index_sync_minutes", "recall", "Sincronización del índice de texto", "Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada.", "int", "min", 0, 1440),
     Def("ingest_retries", "ingest", "Reintentos de la ingesta", "Intentos cuando el modelo responde con límite de tasa o un error transitorio.", "int", "", 1, 20),
+    Def("reindex_batch", "ingest", "Lote al cambiar de modelo de embeddings", "Textos por lote al recalcular los vectores con otro modelo. Más pequeño reparte mejor la carga en el proveedor.", "int", "textos", 1, 512),
+    Def("reindex_pause", "ingest", "Pausa entre lotes al cambiar de modelo", "Segundos de espera entre lotes para respetar el límite de tasa del proveedor. Con un 429 se espera además lo que indique Retry-After.", "float", "s", 0, 600),
     Def("jobs_keep_days", "ingest", "Conservar trabajos terminados", "Pasado este plazo se borran los trabajos terminados, fallidos y cancelados.", "int", "días", 1, 3650),
     Def("jobs_keep_scheduled_days", "ingest", "Conservar reescaneos programados", "Los reescaneos automáticos sin incidencias son ruido (uno cada pocos minutos): se borran antes.", "int", "días", 1, 365),
     Def("notify_cooldown_minutes", "notifications", "Aviso repetido", "Mientras un problema siga abierto no se vuelve a avisar por los canales hasta pasado este plazo (en la campana solo suma una repetición). Un problema resuelto avisa de la recuperación.", "int", "min", 1, 10080),
