@@ -18,7 +18,7 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | empty | Existing graphs to adopt as brains on first start (`slug:Name,other:Other`) |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (own accounts, optional OIDC) or `off` (development only, no sign-in) |
-| `MIMIRSYNTH_PUBLIC_URL` | empty | Public URL, for OIDC and invitation links |
+| `MIMIRSYNTH_PUBLIC_URL` | empty | Public URL, for OIDC, invitation links and **passkeys** (its domain is the passkeys' relying-party ID: set it, over HTTPS, before anyone registers one) |
 | `MIMIRSYNTH_COOKIE_SECURE` | `false` | `true` if you serve over HTTPS |
 | `MIMIRSYNTH_EMBEDDING_*`, `MIMIRSYNTH_LLM_*` | empty | Default engines if none is configured in the interface yet |
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Host folder mounted read-only at `/sources` |
@@ -31,6 +31,7 @@ Under **Administration → LLM model / Embeddings / Decider**. Each engine is an
 
 ## Accounts and security
 - **Users:** Administration → Users. Sign-up by invitation (single-use link) or with a temporary password; roles, brains, disable, reset and delete.
+- **Passkeys:** each person can add passkeys (WebAuthn) in My account → Security to sign in with their device's fingerprint, face or PIN, or to use as the second step after the password. A passkey requires user verification, so it counts as two-factor, including when the administrator makes two-factor mandatory. A passkey only works on the domain it was created on (the `MIMIRSYNTH_PUBLIC_URL` host); changing the domain invalidates them, so keep the password as a fallback. An administrator's «reset two-factor» on a user also removes their passkeys.
 - **Account security:** minimum password length, lockout after failed attempts, link validity and **mandatory two-factor**.
 - **Email (SMTP):** needed to send invitations and recover passwords by email. Without it, the administrator copies the links from the user's page.
 - **Identity (OIDC):** a list of sign-in providers; you can add several, and each shows its own button on the sign-in screen. Every provider has its own issuer, Client ID, secret, scopes, automatic sign-up policy (by email domain) and group-based roles. Roles granted by a group are revoked when the person leaves the group (never those set by hand, and never the last administrator). People can link several providers to their account from My account → Security. Each one shows the return URL to register at the provider and lets you test the connection. By default only people who already have an account or invitation with the same verified email can sign in. The `MIMIRSYNTH_OIDC_*` variables and the old single-provider settings are imported once, when upgrading to 0.5, as the provider `oidc` (same return URL, `/api/auth/callback`); after that, manage them only here.

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from . import appsettings, brand, passwords, ratelimit, secretbox, totp
 from .deps import audit, current_user
-from .models import RecoveryCode, User, now
+from .models import Passkey, RecoveryCode, User, now
 from .store import get_db
 
 router = APIRouter(prefix="/api/me/2fa")
@@ -37,9 +37,12 @@ def check_second_factor(db: Session, u: User, code: str) -> bool:
     return False
 
 
-def clear(db: Session, u: User) -> None:
+def clear(db: Session, u: User, passkeys: bool = False) -> None:
+    """Quita el TOTP y los códigos de recuperación; con `passkeys`, también las llaves de acceso (reinicio por un administrador o baja de la cuenta)."""
     u.totp_secret, u.totp_enabled, u.totp_last_step = "", False, 0
     db.execute(delete(RecoveryCode).where(RecoveryCode.user_id == u.id))
+    if passkeys:
+        db.execute(delete(Passkey).where(Passkey.user_id == u.id))
 
 
 def _issue_codes(db: Session, u: User) -> list[str]:

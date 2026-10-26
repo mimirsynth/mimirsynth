@@ -179,7 +179,7 @@ def test_two_factor_enrol_login_recovery_required_and_reset(client, local):  # n
     # login en dos pasos
     ratelimit.reset()
     c2 = TestClient(app)
-    r = c2.post("/api/auth/login", json={"email": "root@example.com", "password": PW}); assert r.json() == {"ok": True, "mfa": True}
+    r = c2.post("/api/auth/login", json={"email": "root@example.com", "password": PW}); assert r.json() == {"ok": True, "mfa": True, "methods": ["totp"]}
     assert c2.get("/api/me").status_code == 401  # aún sin sesión
     assert c2.post("/api/auth/mfa", json={"code": "123456"}).status_code == 401
     import time

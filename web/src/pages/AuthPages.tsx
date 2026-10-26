@@ -7,9 +7,11 @@ import { useState } from "react";
 import { get, send } from "../api";
 import Logo from "../Logo";
 import { TwoFactor } from "./TwoFactor";
+import { Passkeys } from "./Passkeys";
+import { getPasskey, passkeyError, passkeysSupported } from "../webauthn";
 import { Btn, EmptyState, Form, LanguageSelect, MutationError, Notice, Panel, PasswordField, TextField } from "../ui";
 
-type Options = { local: boolean; oidc: boolean; providers?: { slug: string; name: string }[]; setup: boolean; password_min_length?: number };
+type Options = { local: boolean; passkeys?: boolean; oidc: boolean; providers?: { slug: string; name: string }[]; setup: boolean; password_min_length?: number };
 const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada de alta en esta instancia. Pide a un administrador que te invite."), disabled: T("Tu cuenta está deshabilitada. Contacta con un administrador.") };
 
 function Card({ name, subtitle, children }: { name: string; subtitle?: string; children: React.ReactNode }) {
@@ -46,7 +48,14 @@ export function AuthScreen({ name }: { name: string }) {
   const [uname, setUname] = useState(""); const [code, setCode] = useState("");
   const pair = usePasswordPair();
   const done = () => qc.invalidateQueries({ queryKey: ["me"] });
-  const login = useMutation({ mutationFn: () => send<{ mfa?: boolean }>("POST", "auth/login", { email, password }), onSuccess: (d) => { if (d.mfa) { setMode("mfa"); setOtp(""); } else done(); } });
+  const [methods, setMethods] = useState<string[]>([]);
+  const login = useMutation({ mutationFn: () => send<{ mfa?: boolean; methods?: string[] }>("POST", "auth/login", { email, password }), onSuccess: (d) => { if (d.mfa) { setMethods(d.methods ?? ["totp"]); setMode("mfa"); setOtp(""); } else done(); } });
+  const pk = useMutation({
+    mutationFn: async (second: boolean) => {
+      const o = await send<Record<string, unknown>>("POST", second ? "auth/passkey/mfa/options" : "auth/passkey/options");
+      return send("POST", second ? "auth/passkey/mfa" : "auth/passkey/login", { credential: await getPasskey(o) });
+    },
+    onSuccess: done });
   const mfa = useMutation({ mutationFn: () => send("POST", "auth/mfa", { code: otp }), onSuccess: done });
   const setup = useMutation({ mutationFn: () => send("POST", "auth/setup", { code, email, name: uname, password: pair.pw }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["auth-options"] }); done(); } });
   const forgot = useMutation({ mutationFn: () => send("POST", "auth/forgot", { email }) });
@@ -72,12 +81,18 @@ export function AuthScreen({ name }: { name: string }) {
   if (mode === "mfa") {
     return (
       <Card name={name} subtitle={t("Verificación en dos pasos")}>
-        <Form onSubmit={() => mfa.mutate()}>
+        {methods.includes("totp") && <Form onSubmit={() => mfa.mutate()}>
           <Text size="sm" c="dimmed">{t("Escribe el código de 6 dígitos de tu app de autenticación, o uno de tus códigos de recuperación.")}</Text>
           <TextField label={t("Código")} autoComplete="one-time-code" inputMode="text" autoFocus value={otp} onChange={(e) => setOtp(e.currentTarget.value)} />
           <MutationError error={mfa.error} />
           <Btn kind="primary" type="submit" fullWidth loading={mfa.isPending} disabled={!otp.trim()}>{t("Verificar")}</Btn>
-        </Form>
+        </Form>}
+        {methods.includes("passkey") && <>
+          {methods.includes("totp") && <Divider label="o" />}
+          {!methods.includes("totp") && <Text size="sm" c="dimmed">{t("Usa tu llave de acceso para terminar de entrar.")}</Text>}
+          <MutationError error={pk.error && passkeyError(pk.error) ? pk.error : null} />
+          <Btn kind={methods.includes("totp") ? undefined : "primary"} fullWidth icon="login" loading={pk.isPending} onClick={() => pk.mutate(true)}>{t("Usar llave de acceso")}</Btn>
+        </>}
         <Btn kind="link" onClick={() => { setMode("login"); setPassword(""); }}>{t("Volver a entrar")}</Btn>
       </Card>
     );
@@ -106,6 +121,11 @@ export function AuthScreen({ name }: { name: string }) {
         <MutationError error={login.error} />
         <Btn kind="primary" type="submit" fullWidth icon="login" loading={login.isPending} disabled={!email || !password}>{t("Entrar")}</Btn>
       </Form>
+      {opts.data.passkeys && passkeysSupported() && <>
+        <Divider label="o" />
+        <MutationError error={pk.error && passkeyError(pk.error) ? pk.error : null} />
+        <Btn fullWidth icon="login" loading={pk.isPending} onClick={() => pk.mutate(false)}>{t("Entrar con llave de acceso")}</Btn>
+      </>}
       <Btn kind="link" onClick={() => setMode("forgot")}>{t("¿Has olvidado la contraseña?")}</Btn>
       {!!opts.data.providers?.length && <><Divider label="o" />{opts.data.providers.map((p) => <Btn key={p.slug} component="a" href={`/api/auth/login/${p.slug}`} fullWidth icon="login">{t("Entrar con {{name}}", { name: p.name })}</Btn>)}</>}
     </Card>
@@ -163,6 +183,8 @@ export function TwoFactorSetupScreen({ name }: { name: string }) {
   return (
     <Card name={name} subtitle={t("El administrador exige verificación en dos pasos")}>
       <TwoFactor onChange={() => qc.invalidateQueries({ queryKey: ["me"] })} />
+      <Divider label={t("o")} />
+      <Passkeys hasPassword={true} onChange={() => qc.invalidateQueries({ queryKey: ["me"] })} />
       <Btn kind="link" loading={out.isPending} onClick={() => out.mutate()}>{t("Salir")}</Btn>
     </Card>
   );

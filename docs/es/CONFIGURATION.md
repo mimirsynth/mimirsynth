@@ -18,7 +18,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | vacío | Grafos existentes a adoptar como brains en el primer arranque (`slug:Nombre,otro:Otro`) |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, OIDC opcional) o `off` (solo desarrollo, sin inicio de sesión) |
-| `MIMIRSYNTH_PUBLIC_URL` | vacío | URL pública, para OIDC y enlaces de invitación |
+| `MIMIRSYNTH_PUBLIC_URL` | vacío | URL pública, para OIDC, enlaces de invitación y **llaves de acceso** (su dominio es el identificador de la parte confiante: defínela, con HTTPS, antes de que nadie registre una) |
 | `MIMIRSYNTH_COOKIE_SECURE` | `false` | `true` si sirves por HTTPS |
 | `MIMIRSYNTH_EMBEDDING_*`, `MIMIRSYNTH_LLM_*` | vacío | Motores por defecto si aún no hay ninguno configurado en la interfaz |
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del host montada en solo lectura en `/sources` |
@@ -31,6 +31,7 @@ En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un e
 
 ## Cuentas y seguridad
 - **Usuarios:** Administración → Usuarios. Alta por invitación (enlace de un solo uso) o con contraseña temporal; roles, brains, deshabilitar, restablecer y eliminar.
+- **Llaves de acceso:** cada persona puede añadir llaves de acceso (WebAuthn) en Mi cuenta → Seguridad para entrar con la huella, el rostro o el PIN de su dispositivo, o usarlas como segundo paso tras la contraseña. Una llave exige verificación de usuario, así que cuenta como doble factor, también cuando el administrador lo hace obligatorio. Una llave solo funciona en el dominio donde se creó (el de `MIMIRSYNTH_PUBLIC_URL`); cambiar de dominio las invalida, así que conviene mantener la contraseña como respaldo. «Reiniciar doble factor» de un administrador sobre una persona también le quita sus llaves.
 - **Seguridad de cuentas:** longitud mínima de contraseña, bloqueo tras intentos fallidos, validez de los enlaces y **doble factor obligatorio**.
 - **Correo (SMTP):** necesario para enviar invitaciones y recuperar contraseñas por email. Sin él, el administrador copia los enlaces desde la ficha del usuario.
 - **Identidad (OIDC):** lista de proveedores de inicio de sesión; puedes añadir varios y cada uno muestra su propio botón en la pantalla de entrada. Cada proveedor tiene su emisor, Client ID, secreto, scopes, política de alta automática (por dominio de email) y roles por grupo. Los roles concedidos por un grupo se retiran cuando la persona deja el grupo (nunca los puestos a mano ni el del último administrador). Cada persona puede vincular varios proveedores a su cuenta desde Mi cuenta → Seguridad. Cada uno muestra la URL de retorno a registrar en el proveedor y permite probar la conexión. Por defecto solo entra quien ya tiene cuenta o invitación con el mismo email verificado. Las variables `MIMIRSYNTH_OIDC_*` y los ajustes antiguos de un único proveedor se importan una sola vez, al actualizar a la 0.5, como el proveedor `oidc` (misma URL de retorno, `/api/auth/callback`); a partir de ahí se gestionan solo aquí.

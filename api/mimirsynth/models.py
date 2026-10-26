@@ -94,6 +94,21 @@ class RecoveryCode(Base):
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class Passkey(Base):
+    """Llave de acceso (WebAuthn) de una cuenta: la clave pública y el contador; la privada nunca sale del autenticador."""
+    __tablename__ = "passkeys"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    credential_id: Mapped[str] = mapped_column(String(1024), unique=True)  # base64url
+    public_key: Mapped[str] = mapped_column(Text)  # COSE, base64url
+    sign_count: Mapped[int] = mapped_column(Integer, default=0)
+    name: Mapped[str] = mapped_column(String(80), default="")
+    transports: Mapped[list] = mapped_column(JSON, default=list)
+    backed_up: Mapped[bool] = mapped_column(Boolean, default=False)  # sincronizada (gestor de contraseñas, nube del sistema)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class UserToken(Base):
     """Enlace de un solo uso para aceptar una invitación o restablecer la contraseña; se guarda solo el hash."""
     __tablename__ = "user_tokens"

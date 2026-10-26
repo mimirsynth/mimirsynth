@@ -54,9 +54,9 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
 
 
 def needs_2fa_setup(request: Request, u: User) -> bool:
-    """El administrador exige doble factor y esta sesión (entrada con contraseña) aún no lo tiene. Las entradas por OIDC se fían del proveedor."""
+    """El administrador exige doble factor y esta sesión (entrada con contraseña) aún no lo tiene. Las entradas por OIDC se fían del proveedor; una llave de acceso ya es doble factor."""
     from . import appsettings
-    return appsettings.get("require_2fa") == "yes" and not u.totp_enabled and request.session.get("m") != "oidc"
+    return appsettings.get("require_2fa") == "yes" and not u.totp_enabled and request.session.get("m") not in ("oidc", "passkey", "mfa")
 
 
 def require_admin(request: Request, user: User = Depends(current_user)) -> User:
