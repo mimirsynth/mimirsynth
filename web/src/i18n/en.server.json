@@ -179,6 +179,7 @@
  "migración abortada, no se ha cambiado nada: {{e}}": "migration aborted, nothing has been changed: {{e}}",
  "min": "min",
  "modo no válido": "invalid mode",
+ "modo no válido (replace o merge)": "invalid mode (replace or merge)",
  "motor no encontrado": "engine not found",
  "no autenticado": "not authenticated",
  "no debe contener tu email ni tu nombre": "it must not contain your email or your name",

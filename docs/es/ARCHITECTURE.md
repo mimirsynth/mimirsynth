@@ -66,7 +66,7 @@ Una consulta combina, sin llamar a un LLM:
 
 ## Vocabulario
 
-La ontología se define por brain (paquetes de partida en `api/mimirsynth/presets/`). La interfaz permite normalizar alias, fusionar duplicados, retipar entidades y editar los tipos de relación; cada cambio es reversible y queda auditado.
+La ontología se define por brain (paquetes estándar en `api/mimirsynth/presets/`, ver [ONTOLOGY.md](ONTOLOGY.md)). La interfaz permite normalizar alias, fusionar duplicados, retipar entidades y editar los tipos de relación; cada cambio es reversible y queda auditado.
 
 ## Trabajos
 

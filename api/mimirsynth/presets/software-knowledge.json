@@ -1,0 +1,390 @@
+{
+ "title": "Software and technical knowledge",
+ "version": 1,
+ "description": "Repositories, applications, components, libraries, APIs, environments, releases, bugs and design decisions (ADRs), with how they depend on each other. For engineering notes and technical documentation.",
+ "standards": [
+  "DOAP (Description of a Project)",
+  "schema.org (SoftwareApplication, SoftwareSourceCode, APIReference)",
+  "Architecture Decision Records (ADR)"
+ ],
+ "entity_types": [
+  {
+   "name": "Repository",
+   "description": "A source code repository. Use for: git repos by name or URL. Not for: the application it builds (Application). Examples: 'org/website', 'infra-config'."
+  },
+  {
+   "name": "Application",
+   "description": "A deployable software product or service that the team builds or runs. Not for: third-party libraries (Library) or the repo (Repository). Examples: 'billing-api', 'mobile app'."
+  },
+  {
+   "name": "Component",
+   "description": "A module, package or subsystem inside an application. Not for: a whole application. Examples: 'auth module', 'payment worker'."
+  },
+  {
+   "name": "Library",
+   "description": "A third-party or shared library, framework or SDK used as a dependency. Not for: the team's own deployable software (Application) or a language (Language). Examples: 'React 19', 'SQLAlchemy', 'pydantic'."
+  },
+  {
+   "name": "Language",
+   "description": "A programming language or runtime. Not for: libraries or frameworks written in it (Library). Examples: 'Python 3.12', 'TypeScript', 'Node 26'."
+  },
+  {
+   "name": "Api",
+   "description": "An interface that other software calls: HTTP endpoints, RPC, MCP tools, events. Not for: the application that offers it (Application). Examples: 'POST /api/recall', 'GraphQL schema'."
+  },
+  {
+   "name": "Environment",
+   "description": "A deployment target: production, staging, a cluster or a region. Not for: a single server or an application. Examples: 'production', 'staging EU'."
+  },
+  {
+   "name": "Release",
+   "description": "A versioned release of an application or library, with its date. Not for: a general change that has no version (Decision). Examples: 'v0.5.0 (2026-10-25)'."
+  },
+  {
+   "name": "Bug",
+   "description": "A defect or incident in software, with its symptom and cause. Use for: reported or found problems. Not for: planned work (Task). Examples: 'login loop on Safari', 'memory leak in worker'."
+  },
+  {
+   "name": "Decision",
+   "description": "A technical or architectural decision with its rationale (ADR). Not for: open questions or plans not yet decided. Examples: 'Use Postgres for the job queue', 'Drop Python 3.9'."
+  },
+  {
+   "name": "Concept",
+   "description": "A technical idea, pattern or standard that is explained in the notes. Not for: concrete software (Application, Library). Examples: 'event sourcing', 'OIDC PKCE flow'."
+  },
+  {
+   "name": "Document",
+   "description": "A spec, README, design doc, RFC or runbook that can be cited. Not for: the thing it describes. Examples: 'ARCHITECTURE.md', 'RFC 6749'."
+  },
+  {
+   "name": "Person",
+   "description": "A developer, maintainer or reporter. Not for: teams or companies (Organization). Examples: 'maintainer Ana'."
+  },
+  {
+   "name": "Organization",
+   "description": "A company or open-source project behind a tool or service. Not for: a single person. Examples: 'GitHub', 'Mozilla'."
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "DependsOn",
+   "description": "A repository, application, component or library requires another to build or run."
+  },
+  {
+   "name": "Uses",
+   "description": "An application or component makes use of a library, language, API or service."
+  },
+  {
+   "name": "WrittenIn",
+   "description": "A repository, application or component is implemented in a language."
+  },
+  {
+   "name": "PartOf",
+   "description": "A component belongs to an application; an application is built from a repository."
+  },
+  {
+   "name": "Implements",
+   "description": "A component or application implements an API, concept or decision."
+  },
+  {
+   "name": "Exposes",
+   "description": "An application or component offers an API."
+  },
+  {
+   "name": "DeployedTo",
+   "description": "An application or release runs in an environment."
+  },
+  {
+   "name": "ReleasedIn",
+   "description": "A change, fix or feature shipped in a release."
+  },
+  {
+   "name": "CausedBy",
+   "description": "A bug was caused by a component, library, release or decision."
+  },
+  {
+   "name": "FixedBy",
+   "description": "A bug was fixed by a release or decision."
+  },
+  {
+   "name": "Affects",
+   "description": "A bug impacts an application, component or environment."
+  },
+  {
+   "name": "Supersedes",
+   "description": "A decision, release or document replaces an earlier one."
+  },
+  {
+   "name": "DocumentedIn",
+   "description": "An entity is described in a document."
+  },
+  {
+   "name": "MaintainedBy",
+   "description": "A person or organization maintains a repository, application or library."
+  },
+  {
+   "name": "RelatesTo",
+   "description": "LAST RESORT. Use only when two entities are clearly associated and no other relation type in the list fits. Never use it when a more specific type applies."
+  }
+ ],
+ "edge_type_map": [
+  {
+   "source": "Application",
+   "target": "Repository",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Application",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Component",
+   "edge_types": [
+    "DependsOn",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Application",
+   "edge_types": [
+    "DependsOn",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Library",
+   "edge_types": [
+    "DependsOn",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Library",
+   "edge_types": [
+    "DependsOn",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Repository",
+   "target": "Library",
+   "edge_types": [
+    "DependsOn"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Language",
+   "edge_types": [
+    "WrittenIn",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Repository",
+   "target": "Language",
+   "edge_types": [
+    "WrittenIn"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Language",
+   "edge_types": [
+    "WrittenIn"
+   ]
+  },
+  {
+   "source": "Library",
+   "target": "Language",
+   "edge_types": [
+    "WrittenIn"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Api",
+   "edge_types": [
+    "Exposes",
+    "Implements",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Api",
+   "edge_types": [
+    "Exposes",
+    "Implements",
+    "Uses"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Concept",
+   "edge_types": [
+    "Implements"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Decision",
+   "edge_types": [
+    "Implements"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Decision",
+   "edge_types": [
+    "Implements"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Environment",
+   "edge_types": [
+    "DeployedTo"
+   ]
+  },
+  {
+   "source": "Release",
+   "target": "Environment",
+   "edge_types": [
+    "DeployedTo"
+   ]
+  },
+  {
+   "source": "Release",
+   "target": "Application",
+   "edge_types": [
+    "ReleasedIn"
+   ]
+  },
+  {
+   "source": "Release",
+   "target": "Library",
+   "edge_types": [
+    "ReleasedIn"
+   ]
+  },
+  {
+   "source": "Bug",
+   "target": "Component",
+   "edge_types": [
+    "CausedBy",
+    "Affects"
+   ]
+  },
+  {
+   "source": "Bug",
+   "target": "Library",
+   "edge_types": [
+    "CausedBy"
+   ]
+  },
+  {
+   "source": "Bug",
+   "target": "Release",
+   "edge_types": [
+    "CausedBy",
+    "FixedBy"
+   ]
+  },
+  {
+   "source": "Bug",
+   "target": "Decision",
+   "edge_types": [
+    "CausedBy",
+    "FixedBy"
+   ]
+  },
+  {
+   "source": "Bug",
+   "target": "Application",
+   "edge_types": [
+    "Affects"
+   ]
+  },
+  {
+   "source": "Bug",
+   "target": "Environment",
+   "edge_types": [
+    "Affects"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Decision",
+   "edge_types": [
+    "Supersedes"
+   ]
+  },
+  {
+   "source": "Release",
+   "target": "Release",
+   "edge_types": [
+    "Supersedes"
+   ]
+  },
+  {
+   "source": "Document",
+   "target": "Document",
+   "edge_types": [
+    "Supersedes"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Document",
+   "edge_types": [
+    "DocumentedIn"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Repository",
+   "edge_types": [
+    "MaintainedBy"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Application",
+   "edge_types": [
+    "MaintainedBy"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Library",
+   "edge_types": [
+    "MaintainedBy"
+   ]
+  },
+  {
+   "source": "Organization",
+   "target": "Application",
+   "edge_types": [
+    "MaintainedBy"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Entity",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  }
+ ],
+ "instructions": "Software and technical notes. Use the MOST SPECIFIC type: a git repo is a Repository, something deployed is an Application, a third-party dependency is a Library, a defect is a Bug, an architectural choice with a reason is a Decision. Extract DependsOn/Uses for dependencies, WrittenIn for languages, DeployedTo for environments, ReleasedIn/FixedBy for versions and fixes, and Supersedes when something replaces an earlier decision or release. Record versions and dates when stated. Never extract secrets, tokens or keys. Use only the listed relation types and prefer a specific one over RelatesTo."
+}

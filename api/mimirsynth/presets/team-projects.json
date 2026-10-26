@@ -1,0 +1,312 @@
+{
+ "title": "Team and projects",
+ "version": 1,
+ "description": "Who is on which team, who owns which project and task, what depends on what, what was decided in which meeting, and what the risks are. For product, engineering or client work.",
+ "standards": [
+  "schema.org (Person, Organization, Project, Event)",
+  "PMBOK/Agile vocabulary (Milestone, Risk, Task, Dependency)"
+ ],
+ "entity_types": [
+  {
+   "name": "Person",
+   "description": "An individual who works on or with the team. Not for: teams (Team) or companies (Organization). Examples: 'Marta Ruiz', 'client contact Jorge'."
+  },
+  {
+   "name": "Team",
+   "description": "A group of people working together inside an organization. Use for: squads, departments, working groups. Not for: the whole company (Organization). Examples: 'Platform team', 'Design guild'."
+  },
+  {
+   "name": "Organization",
+   "description": "A company or institution outside or above the team. Use for: customers, partners, vendors, the employer. Not for: a team inside the company (Team) or a person. Examples: 'Acme Corp', 'Customer: Globex'."
+  },
+  {
+   "name": "Project",
+   "description": "A bounded initiative with a goal and an expected end, usually with several tasks. Not for: single tasks (Task) or recurring operations. Examples: 'Mobile app v2', 'Data migration'."
+  },
+  {
+   "name": "Task",
+   "description": "A concrete unit of work assigned to someone, with a clear outcome. Use for: tickets, issues, to-dos. Not for: whole projects or goals. Examples: 'Write the API spec', 'Fix login timeout'."
+  },
+  {
+   "name": "Milestone",
+   "description": "A dated checkpoint or deliverable in a project. Not for: ordinary tasks (Task) or whole projects. Examples: 'Beta release 2026-06-30', 'Contract signed'."
+  },
+  {
+   "name": "Meeting",
+   "description": "A scheduled gathering with attendees and usually decisions or actions. Not for: ongoing channels or one-person events. Examples: 'Sprint review 42', 'Kick-off with Globex'."
+  },
+  {
+   "name": "Decision",
+   "description": "A decision that was taken and its reason. Not for: open questions. Examples: 'Ship in two phases', 'Adopt Postgres'."
+  },
+  {
+   "name": "Risk",
+   "description": "Something that may go wrong, with its impact or mitigation. Not for: problems that already happened. Examples: 'Vendor delay may push the release'."
+  },
+  {
+   "name": "Document",
+   "description": "A spec, report, proposal, plan or minute that can be cited. Not for: a meeting itself (Meeting). Examples: 'Technical design doc', 'Q3 roadmap'."
+  },
+  {
+   "name": "Topic",
+   "description": "A subject or domain. LAST RESORT: only when nothing more specific fits. Not for: people, teams, projects or tasks. Examples: 'accessibility'."
+  }
+ ],
+ "edge_types": [
+  {
+   "name": "MemberOf",
+   "description": "A person belongs to a team or organization."
+  },
+  {
+   "name": "Leads",
+   "description": "A person leads or manages a team, project or task."
+  },
+  {
+   "name": "AssignedTo",
+   "description": "A task is assigned to a person or team."
+  },
+  {
+   "name": "Owns",
+   "description": "A person or team is accountable for a project, document or deliverable."
+  },
+  {
+   "name": "PartOf",
+   "description": "A task belongs to a project, a project to a larger project, a team to an organization, a milestone to a project."
+  },
+  {
+   "name": "DependsOn",
+   "description": "A task, milestone or project cannot proceed without another."
+  },
+  {
+   "name": "Blocks",
+   "description": "A risk or task prevents another task or milestone from progressing."
+  },
+  {
+   "name": "DecidedIn",
+   "description": "A decision was taken in a meeting."
+  },
+  {
+   "name": "Attends",
+   "description": "A person or team takes part in a meeting."
+  },
+  {
+   "name": "ReportsTo",
+   "description": "A person reports to another person."
+  },
+  {
+   "name": "Mitigates",
+   "description": "A task or decision reduces or handles a risk."
+  },
+  {
+   "name": "Authored",
+   "description": "A person or team wrote a document."
+  },
+  {
+   "name": "MentionedIn",
+   "description": "An entity is referenced in a document or meeting."
+  },
+  {
+   "name": "RelatesTo",
+   "description": "LAST RESORT. Use only when two entities are clearly associated and no other relation type in the list fits. Never use it when a more specific type applies."
+  }
+ ],
+ "edge_type_map": [
+  {
+   "source": "Person",
+   "target": "Team",
+   "edge_types": [
+    "MemberOf",
+    "Leads"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Organization",
+   "edge_types": [
+    "MemberOf"
+   ]
+  },
+  {
+   "source": "Team",
+   "target": "Organization",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Person",
+   "edge_types": [
+    "ReportsTo"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Project",
+   "edge_types": [
+    "Leads",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Team",
+   "target": "Project",
+   "edge_types": [
+    "Owns"
+   ]
+  },
+  {
+   "source": "Task",
+   "target": "Person",
+   "edge_types": [
+    "AssignedTo"
+   ]
+  },
+  {
+   "source": "Task",
+   "target": "Team",
+   "edge_types": [
+    "AssignedTo"
+   ]
+  },
+  {
+   "source": "Task",
+   "target": "Project",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Milestone",
+   "target": "Project",
+   "edge_types": [
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Project",
+   "target": "Project",
+   "edge_types": [
+    "PartOf",
+    "DependsOn"
+   ]
+  },
+  {
+   "source": "Task",
+   "target": "Task",
+   "edge_types": [
+    "DependsOn",
+    "Blocks"
+   ]
+  },
+  {
+   "source": "Task",
+   "target": "Milestone",
+   "edge_types": [
+    "DependsOn",
+    "PartOf"
+   ]
+  },
+  {
+   "source": "Milestone",
+   "target": "Milestone",
+   "edge_types": [
+    "DependsOn"
+   ]
+  },
+  {
+   "source": "Risk",
+   "target": "Task",
+   "edge_types": [
+    "Blocks"
+   ]
+  },
+  {
+   "source": "Risk",
+   "target": "Milestone",
+   "edge_types": [
+    "Blocks"
+   ]
+  },
+  {
+   "source": "Task",
+   "target": "Risk",
+   "edge_types": [
+    "Mitigates"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Risk",
+   "edge_types": [
+    "Mitigates"
+   ]
+  },
+  {
+   "source": "Decision",
+   "target": "Meeting",
+   "edge_types": [
+    "DecidedIn"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Meeting",
+   "edge_types": [
+    "Attends"
+   ]
+  },
+  {
+   "source": "Team",
+   "target": "Meeting",
+   "edge_types": [
+    "Attends"
+   ]
+  },
+  {
+   "source": "Person",
+   "target": "Document",
+   "edge_types": [
+    "Authored",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Team",
+   "target": "Document",
+   "edge_types": [
+    "Authored",
+    "Owns"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Document",
+   "edge_types": [
+    "MentionedIn"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Meeting",
+   "edge_types": [
+    "MentionedIn"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Topic",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  },
+  {
+   "source": "Entity",
+   "target": "Entity",
+   "edge_types": [
+    "RelatesTo"
+   ]
+  }
+ ],
+ "instructions": "Team and project notes. Use the MOST SPECIFIC type: a ticket or to-do is a Task, a group inside a company is a Team, a customer or vendor is an Organization. Extract MemberOf/Leads for team structure, AssignedTo for ownership of tasks, PartOf and DependsOn for structure and ordering, DecidedIn for decisions taken in meetings, and Blocks/Mitigates for risks. Record due dates and dates of decisions when stated. Use only the listed relation types and prefer a specific one over RelatesTo."
+}

@@ -7,8 +7,12 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 ## [Unreleased]
 ### Added
 - Own MCP server: `POST /api/brains/{slug}/mcp` (Streamable HTTP, stateless) exposes the tools `recall` (reader) and `remember` (contributor) with the same API tokens and roles as the REST API. Only API tokens are accepted, browser origins other than the instance's are rejected, and tool failures are returned to the model as tool errors. See `docs/AGENTS.md`.
+- Standard ontology packages replace the old starter ones: `general`, `infrastructure` (rewritten), `team-projects`, `personal-family` and `software-knowledge`. Aligned with schema.org, FOAF, Dublin Core, DOAP and ITIL/CMDB; every type says what it is, when to use it and when not to, with examples; every package has extraction instructions. See `docs/ONTOLOGY.md`.
+- Ontology packages are versioned. A brain remembers the package and version it applied; when a newer version ships, **Update** adds what is missing (types, relations, rules) without touching anything you changed by hand. «Replace ontology» now asks for confirmation.
+- Tests check each package: valid map, no unused types or relations, descriptions with guidance and examples, no personal data.
 
 ### Changed
+- The `generic` package is now `general` (the old name still works as an alias).
 - Type corrector: applying or rejecting in bulk now asks for confirmation with a summary by proposed type, there is a «Reject all visible» action, the result of each action is reported (including how many did not fit the ontology), the confidence is shown as a percentage and a filter can no longer apply rows it has hidden.
 - The request limiter (sign-in, two-factor, password recovery and setup) now keeps its attempts in the database (migration `0018`): it is shared between processes and survives restarts, so restarting the service no longer resets the counters. If the database fails it falls back to an in-memory counter, so access is never left unprotected.
 
