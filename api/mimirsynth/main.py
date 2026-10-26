@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import appsettings, brand, settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation
+from . import appsettings, brand, settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
@@ -110,6 +110,7 @@ app.include_router(settings_admin.router)
 app.include_router(oidc_providers.router)
 app.include_router(users_admin.router)
 app.include_router(mfa.router)
+app.include_router(passkeys.router)
 app.include_router(proposals.router)
 
 

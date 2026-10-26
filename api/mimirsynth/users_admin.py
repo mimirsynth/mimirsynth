@@ -145,10 +145,10 @@ def unlock(uid: int, admin: User = Depends(require_admin), db: Session = Depends
 
 @router.post("/{uid}/mfa/reset")
 def reset_mfa(uid: int, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Quita el doble factor de una cuenta (perdió el móvil y los códigos). Cierra sus sesiones."""
+    """Quita el doble factor de una cuenta, con sus llaves de acceso (perdió el móvil y los códigos). Cierra sus sesiones."""
     from . import mfa
     u = _get(db, uid)
-    mfa.clear(db, u)
+    mfa.clear(db, u, passkeys=True)
     u.session_epoch += 1
     db.commit()
     audit(db, admin, "user.mfa_reset", user_id=u.id, email=u.email)
@@ -198,7 +198,7 @@ def remove_user(uid: int, admin: User = Depends(require_admin), db: Session = De
         t.revoked = True
     u.email, u.sub, u.name, u.display_name, u.picture_url, u.avatar_ref = None, None, "Usuario eliminado", "", "", ""
     from . import mfa
-    mfa.clear(db, u)
+    mfa.clear(db, u, passkeys=True)
     u.password_hash, u.status, u.is_admin, u.session_epoch = "", "deleted", False, u.session_epoch + 1
     db.commit()
     audit(db, admin, "user.delete", user_id=u.id, email=email)

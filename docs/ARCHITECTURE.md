@@ -41,7 +41,7 @@ A **brain** is an isolated knowledge domain: its graph, its ontology (entity and
 
 ## Users and roles
 
-- **Own accounts** (email and password with argon2id, lockout after failed attempts, single-use invitation and recovery links, optional email through SMTP) and **TOTP two-factor** with recovery codes, which the administrator can require.
+- **Own accounts** (email and password with argon2id, lockout after failed attempts, single-use invitation and recovery links, optional email through SMTP) **TOTP two-factor** with recovery codes, which the administrator can require, and **passkeys** (WebAuthn) for passwordless sign-in or as a second step.
 - **Optional OIDC, one or several providers** (Keycloak, Authentik, Entra ID, PocketID…): by default only people who already have an account or invitation can sign in; each provider can optionally allow automatic sign-up by domain and grant roles from its groups.
 - **Per-brain role:** reader < contributor < curator < administrator < owner. The instance administrator sees everything.
 - **API tokens** scoped to a brain, for agents and plugins; they never exceed the creator's role and do not administer the instance.

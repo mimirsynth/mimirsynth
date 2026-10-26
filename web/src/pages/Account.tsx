@@ -2,6 +2,7 @@ import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { tr, setLanguage } from "../i18n";
 import { TwoFactor } from "./TwoFactor";
+import { Passkeys } from "./Passkeys";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -165,6 +166,7 @@ export default function Account() {
                 <SettingsBody><PasswordForm has={p.has_password} onDone={() => { setMsg({ tone: "info", text: t("Contraseña actualizada. Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); }} /></SettingsBody>
               </SettingsGroup>
               <Identities onMsg={setMsg} />
+              <SettingsGroup title={t("Llaves de acceso")} description={t("Passkeys: la huella, el rostro o el PIN de tu dispositivo en lugar de la contraseña.")}><SettingsBody><Passkeys hasPassword={p.has_password} onChange={refreshMe} /></SettingsBody></SettingsGroup>
               {p.has_password && <SettingsGroup title={t("Verificación en dos pasos")} description={t("Además de la contraseña, pide un código de una app de autenticación.")}><SettingsBody><TwoFactor /></SettingsBody></SettingsGroup>}
               <SettingsGroup title={t("Sesiones")} description={t("Si crees que alguien más tiene abierta tu sesión, ciérrala en todos los demás dispositivos. Esta sesión sigue abierta.")}>
                 <SettingsBody><Group gap="xs">

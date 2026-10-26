@@ -47,7 +47,7 @@ def admin_count(db: Session, excluding: int | None = None) -> int:
 
 
 def start_session(request: Request, user: User, method: str = "pw") -> None:
-    """method: pw (contraseña sin segundo factor) | mfa (contraseña + segundo factor) | oidc (el proveedor responde de la identidad)."""
+    """method: pw (contraseña sin segundo factor) | mfa (contraseña + segundo factor) | oidc (el proveedor responde de la identidad) | passkey (llave de acceso, con verificación de usuario)."""
     request.session.clear()
     request.session["uid"], request.session["ep"], request.session["m"] = user.id, user.session_epoch, method
 

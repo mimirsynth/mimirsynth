@@ -51,7 +51,7 @@ def _ip(request: Request) -> str:
 @router.get("/auth/options")
 def auth_options(db: Session = Depends(get_db)):
     provs = [{"slug": p.slug, "name": p.name} for p in enabled_providers(db)]
-    return {"local": True, "oidc": bool(provs), "providers": provs, "setup": setup_required(db), "password_min_length": int(appsettings.get("password_min_length"))}
+    return {"local": True, "passkeys": True, "oidc": bool(provs), "providers": provs, "setup": setup_required(db), "password_min_length": int(appsettings.get("password_min_length"))}
 
 
 class SetupIn(BaseModel):
@@ -113,11 +113,13 @@ def login_local(body: LoginIn, request: Request, db: Session = Depends(get_db)):
         raise generic
     if passwords.needs_rehash(u.password_hash):
         u.password_hash = passwords.hash_password(body.password)
-    if u.totp_enabled:  # segundo paso: la sesión aún no existe, solo un permiso de 5 minutos para enviar el código
+    from . import passkeys
+    has_pk = passkeys.count(db, u) > 0
+    if u.totp_enabled or has_pk:  # segundo paso: la sesión aún no existe, solo un permiso de 5 minutos para enviar el código o usar la llave
         db.commit()
         request.session.clear()
         request.session["mfa"] = {"uid": u.id, "ep": u.session_epoch, "exp": time.time() + 300}
-        return {"ok": True, "mfa": True}
+        return {"ok": True, "mfa": True, "methods": (["totp"] if u.totp_enabled else []) + (["passkey"] if has_pk else [])}
     u.failed_attempts, u.locked_until, u.last_login = 0, None, now()
     db.commit()
     audit(db, u, "login", method="password")
@@ -140,7 +142,7 @@ def login_mfa(body: MfaIn, request: Request, db: Session = Depends(get_db)):
     if not ratelimit.allow(f"mfa-ip:{_ip(request)}", 60, 600) or not ratelimit.allow(f"mfa:{pend['uid']}", 20, 600):
         raise HTTPException(429, "demasiados intentos; espera unos minutos")
     u = db.get(User, pend["uid"])
-    if not u or u.status != "active" or u.session_epoch != pend["ep"] or not u.totp_enabled:
+    if not u or u.status != "active" or u.session_epoch != pend["ep"] or not u.totp_enabled:  # sin TOTP no hay código que comprobar (solo llaves: /auth/passkey/mfa)
         request.session.clear()
         raise HTTPException(401, "la verificación ha caducado; vuelve a introducir tu contraseña")
     if u.locked_until and (u.locked_until if u.locked_until.tzinfo else u.locked_until.replace(tzinfo=timezone.utc)) > datetime.now(timezone.utc):
