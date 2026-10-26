@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+
+## [0.6.0] - 2026-10-26
 ### Added
 - Own MCP server: `POST /api/brains/{slug}/mcp` (Streamable HTTP, stateless) exposes the tools `recall` (reader) and `remember` (contributor) with the same API tokens and roles as the REST API. Only API tokens are accepted, browser origins other than the instance's are rejected, and tool failures are returned to the model as tool errors. See `docs/AGENTS.md`.
 - Standard ontology packages replace the old starter ones: `general`, `infrastructure` (rewritten), `team-projects`, `personal-family` and `software-knowledge`. Aligned with schema.org, FOAF, Dublin Core, DOAP and ITIL/CMDB; every type says what it is, when to use it and when not to, with examples; every package has extraction instructions. See `docs/ONTOLOGY.md`.
