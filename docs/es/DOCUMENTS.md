@@ -71,7 +71,7 @@ Los originales viven en un **volumen del stack** que monta la aplicación (`MIMI
 6. **Sustituir:** los trozos de un documento cambiado se reemplazan en una sola transacción, así una consulta nunca ve un documento a medias.
 7. **Retirar:** un documento que ya no está en la fuente pasa a `deleted` y sus trozos salen de la búsqueda; el registro se conserva para el historial.
 
-Es idempotente y reanudable: si falla a mitad, la siguiente pasada continúa. Corre en segundo plano con progreso visible (patrón de trabajos del corrector de tipos). Cambiar de modelo de embeddings obliga a una acción explícita «reindexar todo».
+Es idempotente y reanudable: si falla a mitad, la siguiente pasada continúa. Corre en segundo plano con progreso visible (patrón de trabajos del corrector de tipos). Cambiar de modelo de embeddings obliga a una acción explícita «reindexar todo» (Administración → Embeddings → Reindexar, ver `CONFIGURATION.md`).
 
 ## Recuperación
 

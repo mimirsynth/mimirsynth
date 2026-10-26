@@ -26,8 +26,17 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 ## AI providers
 Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.
 - **LLM model:** extracts entities and facts when proposals are ingested. For "reasoning" models that return empty JSON, use a proxy that disables *thinking*.
-- **Embeddings:** model and dimension **cannot be changed** once the index exists (vectors depend on the model). It must be the same one Graphiti uses on that FalkorDB.
+- **Embeddings:** stored vectors depend on the model and its dimension. Moving to another engine with the same model (another host) is immediate with "Default". To move to another model, use **Reindex** on the new engine (see below). Agents that write directly to Graphiti on that FalkorDB must use the same model.
 - **Decider:** closed-decision model (with probabilities) for proposal triage and the type corrector. It only approves what is factual with enough confidence; it never rejects on its own.
+
+### Changing the embedding model
+**Administration → Embeddings → Reindex** (on an engine with another model, after confirming) starts the *Embedding model change* job. It needs no LLM: it only computes embeddings, with the new engine, for every brain:
+- in FalkorDB, in the format of graphiti-core 0.30.2: `name_embedding` of the `Entity` nodes (and of `Community` nodes, if any) and `fact_embedding` of the `RELATES_TO` edges;
+- in pgvector, the episode fragments (`episode_chunks`) and document chunks (`doc_chunks`). If the dimension changes, the `embedding` columns and their HNSW indexes are recreated with the new one.
+
+While it runs, everything keeps working with the current engine: the new vectors are written aside (shadow properties and a shadow column with its own HNSW index). Only at the end, with vector writes paused for a moment, are the new vectors swapped in and the new engine marked as the default, in a single PostgreSQL transaction. If anything fails, the graphs go back to their previous vectors and the default engine does not change. Progress, cancellation and retry are shown on the same screen; the job is resumable (after a restart or a retry it only computes what is missing or what changed in the meantime). Cancelling discards what was computed.
+
+When it finishes, **recalibrate the minimum passage similarity** (Administration → Recall): similarities from different models are not comparable. Graphs without a brain are not reindexed.
 
 ## Accounts and security
 - **Users:** Administration → Users. Sign-up by invitation (single-use link) or with a temporary password; roles, brains, disable, reset and delete.

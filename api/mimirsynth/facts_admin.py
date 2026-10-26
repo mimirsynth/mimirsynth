@@ -7,12 +7,13 @@ from pydantic import BaseModel, Field
 
 from .db import rows
 from .deps import BrainCtx, curator_of_brain
-from .embed import get_embedder
+from .embed import gate, get_embedder
 from .entity_types import _record
+from .reembed import is_shadow
 from .vocab import canon_rel
 
 router = APIRouter(prefix="/api/brains/{slug}/facts")
-_HIDE = {"fact_embedding"}
+_HIDE = {"fact_embedding"}  # y las propiedades auxiliares de un cambio de modelo (reembed.is_shadow)
 
 
 class EditIn(BaseModel):
@@ -30,8 +31,9 @@ def _get(ctx: BrainCtx, uuid: str) -> dict:
 
 
 def _set_embedding(ctx: BrainCtx, uuid: str, text: str) -> None:
-    v = get_embedder().embed([text])[0]
-    ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() SET r.fact_embedding = vecf32($v)", {"u": uuid, "v": v})
+    with gate.writing():
+        v = get_embedder().embed([text])[0]
+        ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() SET r.fact_embedding = vecf32($v)", {"u": uuid, "v": v})
 
 
 def _label(f: dict) -> str:
@@ -51,10 +53,11 @@ def edit_fact(uuid: str, body: EditIn, ctx: BrainCtx = Depends(curator_of_brain)
         changes["name"] = name
     if not changes:
         raise HTTPException(400, "no hay cambios")
-    if "fact" in changes:  # primero el embedding: si el motor falla, no se toca nada
-        vec = get_embedder().embed([changes["fact"]])[0]
-    sets = ", ".join(f"r.{k} = ${k}" for k in changes) + (", r.fact_embedding = vecf32($v)" if "fact" in changes else "")
-    ctx.graph.query(f"MATCH ()-[r:RELATES_TO {{uuid:$u}}]->() SET {sets}", {"u": uuid, **changes, **({"v": vec} if "fact" in changes else {})})
+    with gate.writing():
+        if "fact" in changes:  # primero el embedding: si el motor falla, no se toca nada
+            vec = get_embedder().embed([changes["fact"]])[0]
+        sets = ", ".join(f"r.{k} = ${k}" for k in changes) + (", r.fact_embedding = vecf32($v)" if "fact" in changes else "")
+        ctx.graph.query(f"MATCH ()-[r:RELATES_TO {{uuid:$u}}]->() SET {sets}", {"u": uuid, **changes, **({"v": vec} if "fact" in changes else {})})
     op = _record(ctx, "fact.edit", f"Editado el hecho {_label(cur)}" + (f" (relación → {changes['name']})" if "name" in changes else ""),
                  uuid=uuid, before={k: cur[k] for k in changes}, after=changes)
     return {"ok": True, "op": op.id, "summary": op.summary}
@@ -85,7 +88,7 @@ def reactivate(uuid: str, ctx: BrainCtx = Depends(curator_of_brain)):
 def delete_fact(uuid: str, ctx: BrainCtx = Depends(curator_of_brain)):
     cur = _get(ctx, uuid)
     r = rows(ctx.graph.query("MATCH (a:Entity)-[r:RELATES_TO {uuid:$u}]->(b:Entity) RETURN properties(r) AS p, a.uuid AS a, b.uuid AS b", {"u": uuid}))[0]
-    props = {k: v for k, v in r["p"].items() if k not in _HIDE}
+    props = {k: v for k, v in r["p"].items() if k not in _HIDE and not is_shadow(k)}
     ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() DELETE r", {"u": uuid})
     ctx.graph.query("MATCH (e:Episodic) WHERE $u IN coalesce(e.entity_edges, []) SET e.entity_edges = [x IN e.entity_edges WHERE x <> $u]", {"u": uuid})
     op = _record(ctx, "fact.delete", f"Borrado el hecho {_label(cur)}", uuid=uuid, props=props, source=r["a"], target=r["b"])

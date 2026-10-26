@@ -1,7 +1,8 @@
 """Administración de motores de embeddings (solo administrador de la instancia).
 
 Los vectores ya guardados (hechos en FalkorDB, fragmentos en pgvector) dependen del modelo y la dimensión: por eso estos son
-inmutables y solo se puede cambiar el motor por defecto a otro con el mismo modelo y dimensión (p. ej. otro host con el mismo modelo).
+inmutables. Pasar a otro motor con el mismo modelo y dimensión (p. ej. otro host) es inmediato; pasar a otro modelo requiere recalcular
+todos los vectores, que hace el trabajo «Cambio de modelo de embeddings» (`reembed`).
 """
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,9 +10,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import jobs, reembed
 from .config import settings
 from .deps import audit, require_admin
-from .models import EmbeddingEngine, User
+from .models import EmbeddingEngine, Job, User
 from .secretbox import seal, unseal
 from .store import get_db
 
@@ -58,9 +60,13 @@ def _check_default_ok(db: Session, e: EmbeddingEngine) -> None:
     cur = default_embedding(db)
     if cur and cur.id != e.id and (cur.model, cur.dim) != (e.model, e.dim):
         raise HTTPException(409, f"no se puede cambiar de «{cur.model}» ({cur.dim}d) a «{e.model}» ({e.dim}d): los vectores guardados "
-                                 "dejarían de ser comparables. Cambiar de modelo requiere reindexar todo (aún no soportado).")
+                                 "dejarían de ser comparables. Para cambiar de modelo usa «Reindexar»: recalcula todos los vectores con el motor nuevo.")
     if not cur and e.dim != settings.embedding_dim:
         raise HTTPException(409, f"el índice de texto es de {settings.embedding_dim} dimensiones y este modelo da {e.dim}")
+
+
+def _reindex_running(db: Session) -> Job | None:
+    return db.scalar(select(Job).where(Job.kind == reembed.KIND, Job.status.in_(("queued", "running"))))
 
 
 @router.get("")
@@ -106,6 +112,8 @@ def make_default(eid: int, user: User = Depends(require_admin), db: Session = De
     e = _get(db, eid)
     if not e.enabled:
         raise HTTPException(409, "el motor está desactivado")
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
     _check_default_ok(db, e)
     for o in db.scalars(select(EmbeddingEngine)):
         o.is_default = o.id == eid
@@ -119,6 +127,9 @@ def delete_engine(eid: int, user: User = Depends(require_admin), db: Session = D
     e = _get(db, eid)
     if e.is_default:
         raise HTTPException(409, "es el motor por defecto; elige otro antes de borrarlo")
+    run = _reindex_running(db)
+    if run and (run.params or {}).get("engine_id") == eid:
+        raise HTTPException(409, "hay un cambio de modelo en marcha hacia este motor: cancélalo antes de borrarlo")
     db.delete(e); db.commit()
     audit(db, user, "embedding.delete", None, name=e.name)
     return {"ok": True}
@@ -134,3 +145,57 @@ def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depend
         return {"ok": dim == e.dim, "ms": int((time.time() - t0) * 1000), "reply": f"{dim} dimensiones", "error": None if dim == e.dim else f"dimensión {dim}, esperada {e.dim}"}
     except HTTPException as ex:
         return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": ex.detail}
+
+
+# --- Cambio de modelo con reindexado completo ----------------------------------------------------
+
+@router.get("/reindex")
+def reindex_status(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """El último cambio de modelo (en marcha o terminado), con su progreso y registro."""
+    j = db.scalar(select(Job).where(Job.kind == reembed.KIND).order_by(Job.id.desc()).limit(1))
+    return {"job": jobs.out(j, detail=True) if j else None}
+
+
+@router.post("/{eid}/reindex", status_code=202)
+def start_reindex(eid: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Recalcula con este motor todos los vectores de todos los brains y, solo si termina bien, lo deja como motor por defecto."""
+    e = _get(db, eid)
+    if not e.enabled:
+        raise HTTPException(409, "el motor está desactivado")
+    if e.is_default:
+        raise HTTPException(409, "ya es el motor por defecto")
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
+    cur = default_embedding(db)
+    audit(db, user, "embedding.reindex", None, name=e.name, model=e.model, dim=e.dim, previous=cur.model if cur else settings.embedding_model)
+    jid = jobs.submit(reembed.KIND, None, {"engine_id": e.id}, f"Cambiar el modelo de embeddings a «{e.name}» ({e.model}, {e.dim}d)", user.id, dedupe_key=reembed.KIND)
+    return {"job": jid}
+
+
+def _reindex_job(db: Session, jid: int) -> Job:
+    j = db.get(Job, jid)
+    if not j or j.kind != reembed.KIND:
+        raise HTTPException(404, "trabajo no encontrado")
+    return j
+
+
+@router.post("/reindex/{jid}/cancel")
+def cancel_reindex(jid: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    _reindex_job(db, jid)
+    res = jobs.cancel(jid)
+    audit(db, user, "job.cancel", None, id=jid, result=res)
+    return {"result": res}
+
+
+@router.post("/reindex/{jid}/retry", status_code=201)
+def retry_reindex(jid: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Reanuda un cambio fallido o cancelado: solo calcula lo que falta."""
+    _reindex_job(db, jid)
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
+    try:
+        new = jobs.retry(jid, user.id)
+    except ValueError as ex:
+        raise HTTPException(409, str(ex))
+    audit(db, user, "job.retry", None, id=jid, new=new)
+    return {"job": new}

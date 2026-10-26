@@ -1,9 +1,9 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
+import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, ProgressBar, SelectField, Tabs, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Brain, fmt, get, Me, send } from "../api";
 import AdminFolders from "./AdminFolders";
 import AdminSettings from "./AdminSettings";
@@ -97,6 +97,10 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   const del = useMutation({ mutationFn: (id: number) => send("DELETE", `${path}/${id}`), onSuccess: refresh });
   const [ask, setAsk] = useState<Engine | null>(null);
   const mk = useMutation({ mutationFn: (id: number) => send("POST", `${path}/${id}/default`), onSuccess: refresh });
+  const [reindex, setReindex] = useState<Engine | null>(null);
+  const startReindex = useMutation({ mutationFn: (id: number) => send("POST", `${path}/${id}/reindex`), onSuccess: () => qc.invalidateQueries({ queryKey: ["embedding-reindex"] }) });
+  const def = (list.data ?? []).find((e) => e.is_default);
+  const otherModel = (e: Engine) => emb && e.enabled && !e.is_default && (!def || def.model !== e.model || def.dim !== e.dim);
   const test = useMutation({ mutationFn: (id: number) => send<{ ok: boolean; ms: number; error?: string; reply?: string }>("POST", `${path}/${id}/test`),
     onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok ? `OK · ${r.ms} ms · «${r.reply}»` : t("Error: {{error}}", { error: r.error }) })) });
   const [models, setModels] = useState<string[]>([]); const [mErr, setMErr] = useState("");
@@ -110,6 +114,8 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
     <SettingsGroup title={title} description={description} action={<Btn kind="primary" onClick={() => open({ ...EMPTY })} icon="plus">{t("Añadir motor")}</Btn>}>
     <SettingsBody><Stack gap="xs">
       <AiStatus kind={kind} />
+      {emb && <Reindex onDone={refresh} />}
+      <MutationError error={mk.error} />
       <ClearFilters active={ev.active} onClear={ev.clear} shown={ev.rows.length} total={ev.total} />
       <DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr><ColHead sort={ev.sortProps("name")} filter={ev.text("name")}>{t("Nombre")}</ColHead><ColHead filter={ev.text("url")}>{t("Endpoint")}</ColHead><ColHead sort={ev.sortProps("model")} filter={ev.text("model")}>{t("Modelo")}</ColHead><ColHead filter={ev.select("state")}>{t("Estado")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
@@ -121,13 +127,20 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
                 {tests[e.id] && <Text size="xs" className={tests[e.id].startsWith("OK") ? "ms-text-ok" : "ms-text-danger"}>{tests[e.id]}</Text>}</DataTable.Td>
               <DataTable.Td><Group gap={4} wrap="nowrap">
                 <Btn size="row" loading={test.isPending && test.variables === e.id} onClick={() => test.mutate(e.id)} icon="test">{t("Probar")}</Btn>
-                {!e.is_default && e.enabled && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
+                {!e.is_default && e.enabled && (!otherModel(e) || !def) && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
+                {otherModel(e) && <Btn size="row" icon="refresh" onClick={() => setReindex(e)}>{t("Reindexar")}</Btn>}
                 <Btn size="row" onClick={() => open({ ...e, api_key: "" })} icon="edit">{t("Editar")}</Btn>
                 <Btn kind="danger" size="row" onClick={() => setAsk(e)} icon="trash">{t("Borrar")}</Btn></Group></DataTable.Td>
             </DataTable.Tr>))}
           {list.data?.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><Text c="dimmed" size="sm">{dec ? t("Sin decisores: toda propuesta de un colaborador espera a un curador.") : emb ? t("Sin motores: se usan las variables MIMIRSYNTH_EMBEDDING_*. Añade el que ya usas (mismo modelo) para gestionarlo desde aquí.") : t("Sin motores. Mientras no haya ninguno se usan las variables MIMIRSYNTH_LLM_* si existen; si tampoco, la ingesta queda desactivada.")}</Text></DataTable.Td></DataTable.Tr>}
         </DataTable.Tbody>
       </DataTable>
+      <ConfirmDialog opened={!!reindex} onClose={() => setReindex(null)} tone="primary" title={t("Cambiar el modelo de embeddings")} action={t("Reindexar")}
+        subject={reindex && `${reindex.name} · ${reindex.model} · ${reindex.dim}d`}
+        warning={t("Se recalculan con este motor los vectores de todos los brains: entidades y hechos del grafo, fragmentos de episodios y trozos de documentos. Puede tardar y consume llamadas al motor. Mientras tanto todo sigue con el motor actual; solo si termina bien pasa a ser el motor por defecto, y si falla o lo cancelas no cambia nada.")}
+        onConfirm={() => startReindex.mutateAsync(reindex!.id)}>
+        <Notice tone="warn">{t("Las similitudes del modelo nuevo no son comparables con las del anterior: al terminar, recalibra la similitud mínima de un pasaje del recall (Administración → Recuerdo). Los agentes que escriban directamente en Graphiti deben pasar a usar el mismo modelo.")}</Notice>
+      </ConfirmDialog>
       <ConfirmDialog opened={!!ask} onClose={() => setAsk(null)} title={t("Borrar motor")} action={t("Borrar motor")} subject={ask?.name}
         warning={t("Los brains que lo usen pasan al motor por defecto, o a las variables de entorno si no hay otro.")} onConfirm={() => del.mutateAsync(ask!.id)} />
       <Modal opened={!!form} onClose={() => setForm(null)} title={(form?.id ? t("Editar ") : t("Añadir ")) + (emb ? t("motor de embeddings") : dec ? "decisor" : "motor LLM")} centered>
@@ -149,6 +162,46 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
       </Modal>
     </Stack></SettingsBody>
     </SettingsGroup>
+  );
+}
+
+type ReindexJob = { id: number; status: string; done: number; total: number | null; message: string; error: string; title: string; finished_at: string | null;
+  result?: { engine: string; model: string; dim: number; previous: { model: string; dim: number } } | null };
+
+/** Progreso del último cambio de modelo de embeddings (en marcha, fallido o terminado). */
+function Reindex({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["embedding-reindex"], queryFn: () => get<{ job: ReindexJob | null }>("embedding-engines/reindex"),
+    refetchInterval: (qr) => (["queued", "running"].includes(qr.state.data?.job?.status ?? "") ? 2000 : false) });
+  const j = q.data?.job;
+  const refresh = () => qc.invalidateQueries({ queryKey: ["embedding-reindex"] });
+  const cancel = useMutation({ mutationFn: (id: number) => send("POST", `embedding-engines/reindex/${id}/cancel`), onSuccess: refresh });
+  const retry = useMutation({ mutationFn: (id: number) => send("POST", `embedding-engines/reindex/${id}/retry`), onSuccess: refresh });
+  const status = j?.status;
+  useEffect(() => { if (status === "done") onDone(); }, [status]);  // al terminar, la lista de motores cambia (nuevo por defecto)
+  if (!j) return null;
+  const active = j.status === "queued" || j.status === "running";
+  return (
+    <Stack gap="xs">
+      {active && <Notice tone="info" title={j.title}>
+        <Stack gap="xs">
+          <ProgressBar done={j.done} total={j.total ?? 0} text={j.total ? `${j.done}/${j.total} · ${j.message}` : j.message || "…"} />
+          <Group><Btn kind="danger" size="row" icon="close" loading={cancel.isPending} onClick={() => cancel.mutate(j.id)}>{t("Cancelar")}</Btn></Group>
+        </Stack>
+      </Notice>}
+      {(j.status === "failed" || j.status === "cancelled") && <Notice tone="warn" title={j.title}>
+        <Stack gap="xs">
+          <Text size="sm">{j.status === "failed" ? t("No se ha completado: todo sigue con el motor anterior. Error: {{error}}", { error: j.error }) : t("Cancelado: todo sigue con el motor anterior.")}</Text>
+          <Group><Btn size="row" icon="refresh" loading={retry.isPending} onClick={() => retry.mutate(j.id)}>{t("Reintentar")}</Btn>
+            <Text size="xs" c="dimmed">{t("Solo calcula lo que falta.")}</Text></Group>
+        </Stack>
+      </Notice>}
+      {j.status === "done" && j.result && <Notice tone="success" title={t("Modelo de embeddings cambiado a «{{model}}» ({{dim}}d) el {{date}}", { model: j.result.model, dim: j.result.dim, date: fmt(j.finished_at) })}>
+        {t("Recalibra la similitud mínima de un pasaje del recall (Administración → Recuerdo): la de «{{previous}}» no vale para el modelo nuevo.", { previous: j.result.previous.model })}
+      </Notice>}
+      <MutationError error={cancel.error ?? retry.error} />
+    </Stack>
   );
 }
 
@@ -258,7 +311,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
           </>}
           {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
           {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}
-          {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Modelo y dimensión no se pueden cambiar una vez creado: los vectores guardados dependen de él.")} />}
+          {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Los vectores guardados dependen del modelo: para pasar a un motor con otro modelo usa «Reindexar», que los recalcula todos antes de cambiar.")} />}
           {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
           {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
           {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}

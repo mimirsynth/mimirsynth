@@ -26,8 +26,17 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 ## Proveedores de IA
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
 - **Modelo LLM:** extrae entidades y hechos al ingerir propuestas. Para modelos que «razonan» y devuelven JSON vacío, usa un proxy que desactive el *thinking*.
-- **Embeddings:** modelo y dimensión **no se pueden cambiar** una vez creados el índice (los vectores dependen del modelo). Debe ser el mismo que use Graphiti sobre ese FalkorDB.
+- **Embeddings:** los vectores guardados dependen del modelo y de su dimensión. Pasar a otro motor con el mismo modelo (otro host) es inmediato con «Por defecto». Para pasar a otro modelo, usa **Reindexar** en el motor nuevo (ver abajo). Los agentes que escriban directamente en Graphiti sobre ese FalkorDB deben usar el mismo modelo.
 - **Decisor:** modelo de decisión cerrada (con probabilidades) para el triaje de propuestas y el corrector de tipos. Solo aprueba lo factual con confianza suficiente; nunca rechaza por su cuenta.
+
+### Cambiar el modelo de embeddings
+**Administración → Embeddings → Reindexar** (en un motor con otro modelo, tras confirmar) lanza el trabajo *Cambio de modelo de embeddings*. No usa el LLM: solo calcula embeddings, con el motor nuevo, para cada brain:
+- en FalkorDB, con el formato de graphiti-core 0.30.2: `name_embedding` de los nodos `Entity` (y de los `Community`, si los hay) y `fact_embedding` de las aristas `RELATES_TO`;
+- en pgvector, los fragmentos de episodios (`episode_chunks`) y los trozos de documentos (`doc_chunks`). Si cambia la dimensión, se rehacen las columnas `embedding` y sus índices HNSW con la nueva.
+
+Mientras dura, todo sigue funcionando con el motor actual: los vectores nuevos se guardan aparte (propiedades sombra y una columna sombra con su propio índice HNSW). Solo al final, con las escrituras de vectores en pausa unos instantes, se intercambian los vectores y se marca el motor nuevo como el por defecto, en una sola transacción de PostgreSQL. Si algo falla, los grafos vuelven a sus vectores anteriores y el motor por defecto no cambia. El progreso, la cancelación y el reintento se ven en la misma pantalla; el trabajo es reanudable (tras un reinicio o un reintento solo calcula lo que falta o lo que cambió entretanto). Cancelar descarta lo calculado.
+
+Al terminar, **recalibra la similitud mínima de un pasaje** (Administración → Recuerdo): las similitudes de modelos distintos no son comparables. Los grafos sin brain no se reindexan.
 
 ## Cuentas y seguridad
 - **Usuarios:** Administración → Usuarios. Alta por invitación (enlace de un solo uso) o con contraseña temporal; roles, brains, deshabilitar, restablecer y eliminar.

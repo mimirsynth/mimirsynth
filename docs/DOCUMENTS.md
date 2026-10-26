@@ -52,7 +52,7 @@ Originals live on a **stack volume** mounted by the application (`MIMIRSYNTH_DOC
 6. **Replace:** a changed document's chunks are replaced in a single transaction, so a query never sees a half-indexed document.
 7. **Retire:** a document no longer in the source becomes `deleted` and leaves the search; the record is kept for history.
 
-It is idempotent and resumable, runs in the background with visible progress, and changing the embedding model requires an explicit "reindex everything".
+It is idempotent and resumable, runs in the background with visible progress, and changing the embedding model requires an explicit "reindex everything" (Administration → Embeddings → Reindex, see `CONFIGURATION.md`).
 
 ## Retrieval
 

@@ -1,4 +1,6 @@
 """Conector EmbeddingProvider: cualquier endpoint OpenAI-compatible (Ollama, OpenAI, vLLM...)."""
+import threading
+from contextlib import contextmanager
 from typing import Protocol
 
 import httpx
@@ -8,6 +10,48 @@ from .config import settings
 
 class EmbeddingProvider(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class _Gate:
+    """Exclusión entre quienes guardan vectores (compartida: ingesta, índice de texto, documentos, edición de hechos) y el cambio
+    de modelo de embeddings (exclusiva). Mientras se cambia de modelo, las escrituras nuevas esperan y el cambio espera a que
+    terminen las que ya estaban en marcha: así ningún vector del modelo anterior se cuela después del cambio. No es reentrante."""
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._writers = 0
+        self._switching = False
+
+    @contextmanager
+    def writing(self):
+        with self._cond:
+            while self._switching:
+                self._cond.wait()
+            self._writers += 1
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._writers -= 1
+                self._cond.notify_all()
+
+    @contextmanager
+    def switching(self):
+        with self._cond:
+            while self._switching:
+                self._cond.wait()
+            self._switching = True
+            while self._writers:
+                self._cond.wait()
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._switching = False
+                self._cond.notify_all()
+
+
+gate = _Gate()
 
 
 class OpenAICompatEmbedder:

@@ -11,7 +11,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from .config import settings
 from .db import graph, rows
-from .embed import EmbeddingProvider, get_embedder
+from .embed import EmbeddingProvider, gate, get_embedder
 from .store import engine
 
 
@@ -103,7 +103,11 @@ def sync_brain(brain_id: int, graph_name: str, embedder: EmbeddingProvider | Non
     """Sincroniza el índice con los episodios del grafo: solo reindexa los nuevos o modificados."""
     if not enabled():
         return {"enabled": False}
-    embedder = embedder or get_embedder()
+    with gate.writing():  # los vectores, siempre del motor por defecto vigente (ver reembed)
+        return _sync_brain(brain_id, graph_name, embedder or get_embedder())
+
+
+def _sync_brain(brain_id: int, graph_name: str, embedder: EmbeddingProvider) -> dict:
     eps = rows(graph(graph_name).query("MATCH (e:Episodic) RETURN e.uuid AS uuid, e.name AS name, e.content AS content, e.valid_at AS valid_at"))
     with engine().begin() as c:
         have = {r[0]: r[1] for r in c.execute(text("SELECT episode_uuid, min(content_hash) FROM episode_chunks WHERE brain_id=:b GROUP BY episode_uuid"), {"b": brain_id})}

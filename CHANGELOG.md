@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- Change the embedding model with a full reindex: Administration → Embeddings → **Reindex** on an engine with another model. A resumable background job (progress, cancellation, retry; no LLM) recomputes, for every brain, the `name_embedding` of entities and the `fact_embedding` of facts in FalkorDB (graphiti-core 0.30.2 format) and the vectors of `episode_chunks` and `doc_chunks` in pgvector, recreating the columns and HNSW indexes if the dimension changes. New vectors are written aside and swapped in at the end; the default engine only changes if the whole job succeeds, and on failure everything stays on the previous engine. Recalibrate the recall's minimum passage similarity afterwards. See `docs/CONFIGURATION.md`.
 
 ## [0.7.0] - 2026-10-26
 ### Added

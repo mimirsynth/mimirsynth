@@ -9,6 +9,7 @@ from sqlalchemy import select
 
 from .deps import BrainCtx, reader
 from .models import VocabAlias
+from .reembed import is_shadow
 from .vocab import alias_map, canon_rel, resolve  # noqa: F401  (canon_rel se reexporta)
 
 router = APIRouter(prefix="/api/brains/{slug}")
@@ -393,7 +394,7 @@ class CypherReq(BaseModel):
 
 
 def _props(p: dict) -> dict:
-    return {k: (v if not isinstance(v, list) or len(v) < 50 else f"[{len(v)} valores]") for k, v in (p or {}).items() if k not in _HIDE}
+    return {k: (v if not isinstance(v, list) or len(v) < 50 else f"[{len(v)} valores]") for k, v in (p or {}).items() if k not in _HIDE and not is_shadow(k)}
 
 
 def _node(n: Node) -> dict:
