@@ -46,7 +46,7 @@ export default function TokensPanel({ brain, brains }: { brain?: string; brains:
           <ColHead sort={v.sortProps("role")} filter={v.select("role")}>{t("Rol")}</ColHead>
           <ColHead filter={v.text("prefix")}>{t("Prefijo")}</ColHead>
           <ColHead sort={v.sortProps("used")}>{t("Último uso")}</ColHead>
-          <DataTable.Th />
+          <DataTable.ActionsHead />
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((tok) => (
           <DataTable.Tr key={tok.id}>

@@ -53,7 +53,7 @@ function Members({ brain }: { brain: Brain }) {
         warning={t("Pierde el acceso a este brain. Sus tokens de API siguen existiendo hasta que se revoquen.")} onConfirm={() => del.mutateAsync(ask!.user_id)} />
       <ClearFilters active={mv.active} onClear={mv.clear} shown={mv.rows.length} total={mv.total} />
       <DataTable fz="sm">
-        <DataTable.Thead><DataTable.Tr><ColHead sort={mv.sortProps("user")} filter={mv.text("user")}>{t("Usuario")}</ColHead><ColHead sort={mv.sortProps("role")} filter={mv.select("role")}>{t("Rol")}</ColHead><DataTable.Th /></DataTable.Tr></DataTable.Thead>
+        <DataTable.Thead><DataTable.Tr><ColHead sort={mv.sortProps("user")} filter={mv.text("user")}>{t("Usuario")}</ColHead><ColHead sort={mv.sortProps("role")} filter={mv.select("role")}>{t("Rol")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{mv.rows.map((m) => (
           <DataTable.Tr key={m.user_id}>
             <DataTable.Td>{m.email ?? m.name}</DataTable.Td>
@@ -110,7 +110,7 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
       <AiStatus kind={kind} />
       <ClearFilters active={ev.active} onClear={ev.clear} shown={ev.rows.length} total={ev.total} />
       <DataTable fz="sm">
-        <DataTable.Thead><DataTable.Tr><ColHead sort={ev.sortProps("name")} filter={ev.text("name")}>{t("Nombre")}</ColHead><ColHead filter={ev.text("url")}>{t("Endpoint")}</ColHead><ColHead sort={ev.sortProps("model")} filter={ev.text("model")}>{t("Modelo")}</ColHead><ColHead filter={ev.select("state")}>{t("Estado")}</ColHead><DataTable.Th /></DataTable.Tr></DataTable.Thead>
+        <DataTable.Thead><DataTable.Tr><ColHead sort={ev.sortProps("name")} filter={ev.text("name")}>{t("Nombre")}</ColHead><ColHead filter={ev.text("url")}>{t("Endpoint")}</ColHead><ColHead sort={ev.sortProps("model")} filter={ev.text("model")}>{t("Modelo")}</ColHead><ColHead filter={ev.select("state")}>{t("Estado")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>
           {ev.rows.map((e) => (
             <DataTable.Tr key={e.id}>
@@ -238,7 +238,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
                 {cur ? (
                   <Group justify="space-between" wrap="nowrap">
                     <Stack gap={2}>
-                      <Group gap="xs"><Title order={4}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill></Group>
+                      <Group gap="xs"><Title order={3}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill></Group>
                       <Text size="xs" c="dimmed" className="ms-data">{cur.slug} {t("· grafo")} {cur.graph_name}</Text>
                     </Stack>
                     <Group gap={6}>

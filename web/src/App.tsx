@@ -73,13 +73,13 @@ export default function App() {
   if (me.data?.must_setup_2fa) return <TwoFactorSetupScreen name={name} />;
   if (me.error) {
     return (
-      <Center className="ms-fullh"><Panel withBorder p="xl" w={420}><Stack>
+      <Center component="main" className="ms-fullh"><Panel withBorder p="xl" w={420}><Stack>
         <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>{(me.error as Error).message}</Notice>
         <Btn onClick={() => void me.refetch()} loading={me.isFetching}>{t("Reintentar")}</Btn>
       </Stack></Panel></Center>
     );
   }
-  if (!me.data) return <Center className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
+  if (!me.data) return <Center component="main" className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
   const cur = brains.data?.find((b) => b.slug === brain);
 
   return (

@@ -120,7 +120,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
 export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="ms-pagehead">
-      <div className="ms-pagehead-row"><h2 className="ms-pagehead-title">{title}</h2>{actions && <div className="ms-pagehead-actions">{actions}</div>}</div>
+      <div className="ms-pagehead-row"><h1 className="ms-pagehead-title">{title}</h1>{actions && <div className="ms-pagehead-actions">{actions}</div>}</div>
       {description && <p className="ms-pagehead-help">{description}</p>}
     </header>
   );

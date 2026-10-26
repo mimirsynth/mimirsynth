@@ -20,7 +20,7 @@ export function SubNav({ value, onChange, items, label }: { value: string; onCha
 export function SettingsGroup({ title, description, action, children }: { title: string; description?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="ms-setgroup">
-      <header className="ms-setgroup-head"><div><h3>{title}</h3>{description && <p>{description}</p>}</div>{action}</header>
+      <header className="ms-setgroup-head"><div><h2>{title}</h2>{description && <p>{description}</p>}</div>{action}</header>
       {children}
     </section>
   );

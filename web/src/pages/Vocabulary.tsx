@@ -29,7 +29,7 @@ function RelationsTable({ rows, isAdmin, onUnify }: { rows: RelRow[]; isAdmin: b
           <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Relación (normalizada)")}</ColHead>
           <ColHead sort={v.sortProps("facts")}>{t("Hechos")}</ColHead>
           <ColHead filter={v.text("variants", t("Variante cruda…"))}>{t("Variantes crudas")}</ColHead>
-          {isAdmin && <DataTable.Th />}
+          {isAdmin && <DataTable.ActionsHead />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((r) => (
           <DataTable.Tr key={r.name}>
@@ -51,7 +51,7 @@ function AliasesTable({ rows, isAdmin, onDelete }: { rows: Alias[]; isAdmin: boo
       <DataTable fz="sm" w={560}><DataTable.Thead><DataTable.Tr>
         <ColHead sort={v.sortProps("alias")} filter={v.text("alias")}>{t("Alias")}</ColHead>
         <ColHead sort={v.sortProps("canonical")} filter={v.text("canonical")}>{t("Se lee como")}</ColHead>
-        {isAdmin && <DataTable.Th />}</DataTable.Tr></DataTable.Thead>
+        {isAdmin && <DataTable.ActionsHead />}</DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((a) => (
           <DataTable.Tr key={a.id}><DataTable.Td>{a.alias}</DataTable.Td><DataTable.Td>{a.canonical}</DataTable.Td>
             {isAdmin && <DataTable.Td><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(a)}>{t("Quitar")}</Btn></DataTable.Td>}</DataTable.Tr>))}</DataTable.Tbody></DataTable>

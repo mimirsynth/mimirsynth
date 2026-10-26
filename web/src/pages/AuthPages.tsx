@@ -15,7 +15,8 @@ const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada
 function Card({ name, subtitle, children }: { name: string; subtitle?: string; children: React.ReactNode }) {
   const { i18n } = useTranslation();
   return (
-    <Center className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack align="center" gap="md">
+    <Center component="main" className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack align="center" gap="md">
+      <h1 className="ms-sr">{subtitle ? `${name} · ${subtitle}` : name}</h1>
       <Logo size={56} name={name} />{subtitle && <Text c="dimmed" size="sm" ta="center">{subtitle}</Text>}
       <Stack w="100%" gap="sm">{children}</Stack>
       <LanguageSelect size="xs" value={i18n.language} onChange={setLanguage} />
@@ -50,7 +51,7 @@ export function AuthScreen({ name }: { name: string }) {
   const setup = useMutation({ mutationFn: () => send("POST", "auth/setup", { code, email, name: uname, password: pair.pw }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["auth-options"] }); done(); } });
   const forgot = useMutation({ mutationFn: () => send("POST", "auth/forgot", { email }) });
   const authError = t(ERRORS[new URLSearchParams(window.location.search).get("auth_error") ?? ""]);
-  if (!opts.data) return <Center className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
+  if (!opts.data) return <Center component="main" className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
   const min = opts.data.password_min_length ?? 12;
 
   if (opts.data.setup) {
@@ -119,7 +120,7 @@ export function AcceptScreen({ token, name }: { token: string; name: string }) {
   const [uname, setUname] = useState<string | null>(null);
   const pair = usePasswordPair();
   const accept = useMutation({ mutationFn: () => send("POST", "auth/accept", { token, password: pair.pw, name: uname ?? undefined }), onSuccess: () => window.location.replace("/") });
-  if (info.isLoading) return <Center className="ms-fullh"><EmptyState>{t("Comprobando el enlace…")}</EmptyState></Center>;
+  if (info.isLoading) return <Center component="main" className="ms-fullh"><EmptyState>{t("Comprobando el enlace…")}</EmptyState></Center>;
   if (info.error) return <Card name={name}><Notice tone="danger" title={t("Enlace no válido")}>{(info.error as Error).message}{t(". Pide a un administrador que te envíe uno nuevo.")}</Notice><Btn component="a" href="/">{t("Ir al inicio")}</Btn></Card>;
   const d = info.data!;
   return (

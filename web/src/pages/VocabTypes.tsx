@@ -27,7 +27,7 @@ function TypesTable({ rows, isAdmin, open }: { rows: TypeItem[]; isAdmin: boolea
           <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Tipo")}</ColHead>
           <ColHead sort={v.sortProps("count")} filter={v.select("onto")}>{t("Entidades")}</ColHead>
           <ColHead filter={v.text("desc", t("Buscar en la descripción…"))}>{t("Descripción")}</ColHead>
-          {isAdmin && <DataTable.Th />}
+          {isAdmin && <DataTable.ActionsHead />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((i) => (
           <DataTable.Tr key={i.name}>

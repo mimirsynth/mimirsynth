@@ -145,7 +145,7 @@ export default function AdminUsers({ me }: { me?: number }) {
               <ColHead>{t("Estado")}</ColHead>
               <ColHead sort={v.sortProps("brains")}>{t("Brains")}</ColHead>
               <ColHead sort={v.sortProps("login")}>{t("Último acceso")}</ColHead>
-              <DataTable.Th />
+              <DataTable.ActionsHead />
             </DataTable.Tr></DataTable.Thead>
             <DataTable.Tbody>{v.rows.map((u) => (
               <DataTable.Tr key={u.id}>

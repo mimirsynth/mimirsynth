@@ -12,6 +12,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 ### Changed
 - Sign out is now one click away: the sidebar shows the person's avatar and name (linking to My account) with a sign-out button next to it, and My account has a highlighted «Sign out» button under its section menu. It used to be a small button in My account → Security → Sessions.
 - A wiki page's content can now be fetched lazily: a rescan only downloads the pages that are new or whose modification date changed.
+- Accessibility pass (see `docs/ACCESSIBILITY.md`): every screen has a level-one heading and the sign-in and setup screens a `main` landmark; action columns in tables have a visually hidden header instead of an empty one; the pager no longer overflows at 320 px; a skipped heading level fixed.
 
 ## [0.6.0] - 2026-10-26
 ### Added
