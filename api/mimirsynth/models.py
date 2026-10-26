@@ -130,6 +130,22 @@ class Membership(Base):
     brain: Mapped[Brain] = relationship(back_populates="members")
 
 
+class BrainGrant(Base):
+    """Concesión de lectura: el brain de origen deja que el brain de destino lo consulte (solo lectura, acotada, revocable)."""
+    __tablename__ = "brain_grants"
+    __table_args__ = (UniqueConstraint("source_brain_id", "target_brain_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"))
+    target_brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"))
+    scope: Mapped[str] = mapped_column(String(8), default="both")  # graph (hechos y episodios) | docs (documentos) | both
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source: Mapped[Brain] = relationship(foreign_keys=[source_brain_id])
+    target: Mapped[Brain] = relationship(foreign_keys=[target_brain_id])
+
+
 class Audit(Base):
     __tablename__ = "audit_log"
     id: Mapped[int] = mapped_column(primary_key=True)

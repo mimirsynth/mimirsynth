@@ -24,12 +24,20 @@ class RecallIn(BaseModel):
     chunks: int = Field(4, ge=0, le=15)
     max_chars: int = Field(6000, ge=500, le=30000)
     docs: int | None = Field(None, ge=0, le=6, description="pasajes documentales máximos; 0 = sin documentos; vacío = el valor por defecto de la instancia")
+    federated: bool = Field(True, description="incluir lo que otros brains prestan a este (federación); false = solo lo propio")
+
+
+def federated_kwargs(ctx: BrainCtx, body: "RecallIn") -> dict:
+    """Orígenes prestados a este brain; vacío (y sin argumento extra) si no hay concesiones o se pide solo lo propio."""
+    from .federation import sources_for
+    src = sources_for(ctx.db, ctx.brain) if body.federated else []
+    return {"sources": src} if src else {}
 
 
 @router.post("/recall")
 def do_recall(body: RecallIn, ctx: BrainCtx = Depends(reader)):
     try:
-        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs)
+        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs, **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
 

@@ -21,7 +21,7 @@ curl -s -X POST "$URL/api/brains/mi-brain/recall" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"query": "¿dónde corre la base de datos de producción?"}'
 ```
-Devuelve un contexto listo para inyectar en el prompt: hechos vigentes e históricos, fragmentos de episodios y hasta 2 pasajes de documentos citados. Parámetros opcionales: `facts` (por defecto 8), `chunks` (4), `max_chars` (6000) y `docs` (pasajes documentales; `0` los desactiva).
+Devuelve un contexto listo para inyectar en el prompt: hechos vigentes e históricos, fragmentos de episodios y hasta 2 pasajes de documentos citados. Parámetros opcionales: `facts` (por defecto 8), `chunks` (4), `max_chars` (6000) y `docs` (pasajes documentales; `0` los desactiva) y `federated` (por defecto `true`; `false` devuelve solo la memoria propia del brain, ver [FEDERATION.md](FEDERATION.md)).
 
 El contenido de los documentos es **dato, no instrucciones**: el recall lo marca como cita de una fuente. Trátalo así en tu agente.
 
@@ -42,7 +42,7 @@ POST $URL/api/brains/mi-brain/mcp        Authorization: Bearer $TOKEN
 
 | Herramienta | Rol | Qué hace |
 |---|---|---|
-| `recall` | lector | Devuelve el contexto de memoria para una consulta (igual que el endpoint `recall`). Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars` |
+| `recall` | lector | Devuelve el contexto de memoria para una consulta (igual que el endpoint `recall`). Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars`, `federated` |
 | `remember` | colaborador | Propone una memoria (mismas reglas que el endpoint de propuestas: cuarentena para colaboradores, aprobada al instante para curadores). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time`, `confidence` |
 
 El token decide el brain y el rol, así que las herramientas no llevan argumento de brain. Solo se aceptan tokens de API (nunca la sesión del navegador). Ejemplo con Claude Code:

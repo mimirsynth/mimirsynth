@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from . import appsettings
 from .deps import BrainCtx, brain_access
-from .memory import RecallIn
+from .memory import RecallIn, federated_kwargs
 from .proposals import ProposalIn, create
 from .recall import recall
 from .roles import allows
@@ -32,7 +32,8 @@ TOOLS = [
          "facts": {"type": "integer", "minimum": 0, "maximum": 30, "description": "Máximo de hechos (por defecto 8)."},
          "chunks": {"type": "integer", "minimum": 0, "maximum": 15, "description": "Máximo de fragmentos de episodios (por defecto 4)."},
          "docs": {"type": "integer", "minimum": 0, "maximum": 6, "description": "Máximo de pasajes de documentos; 0 = sin documentos."},
-         "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo del contexto devuelto (por defecto 6000)."}},
+         "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo del contexto devuelto (por defecto 6000)."},
+         "federated": {"type": "boolean", "description": "Incluir lo que otros brains prestan a este (por defecto sí); false = solo la memoria propia."}},
          "required": ["query"]}, "annotations": {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}},
     {"name": "remember", "title": "Proponer una memoria", "description": "Propone guardar un conocimiento que persista (una decisión, una configuración, un arreglo, un patrón). Según tu rol queda en cuarentena hasta que un curador la apruebe, o se aprueba al instante. No guardes datos efímeros ni secretos.",
      "inputSchema": {"type": "object", "properties": {
@@ -63,7 +64,7 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
     try:
         if name == "recall":
             body = RecallIn(**args)
-            out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs)
+            out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs, **federated_kwargs(ctx, body))
             return _text(out["context"] or "No hay nada relevante en la memoria para esa consulta.")
         if name == "remember":
             if not allows(ctx.role, "contributor"):

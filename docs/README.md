@@ -11,3 +11,4 @@
 | [AGENTS.md](AGENTS.md) | Connect agents: tokens, recall, proposals and documents |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it fits together: brains, roles, quarantine and recall |
 | [DOCUMENTS.md](DOCUMENTS.md) | Document memory design |
+| [FEDERATION.md](FEDERATION.md) | Lending read access between brains |

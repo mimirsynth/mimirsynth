@@ -6,6 +6,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 ### Added
+- **Federation between brains**: an administrator of a brain can lend read access to another brain (scope: graph, documents or both; optional expiry; revocable at any time; audited). The receiving brain's `recall` (REST and MCP) merges what it is lent with its own using weighted RRF and marks each lent item with its origin. One way and one hop; no embeddings or summaries are shared. New Administration → Brains → Federation panel, `/api/brains/{slug}/grants`, `federated` option on `recall`, and migration `0019`. See `docs/FEDERATION.md`.
 - Wiki adapters for **Confluence** (Cloud and Data Center) and **Notion**, read-only. Written against each API's documented format and covered by tests with simulated responses; not yet validated against a live instance. Docmost is left out for now (no documented public API).
 - Knowledge → Sources → Edit: change which collections (spaces, databases) of a connected wiki are indexed, using the stored credentials.
 
