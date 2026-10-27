@@ -1,4 +1,7 @@
 """Conector EmbeddingProvider: cualquier endpoint OpenAI-compatible (Ollama, OpenAI, vLLM...)."""
+import threading
+import time
+from contextlib import contextmanager
 from typing import Protocol
 
 import httpx
@@ -8,6 +11,67 @@ from .config import settings
 
 class EmbeddingProvider(Protocol):
     def embed(self, texts: list[str]) -> list[list[float]]: ...
+
+
+class GateBusy(RuntimeError):
+    """El cambio de modelo no consiguió la compuerta a tiempo: hay escrituras de vectores largas en curso."""
+
+
+class _Gate:
+    """Exclusión entre quienes guardan vectores (compartida: ingesta, índice de texto, documentos, edición de hechos) y el cambio
+    de modelo de embeddings (exclusiva). Mientras se cambia de modelo, las escrituras nuevas esperan; el cambio espera a que terminen
+    las que ya estaban en marcha, pero como mucho `timeout` segundos: si no lo consigue, se retira y las escrituras siguen (se aplaza
+    el cambio, no las escrituras). Así ningún vector del modelo anterior se cuela después del cambio. No es reentrante y es por
+    proceso (el servicio corre en un solo proceso)."""
+
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._writers = 0
+        self._switching = False
+
+    @contextmanager
+    def writing(self):
+        with self._cond:
+            while self._switching:
+                self._cond.wait()
+            self._writers += 1
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._writers -= 1
+                self._cond.notify_all()
+
+    @contextmanager
+    def switching(self, timeout: float | None = None):
+        deadline = None if timeout is None else time.monotonic() + timeout
+
+        def wait() -> None:
+            left = None if deadline is None else deadline - time.monotonic()
+            if left is not None and left <= 0:
+                raise GateBusy("hay escrituras de vectores en curso")
+            self._cond.wait(left)
+
+        with self._cond:
+            while self._switching:
+                wait()
+            self._switching = True
+            try:
+                while self._writers:
+                    wait()
+            except GateBusy:
+                self._switching = False
+                self._cond.notify_all()
+                raise
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._switching = False
+                self._cond.notify_all()
+
+
+gate = _Gate()
 
 
 class OpenAICompatEmbedder:

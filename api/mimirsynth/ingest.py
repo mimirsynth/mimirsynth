@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from . import appsettings, ontology as ontology_mod
 from .config import settings
+from .embed import gate
 
 os.environ.setdefault("SEMAPHORE_LIMIT", str(settings.ingest_concurrency))  # antes de importar graphiti_core
 log = logging.getLogger("mimirsynth.ingest")
@@ -89,7 +90,8 @@ def ingest_proposal(pid: int, job=None) -> str:
             for attempt in range(1, appsettings.get("ingest_retries") + 1):
                 rep: dict = {}
                 try:
-                    uuid = asyncio.run(add_episode(brain.graph_name, p.name, p.body, p.source, p.source_description, p.reference_time, ontology=onto, report=rep))
+                    with gate.writing():  # un cambio de modelo de embeddings espera a que termine (y la ingesta, a que termine él)
+                        uuid = asyncio.run(add_episode(brain.graph_name, p.name, p.body, p.source, p.source_description, p.reference_time, ontology=onto, report=rep))
                     break
                 except Exception as e:  # noqa: BLE001
                     msg = str(e).lower()

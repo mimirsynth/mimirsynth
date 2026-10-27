@@ -145,7 +145,7 @@ def status() -> dict:
     """El marcador y si las sombras están huérfanas: las hay y ningún relleno está en cola ni en marcha."""
     m = marker()
     with _factory()() as db:
-        running = db.scalar(select(Job.id).where(Job.kind == KIND, Job.status.in_(("queued", "running")))) is not None
+        running = db.scalar(select(Job.id).where(Job.kind.in_((KIND, "embedding.switch")), Job.status.in_(("queued", "running")))) is not None
     return {"shadow": m, "orphan": bool(m) and not running}
 
 
@@ -281,7 +281,8 @@ def _ddl(fn, what: str, note=None) -> None:
     for attempt in range(1, LOCK_RETRIES + 1):
         try:
             with engine().begin() as c:
-                c.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'"))
+                if c.dialect.name == "postgresql":
+                    c.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'"))
                 fn(c)
             return
         except OperationalError as ex:
@@ -500,3 +501,184 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
     with _factory()() as db:
         audit(db, None, "embedding.reindex.filled", None, name=e.name, model=e.model, dim=dim, counts=counts)
     return {"engine": e.name, "model": e.model, "dim": dim, "counts": counts, "switched": False}
+
+
+# --- paso 2: intercambio y recuperación al arrancar (#48) ----------------------------------------
+# Con un relleno terminado (marcador en `ready`) y la copia de seguridad confirmada, el trabajo `embedding.switch`:
+# 1. se pone al día fuera de la compuerta (lo que cambió desde el relleno) y se asegura del índice HNSW sombra;
+# 2. pausa las escrituras de vectores (`embed.gate`, como mucho `reindex_switch_wait` segundos de espera a las que estén en curso; si
+#    no lo consigue, se retira y lo vuelve a intentar más tarde: se aplaza el cambio, no las escrituras);
+# 3. con las escrituras en pausa, completa lo que quede, intercambia los vectores de cada grafo (los anteriores en `<vector>_prev`) y,
+#    en una sola transacción de PostgreSQL, sustituye columnas e índices, marca el motor nuevo por defecto y borra el marcador;
+# 4. si algo falla antes de confirmar la transacción, los grafos vuelven a sus vectores y el marcador a `ready`.
+# Si el servicio muere a mitad, `recover_switch` (al arrancar, antes de servir) deja cada grafo coherente con el motor por defecto.
+KIND_SWITCH = "embedding.switch"
+SWITCH_ATTEMPTS = 3
+SWITCH_RETRY_WAIT = 30.0  # segundos entre intentos de pausar las escrituras
+
+
+def _set_state(state: str) -> None:
+    with _factory()() as db:
+        row = db.get(AppSetting, MARKER)
+        if row:
+            v = dict((row.value or {}).get("v") or {})
+            v.update(state=state, updated_at=_now().isoformat(timespec="seconds"))
+            row.value, row.updated_at = {"v": v}, _now()
+            db.commit()
+
+
+def _swap_graph(name: str) -> None:
+    g = graph(name)
+    for kind, label, _, vec in ITEMS:
+        g.query(f"MATCH {_match(kind, label)} WHERE x.{vec}_reindex IS NOT NULL WITH x, x.{vec} AS old, x.{vec}_reindex AS new "
+                f"SET x.{vec}_prev = old, x.{vec} = new, x.{vec}_reindex = NULL, x.{vec}_reindex_src = NULL")
+
+
+def _unswap_graph(name: str) -> None:
+    """Deshace el intercambio: vuelve el vector anterior y deja el nuevo como sombra (un reintento no tendrá que recalcularlo)."""
+    g = graph(name)
+    for kind, label, txt, vec in ITEMS:
+        g.query(f"MATCH {_match(kind, label)} WHERE x.{vec}_prev IS NOT NULL WITH x, x.{vec} AS new, x.{vec}_prev AS old "
+                f"SET x.{vec}_reindex = new, x.{vec}_reindex_src = x.{txt}, x.{vec} = old, x.{vec}_prev = NULL")
+
+
+def _has_prev(name: str) -> bool:
+    g = graph(name)
+    return any(g.query(f"MATCH {_match(k, lb)} WHERE x.{v}_prev IS NOT NULL RETURN x LIMIT 1").result_set for k, lb, _, v in ITEMS)
+
+
+def _drop_prev(name: str) -> None:
+    g = graph(name)
+    for kind, label, _, vec in ITEMS:
+        g.query(f"MATCH {_match(kind, label)} WHERE x.{vec}_prev IS NOT NULL SET x.{vec}_prev = NULL")
+
+
+def _switch_tx(eid: int, note=None) -> None:
+    """En una sola transacción: columnas e índices de pgvector pasan a los nuevos, el motor nuevo queda como el por defecto y se
+    borra el marcador. Es lo que confirma el cambio: si no llega a hacerse, el motor por defecto sigue siendo el anterior."""
+    def run(c):
+        if index.enabled():
+            for table, ix, *_ in _tables(c):
+                if _shadow_type(c, table) is None:
+                    raise RuntimeError(f"falta la columna sombra de {table}: vuelve a calcular los vectores en sombra")
+                c.execute(text(f"DROP INDEX IF EXISTS {ix}"))
+                c.execute(text(f"ALTER TABLE {table} DROP COLUMN embedding"))
+                c.execute(text(f"ALTER TABLE {table} RENAME COLUMN embedding_reindex TO embedding"))
+                c.execute(text(f"ALTER INDEX IF EXISTS {ix}_reindex RENAME TO {ix}"))
+        c.execute(text("UPDATE embedding_engines SET is_default = (id = :e)"), {"e": eid})
+        c.execute(text("DELETE FROM app_settings WHERE key = :k"), {"k": MARKER})
+    _ddl(run, "cambiar las columnas del índice", note)
+
+
+def recover_switch() -> dict:
+    """Al arrancar, antes de servir: un grafo con `<vector>_prev` quedó a medias de un intercambio. Si el cambio no llegó a
+    confirmarse (sigue el marcador y el motor por defecto no es el nuevo), vuelve a los vectores anteriores y el relleno queda listo
+    para reintentar; si se confirmó, solo quedan por borrar los vectores anteriores."""
+    out = {"restored": 0, "cleaned": 0}
+    m = marker()
+    with _factory()() as db:
+        current = db.scalar(select(EmbeddingEngine.id).where(EmbeddingEngine.is_default.is_(True)))
+    pending = bool(m) and m.get("engine_id") != current
+    for g in _graphs():
+        if not _has_prev(g):
+            continue
+        if pending:
+            _unswap_graph(g)
+            out["restored"] += 1
+        else:
+            _drop_prev(g)
+            out["cleaned"] += 1
+    if m and m.get("state") == "switching":
+        if pending:
+            _set_state("ready")
+        else:
+            _unmark()
+    if out["restored"] or out["cleaned"]:
+        log.warning("cambio de modelo de embeddings interrumpido: %s grafos devueltos al motor anterior, %s limpiados", out["restored"], out["cleaned"])
+    return out
+
+
+def _catch_up(emb, dim: int, tick, batch: int, pause: float, note=None) -> int:
+    n = 0
+    for g in _graphs():
+        n += sum(_fill_graph(g, emb, dim, tick, batch, pause, note).values())
+    if index.enabled():
+        n += sum(_fill_pg(emb, dim, tick, batch, pause, note).values())
+    return n
+
+
+@jobs.register(KIND_SWITCH, "Cambio de modelo de embeddings (intercambio)", limit=1, resume=False)
+def _switch_job(ctx: "jobs.JobCtx", p: dict) -> dict:
+    from . import notify
+    from .embed import GateBusy, gate, resolve_embedding
+    eid = p["engine_id"]
+    m = marker()
+    if not m or m.get("engine_id") != eid or m.get("state") != "ready":
+        raise RuntimeError("no hay un relleno terminado hacia ese motor: calcula primero los vectores en sombra")
+    with _factory()() as db:
+        e = db.get(EmbeddingEngine, eid)
+        if not e or not e.enabled:
+            raise RuntimeError("el motor de embeddings ya no existe o está desactivado")
+        dim, emb, name, model = e.dim, _embedder(e), e.name, e.model
+    cur = resolve_embedding()
+    before = {"model": cur["model"], "dim": cur["dim"]}
+    ctx.note(f"copia de seguridad de FalkorDB y PostgreSQL confirmada por quien lanzó el cambio; de «{before['model']}» ({before['dim']}d) a «{model}» ({dim}d)")
+    batch, pause, wait_s = appsettings.get("reindex_batch"), appsettings.get("reindex_pause"), float(appsettings.get("reindex_switch_wait"))
+    state = {"done": 0}
+
+    def tick(n: int, msg: str) -> None:
+        ctx.check()
+        state["done"] += n
+        ctx.progress(state["done"], None, msg)
+
+    pg = index.enabled()
+    try:
+        ctx.progress(0, 0, "poniéndose al día con lo que cambió desde el relleno")
+        _catch_up(emb, dim, tick, batch, pause, ctx.note)
+        if pg:
+            _index_pg()
+        for attempt in range(1, SWITCH_ATTEMPTS + 1):
+            t0 = time.monotonic()
+            try:
+                with gate.switching(timeout=wait_s):
+                    t1 = time.monotonic()
+                    ctx.note(f"escrituras de vectores en pausa (tras esperar {t1 - t0:.1f}s a las que estaban en curso)")
+                    _set_state("switching")
+                    late = _catch_up(emb, dim, tick, batch, pause, ctx.note)
+                    graphs, swapped = _graphs(), []
+                    try:
+                        for g in graphs:
+                            _swap_graph(g)
+                            swapped.append(g)
+                        _switch_tx(eid, ctx.note)
+                    except Exception:
+                        for g in swapped:
+                            try:
+                                _unswap_graph(g)
+                            except Exception:  # noqa: BLE001  (recover_switch lo arreglará al arrancar)
+                                log.exception("no se pudo deshacer el intercambio del grafo %s", g)
+                        raise
+                    paused = time.monotonic() - t1
+                break
+            except GateBusy:
+                ctx.note(f"no se pudieron pausar las escrituras en {wait_s:.0f}s (hay escrituras largas en curso): cambio aplazado (intento {attempt}/{SWITCH_ATTEMPTS})")
+                if attempt == SWITCH_ATTEMPTS:
+                    raise RuntimeError("cambio aplazado: había escrituras de vectores largas en curso; el motor en uso no ha cambiado, reinténtalo más tarde")
+                ctx.check()
+                time.sleep(SWITCH_RETRY_WAIT)
+    except BaseException:
+        if marker():  # sin confirmar: el relleno sigue listo para reintentar el cambio
+            _set_state("ready")
+        raise
+    ctx.note(f"pausa de escrituras: {paused:.1f}s ({late} elementos completados en la pausa)")
+    for g in graphs:
+        try:
+            _drop_prev(g)
+        except Exception as ex:  # noqa: BLE001  (son vectores ya sin uso: recover_switch los borra al arrancar)
+            ctx.note(f"no se pudieron borrar los vectores anteriores del grafo «{g}»: {str(ex)[:150]}")
+    notify.resolve("reindex.orphan", MARKER, "El cambio de modelo ha terminado.")
+    ctx.note("hecho: recalibra la similitud mínima de un pasaje del recall (Administración → Recuerdo) y pasa al modelo nuevo los agentes que escriban directamente en Graphiti")
+    from .deps import audit
+    with _factory()() as db:
+        audit(db, None, "embedding.switched", None, name=name, model=model, dim=dim, previous=before["model"], pause_seconds=round(paused, 1))
+    return {"engine": name, "model": model, "dim": dim, "previous": before, "graphs": len(graphs), "pause_seconds": round(paused, 1), "switched": True}
