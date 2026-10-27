@@ -11,27 +11,37 @@ Qué se calcula, para cada brain:
 Nada de lo que usan el recall, la ingesta o el índice cambia: el motor por defecto sigue siendo el mismo. El intercambio llega en un
 paso posterior. Al reanudar o reintentar solo se calcula lo que falta o lo que ha cambiado (el texto ya no coincide con `_src`).
 Cancelar (o descartar) borra todas las propiedades sombra de FalkorDB y la columna y el índice sombra de PostgreSQL.
-Los grafos sin brain no se tocan.
+Mientras haya sombras queda un marcador barato de consultar (`reindex_shadow` en `app_settings`): así se sabe, sin recorrer el grafo,
+si hay un relleno sin terminar, y se avisa (`reindex.orphan`) si lleva tiempo parado. Los grafos sin brain no se tocan.
 """
 import logging
 import math
+import threading
 import time
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 
 from . import appsettings, index, jobs
 from .db import client, graph, list_graphs, rows
 from .embed import OpenAICompatEmbedder
-from .models import Brain, EmbeddingEngine, Job
+from .models import AppSetting, Brain, EmbeddingEngine, Job
 from .secretbox import unseal
 from .store import _factory, engine
 
 log = logging.getLogger("mimirsynth.reembed")
 KIND = "embedding.reindex"
+MARKER = "reindex_shadow"
 RETRY_WAIT = 4.0  # segundos (por intento) antes de reintentar una llamada fallida al motor
 MAX_RETRY_AFTER = 300.0  # tope de espera que se acepta de un `Retry-After`
 FALKOR_MARGIN = 1.5  # la memoria libre de FalkorDB debe superar la estimación por este factor
+SAMPLE = 1000  # elementos por tipo con los que se estima el tamaño medio del texto
+ESTIMATE_SECONDS = 5.0  # tiempo máximo de una estimación pedida por la API; si se pasa, la estimación es parcial
+ESTIMATE_TTL = 300.0  # segundos que se reutiliza la última estimación de un motor
+LOCK_TIMEOUT = "2s"  # espera máxima por el bloqueo de una tabla del índice al cambiar su estructura
+LOCK_RETRIES = 5
 # (tipo, etiqueta, propiedad con el texto, propiedad con el vector)
 ITEMS = (
     ("node", "Entity", "name", "name_embedding"),
@@ -45,6 +55,8 @@ TABLES = (
     ("doc_chunks", "ix_doc_chunks_emb", "FROM doc_chunks c JOIN documents d ON d.id = c.document_id WHERE c.embedding_reindex IS NULL",
      "c.id, d.title, c.heading_path, c.text", lambda r: f"{r.title}\n{r.heading_path}\n{r.text}"),
 )
+_cache: dict[int, tuple[float, dict]] = {}
+_cache_lock = threading.Lock()
 
 
 def is_shadow(prop: str) -> bool:
@@ -93,6 +105,73 @@ def _embed(emb, texts: list[str], dim: int, note=None) -> list[list[float]]:
     return vecs
 
 
+# --- marcador de sombras --------------------------------------------------------------------------
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def marker() -> dict | None:
+    """Estado de las sombras sin recorrer el grafo: {engine_id, engine, model, dim, state: running|failed|ready, started_at, updated_at}."""
+    with _factory()() as db:
+        row = db.get(AppSetting, MARKER)
+    v = (row.value or {}).get("v") if row else None
+    return dict(v) if v else None
+
+
+def _mark(e: EmbeddingEngine, state: str) -> None:
+    with _factory()() as db:
+        row = db.get(AppSetting, MARKER)
+        cur = (row.value or {}).get("v", {}) if row else {}
+        t = _now().isoformat(timespec="seconds")
+        v = {"engine_id": e.id, "engine": e.name, "model": e.model, "dim": e.dim, "state": state,
+             "started_at": cur.get("started_at") if cur.get("engine_id") == e.id else t, "updated_at": t}
+        if row:
+            row.value, row.updated_at = {"v": v}, _now()
+        else:
+            db.add(AppSetting(key=MARKER, value={"v": v}))
+        db.commit()
+
+
+def _unmark() -> None:
+    with _factory()() as db:
+        row = db.get(AppSetting, MARKER)
+        if row:
+            db.delete(row)
+            db.commit()
+
+
+def status() -> dict:
+    """El marcador y si las sombras están huérfanas: las hay y ningún relleno está en cola ni en marcha."""
+    m = marker()
+    with _factory()() as db:
+        running = db.scalar(select(Job.id).where(Job.kind == KIND, Job.status.in_(("queued", "running")))) is not None
+    return {"shadow": m, "orphan": bool(m) and not running}
+
+
+def check_orphan() -> None:
+    """Ciclo de fondo de las notificaciones: avisa si un relleno lleva más de `reindex_orphan_hours` parado sin terminar (falló, o se
+    cortó y nadie lo retoma) con las sombras ocupando memoria; el aviso se resuelve al descartarlas o al terminar el relleno.
+    Un relleno terminado (`ready`) espera al intercambio y no avisa."""
+    from . import notify
+    st = status()
+    m = st["shadow"]
+    if not m or m.get("state") == "ready":
+        notify.resolve("reindex.orphan", MARKER)
+        return
+    if not st["orphan"]:  # el relleno está en marcha
+        return
+    try:
+        since = datetime.fromisoformat(m["updated_at"])
+    except (KeyError, ValueError):
+        return
+    hours = float(appsettings.get("reindex_orphan_hours"))
+    if _now() - since >= timedelta(hours=hours):
+        notify.emit("reindex.orphan", "Hay un cambio de modelo de embeddings sin terminar",
+                    f"El relleno hacia «{m.get('engine')}» ({m.get('model')}, {m.get('dim')}d) está {'fallido' if m.get('state') == 'failed' else 'parado'} "
+                    f"desde {m['updated_at']} y sus vectores sombra siguen ocupando memoria. Reinténtalo o descártalo.", key=MARKER)
+
+
 # --- FalkorDB -------------------------------------------------------------------------------------
 
 def _graphs() -> list[str]:
@@ -112,13 +191,24 @@ def _pending(txt: str, vec: str) -> str:
             f"AND (x.{vec}_reindex IS NULL OR x.{vec}_reindex_src IS NULL OR x.{vec}_reindex_src <> x.{txt})")
 
 
-def _count_graph(name: str) -> tuple[int, int]:
-    """(elementos pendientes, bytes de su texto) de un grafo."""
+def _estimate_graph(name: str) -> tuple[int, int]:
+    """(elementos, bytes de texto estimados) de un grafo con consultas acotadas: un recuento por tipo (sin filtros, que FalkorDB
+    resuelve sin recorrer los elementos) y una muestra de SAMPLE elementos para el tamaño medio del texto. Cuenta todos los elementos,
+    no solo los pendientes: es una cota superior."""
     g, n, size = graph(name), 0, 0
-    for kind, label, txt, vec in ITEMS:
-        c, s = g.query(f"MATCH {_match(kind, label)} WHERE {_pending(txt, vec)} RETURN count(x), sum(size(x.{txt}))").result_set[0]
-        n, size = n + int(c or 0), size + int(s or 0)
+    for kind, label, txt, _ in ITEMS:
+        c = int(g.query(f"MATCH {_match(kind, label)} RETURN count(x)").result_set[0][0] or 0)
+        if c:
+            lens = [int(r[0] or 0) for r in g.query(f"MATCH {_match(kind, label)} RETURN size(x.{txt}) LIMIT {SAMPLE}").result_set]
+            size += int(c * (sum(lens) / len(lens))) if lens else 0
+        n += c
     return n, size
+
+
+def _count_graph(name: str) -> int:
+    """Elementos pendientes de un grafo (exacto; lo usa el trabajo, no la API)."""
+    g = graph(name)
+    return sum(int(g.query(f"MATCH {_match(k, lb)} WHERE {_pending(t, v)} RETURN count(x)").result_set[0][0] or 0) for k, lb, t, v in ITEMS)
 
 
 def _fill_graph(name: str, emb, dim: int, tick, batch: int, pause: float, note=None) -> dict:
@@ -181,9 +271,32 @@ def _shadow_type(c, table: str) -> str | None:
                           "AND attname = 'embedding_reindex' AND NOT attisdropped"), {"t": table}).scalar()
 
 
-def _prepare_pg(dim: int) -> None:
+def _locked(ex: OperationalError) -> bool:
+    return getattr(getattr(ex, "orig", None), "sqlstate", "") == "55P03"  # lock_not_available
+
+
+def _ddl(fn, what: str, note=None) -> None:
+    """Cambia la estructura de las tablas del índice con un `lock_timeout` corto: si la sincronización del índice o una indexación
+    tienen la tabla, se reintenta en lugar de quedarse esperando (y de hacer esperar a todos los que vengan detrás)."""
+    for attempt in range(1, LOCK_RETRIES + 1):
+        try:
+            with engine().begin() as c:
+                c.execute(text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'"))
+                fn(c)
+            return
+        except OperationalError as ex:
+            if not _locked(ex) or attempt == LOCK_RETRIES:
+                if _locked(ex):
+                    raise RuntimeError(f"no se pudo {what}: las tablas del índice siguen ocupadas tras {LOCK_RETRIES} intentos") from ex
+                raise
+            if note:
+                note(f"tablas del índice ocupadas al {what}: reintento ({attempt}/{LOCK_RETRIES})")
+            time.sleep(RETRY_WAIT * attempt / 4)
+
+
+def _prepare_pg(dim: int, note=None) -> None:
     """Columna sombra con la dimensión nueva (se rehace si quedó de un intento con otra dimensión)."""
-    with engine().begin() as c:
+    def run(c):
         for table, ix, *_ in _tables(c):
             cur = _shadow_type(c, table)
             if cur and cur != f"vector({dim})":
@@ -192,14 +305,23 @@ def _prepare_pg(dim: int) -> None:
                 cur = None
             if not cur:
                 c.execute(text(f"ALTER TABLE {table} ADD COLUMN embedding_reindex vector({dim})"))
+    _ddl(run, "preparar la columna sombra", note)
 
 
-def _count_pg(shadow: bool = True) -> int:
-    """Trozos pendientes (con la columna sombra ya creada) o, antes de crearla, todos los trozos."""
+def _pg_rows() -> int:
+    """Trozos de las tablas del índice según las estadísticas de PostgreSQL (sin recorrerlas); si aún no hay estadísticas, se cuentan."""
     with engine().begin() as c:
-        if shadow:
-            return sum(c.execute(text(f"SELECT count(*) {where}")).scalar() for _, _, where, *_ in _tables(c))
-        return sum(c.execute(text(f"SELECT count(*) FROM {t}")).scalar() for t, *_ in _tables(c))
+        n = 0
+        for table, *_ in _tables(c):
+            est = c.execute(text("SELECT reltuples FROM pg_class WHERE oid = to_regclass(:t)"), {"t": table}).scalar()
+            n += int(est) if est is not None and est >= 0 else int(c.execute(text(f"SELECT count(*) FROM {table}")).scalar())
+        return n
+
+
+def _count_pg() -> int:
+    """Trozos pendientes (exacto, con la columna sombra ya creada; lo usa el trabajo)."""
+    with engine().begin() as c:
+        return sum(c.execute(text(f"SELECT count(*) {where}")).scalar() for _, _, where, *_ in _tables(c))
 
 
 def _fill_pg(emb, dim: int, tick, batch: int, pause: float, note=None) -> dict:
@@ -233,43 +355,73 @@ def _fill_pg(emb, dim: int, tick, batch: int, pause: float, note=None) -> dict:
 
 
 def _index_pg() -> None:
-    with engine().begin() as c:
-        for table, ix, *_ in _tables(c):
-            c.execute(text(f"CREATE INDEX IF NOT EXISTS {ix}_reindex ON {table} USING hnsw (embedding_reindex vector_cosine_ops) "
+    """Índice HNSW de la columna sombra, con CONCURRENTLY: mientras se construye no bloquea las escrituras del índice."""
+    with engine().connect() as c:
+        present = _tables(c)
+        c.commit()
+        c = c.execution_options(isolation_level="AUTOCOMMIT")
+        for table, ix, *_ in present:
+            valid = c.execute(text("SELECT i.indisvalid FROM pg_index i WHERE i.indexrelid = to_regclass(:n)"), {"n": f"{ix}_reindex"}).scalar()
+            if valid is False:  # una construcción concurrente interrumpida deja el índice inválido
+                c.execute(text(f"DROP INDEX CONCURRENTLY IF EXISTS {ix}_reindex"))
+            c.execute(text(f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {ix}_reindex ON {table} USING hnsw (embedding_reindex vector_cosine_ops) "
                            "WITH (m = 16, ef_construction = 64)"))
 
 
 def _wipe_pg() -> None:
-    with engine().begin() as c:
+    def run(c):
         for table, ix, *_ in _tables(c):
             c.execute(text(f"DROP INDEX IF EXISTS {ix}_reindex"))
             c.execute(text(f"ALTER TABLE {table} DROP COLUMN IF EXISTS embedding_reindex"))
+    _ddl(run, "borrar la columna sombra")
 
 
 # --- estimación, descarte y trabajo ---------------------------------------------------------------
 
-def estimate(e: EmbeddingEngine) -> dict:
-    """Cuánto queda por calcular, cuántas llamadas al motor supone y si FalkorDB tiene memoria libre para los vectores sombra.
-    En PostgreSQL se estima lo que ocupará (columna e índice HNSW), pero el espacio libre en disco no se puede consultar por SQL."""
-    n_graph, text_bytes = 0, 0
-    for g in _graphs():
-        n, s = _count_graph(g)
-        n_graph, text_bytes = n_graph + n, text_bytes + s
+def estimate(e: EmbeddingEngine, deadline: float | None = None) -> dict:
+    """Cuánto hay que calcular, cuántas llamadas al motor supone y si FalkorDB tiene memoria libre para los vectores sombra.
+    Con consultas acotadas (ver `_estimate_graph`): es una cota superior, que no descuenta lo ya calculado. Con `deadline`
+    (time.monotonic()) se para al llegar y la estimación queda marcada como parcial. En PostgreSQL se estima lo que ocuparán la columna
+    y el índice HNSW, pero el espacio libre en disco no se puede consultar por SQL."""
+    n_graph, text_bytes, partial, done, graphs = 0, 0, False, 0, _graphs()
+    for g in graphs:
+        if deadline is not None and time.monotonic() > deadline:
+            partial = True
+            break
+        n, s = _estimate_graph(g)
+        n_graph, text_bytes, done = n_graph + n, text_bytes + s, done + 1
     n_pg, pg_size = 0, None
     if index.enabled():
+        n_pg = _pg_rows()
         with engine().begin() as c:
-            shadow = all(_shadow_type(c, t) == f"vector({e.dim})" for t, *_ in _tables(c))
             pg_size = c.execute(text("SELECT pg_database_size(current_database())")).scalar()
-        n_pg = _count_pg(shadow)
     falkor_need = int(n_graph * (e.dim * 4 + 64) + text_bytes)  # vector float32 + sobrecoste por propiedad + copia del texto en _src
     used, limit = _falkor_memory()
     free = max(limit - used, 0) if limit else None
-    pg_need = int(n_pg * (e.dim * 4 + 8) * 2)  # la columna y, aproximadamente, lo mismo en el índice HNSW
     batch = appsettings.get("reindex_batch")
-    return {"engine": e.name, "model": e.model, "dim": e.dim,
+    return {"engine": e.name, "model": e.model, "dim": e.dim, "partial": partial, "graphs": len(graphs), "graphs_estimated": done,
             "graph_items": n_graph, "chunks": n_pg, "calls": math.ceil((n_graph + n_pg) / 16), "batches": math.ceil(n_graph / batch) + math.ceil(n_pg / batch),
             "falkor": {"need_bytes": falkor_need, "free_bytes": free, "ok": free is None or free >= falkor_need * FALKOR_MARGIN},
-            "postgres": {"need_bytes": pg_need, "database_bytes": pg_size}}
+            "postgres": {"need_bytes": int(n_pg * (e.dim * 4 + 8) * 2), "database_bytes": pg_size},  # la columna y, aprox., otro tanto el índice HNSW
+            "at": _now().isoformat(timespec="seconds")}
+
+
+def cached_estimate(e: EmbeddingEngine, refresh: bool = False) -> dict:
+    """Estimación para la API: con tiempo máximo (ESTIMATE_SECONDS) y reutilizando la última de ese motor durante ESTIMATE_TTL."""
+    with _cache_lock:
+        hit = _cache.get(e.id)
+        if hit and not refresh and time.monotonic() - hit[0] < ESTIMATE_TTL:
+            return {**hit[1], "cached": True}
+    est = estimate(e, deadline=time.monotonic() + ESTIMATE_SECONDS)
+    with _cache_lock:
+        _cache[e.id] = (time.monotonic(), est)
+    return {**est, "cached": False}
+
+
+def last_estimate(eid: int) -> dict | None:
+    with _cache_lock:
+        hit = _cache.get(eid)
+        return hit[1] if hit and time.monotonic() - hit[0] < ESTIMATE_TTL else None
 
 
 def check_space(est: dict) -> None:
@@ -280,11 +432,14 @@ def check_space(est: dict) -> None:
 
 
 def discard() -> None:
-    """Borra todo lo que deja el relleno: propiedades sombra en FalkorDB y columna e índice sombra en PostgreSQL."""
+    """Borra todo lo que deja el relleno: propiedades sombra en FalkorDB, columna e índice sombra en PostgreSQL y el marcador."""
+    from . import notify
     for g in _graphs():
         _wipe_graph(g)
     if index.enabled():
         _wipe_pg()
+    _unmark()
+    notify.resolve("reindex.orphan", MARKER, "Se han descartado los vectores sombra.")
 
 
 @jobs.register(KIND, "Cambio de modelo de embeddings (relleno en sombra)", limit=1, resume=True)
@@ -296,29 +451,29 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
             raise RuntimeError("el motor de embeddings ya no existe o está desactivado")
         dim, emb = e.dim, _embedder(e)
         prev = db.scalar(select(Job).where(Job.kind == KIND, Job.id < ctx.id).order_by(Job.id.desc()).limit(1))
-        stale = prev is not None and (prev.params or {}).get("engine_id") != eid  # sombras de un intento hacia otro motor
-        est = estimate(e)
-    if stale:
-        discard()
-        with _factory()() as db:
-            est = estimate(db.get(EmbeddingEngine, eid))
+    m = marker()
+    if (m and m.get("engine_id") != eid) or (prev is not None and (prev.params or {}).get("engine_id") != eid):
+        discard()  # sombras de un intento hacia otro motor
+    ctx.progress(0, 0, "estimando el trabajo")
+    est = estimate(e)  # aquí, en el trabajo, y no en la petición que lo lanza
     check_space(est)
+    ctx.note(f"estimación: hasta {est['graph_items']} elementos del grafo y {est['chunks']} trozos, unas {est['calls']} llamadas al motor; "
+             f"memoria en FalkorDB: unos {est['falkor']['need_bytes'] / 2**20:.0f} MB")
     batch, pause = appsettings.get("reindex_batch"), appsettings.get("reindex_pause")
-    ctx.note(f"pendientes: {est['graph_items']} elementos del grafo y {est['chunks']} trozos, unas {est['calls']} llamadas al motor; "
-             f"memoria estimada en FalkorDB: {est['falkor']['need_bytes'] / 2**20:.0f} MB")
-    state = {"done": 0, "total": est["graph_items"] + est["chunks"]}
-
-    def tick(n: int, msg: str) -> None:
-        ctx.check()
-        state["done"] += n
-        state["total"] = max(state["total"], state["done"])
-        ctx.progress(state["done"], state["total"], msg)
-
+    _mark(e, "running")
     pg = index.enabled()
     counts: dict = {}
     try:
         if pg:
-            _prepare_pg(dim)
+            _prepare_pg(dim, ctx.note)
+        state = {"done": 0, "total": sum(_count_graph(g) for g in _graphs()) + (_count_pg() if pg else 0)}
+
+        def tick(n: int, msg: str) -> None:
+            ctx.check()
+            state["done"] += n
+            state["total"] = max(state["total"], state["done"])
+            ctx.progress(state["done"], state["total"], msg)
+
         ctx.progress(0, state["total"], "calculando los vectores nuevos")
         for g in _graphs():
             for k, v in _fill_graph(g, emb, dim, tick, batch, pause, ctx.note).items():
@@ -334,6 +489,12 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
     except jobs.Cancelled:
         discard()
         raise
+    except Exception:
+        _mark(e, "failed")  # las sombras se quedan para reintentar; si nadie lo hace, check_orphan avisa
+        raise
+    _mark(e, "ready")
+    from . import notify
+    notify.resolve("reindex.orphan", MARKER, "El relleno ha terminado.")
     ctx.note("vectores nuevos listos en sombra; el modelo en uso no ha cambiado")
     from .deps import audit
     with _factory()() as db:

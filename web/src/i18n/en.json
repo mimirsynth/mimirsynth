@@ -857,6 +857,7 @@
  "URL del servidor": "Server URL",
  "Umbral de confianza": "Confidence threshold",
  "Un brain presta a otro su memoria solo para leer: las consultas del que recibe incluyen lo prestado, fusionado y marcado con su origen. No se comparten embeddings ni resúmenes, y la concesión no se transmite a un tercero.": "A brain lends its memory to another for reading only: queries on the receiving brain include what is lent, merged and marked with its origin. Embeddings and summaries are not shared, and the grant is not passed on to a third party.",
+ "Un cambio de modelo de embeddings lleva tiempo sin terminar y sus vectores sombra ocupan memoria": "An embedding model change has been unfinished for a while and its shadow vectors take up memory",
  "Un colaborador puede subir ficheros.": "A contributor can upload files.",
  "Un modelo de IA (LLM, embeddings o decisor) no responde": "An AI model (LLM, embeddings or decider) is not responding",
  "Un proveedor desactivado no aparece en la pantalla de entrada.": "A disabled provider is not offered on the sign-in screen.",

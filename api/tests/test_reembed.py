@@ -56,10 +56,14 @@ def env(client, monkeypatch):  # noqa: F811
     monkeypatch.setattr(settings, "reindex_batch", 2)  # varios lotes por tipo
     monkeypatch.setattr(ea, "_probe", lambda url, model, key: {"viejo": 4, "nuevo": 8}[model])
     monkeypatch.setattr(reembed, "RETRY_WAIT", 0)
+    reembed._cache.clear()  # las estimaciones se guardan por motor, y los ids se reutilizan entre pruebas
     fakes = {"viejo": Fake("viejo", 4), "nuevo": Fake("nuevo", 8)}
     monkeypatch.setattr(reembed, "_embedder", lambda e: fakes[e.model])
+    from mimirsynth.models import AppSetting, Notification
     with _factory()() as db:
-        db.execute(delete(EmbeddingEngine)); db.execute(delete(Job).where(Job.kind == reembed.KIND)); db.commit()
+        db.execute(delete(EmbeddingEngine)); db.execute(delete(Job).where(Job.kind == reembed.KIND))
+        db.execute(delete(AppSetting).where(AppSetting.key == reembed.MARKER)); db.execute(delete(Notification).where(Notification.event == "reindex.orphan"))
+        db.commit()
     c = falkordb.FalkorDB(host=FALKOR, port=6379)
     try:
         c.select_graph(GRAPH).delete()
@@ -115,9 +119,9 @@ def default_model(client) -> str:  # noqa: F811
 def test_fill_computes_shadow_vectors_and_changes_nothing_in_use(env, client):  # noqa: F811
     g = env["g"]
     est = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
-    assert est["graph_items"] == 6 and est["calls"] == 1 and est["falkor"]["ok"] and est["falkor"]["need_bytes"] > 6 * 8 * 4
+    assert est["graph_items"] == 6 and est["calls"] == 1 and est["falkor"]["ok"] and est["falkor"]["need_bytes"] > 6 * 8 * 4 and not est["partial"]
     r = client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
-    assert r.status_code == 202 and r.json()["estimate"]["graph_items"] == 6
+    assert r.status_code == 202
     job = client.get("/api/embedding-engines/reindex").json()["job"]
     assert job["status"] == "done" and job["result"]["switched"] is False, job
     assert job["result"]["counts"] == {"Entity": 3, "Community": 1, "RELATES_TO": 2} and job["done"] == job["total"] == 6
@@ -185,7 +189,8 @@ def test_cancel_discards_everything(env, client):  # noqa: F811
                 jobs.cancel(db.scalar(select(Job.id).where(Job.kind == reembed.KIND, Job.status == "running")))
     fake.hook = hook
     client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
-    assert client.get("/api/embedding-engines/reindex").json()["job"]["status"] == "cancelled"
+    st = client.get("/api/embedding-engines/reindex").json()
+    assert st["job"]["status"] == "cancelled" and st["shadow"] is None and st["orphan"] is False
     assert aux_props(g) == 0                                                            # ninguna propiedad auxiliar
     assert all_with(in_use(g), "viejo", 4) and default_model(client) == "viejo"
 
@@ -235,3 +240,113 @@ def test_guards(env, client):  # noqa: F811
     client.patch(f"/api/embedding-engines/{new['id']}", json={"name": "local-nuevo", "base_url": "http://n/v1", "model": "nuevo", "enabled": False})
     assert client.post(f"/api/embedding-engines/{new['id']}/reindex").status_code == 409           # desactivado
     assert client.post("/api/embedding-engines/reindex/999999/cancel").status_code == 404
+
+
+
+class Counting:
+    """Envuelve un grafo y apunta cada consulta que recibe."""
+    def __init__(self, g, log):
+        self.g, self.log = g, log
+
+    def query(self, q, params=None):
+        self.log.append(q)
+        return self.g.query(q, params or {})
+
+
+def test_estimate_uses_a_bounded_number_of_cheap_queries(env, client, monkeypatch):  # noqa: F811
+    from mimirsynth import reembed
+    g = env["g"]
+    g.query("UNWIND range(1, 400) AS i CREATE (:Entity {uuid: 'm' + toString(i), name: 'Entidad número ' + toString(i)})")
+    g.query("MATCH (a:Entity), (b:Entity {uuid:'e0'}) WHERE a.uuid STARTS WITH 'm' CREATE (a)-[:RELATES_TO {uuid: 'r' + a.uuid, fact: a.name + ' depende de Vesta'}]->(b)")
+    seen = []
+    real = reembed.graph
+    monkeypatch.setattr(reembed, "graph", lambda name: Counting(real(name), seen))
+    est = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
+    assert est["graph_items"] == 806 and not est["partial"]                             # 403 entidades, 1 comunidad, 402 hechos
+    assert 200 * 400 < est["falkor"]["need_bytes"]                                      # y el texto se estima con la muestra
+    assert len(seen) <= 2 * len(reembed.ITEMS) * est["graphs"]                          # por grafo, un recuento y una muestra por tipo como mucho
+    assert not [q for q in seen if "sum(" in q or "WHERE" in q]                         # sin agregar el texto ni filtrar todo el grafo
+    assert all("LIMIT" in q or q.rstrip().endswith("RETURN count(x)") for q in seen)
+
+
+def test_estimate_is_partial_after_its_time_limit_and_is_cached(env, client, monkeypatch):  # noqa: F811
+    from mimirsynth import reembed
+    monkeypatch.setattr(reembed, "ESTIMATE_SECONDS", -1)  # el tiempo ya se ha agotado al empezar
+    est = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
+    assert est["partial"] is True and est["graphs_estimated"] == 0 and est["graphs"] >= 1 and est["cached"] is False
+    seen = []
+    real = reembed.graph
+    monkeypatch.setattr(reembed, "graph", lambda name: Counting(real(name), seen))
+    again = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
+    assert again["cached"] is True and again["at"] == est["at"] and seen == []          # se reutiliza sin tocar el grafo
+    assert client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate", params={"refresh": True}).json()["cached"] is False
+
+
+def test_start_does_not_estimate_in_the_request(env, client, monkeypatch):  # noqa: F811
+    import threading
+    import time
+
+    from mimirsynth import jobs, reembed
+    where = []
+    real = reembed.estimate
+    monkeypatch.setattr(reembed, "estimate", lambda e, deadline=None: (where.append(threading.current_thread().name), real(e, deadline))[1])
+    monkeypatch.setattr(jobs, "INLINE", False)  # el trabajo en su hilo, como en producción
+    r = client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
+    assert r.status_code == 202 and "estimate" not in r.json()
+    for _ in range(100):
+        if client.get("/api/embedding-engines/reindex").json()["job"]["status"] in ("done", "failed"):
+            break
+        time.sleep(0.1)
+    job = client.get("/api/embedding-engines/reindex").json()["job"]
+    assert job["status"] == "done" and where and all(n.startswith("job-") for n in where)   # solo la hace el trabajo
+    assert any(x["msg"].startswith("estimación:") for x in job["log"])                       # y la deja en su registro
+
+
+def test_orphan_shadows_are_marked_exposed_notified_and_discarded(env, client, monkeypatch):  # noqa: F811
+    from sqlalchemy import select
+
+    from mimirsynth import reembed
+    from mimirsynth.config import settings
+    from mimirsynth.models import Notification
+    from mimirsynth.store import _factory
+    g, fake = env["g"], env["fakes"]["nuevo"]
+    calls = {"n": 0}
+
+    def hook(f, texts):
+        calls["n"] += 1
+        f.fail = calls["n"] >= 2
+    fake.hook = hook
+    client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
+    st = client.get("/api/embedding-engines/reindex").json()
+    assert st["job"]["status"] == "failed" and st["orphan"] is True
+    assert st["shadow"]["state"] == "failed" and st["shadow"]["engine"] == "local-nuevo" and st["shadow"]["dim"] == 8
+
+    def open_alerts():
+        with _factory()() as db:
+            return db.scalars(select(Notification).where(Notification.event == "reindex.orphan", Notification.resolved_at.is_(None))).all()
+    monkeypatch.setattr(settings, "reindex_orphan_hours", 24.0)
+    reembed.check_orphan()
+    assert open_alerts() == []                                                          # aún no ha pasado el plazo
+    monkeypatch.setattr(settings, "reindex_orphan_hours", 0.0)
+    reembed.check_orphan()
+    alerts = open_alerts()
+    assert len(alerts) == 1 and "local-nuevo" in alerts[0].body and alerts[0].severity == "warning"
+    assert client.post("/api/embedding-engines/reindex/discard").json() == {"ok": True}
+    st = client.get("/api/embedding-engines/reindex").json()
+    assert st["shadow"] is None and st["orphan"] is False and aux_props(g) == 0 and open_alerts() == []
+
+
+def test_a_finished_fill_is_ready_and_does_not_notify(env, client, monkeypatch):  # noqa: F811
+    from sqlalchemy import select
+
+    from mimirsynth import reembed
+    from mimirsynth.config import settings
+    from mimirsynth.models import Notification
+    from mimirsynth.store import _factory
+    client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
+    st = client.get("/api/embedding-engines/reindex").json()
+    assert st["shadow"]["state"] == "ready" and st["orphan"] is True                    # hay sombras y ningún relleno en marcha
+    monkeypatch.setattr(settings, "reindex_orphan_hours", 0.0)
+    reembed.check_orphan()
+    with _factory()() as db:
+        assert db.scalars(select(Notification).where(Notification.event == "reindex.orphan")).all() == []   # espera al intercambio

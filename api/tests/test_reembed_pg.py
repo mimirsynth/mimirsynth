@@ -74,12 +74,15 @@ def client(monkeypatch):
     monkeypatch.setattr(ea, "_probe", lambda url, model, key: fakes[model].dim)
     monkeypatch.setattr(reembed, "_embedder", lambda e: fakes[e.model])
     monkeypatch.setattr(reembed, "RETRY_WAIT", 0)
+    reembed._cache.clear()
     monkeypatch.setattr(docs, "get_embedder", lambda: fakes["viejo"])
     monkeypatch.setattr(docs, "start_index", lambda doc_id, user_id=None: docs.run_index(doc_id))
     jobs.INLINE = True
+    from mimirsynth.models import AppSetting
     with TestClient(app) as c:
         with _factory()() as db:
-            db.execute(delete(EmbeddingEngine)); db.execute(delete(Job).where(Job.kind == reembed.KIND)); db.commit()
+            db.execute(delete(EmbeddingEngine)); db.execute(delete(Job).where(Job.kind == reembed.KIND))
+            db.execute(delete(AppSetting).where(AppSetting.key == reembed.MARKER)); db.commit()
         c.fakes = fakes
         yield c
     jobs.INLINE = False
@@ -188,3 +191,49 @@ def test_cancel_leaves_no_auxiliary_column_index_or_property(client, brain):
     assert client.get("/api/embedding-engines/reindex").json()["job"]["status"] == "cancelled"
     assert aux_pg() == 0 and aux_graph(brain["g"]) == 0
     assert coltype("episode_chunks") == coltype("doc_chunks") == "vector(16)"
+
+
+
+def test_ddl_waits_with_a_short_lock_timeout_and_retries(client, monkeypatch):
+    """Si otra conexión tiene la tabla del índice, el cambio de estructura no se queda esperando: reintenta con lock_timeout corto."""
+    import threading
+    import time
+
+    from sqlalchemy import text
+
+    from mimirsynth import reembed
+    from mimirsynth.store import engine
+    monkeypatch.setattr(reembed, "LOCK_TIMEOUT", "100ms")
+    monkeypatch.setattr(reembed, "LOCK_RETRIES", 30)
+    held, release = threading.Event(), threading.Event()
+
+    def locker():
+        with engine().connect() as c:
+            c.execute(text("BEGIN"))
+            c.execute(text("LOCK TABLE episode_chunks IN ACCESS SHARE MODE"))  # como una lectura larga del índice
+            held.set()
+            release.wait(5)
+            c.execute(text("COMMIT"))
+    t = threading.Thread(target=locker)
+    t.start()
+    held.wait(5)
+    notes = []
+    threading.Timer(0.6, release.set).start()
+    t0 = time.monotonic()
+    reembed._prepare_pg(8, notes.append)
+    t.join(5)
+    assert coltype("episode_chunks", "embedding_reindex") == "vector(8)" and any("reintento" in n for n in notes) and time.monotonic() - t0 < 5
+    # si la tabla sigue ocupada, se rinde con un error claro en lugar de quedarse bloqueado
+    reembed._wipe_pg()
+    monkeypatch.setattr(reembed, "LOCK_RETRIES", 2)
+    held.clear(); release.clear()
+    t = threading.Thread(target=locker)
+    t.start()
+    held.wait(5)
+    try:
+        with pytest.raises(RuntimeError, match="siguen ocupadas"):
+            reembed._prepare_pg(8)
+    finally:
+        release.set()
+        t.join(5)
+    assert coltype("episode_chunks", "embedding_reindex") is None

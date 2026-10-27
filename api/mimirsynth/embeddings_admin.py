@@ -160,15 +160,17 @@ def _target(db: Session, eid: int) -> EmbeddingEngine:
 
 @router.get("/reindex")
 def reindex_status(_: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """El último relleno (en marcha o terminado), con su progreso y registro."""
+    """El último relleno (en marcha o terminado) con su progreso y registro, y el marcador de sombras: `orphan` si las hay y ningún
+    relleno está en marcha. Se consulta sin recorrer el grafo."""
     j = db.scalar(select(Job).where(Job.kind == reembed.KIND).order_by(Job.id.desc()).limit(1))
-    return {"job": jobs.out(j, detail=True) if j else None}
+    return {"job": jobs.out(j, detail=True) if j else None, **reembed.status()}
 
 
 @router.get("/{eid}/reindex/estimate")
-def reindex_estimate(eid: int, _: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Elementos pendientes, llamadas al motor y memoria que hará falta, antes de empezar."""
-    return reembed.estimate(_target(db, eid))
+def reindex_estimate(eid: int, refresh: bool = False, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Elementos, llamadas al motor y memoria que hará falta (cota superior). Con consultas acotadas y un tiempo máximo: si se pasa,
+    la respuesta lleva `partial: true`. Se reutiliza la última unos minutos (`refresh=true` la rehace)."""
+    return reembed.cached_estimate(_target(db, eid), refresh)
 
 
 @router.post("/{eid}/reindex", status_code=202)
@@ -177,15 +179,15 @@ def start_reindex(eid: int, user: User = Depends(require_admin), db: Session = D
     e = _target(db, eid)
     if _reindex_running(db):
         raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
-    est = reembed.estimate(e)
-    if not est["falkor"]["ok"]:
+    est = reembed.last_estimate(e.id)  # la estimación completa la hace el trabajo al empezar; aquí solo se mira la última, si la hay
+    if est and not est["partial"] and not est["falkor"]["ok"]:
         raise HTTPException(409, f"FalkorDB no tiene memoria libre suficiente: hacen falta unos {est['falkor']['need_bytes'] * reembed.FALKOR_MARGIN / 2**20:.0f} MB "
                                  f"y quedan {est['falkor']['free_bytes'] / 2**20:.0f} MB")
     cur = default_embedding(db)
-    audit(db, user, "embedding.reindex", None, name=e.name, model=e.model, dim=e.dim, previous=cur.model if cur else settings.embedding_model,
-          graph_items=est["graph_items"], chunks=est["chunks"])
+    audit(db, user, "embedding.reindex", None, name=e.name, model=e.model, dim=e.dim, previous=cur.model if cur else settings.embedding_model)
+    db.commit()  # sin transacción abierta: el índice sombra se crea con CONCURRENTLY, que espera a las transacciones en curso
     jid = jobs.submit(reembed.KIND, None, {"engine_id": e.id}, f"Calcular en sombra los vectores de «{e.name}» ({e.model}, {e.dim}d)", user.id, dedupe_key=reembed.KIND)
-    return {"job": jid, "estimate": est}
+    return {"job": jid}
 
 
 def _reindex_job(db: Session, jid: int) -> Job:
@@ -210,6 +212,7 @@ def retry_reindex(jid: int, user: User = Depends(require_admin), db: Session = D
     _reindex_job(db, jid)
     if _reindex_running(db):
         raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
+    db.commit()  # ver start_reindex
     try:
         new = jobs.retry(jid, user.id)
     except ValueError as ex:

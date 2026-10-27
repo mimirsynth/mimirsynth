@@ -1,5 +1,6 @@
 {
  "Administradores de la instancia": "Instance administrators",
+ "Avisar de un cambio de modelo parado": "Alert about a stalled model change",
  "Avisar de versiones nuevas": "Notify about new versions",
  "Aviso repetido": "Repeated alert",
  "Cada cuántos minutos se comprueba que el grafo y los modelos de IA responden (un modelo con clave de pago recibe una llamada mínima). 0 = no comprobar.": "How many minutes between checks that the graph and the AI models respond (a model behind a paid key receives one minimal call). 0 = do not check.",
@@ -28,6 +29,7 @@
  "Habitual: 587 (STARTTLS), 465 (SSL) o 25.": "Typical: 587 (STARTTLS), 465 (SSL) or 25.",
  "Hora (HH:MM) a partir de la cual solo se envían los avisos críticos; el resto espera al final del silencio. Vacío = sin horas de silencio.": "Time (HH:MM) from which only critical alerts are sent; the rest wait until the quiet period ends. Empty = no quiet hours.",
  "Hora (HH:MM) en que termina el silencio. Se usa la hora del servidor.": "Time (HH:MM) when the quiet period ends. Server time is used.",
+ "Horas que un relleno de embeddings puede estar fallido o parado, con sus vectores sombra ocupando memoria, antes de avisar (evento «reindex.orphan»).": "Hours an embedding fill can stay failed or stalled, with its shadow vectors taking up memory, before alerting (event “reindex.orphan”).",
  "Identidad": "Identity",
  "Idioma de la interfaz y de los correos para quien no haya elegido uno propio en «Mi cuenta». Cada persona puede cambiarlo.": "Language of the interface and emails for anyone who has not chosen their own in “My account”. Each person can change it.",
  "Idioma por defecto": "Default language",
@@ -183,6 +185,7 @@
  "formato no admitido ({{ext}}). Admitidos: {{v}}": "unsupported format ({{ext}}). Supported: {{v}}",
  "formato no admitido: usa PNG, JPEG o WebP": "unsupported format: use PNG, JPEG or WebP",
  "fuente no encontrada": "source not found",
+ "h": "h",
  "hay cambios posteriores: deshaz primero el más reciente": "there are later changes: undo the most recent one first",
  "hay nombres de tipo repetidos": "there are repeated type names",
  "hay un cambio de modelo en marcha hacia este motor: cancélalo antes de borrarlo": "a model change to this engine is in progress: cancel it before deleting the engine",
