@@ -86,9 +86,9 @@ export function SidePanel({ children, ...rest }: Omit<DrawerProps, "position" | 
  * `onConfirm` devuelve la promesa de la mutación (`mutateAsync`): el diálogo muestra su carga y su error y se cierra al acabar.
  * `requireText` pide escribir ese texto para habilitar la acción (borrados de grandes cosas).
  */
-export function ConfirmDialog({ opened, onClose, title, warning, subject, action, tone = "danger", requireText, onConfirm, children }: {
+export function ConfirmDialog({ opened, onClose, title, warning, subject, action, tone = "danger", requireText, disabled, onConfirm, children }: {
   opened: boolean; onClose: () => void; title: string; warning?: ReactNode; subject?: ReactNode; action: string;
-  tone?: "danger" | "primary"; requireText?: string; onConfirm: () => Promise<unknown>; children?: ReactNode;
+  tone?: "danger" | "primary"; requireText?: string; disabled?: boolean; onConfirm: () => Promise<unknown>; children?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -109,7 +109,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
         <MutationError error={error} />
         <div className="ms-confirm-actions">
           <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>
-          <Btn kind={tone} icon={tone === "danger" ? "trash" : "check"} loading={busy} disabled={!!requireText && typed !== requireText} onClick={run}>{action}</Btn>
+          <Btn kind={tone} icon={tone === "danger" ? "trash" : "check"} loading={busy} disabled={disabled || (!!requireText && typed !== requireText)} onClick={run}>{action}</Btn>
         </div>
       </div>
     </Modal>

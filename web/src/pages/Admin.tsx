@@ -10,6 +10,7 @@ import AdminSettings from "./AdminSettings";
 import AdminUsers from "./AdminUsers";
 import TokensPanel from "./TokensPanel";
 import Federation from "./Federation";
+import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
 
 type AuditRow = { ts: string; action: string; detail: unknown };
@@ -97,6 +98,9 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   const del = useMutation({ mutationFn: (id: number) => send("DELETE", `${path}/${id}`), onSuccess: refresh });
   const [ask, setAsk] = useState<Engine | null>(null);
   const mk = useMutation({ mutationFn: (id: number) => send("POST", `${path}/${id}/default`), onSuccess: refresh });
+  const [reindex, setReindex] = useState<Engine | null>(null);
+  const def = (list.data ?? []).find((e) => e.is_default);
+  const otherModel = (e: Engine) => emb && e.enabled && !e.is_default && (!def || def.model !== e.model || def.dim !== e.dim);
   const test = useMutation({ mutationFn: (id: number) => send<{ ok: boolean; ms: number; error?: string; reply?: string }>("POST", `${path}/${id}/test`),
     onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok ? `OK · ${r.ms} ms · «${r.reply}»` : t("Error: {{error}}", { error: r.error }) })) });
   const [models, setModels] = useState<string[]>([]); const [mErr, setMErr] = useState("");
@@ -110,6 +114,8 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
     <SettingsGroup title={title} description={description} action={<Btn kind="primary" onClick={() => open({ ...EMPTY })} icon="plus">{t("Añadir motor")}</Btn>}>
     <SettingsBody><Stack gap="xs">
       <AiStatus kind={kind} />
+      {emb && <ReindexPanel onDone={refresh} />}
+      <MutationError error={mk.error} />
       <ClearFilters active={ev.active} onClear={ev.clear} shown={ev.rows.length} total={ev.total} />
       <DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr><ColHead sort={ev.sortProps("name")} filter={ev.text("name")}>{t("Nombre")}</ColHead><ColHead filter={ev.text("url")}>{t("Endpoint")}</ColHead><ColHead sort={ev.sortProps("model")} filter={ev.text("model")}>{t("Modelo")}</ColHead><ColHead filter={ev.select("state")}>{t("Estado")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
@@ -121,13 +127,15 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
                 {tests[e.id] && <Text size="xs" className={tests[e.id].startsWith("OK") ? "ms-text-ok" : "ms-text-danger"}>{tests[e.id]}</Text>}</DataTable.Td>
               <DataTable.Td><Group gap={4} wrap="nowrap">
                 <Btn size="row" loading={test.isPending && test.variables === e.id} onClick={() => test.mutate(e.id)} icon="test">{t("Probar")}</Btn>
-                {!e.is_default && e.enabled && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
+                {!e.is_default && e.enabled && (!otherModel(e) || !def) && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
+                {otherModel(e) && <Btn size="row" icon="refresh" onClick={() => setReindex(e)}>{t("Reindexar")}</Btn>}
                 <Btn size="row" onClick={() => open({ ...e, api_key: "" })} icon="edit">{t("Editar")}</Btn>
                 <Btn kind="danger" size="row" onClick={() => setAsk(e)} icon="trash">{t("Borrar")}</Btn></Group></DataTable.Td>
             </DataTable.Tr>))}
           {list.data?.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><Text c="dimmed" size="sm">{dec ? t("Sin decisores: toda propuesta de un colaborador espera a un curador.") : emb ? t("Sin motores: se usan las variables MIMIRSYNTH_EMBEDDING_*. Añade el que ya usas (mismo modelo) para gestionarlo desde aquí.") : t("Sin motores. Mientras no haya ninguno se usan las variables MIMIRSYNTH_LLM_* si existen; si tampoco, la ingesta queda desactivada.")}</Text></DataTable.Td></DataTable.Tr>}
         </DataTable.Tbody>
       </DataTable>
+      {emb && <StartReindex engine={reindex} onClose={() => setReindex(null)} />}
       <ConfirmDialog opened={!!ask} onClose={() => setAsk(null)} title={t("Borrar motor")} action={t("Borrar motor")} subject={ask?.name}
         warning={t("Los brains que lo usen pasan al motor por defecto, o a las variables de entorno si no hay otro.")} onConfirm={() => del.mutateAsync(ask!.id)} />
       <Modal opened={!!form} onClose={() => setForm(null)} title={(form?.id ? t("Editar ") : t("Añadir ")) + (emb ? t("motor de embeddings") : dec ? "decisor" : "motor LLM")} centered>
@@ -260,7 +268,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
           </>}
           {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
           {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}
-          {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Modelo y dimensión no se pueden cambiar una vez creado: los vectores guardados dependen de él.")} />}
+          {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Los vectores guardados dependen del modelo: para pasar a un motor con otro modelo usa «Reindexar», que los calcula todos en sombra antes de cambiar.")} />}
           {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
           {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
           {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}
