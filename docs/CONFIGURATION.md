@@ -47,6 +47,8 @@ Changing to an engine with another model is done in two steps: first every vecto
 
 The single-process gate assumes the service runs as one process (as the image does). After the change, **recalibrate the minimum passage similarity** (Administration → Recall): similarities from different models are not comparable. Agents that write directly to Graphiti keep writing with the previous model until you change them: switch them to the same model.
 
+**Your `.env` after the change.** Once the engine is switched, the model lives in Administration → Embeddings, not in the variables. `MIMIRSYNTH_EMBEDDING_DIM` (and `MIMIRSYNTH_EMBEDDING_MODEL` / `MIMIRSYNTH_EMBEDDING_BASE_URL`) keep their old values. They only matter in two cases: a fresh installation (which creates the index with that size) and the fallback used when **no** engine is registered in Administration. Keep an engine registered, and if you rely on the variables, update them to the new model and dimension.
+
 ## Accounts and security
 - **Users:** Administration → Users. Sign-up by invitation (single-use link) or with a temporary password; roles, brains, disable, reset and delete.
 - **Passkeys:** each person can add passkeys (WebAuthn) in My account → Security to sign in with their device's fingerprint, face or PIN, or to use as the second step after the password. A passkey requires user verification, so it counts as two-factor, including when the administrator makes two-factor mandatory. A passkey only works on the domain it was created on (the `MIMIRSYNTH_PUBLIC_URL` host); changing the domain invalidates them, so keep the password as a fallback. An administrator's «reset two-factor» on a user also removes their passkeys.

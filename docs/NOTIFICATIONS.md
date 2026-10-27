@@ -55,7 +55,7 @@ Webhook body:
 
 ## Checks the instance runs
 
-- Every *N* minutes (default 10; 0 = off) it checks FalkorDB and the default LLM, embedding and decider engines. A model behind a paid key receives one minimal call per check.
+- Every *N* minutes (default 10; 0 = off) it checks FalkorDB and the default LLM, embedding and decider engines. A model behind a paid key receives one minimal call per check. An alert is only raised after **2 consecutive failures** (setting «Consecutive failures before alerting»; 1 = at the first one), so a one-off 500 or timeout from a provider does not notify; the recovery clears the count.
 - **New versions** are checked once a day against the GitHub releases API, **only if you turn it on**. It is the only outbound connection the instance makes on its own.
 - PostgreSQL cannot report its own outage (there would be nowhere to store the alert): watch it with an external monitor.
 

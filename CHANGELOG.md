@@ -8,6 +8,12 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 ### Added
 - **`update.sh`**, attached to every release: backs up, updates and checks in one step (`./update.sh`, `--check`, `--version X`, `--rollback [--with-db]`). It downloads the new image first (a wrong version stops everything before touching anything), keeps **a single backup** (PostgreSQL, documents volume, bundled FalkorDB, `docker-compose.yml` and `.env`) that is replaced only after the new one is complete, adopts the release's compose file only if yours is the unmodified one, and verifies the new version and its health afterwards. See `docs/INSTALL.md`.
 
+### Changed
+- The health check of the graph and the AI models now alerts only after **2 consecutive failures** (new setting «Consecutive failures before alerting» under Administration → Notifications; 1 restores the old behaviour). A one-off 500 or timeout from a provider no longer raises an alert and its recovery message.
+
+### Fixed
+- Documentation: after changing the embedding model, what to do with `MIMIRSYNTH_EMBEDDING_DIM` and the other `MIMIRSYNTH_EMBEDDING_*` variables in `.env`.
+
 ## [0.7.1] - 2026-10-27
 ### Added
 - Administration → Embeddings: change the embedding model from the interface (#48). **Reindex** on an engine with another model shows the estimate (items, engine calls, memory) and computes the vectors in shadow; a panel shows the progress with Cancel, unfinished shadows with Retry and Discard and, when ready, **Switch to the new model**, which requires ticking that FalkorDB and PostgreSQL have been backed up. When it finishes it reminds you to recalibrate the recall's minimum passage similarity and to switch agents that write directly to Graphiti.
