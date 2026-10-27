@@ -17,7 +17,7 @@ Edit `.env` and set at least `POSTGRES_PASSWORD` and `MIMIRSYNTH_SESSION_SECRET`
 ```bash
 docker compose --profile bundled up -d
 ```
-This pulls the official image (`ghcr.io/mimirsynth/mimirsynth`, for amd64 and arm64). To pin a version, set `MIMIRSYNTH_VERSION=0.7.0` in `.env` (default: `latest`).
+This pulls the official image (`ghcr.io/mimirsynth/mimirsynth`, for amd64 and arm64). To pin a version, set `MIMIRSYNTH_VERSION=0.7.1` in `.env` (default: `latest`).
 - `--profile bundled` also starts a bundled FalkorDB. If you already have one, omit the profile and put its address in `MIMIRSYNTH_FALKOR_HOST`.
 - The application is available at `http://localhost:8000` (change the port with `MIMIRSYNTH_PORT`).
 
