@@ -44,7 +44,10 @@ command -v docker >/dev/null && docker compose version >/dev/null 2>&1 || die "D
 command -v curl >/dev/null || die "curl is required" "hace falta curl"
 exec 9>"$DIR/.update.lock"; flock -n 9 || die "another update is running" "ya hay otra actualización en marcha"
 
-DC="docker compose --profile bundled"
+# The bundled-FalkorDB profile is only added when that container exists here (or COMPOSE_PROFILES is set): with an external FalkorDB,
+# naming the profile would create an empty, unused graphdata volume.
+DC="docker compose"
+if [ -n "$(docker compose --profile bundled ps -aq falkordb 2>/dev/null)" ]; then DC="docker compose --profile bundled"; fi
 envget() { local v; v=$(grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true); v="${v%\"}"; v="${v#\"}"; printf '%s' "${v:-$2}"; }
 norm()   { printf '%s' "${1#v}"; }
 base()   { local v; v="$(norm "$1")"; printf '%s' "${v%%-*}"; }
