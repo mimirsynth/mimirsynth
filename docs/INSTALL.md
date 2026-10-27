@@ -42,11 +42,18 @@ Do not expose port 8000 to the Internet without TLS. Put a reverse proxy (Caddy,
 PostgreSQL and FalkorDB do not publish ports outside the Compose network. Do not expose them.
 
 ## Upgrading
+The release includes an update script that makes the backup, updates and checks in one go:
 ```bash
-docker compose pull
-docker compose --profile bundled up -d
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
+./update.sh              # latest stable release; ./update.sh --check only reports; --version 0.7.1 picks one
 ```
-Database migrations are applied automatically on start. Take a backup before upgrading.
+It does, in this order:
+1. **Downloads** the new image first, so a wrong version or no network stops everything before touching anything.
+2. **Backs up** PostgreSQL, the `docstore` volume, the bundled FalkorDB (if you use `--profile bundled`) and your `docker-compose.yml` and `.env` into `./backup`. **Only one backup is kept**: the previous one is replaced once the new one has been written and checked, so backups never pile up.
+3. **Updates**: pins `MIMIRSYNTH_VERSION` in `.env` and recreates only the application (migrations run on start). It adopts the release's `docker-compose.yml` only if yours is the unmodified one of the version you were running; otherwise it keeps yours and tells you (`--update-compose` forces it, `--keep-compose` never touches it).
+4. **Checks** that it answers with the new version and is healthy, and shows the database revision. If it does not verify, it tells you how to go back.
+
+To go back: `./update.sh --rollback` restores the previous image and files; add `--with-db` to restore the database too (anything written since the backup is lost). An external FalkorDB is not part of the backup: save it yourself. Without the script, the manual way is `docker compose pull` and `docker compose --profile bundled up -d`, after a backup.
 
 ## Backups
 Three things must be saved, and they must be consistent with each other:

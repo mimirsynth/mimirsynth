@@ -40,11 +40,18 @@ No publiques el puerto 8000 a Internet sin TLS. Pon un proxy inverso (Caddy, Tra
 PostgreSQL y FalkorDB no publican puertos fuera de la red de Compose. No los expongas.
 
 ## Actualizar
+La release incluye un script que hace la copia de seguridad, actualiza y comprueba de una vez:
 ```bash
-docker compose pull
-docker compose --profile bundled up -d
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
+./update.sh              # última versión estable; ./update.sh --check solo informa; --version 0.7.1 elige una
 ```
-Las migraciones de la base de datos se aplican solas al arrancar. Haz una copia de seguridad antes de actualizar.
+Hace, por este orden:
+1. **Descarga** primero la imagen nueva: una versión equivocada o la falta de red paran todo antes de tocar nada.
+2. **Copia de seguridad** de PostgreSQL, del volumen `docstore`, del FalkorDB incluido (si usas `--profile bundled`) y de tu `docker-compose.yml` y `.env` en `./backup`. **Solo se conserva una copia**: la anterior se sustituye cuando la nueva ya está escrita y comprobada, así que las copias nunca se acumulan.
+3. **Actualiza**: fija `MIMIRSYNTH_VERSION` en `.env` y recrea solo la aplicación (las migraciones se aplican al arrancar). Adopta el `docker-compose.yml` de la versión solo si el tuyo es el original, sin modificar, de la versión que tenías; si no, conserva el tuyo y te avisa (`--update-compose` lo fuerza, `--keep-compose` no lo toca nunca).
+4. **Comprueba** que responde con la versión nueva y está sana, y muestra la revisión de la base de datos. Si no se verifica, te dice cómo volver atrás.
+
+Para volver atrás: `./update.sh --rollback` restaura la imagen y los ficheros anteriores; añade `--with-db` para restaurar también la base de datos (lo escrito desde la copia se pierde). Un FalkorDB externo no forma parte de la copia: guárdalo tú. Sin el script, a mano es `docker compose pull` y `docker compose --profile bundled up -d`, tras una copia de seguridad.
 
 ## Copias de seguridad
 Hay tres cosas que guardar, y deben ser coherentes entre sí:
