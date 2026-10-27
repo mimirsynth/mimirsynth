@@ -66,7 +66,8 @@ def _check_default_ok(db: Session, e: EmbeddingEngine) -> None:
 
 
 def _reindex_running(db: Session) -> Job | None:
-    return db.scalar(select(Job).where(Job.kind == reembed.KIND, Job.status.in_(("queued", "running"))))
+    """Un relleno o un intercambio en cola o en marcha."""
+    return db.scalar(select(Job).where(Job.kind.in_((reembed.KIND, reembed.KIND_SWITCH)), Job.status.in_(("queued", "running"))))
 
 
 @router.get("")
@@ -163,7 +164,8 @@ def reindex_status(_: User = Depends(require_admin), db: Session = Depends(get_d
     """El último relleno (en marcha o terminado) con su progreso y registro, y el marcador de sombras: `orphan` si las hay y ningún
     relleno está en marcha. Se consulta sin recorrer el grafo."""
     j = db.scalar(select(Job).where(Job.kind == reembed.KIND).order_by(Job.id.desc()).limit(1))
-    return {"job": jobs.out(j, detail=True) if j else None, **reembed.status()}
+    s = db.scalar(select(Job).where(Job.kind == reembed.KIND_SWITCH).order_by(Job.id.desc()).limit(1))
+    return {"job": jobs.out(j, detail=True) if j else None, "switch_job": jobs.out(s, detail=True) if s else None, **reembed.status()}
 
 
 @router.get("/{eid}/reindex/estimate")
@@ -192,7 +194,7 @@ def start_reindex(eid: int, user: User = Depends(require_admin), db: Session = D
 
 def _reindex_job(db: Session, jid: int) -> Job:
     j = db.get(Job, jid)
-    if not j or j.kind != reembed.KIND:
+    if not j or j.kind not in (reembed.KIND, reembed.KIND_SWITCH):
         raise HTTPException(404, "trabajo no encontrado")
     return j
 
@@ -229,3 +231,27 @@ def discard_reindex(user: User = Depends(require_admin), db: Session = Depends(g
     reembed.discard()
     audit(db, user, "embedding.reindex.discard", None)
     return {"ok": True}
+
+
+# --- Cambio de modelo, paso 2: intercambio (#48) --------------------------------------------------
+
+class SwitchIn(BaseModel):
+    backup_confirmed: bool = False  # quien lo lanza confirma que ha hecho copia de FalkorDB y PostgreSQL
+
+
+@router.post("/reindex/switch", status_code=202)
+def switch_reindex(body: SwitchIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Pasa al motor del relleno terminado: intercambia los vectores y lo deja como motor por defecto. Si falla, nada cambia."""
+    if not body.backup_confirmed:
+        raise HTTPException(400, "confirma que has hecho una copia de seguridad de FalkorDB y PostgreSQL antes del cambio")
+    m = reembed.marker()
+    if not m or m.get("state") != "ready":
+        raise HTTPException(409, "no hay un relleno terminado: calcula primero los vectores en sombra")
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
+    e = _target(db, m["engine_id"])
+    audit(db, user, "embedding.switch", None, name=e.name, model=e.model, dim=e.dim, backup_confirmed=True)
+    db.commit()  # ver start_reindex
+    jid = jobs.submit(reembed.KIND_SWITCH, None, {"engine_id": e.id, "backup_confirmed": True}, f"Pasar al modelo de embeddings «{e.name}» ({e.model}, {e.dim}d)",
+                      user.id, dedupe_key=reembed.KIND_SWITCH)
+    return {"job": jid}

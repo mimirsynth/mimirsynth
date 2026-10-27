@@ -19,7 +19,7 @@ from . import appsettings, docindex, docstore, index, jobs
 from .config import settings
 from .deps import BrainCtx, audit, contributor_of_brain, reader
 from .docextract import ExtractError, chunk, extract
-from .embed import get_embedder
+from .embed import gate, get_embedder
 from .models import Brain, DocSource, Document
 from .roles import allows
 from .store import _factory
@@ -71,15 +71,16 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
                 d.title = title[:500]
             vecs: list[list[float]] = []
             _PROGRESS[doc_id] = {"done": 0, "total": len(chunks)}
-            for i in range(0, len(chunks), EMBED_BATCH):
-                if job:
-                    job.check()
-                batch = chunks[i:i + EMBED_BATCH]
-                vecs += _embed([f"{d.title}\n{c['heading_path']}\n{c['text']}" for c in batch])
-                _PROGRESS[doc_id]["done"] = min(i + EMBED_BATCH, len(chunks))
-                if job:
-                    job.progress(_PROGRESS[doc_id]["done"], len(chunks), "calculando embeddings")
-            docindex.replace_chunks(d.brain_id, d.id, chunks, vecs, d.sha256)
+            with gate.writing():  # vectores y trozos del mismo motor aunque se esté cambiando de modelo (ver reembed)
+                for i in range(0, len(chunks), EMBED_BATCH):
+                    if job:
+                        job.check()
+                    batch = chunks[i:i + EMBED_BATCH]
+                    vecs += _embed([f"{d.title}\n{c['heading_path']}\n{c['text']}" for c in batch])
+                    _PROGRESS[doc_id]["done"] = min(i + EMBED_BATCH, len(chunks))
+                    if job:
+                        job.progress(_PROGRESS[doc_id]["done"], len(chunks), "calculando embeddings")
+                docindex.replace_chunks(d.brain_id, d.id, chunks, vecs, d.sha256)
             d.chunks, d.status = len(chunks), "active"
         except jobs.Cancelled:
             d.status, d.error = "error", "indexación cancelada"

@@ -53,6 +53,11 @@ async def lifespan(_: FastAPI):
         raise RuntimeError("define MIMIRSYNTH_SESSION_SECRET (p. ej. openssl rand -hex 32): firma las sesiones y cifra los secretos guardados")
     init_db()
     index.init_index()
+    try:  # antes de servir: un cambio de modelo de embeddings cortado a medias deja cada grafo coherente con el motor por defecto
+        from . import reembed
+        reembed.recover_switch()
+    except Exception:  # noqa: BLE001  (sin FalkorDB no se puede comprobar; no impide arrancar)
+        logging.getLogger("mimirsynth").exception("no se pudo comprobar si quedó un cambio de modelo de embeddings a medias")
     try:
         docstore.purge_stale_uploads()
     except OSError:  # volumen aún no montado o sin permisos: no impide arrancar

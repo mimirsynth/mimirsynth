@@ -237,3 +237,46 @@ def test_ddl_waits_with_a_short_lock_timeout_and_retries(client, monkeypatch):
         release.set()
         t.join(5)
     assert coltype("episode_chunks", "embedding_reindex") is None
+
+
+def test_switch_replaces_columns_and_indexes_with_the_new_dimension(client, brain, monkeypatch):
+    from mimirsynth import docs, index
+    new, fakes, g = brain["new"], client.fakes, brain["g"]
+    client.post(f"/api/embedding-engines/{new['id']}/reindex")
+    assert client.post("/api/embedding-engines/reindex/switch", json={"backup_confirmed": True}).status_code == 202
+    st = client.get("/api/embedding-engines/reindex").json()
+    assert st["switch_job"]["status"] == "done", st["switch_job"]
+    for table, ix in (("episode_chunks", "ix_chunks_emb"), ("doc_chunks", "ix_doc_chunks_emb")):
+        assert coltype(table) == "vector(8)" and coltype(table, "embedding_reindex") is None
+        assert "hnsw" in indexdef(ix) and "embedding vector_cosine_ops" in indexdef(ix) and indexdef(f"{ix}_reindex") is None
+    assert aux_pg() == 0 and aux_graph(g) == 0 and st["shadow"] is None
+    assert [e["model"] for e in client.get("/api/embedding-engines").json() if e["is_default"]] == ["nuevo"]
+    monkeypatch.setattr(docs, "get_embedder", lambda: fakes["nuevo"])
+    r = client.get("/api/brains/rp/docs/search", params={"q": "puerto del resolvedor interno"}).json()["results"]
+    assert r and r[0]["document_id"] == brain["doc"]["id"] and r[0]["similarity"] > 0.3       # la búsqueda, ya con el modelo nuevo
+    q = vec("nuevo", 8, "Red\nEl resolvedor DNS interno escucha en el puerto 53.")
+    assert _sql("SELECT 1 - (embedding <=> CAST(:q AS vector)) FROM episode_chunks WHERE episode_uuid = 'ep2'", q=str(q)) > 0.99
+    g.query("CREATE (:Episodic {uuid:'ep3', name:'Nuevo', content:'Un episodio posterior al cambio.', valid_at:'2026-02-01T00:00:00Z'})")
+    assert index.sync_brain(brain["bid"], GRAPH, fakes["nuevo"])["reindexed"] == 1                # los trozos nuevos, con la dimensión nueva
+
+
+def test_final_transaction_is_all_or_nothing(client, brain, monkeypatch):
+    from sqlalchemy import text
+
+    from mimirsynth import reembed
+    from mimirsynth.store import engine
+    new, g = brain["new"], brain["g"]
+    client.post(f"/api/embedding-engines/{new['id']}/reindex")
+    monkeypatch.setattr(reembed, "_catch_up", lambda *a, **k: 0)  # que el fallo llegue dentro de la transacción final
+    monkeypatch.setattr(reembed, "_index_pg", lambda: None)
+    with engine().begin() as c:  # falta la sombra de la segunda tabla: la transacción falla después de tocar la primera
+        c.execute(text("DROP INDEX IF EXISTS ix_doc_chunks_emb_reindex"))
+        c.execute(text("ALTER TABLE doc_chunks DROP COLUMN embedding_reindex"))
+    client.post("/api/embedding-engines/reindex/switch", json={"backup_confirmed": True})
+    st = client.get("/api/embedding-engines/reindex").json()
+    assert st["switch_job"]["status"] == "failed" and "falta la columna sombra" in st["switch_job"]["error"]
+    assert coltype("episode_chunks") == "vector(16)" and coltype("episode_chunks", "embedding_reindex") == "vector(8)"   # nada a medias
+    assert "embedding vector_cosine_ops" in indexdef("ix_chunks_emb") and indexdef("ix_chunks_emb_reindex")
+    assert [e["model"] for e in client.get("/api/embedding-engines").json() if e["is_default"]] == ["viejo"] and st["shadow"]["state"] == "ready"
+    q = "UNWIND keys(x) AS k WITH k WHERE k STARTS WITH 'name_embedding_prev' RETURN count(k)"
+    assert g.query(f"MATCH (x) {q}").result_set[0][0] == 0                                          # los grafos, de vuelta
