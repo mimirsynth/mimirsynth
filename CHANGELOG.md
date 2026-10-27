@@ -5,16 +5,19 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+
+## [0.7.1] - 2026-10-27
 ### Added
 - Administration → Embeddings: change the embedding model from the interface (#48). **Reindex** on an engine with another model shows the estimate (items, engine calls, memory) and computes the vectors in shadow; a panel shows the progress with Cancel, unfinished shadows with Retry and Discard and, when ready, **Switch to the new model**, which requires ticking that FalkorDB and PostgreSQL have been backed up. When it finishes it reminds you to recalibrate the recall's minimum passage similarity and to switch agents that write directly to Graphiti.
 - Second step of the embedding model change (#48): swapping to the new engine. `POST /api/embedding-engines/reindex/switch` (needs a finished shadow fill and an explicit backup confirmation, kept in the log and the audit) catches up with what changed, pauses vector writes for at most a configurable wait (if writes in progress do not finish, the change is postponed, never the writes), swaps the vectors of every graph and, in one PostgreSQL transaction, replaces the columns and HNSW indexes and makes the new engine the default. On failure the graphs roll back and everything stays on the previous engine; after a crash in the middle, the service makes every graph consistent with the default engine on start, before serving. The pause duration is logged. Interface in a later step.
 - First step towards changing the embedding model (#48): a resumable background job computes, with the new engine and without touching the vectors in use, every vector of every brain in shadow (entity and fact embeddings in FalkorDB, `episode_chunks` and `doc_chunks` in pgvector with their own HNSW index). API only for now: a bounded estimate (cheap counts and a sample, with a time limit and a short cache), start (the job estimates and refuses to go on without enough free memory in FalkorDB), progress, cancel, retry and discard. Unfinished shadows leave a marker reported by the API and raise the new `reindex.orphan` alert if they stay failed or stalled. The shadow HNSW index is built concurrently and table changes use a short `lock_timeout` with retries. Batch size and pause between batches are configurable and `Retry-After` is honoured on 429. Cancelling or discarding removes every shadow property, column and index. Swapping the vectors and the interface will come in later steps. See `docs/CONFIGURATION.md`.
 - Knowledge → document viewer: under «Mentioned entities», a new **Relations** section shows how those entities relate in the graph («A —relation→ B», with the fact and the date it holds from). Only current facts by default, with a switch to include the ones that are no longer true, and «Show more». One graph query, no LLM or embeddings; `GET /docs/{id}/entities` now also returns `relations`, `total` and `expired_count`.
 
-### Fixed
-- Knowledge → document viewer: the status tags (indexed, size, chunks) no longer sit flush against the panel header.
 ### Changed
 - The decider no longer assumes an infrastructure domain. Triage used to ask whether a proposal was "a factual statement about the infrastructure"; it now judges it against the brain's scope (its description and the entity and relation types of its ontology), and without either only checks that it is factual. The type corrector's questions are generic too. It still never rejects on its own: what does not fit goes to a curator. The brain description can now be edited when creating or editing a brain.
+
+### Fixed
+- Knowledge → document viewer: the status tags (indexed, size, chunks) no longer sit flush against the panel header.
 
 ## [0.7.0] - 2026-10-26
 ### Added
