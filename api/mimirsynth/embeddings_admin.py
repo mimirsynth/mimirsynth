@@ -2,6 +2,7 @@
 
 Los vectores ya guardados (hechos en FalkorDB, fragmentos en pgvector) dependen del modelo y la dimensión: por eso estos son
 inmutables y solo se puede cambiar el motor por defecto a otro con el mismo modelo y dimensión (p. ej. otro host con el mismo modelo).
+Para pasar a otro modelo, el primer paso es calcular en sombra todos los vectores con el motor nuevo (`reembed`, #48).
 """
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,9 +10,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from . import jobs, reembed
 from .config import settings
 from .deps import audit, require_admin
-from .models import EmbeddingEngine, User
+from .models import EmbeddingEngine, Job, User
 from .secretbox import seal, unseal
 from .store import get_db
 
@@ -63,6 +65,10 @@ def _check_default_ok(db: Session, e: EmbeddingEngine) -> None:
         raise HTTPException(409, f"el índice de texto es de {settings.embedding_dim} dimensiones y este modelo da {e.dim}")
 
 
+def _reindex_running(db: Session) -> Job | None:
+    return db.scalar(select(Job).where(Job.kind == reembed.KIND, Job.status.in_(("queued", "running"))))
+
+
 @router.get("")
 def list_engines(_: User = Depends(require_admin), db: Session = Depends(get_db)):
     return [_out(e) for e in db.scalars(select(EmbeddingEngine).order_by(EmbeddingEngine.id))]
@@ -106,6 +112,8 @@ def make_default(eid: int, user: User = Depends(require_admin), db: Session = De
     e = _get(db, eid)
     if not e.enabled:
         raise HTTPException(409, "el motor está desactivado")
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
     _check_default_ok(db, e)
     for o in db.scalars(select(EmbeddingEngine)):
         o.is_default = o.id == eid
@@ -119,6 +127,9 @@ def delete_engine(eid: int, user: User = Depends(require_admin), db: Session = D
     e = _get(db, eid)
     if e.is_default:
         raise HTTPException(409, "es el motor por defecto; elige otro antes de borrarlo")
+    run = _reindex_running(db)
+    if run and (run.params or {}).get("engine_id") == eid:
+        raise HTTPException(409, "hay un cambio de modelo en marcha hacia este motor: cancélalo antes de borrarlo")
     db.delete(e); db.commit()
     audit(db, user, "embedding.delete", None, name=e.name)
     return {"ok": True}
@@ -134,3 +145,87 @@ def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depend
         return {"ok": dim == e.dim, "ms": int((time.time() - t0) * 1000), "reply": f"{dim} dimensiones", "error": None if dim == e.dim else f"dimensión {dim}, esperada {e.dim}"}
     except HTTPException as ex:
         return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": ex.detail}
+
+
+# --- Cambio de modelo, paso 1: relleno en sombra (#48) -------------------------------------------
+
+def _target(db: Session, eid: int) -> EmbeddingEngine:
+    e = _get(db, eid)
+    if not e.enabled:
+        raise HTTPException(409, "el motor está desactivado")
+    if e.is_default:
+        raise HTTPException(409, "ya es el motor por defecto")
+    return e
+
+
+@router.get("/reindex")
+def reindex_status(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """El último relleno (en marcha o terminado) con su progreso y registro, y el marcador de sombras: `orphan` si las hay y ningún
+    relleno está en marcha. Se consulta sin recorrer el grafo."""
+    j = db.scalar(select(Job).where(Job.kind == reembed.KIND).order_by(Job.id.desc()).limit(1))
+    return {"job": jobs.out(j, detail=True) if j else None, **reembed.status()}
+
+
+@router.get("/{eid}/reindex/estimate")
+def reindex_estimate(eid: int, refresh: bool = False, _: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Elementos, llamadas al motor y memoria que hará falta (cota superior). Con consultas acotadas y un tiempo máximo: si se pasa,
+    la respuesta lleva `partial: true`. Se reutiliza la última unos minutos (`refresh=true` la rehace)."""
+    return reembed.cached_estimate(_target(db, eid), refresh)
+
+
+@router.post("/{eid}/reindex", status_code=202)
+def start_reindex(eid: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Calcula con este motor, en sombra, todos los vectores de todos los brains. No cambia el motor en uso."""
+    e = _target(db, eid)
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
+    est = reembed.last_estimate(e.id)  # la estimación completa la hace el trabajo al empezar; aquí solo se mira la última, si la hay
+    if est and not est["partial"] and not est["falkor"]["ok"]:
+        raise HTTPException(409, f"FalkorDB no tiene memoria libre suficiente: hacen falta unos {est['falkor']['need_bytes'] * reembed.FALKOR_MARGIN / 2**20:.0f} MB "
+                                 f"y quedan {est['falkor']['free_bytes'] / 2**20:.0f} MB")
+    cur = default_embedding(db)
+    audit(db, user, "embedding.reindex", None, name=e.name, model=e.model, dim=e.dim, previous=cur.model if cur else settings.embedding_model)
+    db.commit()  # sin transacción abierta: el índice sombra se crea con CONCURRENTLY, que espera a las transacciones en curso
+    jid = jobs.submit(reembed.KIND, None, {"engine_id": e.id}, f"Calcular en sombra los vectores de «{e.name}» ({e.model}, {e.dim}d)", user.id, dedupe_key=reembed.KIND)
+    return {"job": jid}
+
+
+def _reindex_job(db: Session, jid: int) -> Job:
+    j = db.get(Job, jid)
+    if not j or j.kind != reembed.KIND:
+        raise HTTPException(404, "trabajo no encontrado")
+    return j
+
+
+@router.post("/reindex/{jid}/cancel")
+def cancel_reindex(jid: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Cancela el relleno y descarta todo lo calculado."""
+    _reindex_job(db, jid)
+    res = jobs.cancel(jid)
+    audit(db, user, "job.cancel", None, id=jid, result=res)
+    return {"result": res}
+
+
+@router.post("/reindex/{jid}/retry", status_code=201)
+def retry_reindex(jid: int, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Reanuda un relleno fallido o cancelado: solo calcula lo que falta."""
+    _reindex_job(db, jid)
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
+    db.commit()  # ver start_reindex
+    try:
+        new = jobs.retry(jid, user.id)
+    except ValueError as ex:
+        raise HTTPException(409, str(ex))
+    audit(db, user, "job.retry", None, id=jid, new=new)
+    return {"job": new}
+
+
+@router.post("/reindex/discard")
+def discard_reindex(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Descarta los vectores calculados en sombra (FalkorDB y PostgreSQL). El motor en uso no cambia."""
+    if _reindex_running(db):
+        raise HTTPException(409, "hay un cambio de modelo en marcha: cancélalo para descartarlo")
+    reembed.discard()
+    audit(db, user, "embedding.reindex.discard", None)
+    return {"ok": True}

@@ -9,10 +9,11 @@ from .db import rows
 from .deps import BrainCtx, curator_of_brain
 from .embed import get_embedder
 from .entity_types import _record
+from .reembed import is_shadow
 from .vocab import canon_rel
 
 router = APIRouter(prefix="/api/brains/{slug}/facts")
-_HIDE = {"fact_embedding"}
+_HIDE = {"fact_embedding"}  # y las propiedades auxiliares de un cambio de modelo (reembed.is_shadow)
 
 
 class EditIn(BaseModel):
@@ -85,7 +86,7 @@ def reactivate(uuid: str, ctx: BrainCtx = Depends(curator_of_brain)):
 def delete_fact(uuid: str, ctx: BrainCtx = Depends(curator_of_brain)):
     cur = _get(ctx, uuid)
     r = rows(ctx.graph.query("MATCH (a:Entity)-[r:RELATES_TO {uuid:$u}]->(b:Entity) RETURN properties(r) AS p, a.uuid AS a, b.uuid AS b", {"u": uuid}))[0]
-    props = {k: v for k, v in r["p"].items() if k not in _HIDE}
+    props = {k: v for k, v in r["p"].items() if k not in _HIDE and not is_shadow(k)}
     ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() DELETE r", {"u": uuid})
     ctx.graph.query("MATCH (e:Episodic) WHERE $u IN coalesce(e.entity_edges, []) SET e.entity_edges = [x IN e.entity_edges WHERE x <> $u]", {"u": uuid})
     op = _record(ctx, "fact.delete", f"Borrado el hecho {_label(cur)}", uuid=uuid, props=props, source=r["a"], target=r["b"])
