@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     notify_quiet_start: str = ""  # HH:MM; con notify_quiet_end define las horas en que solo salen los avisos críticos
     notify_quiet_end: str = ""
     notify_health_minutes: int = 10  # comprobación periódica del grafo y los modelos de IA (0 = no)
+    notify_health_failures: int = 2  # fallos seguidos de una comprobación antes de avisar
     notify_update_check: str = "no"  # consultar GitHub una vez al día por versiones nuevas
     notify_block_private: str = "no"  # prohibir que los canales apunten a redes privadas
     notify_keep_days: int = 30

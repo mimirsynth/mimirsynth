@@ -166,14 +166,30 @@ def prune() -> int:
 
 
 # ---- comprobaciones de estado ----
+_FAILS: dict[str, int] = {}   # fallos seguidos de cada comprobación (en memoria: un reinicio empieza de cero)
+
+
+def _fail(event: str, title: str, body: str, key: str) -> None:
+    """Un fallo aislado no avisa: hacen falta `notify_health_failures` seguidos. Así un 500 o un timeout puntual de un proveedor no genera un aviso (y su correo de recuperación)."""
+    k = f"{event}:{key}"
+    _FAILS[k] = _FAILS.get(k, 0) + 1
+    if _FAILS[k] >= int(appsettings.get("notify_health_failures")):
+        emit(event, title, body, key=key)
+
+
+def _ok(event: str, key: str) -> None:
+    _FAILS.pop(f"{event}:{key}", None)
+    resolve(event, key)
+
+
 def check_health() -> None:
-    """Grafo y modelos de IA: emite el problema si no responden y lo resuelve cuando vuelven. Los fallos de PostgreSQL no se pueden avisar desde dentro (no habría dónde guardarlos): vigílalo con un monitor externo."""
+    """Grafo y modelos de IA: emite el problema si no responden `notify_health_failures` veces seguidas y lo resuelve cuando vuelven. Los fallos de PostgreSQL no se pueden avisar desde dentro (no habría dónde guardarlos): vigílalo con un monitor externo."""
     from .db import list_graphs
     try:
         list_graphs()
-        resolve("graph.down", "falkordb")
+        _ok("graph.down", "falkordb")
     except Exception as e:  # noqa: BLE001
-        emit("graph.down", "El grafo (FalkorDB) no responde", str(e)[:300], key="falkordb")
+        _fail("graph.down", "El grafo (FalkorDB) no responde", str(e)[:300], "falkordb")
     try:
         from . import decider as _decider
         from .aistatus import _llm_ping
@@ -196,9 +212,9 @@ def check_health() -> None:
     for kind, name, fn in probes:
         try:
             fn()
-            resolve("model.unavailable", kind)
+            _ok("model.unavailable", kind)
         except Exception as e:  # noqa: BLE001
-            emit("model.unavailable", f"El modelo de {names[kind]} no responde", f"Motor «{name}»: {str(e)[:250]}", key=kind)
+            _fail("model.unavailable", f"El modelo de {names[kind]} no responde", f"Motor «{name}»: {str(e)[:250]}", kind)
 
 
 def _newer(latest: str, current: str) -> bool:

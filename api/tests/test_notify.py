@@ -324,10 +324,21 @@ def test_job_failure_emits_and_scan_error_resolves(client):  # noqa: F811
         assert n.title == "Trabajo fallido: Trabajo de prueba" and "explotó" in n.body
 
 
-def test_health_check_emits_and_recovers(monkeypatch):
+def test_health_check_needs_two_failures_in_a_row_and_recovers(monkeypatch):
     import mimirsynth.db as dbm
-    monkeypatch.setattr(dbm, "list_graphs", lambda: (_ for _ in ()).throw(ConnectionError("conexión rechazada")))
+    notify._FAILS.clear()
+    boom = lambda: (_ for _ in ()).throw(ConnectionError("conexión rechazada"))  # noqa: E731
+    monkeypatch.setattr(dbm, "list_graphs", boom)
     notify.check_health()
+    with _factory()() as db:
+        assert db.query(Notification).filter_by(event="graph.down").count() == 0              # un fallo aislado no avisa
+    monkeypatch.setattr(dbm, "list_graphs", lambda: [])
+    notify.check_health()                                                                     # vuelve a responder: el contador empieza de cero
+    monkeypatch.setattr(dbm, "list_graphs", boom)
+    notify.check_health()
+    with _factory()() as db:
+        assert db.query(Notification).filter_by(event="graph.down").count() == 0              # dos fallos, pero no seguidos
+    notify.check_health()                                                                     # segundo fallo seguido: ahora sí
     with _factory()() as db:
         n = db.query(Notification).filter_by(event="graph.down").one()
         assert n.resolved_at is None and "rechazada" in n.body and n.severity == "critical"
@@ -335,6 +346,17 @@ def test_health_check_emits_and_recovers(monkeypatch):
     notify.check_health()
     with _factory()() as db:
         assert db.query(Notification).filter_by(event="graph.down").one().resolved_at is not None
+
+
+def test_health_check_failures_threshold_is_a_setting(monkeypatch):
+    import mimirsynth.db as dbm
+    notify._FAILS.clear()
+    real = appsettings.get
+    monkeypatch.setattr(appsettings, "get", lambda k: 1 if k == "notify_health_failures" else real(k))
+    monkeypatch.setattr(dbm, "list_graphs", lambda: (_ for _ in ()).throw(ConnectionError("caído")))
+    notify.check_health()
+    with _factory()() as db:
+        assert db.query(Notification).filter_by(event="graph.down").count() == 1             # con 1, al primer fallo
 
 
 def test_update_check_is_opt_in(monkeypatch):
