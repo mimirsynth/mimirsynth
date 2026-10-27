@@ -36,6 +36,35 @@ def test_pack_integrity(name):
 
 
 @pytest.mark.parametrize("name", sorted(PACKS))
+def test_pack_retype_block(name):
+    """El bloque del corrector de tipos usa tipos del paquete y reglas conocidas: un error tipográfico falla aquí, no en silencio."""
+    from mimirsynth import retype
+    r = PACKS[name]["retype"]
+    assert set(r) == {"review_first", "doubtful_rules"}
+    ents = {t["name"] for t in PACKS[name]["entity_types"]}
+    assert [t for t in r["review_first"] if t not in ents] == [] and len(set(r["review_first"])) == len(r["review_first"])
+    assert [k for k in r["doubtful_rules"] if k not in retype.RULES] == [] and len(set(r["doubtful_rules"])) == len(r["doubtful_rules"])
+
+
+# Ejemplos que el paquete descarta a propósito: en infraestructura se conserva la regla de «problema» (decidido en #56).
+KEPT_ON_PURPOSE = {("infrastructure", "Fix: restart zigbee bridge")}
+
+
+@pytest.mark.parametrize("name", sorted(PACKS))
+def test_pack_rules_do_not_discard_its_own_examples(name):
+    """Las reglas técnicas de un paquete no marcan como dudosos los ejemplos de sus propios tipos."""
+    from mimirsynth import retype
+    rules = set(PACKS[name]["retype"]["doubtful_rules"])
+    bad = []
+    for t in PACKS[name]["entity_types"]:
+        m = re.search(r"Examples?:(.*)", t["description"])
+        for ex in re.findall(r"'([^']+)'", m.group(1) if m else ""):
+            if (name, ex) not in KEPT_ON_PURPOSE and any(retype.RULES[k][0](ex) for k in rules):
+                bad.append((t["name"], ex))
+    assert bad == []
+
+
+@pytest.mark.parametrize("name", sorted(PACKS))
 def test_entity_descriptions_say_what_it_is_and_what_it_is_not(name):
     """Cada tipo principal dice qué es y cuándo sí / cuándo no, con ejemplos (el modelo clasifica solo con esta descripción)."""
     for t in PACKS[name]["entity_types"]:

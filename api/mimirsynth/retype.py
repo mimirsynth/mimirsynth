@@ -1,5 +1,6 @@
 """Corrector de tipos: el decisor propone el tipo de cada entidad (opciones cerradas = la ontología del brain) y un administrador
-del brain aprueba. Aplicar cambia la etiqueta de tipo del nodo en el grafo; es reversible. Graphiti no reetiqueta nodos existentes."""
+del brain aprueba. Aplicar cambia la etiqueta de tipo del nodo en el grafo; es reversible. Graphiti no reetiqueta nodos existentes.
+Qué se revisa y qué se descarta antes del decisor lo decide el paquete de ontología del brain (bloque `retype`), no un dominio fijo."""
 import logging
 import re
 import threading
@@ -14,45 +15,84 @@ from .db import graph, rows
 from .deciders_admin import default_decider
 from .deps import BrainCtx, admin_of_brain, audit
 from .models import Brain, RetypeSuggestion
-from .ontology import NAME, get_ontology
+from .ontology import ALIASES, NAME, get_ontology, presets
 from .secretbox import unseal
 from .store import _factory
 
 log = logging.getLogger("mimirsynth.retype")
 router = APIRouter(prefix="/api/brains/{slug}/retype")
-# Tipos genéricos que suelen ser clasificaciones erróneas de entidades de infraestructura: se revisan primero.
-SUSPECT = ["Object", "Organization", "Location", "Topic", "Document", "Preference", "Requirement", "Procedure", "Event", "Person"]
+# Cómo se revisa un brain cuyo paquete no dice nada (ontología a mano, paquete retirado): solo los comodines y las reglas de cualquier dominio.
+MINIMAL = {"review_first": ["Object", "Thing", "Topic"], "doubtful_rules": []}
+# Si la ontología tiene tipos para errores o procedimientos, la pregunta del decisor no los excluye.
+ERROR_TYPES = {"Bug", "Incident", "Issue", "Error", "Problem"}
+PROCEDURE_TYPES = {"Runbook", "Procedure", "Howto"}
 _PROGRESS: dict[int, dict] = {}
 _FILE = re.compile(r"\.(py|js|ts|tsx|json|ya?ml|md|sh|conf|cfg|toml|log|txt|html|css|service|env)\b", re.I)
 _VERSION = re.compile(r"(\s[vV]?\d+(\.\d+){1,3}([-.\w]*)?$)|(\b[vV]\d+\.\d+)")
 _PROBLEM = re.compile(r"\b(bug|error|issue|fix|fallo|problema)\b", re.I)
+# Reglas técnicas, en el orden en que se comprueban; cada paquete activa las suyas en `retype.doubtful_rules`.
+RULES = {
+    "file": (lambda n: bool(re.search(r"[\\/]", n) or _FILE.search(n)), "ruta o nombre de fichero"),
+    "option": (lambda n: n.startswith("-"), "opción de línea de comandos"),
+    "code": (lambda n: bool(re.search(r"[=()]|::", n)), "expresión de código"),
+    "version": (lambda n: bool(_VERSION.search(n)), "versión en el nombre (¿fusionar con la entidad base?)"),
+    "problem": (lambda n: bool(_PROBLEM.search(n)), "descripción de un problema"),
+}
 
 
-def doubtful_reason(name: str) -> str:
-    """Heurística barata: nombres que no son una entidad concreta de infraestructura (no tiene sentido darles un tipo)."""
+def profile(onto: dict | None) -> dict:
+    """Cómo revisa el corrector un brain: el bloque `retype` de su paquete de ontología (o el mínimo) y los tipos que tiene."""
+    name = ((onto or {}).get("preset") or {}).get("name", "")
+    block = (presets().get(ALIASES.get(name, name)) or {}).get("retype") or MINIMAL
+    return {"review_first": list(block["review_first"]), "rules": frozenset(block["doubtful_rules"]),
+            "types": {t["name"] for t in (onto or {}).get("entity_types", [])}}
+
+
+def doubtful_reason(name: str, rules: frozenset[str] | set[str]) -> str:
+    """Heurística barata: nombres que no son una entidad concreta (no tiene sentido darles un tipo). La de frase vale en cualquier
+    dominio; las técnicas solo si el paquete del brain las activa."""
     n = (name or "").strip()
-    if re.search(r"[\\/]", n) or _FILE.search(n):
-        return "ruta o nombre de fichero"
-    if n.startswith("-"):
-        return "opción de línea de comandos"
-    if re.search(r"[=()]|::", n):
-        return "expresión de código"
-    if _VERSION.search(n):
-        return "versión en el nombre (¿fusionar con la entidad base?)"
+    for key in ("file", "option", "code", "version"):
+        if key in rules and RULES[key][0](n):
+            return RULES[key][1]
     if len(n.split()) >= 5:
         return "frase, no un nombre propio"
-    if _PROBLEM.search(n):
-        return "descripción de un problema"
+    if "problem" in rules and RULES["problem"][0](n):
+        return RULES["problem"][1]
     return ""
 _LOCK = threading.Lock()
 
 
-def _candidates(graph_name: str, skip: set[str], limit: int) -> list[dict]:
+def _entity_question(types: set[str]) -> str:
+    no = ["una frase", "un fichero", "una opción"]
+    no += [] if types & ERROR_TYPES else ["un error"]
+    no += [] if types & PROCEDURE_TYPES else ["un procedimiento"]
+    return ("¿Es una entidad concreta con nombre propio (una persona, organización, lugar, objeto, servicio, proyecto…), y no "
+            + ", ".join(no[:-1]) + " o " + no[-1] + "?")
+
+
+def _priority(t: str, types: set[str], first: list[str]) -> int | None:
+    """Prioridad de revisión según el tipo actual (menor = antes): sin tipo, tipo ajeno a la ontología, tipo que el paquete revisa
+    primero. None: no se revisa."""
+    if not t:
+        return 0
+    if t not in types:
+        return 1
+    return 2 if t in first else None
+
+
+def rank(cands: list[dict], prof: dict, skip: set[str], limit: int) -> list[dict]:
+    """Cola del análisis: por prioridad y, a igual prioridad, por uuid, para que dos análisis seguidos no la reordenen."""
+    keyed = [(_priority(c["type"], prof["types"], prof["review_first"]), c["uuid"], c) for c in cands if c["uuid"] not in skip]
+    return [c for _, _, c in sorted((k for k in keyed if k[0] is not None), key=lambda k: k[:2])][:limit]
+
+
+def _candidates(graph_name: str, prof: dict, skip: set[str], limit: int) -> list[dict]:
     q = ("MATCH (n:Entity) WITH n, [l IN labels(n) WHERE l <> 'Entity'] AS ts "
-         "WHERE size(ts) = 0 OR ts[0] IN $suspect "
+         "WHERE size(ts) = 0 OR NOT ts[0] IN $types OR ts[0] IN $first "
          "RETURN n.uuid AS uuid, n.name AS name, coalesce(ts[0], '') AS type, left(coalesce(n.summary, ''), 400) AS summary")
-    out = [r for r in rows(graph(graph_name).query(q, {"suspect": SUSPECT})) if r["uuid"] not in skip]
-    return out[:limit]
+    found = rows(graph(graph_name).query(q, {"types": sorted(prof["types"]), "first": prof["review_first"]}))
+    return rank(found, prof, skip, limit)
 
 
 def _facts(graph_name: str, uuid: str) -> list[str]:
@@ -84,10 +124,12 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
         if not onto or not d:
             return
         types, labels = _options(onto)
+        prof = profile(onto)
+        question = _entity_question(prof["types"])
         skip = set(db.scalars(select(RetypeSuggestion.entity_uuid).where(RetypeSuggestion.brain_id == brain_id)))
         brain = db.get(Brain, brain_id)
         context = decider.scope(brain.name, brain.description, onto) if brain else ""
-        cands = _candidates(graph_name, skip, limit)
+        cands = _candidates(graph_name, prof, skip, limit)
         _PROGRESS[brain_id] = {"running": True, "done": 0, "total": len(cands), "error": None}
         key = unseal(d.api_key_enc)
         for c in cands:
@@ -99,7 +141,7 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
                     _PROGRESS[brain_id]["running"] = False
                     raise
             try:
-                why = doubtful_reason(c["name"])
+                why = doubtful_reason(c["name"], prof["rules"])
                 if why:
                     db.add(RetypeSuggestion(brain_id=brain_id, entity_uuid=c["uuid"], name=c["name"][:500], current_type=c["type"], status="doubtful", reason=why))
                     db.commit()
@@ -107,7 +149,7 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
                     continue
                 facts = _facts(graph_name, c["uuid"])
                 state = decider.with_scope(f"Entidad: {c['name']}\nResumen: {c['summary'][:300]}\nHechos:\n" + "\n".join(f"- {f[:160]}" for f in facts), context)
-                ent = decider.decide(d.base_url, d.model, key, state, "¿Es una entidad concreta con nombre propio (una persona, organización, lugar, objeto, servicio, proyecto…), y no una frase, un fichero, una opción, un error o un procedimiento?", ["Sí", "No"])
+                ent = decider.decide(d.base_url, d.model, key, state, question, ["Sí", "No"])
                 if ent["letter"] == "B" and ent["prob"] >= 0.7:
                     db.add(RetypeSuggestion(brain_id=brain_id, entity_uuid=c["uuid"], name=c["name"][:500], current_type=c["type"], status="doubtful",
                                             reason=f"el decisor no la ve como una entidad concreta ({ent['prob']})", confidence=ent["prob"]))
@@ -151,14 +193,15 @@ class IdsIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=2000)
 
 
-def _out(s: RetypeSuggestion) -> dict:
+def _out(s: RetypeSuggestion, rules: frozenset[str]) -> dict:
+    st = _eff_status(s, rules)
     return {"id": s.id, "entity_uuid": s.entity_uuid, "name": s.name, "current_type": s.current_type, "suggested_type": s.suggested_type,
-            "confidence": s.confidence, "status": _eff_status(s), "previous_type": s.previous_type, "reason": s.reason or (doubtful_reason(s.name) if s.status == "pending" else ("ninguno de los tipos de la ontología encaja" if _eff_status(s) == "none" else ""))}
+            "confidence": s.confidence, "status": st, "previous_type": s.previous_type, "reason": s.reason or (doubtful_reason(s.name, rules) if s.status == "pending" else ("ninguno de los tipos de la ontología encaja" if st == "none" else ""))}
 
 
-def _eff_status(s: RetypeSuggestion) -> str:
-    """Las propuestas antiguas cuyo nombre no es una entidad concreta pasan a «dudosas» sin volver a analizarlas."""
-    if s.status == "pending" and doubtful_reason(s.name):
+def _eff_status(s: RetypeSuggestion, rules: frozenset[str]) -> str:
+    """Las propuestas antiguas cuyo nombre no es una entidad concreta (según las reglas del brain) pasan a «dudosas» sin volver a analizarlas."""
+    if s.status == "pending" and doubtful_reason(s.name, rules):
         return "doubtful"
     if s.status == "same" and not s.suggested_type:  # el decisor contestó «ninguno de los anteriores»: no es lo mismo que «ya correcto»
         return "none"
@@ -168,14 +211,15 @@ def _eff_status(s: RetypeSuggestion) -> str:
 @router.get("")
 def overview(status: str = "pending", min_conf: float = 0.0, limit: int = 300, ctx: BrainCtx = Depends(admin_of_brain)):
     onto = get_ontology(ctx.db, ctx.brain.id)
+    rules = profile(onto)["rules"]
     allrows = ctx.db.scalars(select(RetypeSuggestion).where(RetypeSuggestion.brain_id == ctx.brain.id)).all()
     counts: dict[str, int] = {}
     for r in allrows:
-        counts[_eff_status(r)] = counts.get(_eff_status(r), 0) + 1
-    in_status = sorted((r for r in allrows if _eff_status(r) == status), key=lambda r: -(r.confidence or 0))
+        counts[_eff_status(r, rules)] = counts.get(_eff_status(r, rules), 0) + 1
+    in_status = sorted((r for r in allrows if _eff_status(r, rules) == status), key=lambda r: -(r.confidence or 0))
     shown = [r for r in in_status if status != "pending" or (r.confidence or 0) >= min_conf]
     return {"ontology": bool(onto), "decider": default_decider(ctx.db) is not None, "counts": counts, "hidden_below_threshold": len(in_status) - len(shown),
-            "progress": _PROGRESS.get(ctx.brain.id, {"running": False, "done": 0, "total": 0, "error": None}), "items": [_out(r) for r in shown[:min(limit, 1000)]]}
+            "progress": _PROGRESS.get(ctx.brain.id, {"running": False, "done": 0, "total": 0, "error": None}), "items": [_out(r, rules) for r in shown[:min(limit, 1000)]]}
 
 
 @router.post("/scan", status_code=202)
@@ -193,10 +237,10 @@ def start_scan(body: ScanIn, bg: BackgroundTasks, ctx: BrainCtx = Depends(admin_
                                                  f"Corrector de tipos: analizar hasta {body.limit} entidades", ctx.user.id, dedupe_key=f"retype.scan:{ctx.brain.id}")}
 
 
-def _pick(ctx: BrainCtx, ids: list[int], status: str) -> list[RetypeSuggestion]:
+def _pick(ctx: BrainCtx, ids: list[int], status: str, rules: frozenset[str]) -> list[RetypeSuggestion]:
     """Filas con ese estado real; las dudosas por heurística no se pueden aplicar como cambio de tipo."""
     rows_ = ctx.db.scalars(select(RetypeSuggestion).where(RetypeSuggestion.brain_id == ctx.brain.id, RetypeSuggestion.id.in_(ids), RetypeSuggestion.status == status)).all()
-    return [r for r in rows_ if status != "pending" or not doubtful_reason(r.name)]
+    return [r for r in rows_ if status != "pending" or not doubtful_reason(r.name, rules)]
 
 
 @router.post("/apply")
@@ -204,7 +248,7 @@ def apply(body: IdsIn, ctx: BrainCtx = Depends(admin_of_brain)):
     onto = get_ontology(ctx.db, ctx.brain.id) or {"entity_types": []}
     allowed = {t["name"] for t in onto["entity_types"]}
     n = 0
-    for s in _pick(ctx, body.ids, "pending"):
+    for s in _pick(ctx, body.ids, "pending", profile(onto)["rules"]):
         if s.suggested_type not in allowed:
             continue
         _set_label(ctx.brain.graph_name, s.entity_uuid, s.current_type, s.suggested_type)

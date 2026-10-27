@@ -6,6 +6,12 @@
   "schema.org (Person, Organization, Project, Event)",
   "PMBOK/Agile vocabulary (Milestone, Risk, Task, Dependency)"
  ],
+ "retype": {
+  "review_first": [
+   "Topic"
+  ],
+  "doubtful_rules": []
+ },
  "entity_types": [
   {
    "name": "Person",

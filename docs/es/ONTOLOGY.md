@@ -24,5 +24,19 @@ La ontología de un brain le dice al ingestor qué **tipos de entidad** y de **r
 ## Versiones y actualizaciones
 Cada paquete tiene una **versión**. El brain recuerda qué paquete y qué versión aplicó. Cuando sale una versión nueva, Vocabulario → Ontología ofrece **Actualizar**, que **añade lo que falta** (tipos, relaciones, reglas) y nunca toca lo que ya tienes ni lo que cambiaste a mano. **Sustituir la ontología** lo descarta todo y aplica el paquete tal cual. Las entidades que ya están en el grafo no cambian.
 
+## Corrector de tipos
+El corrector de tipos (Vocabulario → Corrector de tipos) no supone ningún dominio: cada paquete indica, en su bloque `retype`, qué se revisa y qué se aparta antes de preguntar al decisor.
+
+```json
+"retype": {"review_first": ["Topic", "Item"], "doubtful_rules": []}
+```
+
+- **Qué se revisa**, por este orden: entidades sin tipo, entidades cuyo tipo **no está en la ontología del brain** (por ejemplo, los tipos por defecto de un agente que escribe directamente en Graphiti) y entidades de los tipos de `review_first` (los comodines o los que más se confunden en ese paquete). El resto no se toca. Los empates se resuelven por id, así que dos análisis seguidos mantienen el orden.
+- **Qué se aparta como dudoso** sin preguntar al decisor: un nombre de cinco palabras o más (en cualquier brain) y, solo si el paquete las activa, las reglas técnicas `file` (ruta o nombre de fichero), `option` (opción de línea de comandos), `code` (expresión de código), `version` (versión al final del nombre) y `problem` (palabras como *bug*, *error*, *fix*). `infrastructure` activa las cinco; `software-knowledge`, solo `option`, porque las demás descartarían sus propios repositorios, documentos, APIs y versiones; el resto de paquetes, ninguna.
+- **La pregunta del decisor** no excluye errores ni procedimientos si la ontología tiene un tipo para ellos (`Bug`, `Incident`, `Runbook`…).
+- Un brain con la ontología escrita a mano, o cuyo paquete ya no existe, usa lo mínimo: revisa `Object`, `Thing` y `Topic` y no aplica ninguna regla técnica.
+
+El bloque se lee del paquete al ejecutar el corrector, así que cambiarlo no exige una versión nueva del paquete. Los tests comprueban que cada bloque solo usa tipos de su paquete y reglas conocidas, y que las reglas de un paquete no descartan los ejemplos de sus propios tipos.
+
 ## Escribir la tuya
 Parte del paquete más cercano y edita tipos, relaciones, mapa e instrucciones en la interfaz. Mantén las descripciones cortas y explícitas sobre cuándo **no** usar un tipo.
