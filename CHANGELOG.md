@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- **`update.sh`**, attached to every release: backs up, updates and checks in one step (`./update.sh`, `--check`, `--version X`, `--rollback [--with-db]`). It downloads the new image first (a wrong version stops everything before touching anything), keeps **a single backup** (PostgreSQL, documents volume, bundled FalkorDB, `docker-compose.yml` and `.env`) that is replaced only after the new one is complete, adopts the release's compose file only if yours is the unmodified one, and verifies the new version and its health afterwards. See `docs/INSTALL.md`.
 
 ## [0.7.1] - 2026-10-27
 ### Added
