@@ -10,6 +10,8 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ### Changed
 - The health check of the graph and the AI models now alerts only after **2 consecutive failures** (new setting «Consecutive failures before alerting» under Administration → Notifications; 1 restores the old behaviour). A one-off 500 or timeout from a provider no longer raises an alert and its recovery message.
+- The type corrector no longer assumes an infrastructure domain (#56). What it reviews comes from the brain's ontology: entities without a type, entities whose type is not in the ontology, and the types the package lists in its new `retype` block. It used to review only a fixed list (`Person`, `Location`, `Organization`, `Event`…), so in a family brain it checked correct people and places and never looked at pets or belongings. The technical rules that set names aside as doubtful before asking the decider (file, option, code, version, problem) now apply only when the package enables them: all of them in `infrastructure`, which behaves as before; only `option` in `software-knowledge`; none in the other packages or in hand-written ontologies. The decider's question no longer rules out errors or procedures when the ontology has types for them. See `docs/ONTOLOGY.md`.
+- **Effect on existing suggestions:** in brains whose package no longer enables a rule, suggestions that the corrector showed as doubtful for that rule (for example «Receta 1.5» for the version rule) are shown as pending again and can be applied. Nothing changes in `infrastructure` brains.
 
 ### Fixed
 - Documentation: after changing the embedding model, what to do with `MIMIRSYNTH_EMBEDDING_DIM` and the other `MIMIRSYNTH_EMBEDDING_*` variables in `.env`.

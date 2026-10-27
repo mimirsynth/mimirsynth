@@ -69,7 +69,7 @@ def test_type_corrector_questions_are_not_about_infrastructure(client, monkeypat
     client.post("/api/brains", json={"slug": "fam", "name": "Familia", "description": "Notas personales y familiares"})
     client.post("/api/brains/fam/ontology/preset/personal-family")
     client.post("/api/decision-engines", json={"name": "dec-fam", "base_url": "http://o/v1", "model": "tev1"})
-    monkeypatch.setattr(retype, "_candidates", lambda g, skip, limit: [{"uuid": "u1", "name": "Abuela Rosa", "type": "", "summary": "persona"}][:limit])
+    monkeypatch.setattr(retype, "_candidates", lambda g, prof, skip, limit: [{"uuid": "u1", "name": "Abuela Rosa", "type": "", "summary": "persona"}][:limit])
     monkeypatch.setattr(retype, "_facts", lambda g, u: ["Abuela Rosa vive en Soria"])
     seen = []
     monkeypatch.setattr(decider, "decide", lambda base, model, key, state, q, opts, **k: (seen.append((state, q)), hi("A"))[1])

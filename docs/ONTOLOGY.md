@@ -24,5 +24,19 @@ The ontology of a brain tells the ingestor which **entity types** and **relation
 ## Versions and updates
 Each package has a **version**. The brain remembers which package and version it applied. When a newer version ships, Vocabulary → Ontology offers **Update**, which **adds what is missing** (types, relations, rules) and never touches what you already have or changed by hand. **Replace ontology** discards everything and applies the package as is. Entities already in the graph never change.
 
+## Type corrector
+The type corrector (Vocabulary → Type corrector) does not assume any domain: each package says, in its `retype` block, what to review and what to set aside before asking the decider.
+
+```json
+"retype": {"review_first": ["Topic", "Item"], "doubtful_rules": []}
+```
+
+- **What gets reviewed**, in this order: entities without a type, entities whose type is **not in the brain's ontology** (for example the defaults of an agent that writes to Graphiti directly), and entities of the types in `review_first` (the package's catch-all or easily confused types). Other entities are left alone. Ties are broken by id, so two scans in a row keep the same order.
+- **What is set aside as doubtful** without asking the decider: a name of five words or more (in every brain) and, only if the package enables them, the technical rules `file` (path or file name), `option` (command-line option), `code` (code expression), `version` (version at the end of the name) and `problem` (words such as *bug*, *error*, *fix*). `infrastructure` enables all five; `software-knowledge` only `option`, because the others would discard its own repositories, documents, APIs and releases; the other packages none.
+- **The decider's question** does not rule out errors or procedures when the ontology has a type for them (`Bug`, `Incident`, `Runbook`…).
+- A brain whose ontology was written by hand, or whose package no longer exists, uses the minimum: it reviews `Object`, `Thing` and `Topic` and applies no technical rule.
+
+The block is read from the package when the corrector runs, so changing it needs no new package version. The tests check that each block only uses types of its package and known rules, and that a package's rules do not discard the examples of its own types.
+
 ## Writing your own
 Start from the package that is closest, then edit types, relations, map and instructions in the interface. Keep descriptions short and explicit about when **not** to use a type.

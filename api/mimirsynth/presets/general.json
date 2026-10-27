@@ -7,6 +7,12 @@
   "FOAF",
   "Dublin Core (dcterms:creator, isPartOf)"
  ],
+ "retype": {
+  "review_first": [
+   "Topic"
+  ],
+  "doubtful_rules": []
+ },
  "entity_types": [
   {
    "name": "Person",

@@ -6,6 +6,23 @@
   "ITIL / CMDB configuration items and relationships",
   "schema.org (SoftwareApplication, Place, Organization)"
  ],
+ "retype": {
+  "review_first": [
+   "Organization",
+   "Location",
+   "Topic",
+   "Document",
+   "Event",
+   "Person"
+  ],
+  "doubtful_rules": [
+   "file",
+   "option",
+   "code",
+   "version",
+   "problem"
+  ]
+ },
  "entity_types": [
   {
    "name": "Host",

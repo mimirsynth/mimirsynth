@@ -390,7 +390,7 @@ def test_retype_scan_apply_revert(client, monkeypatch):
     ents = [{"uuid": "u1", "name": "sonarr", "type": "Organization", "summary": "app"},
             {"uuid": "u2", "name": "Helios", "type": "Location", "summary": "nodo"},
             {"uuid": "u3", "name": "Madrid", "type": "Location", "summary": "ciudad"}]
-    monkeypatch.setattr(retype, "_candidates", lambda g, skip, limit: [e for e in ents if e["uuid"] not in skip][:limit])
+    monkeypatch.setattr(retype, "_candidates", lambda g, prof, skip, limit: [e for e in ents if e["uuid"] not in skip][:limit])
     monkeypatch.setattr(retype, "_facts", lambda g, u: ["x"])
     calls = []
     monkeypatch.setattr(retype, "_set_label", lambda g, u, old, new: calls.append((u, old, new)))
@@ -413,13 +413,13 @@ def test_retype_doubtful_heuristics_and_counts(client, monkeypatch):
     from mimirsynth import decider, retype
     for n, why in [("tools/utils/secrets.py", "fichero"), ("-config-file flag", "opción"), ("Nextcloud 1.36.0", "versión"),
                    ("LXC container network configuration with ip6=auto", "expresión"), ("Anthropic temperature validation bug", "problema"), ("Nextcloud", ""), ("plex.example.com", "")]:
-        assert bool(retype.doubtful_reason(n)) == bool(why), n
+        assert bool(retype.doubtful_reason(n, retype.profile({"preset": {"name": "infrastructure"}})["rules"])) == bool(why), n
     client.post("/api/brains", json={"slug": "dud", "name": "Dud"})
     client.post("/api/brains/dud/ontology/preset/infrastructure")
     client.post("/api/decision-engines", json={"name": "dec-dud", "base_url": "http://o/v1", "model": "tev1"})
     ents = [{"uuid": "a", "name": "roulette_spin.py", "type": "Object", "summary": ""}, {"uuid": "b", "name": "Plex", "type": "Organization", "summary": ""},
             {"uuid": "c", "name": "Cosa rara", "type": "Object", "summary": ""}]
-    monkeypatch.setattr(retype, "_candidates", lambda g, skip, limit: [e for e in ents if e["uuid"] not in skip])
+    monkeypatch.setattr(retype, "_candidates", lambda g, prof, skip, limit: [e for e in ents if e["uuid"] not in skip])
     monkeypatch.setattr(retype, "_facts", lambda g, u: [])
     types = [t["name"] for t in __import__("mimirsynth.ontology", fromlist=["x"]).presets()["infrastructure"]["entity_types"]]
 
@@ -445,7 +445,7 @@ def test_retype_none_is_not_same(client, monkeypatch):
     client.post("/api/brains/nin/ontology/preset/infrastructure")
     client.post("/api/decision-engines", json={"name": "dec-nin", "base_url": "http://o/v1", "model": "tev1"})
     ents = [{"uuid": "x", "name": "Cosa", "type": "Object", "summary": ""}, {"uuid": "y", "name": "Plex", "type": "Service", "summary": ""}]
-    monkeypatch.setattr(retype, "_candidates", lambda g, skip, limit: [e for e in ents if e["uuid"] not in skip])
+    monkeypatch.setattr(retype, "_candidates", lambda g, prof, skip, limit: [e for e in ents if e["uuid"] not in skip])
     monkeypatch.setattr(retype, "_facts", lambda g, u: [])
     types = [t["name"] for t in __import__("mimirsynth.ontology", fromlist=["x"]).presets()["infrastructure"]["entity_types"]]
     def fake(base, model, key, state, q, opts, **k):
@@ -459,6 +459,82 @@ def test_retype_none_is_not_same(client, monkeypatch):
     assert c == {"none": 1, "same": 1}                                     # «ninguno» ya no se cuenta como «ya correcto»
     n = client.get("/api/brains/nin/retype?status=none").json()["items"]
     assert [i["name"] for i in n] == ["Cosa"] and n[0]["reason"]
+
+
+def _pack_onto(name: str) -> dict:
+    from mimirsynth.ontology import presets
+    return {"entity_types": presets()[name]["entity_types"], "preset": {"name": name, "version": 1}}
+
+
+def test_retype_queue_follows_the_brain_ontology():
+    """#56: qué se revisa sale de la ontología del brain (sin tipo, tipo ajeno, tipos que el paquete revisa primero), no de una lista fija."""
+    from mimirsynth import retype
+    fam = retype.profile(_pack_onto("personal-family"))
+    ents = [{"uuid": u, "type": t} for u, t in [("e", "Person"), ("d", "Place"), ("c", "Topic"), ("b", "Preference"), ("a", ""),
+                                               ("f", "Pet"), ("g", "Item"), ("h", "Location")]]
+    assert [c["uuid"] for c in retype.rank(ents, fam, set(), 10)] == ["a", "b", "h", "c", "g"]   # Person, Place y Pet son del paquete
+    assert [c["uuid"] for c in retype.rank(list(reversed(ents)), fam, set(), 10)] == ["a", "b", "h", "c", "g"]  # orden estable
+    assert [c["uuid"] for c in retype.rank(ents, fam, {"a"}, 2)] == ["b", "h"]
+    infra = retype.profile(_pack_onto("infrastructure"))
+    old_suspect = ["Object", "Organization", "Location", "Topic", "Document", "Preference", "Requirement", "Procedure", "Event", "Person"]
+    assert all(retype._priority(t, infra["types"], infra["review_first"]) is not None for t in old_suspect)  # infraestructura: como antes
+    assert retype._priority("Host", infra["types"], infra["review_first"]) is None and retype._priority("Service", infra["types"], infra["review_first"]) is None
+
+
+def test_retype_profile_without_pack_uses_minimal_rules():
+    from mimirsynth import retype
+    hand = {"entity_types": [{"name": "Recipe", "description": "una receta"}, {"name": "Topic", "description": "un tema"}]}
+    for o in (hand, {**hand, "preset": {"name": "paquete-retirado", "version": 3}}, {**hand, "preset": None}, None):
+        p = retype.profile(o)
+        assert p["rules"] == frozenset() and p["review_first"] == ["Object", "Thing", "Topic"], o
+    assert retype.profile({**_pack_onto("general"), "preset": {"name": "generic", "version": 1}})["review_first"] == ["Topic"]  # alias
+    prof = retype.profile(hand)
+    assert [c["uuid"] for c in retype.rank([{"uuid": "1", "type": "Recipe"}, {"uuid": "2", "type": "Topic"}, {"uuid": "3", "type": "Thing"}], prof, set(), 9)] == ["3", "2"]
+
+
+def test_retype_doubtful_rules_depend_on_the_pack():
+    from mimirsynth import retype
+    fam, sw, infra = (retype.profile(_pack_onto(p))["rules"] for p in ("personal-family", "software-knowledge", "infrastructure"))
+    for n in ("Capítulo 2.1", "Receta 1.5", "Fix de la cocina", "Lucía (hija)", "notas/2026.md"):
+        assert retype.doubtful_reason(n, fam) == "", n
+    for n in ("MimirSynth 0.7.1", "Bug del login", "org/website", "ARCHITECTURE.md", "v0.5.0 (2026-10-25)"):
+        assert retype.doubtful_reason(n, sw) == "", n
+    assert retype.doubtful_reason("--dry-run", sw)
+    for n in ("Receta 1.5", "notas/2026.md", "Fix de la cocina", "Lucía (hija)"):  # en infraestructura se conserva todo
+        assert retype.doubtful_reason(n, infra), n
+    assert retype.doubtful_reason("una frase de cinco palabras", fam) == "frase, no un nombre propio"  # la de frase vale siempre
+
+
+def test_retype_entity_question_respects_ontology_types():
+    from mimirsynth import retype
+    gen, sw, infra = (retype.profile(_pack_onto(p))["types"] for p in ("general", "software-knowledge", "infrastructure"))
+    q = retype._entity_question(gen)
+    assert "entidad concreta" in q and q.endswith("una opción, un error o un procedimiento?")
+    assert "un error" not in retype._entity_question(sw) and retype._entity_question(sw).endswith("una opción o un procedimiento?")
+    assert retype._entity_question(infra).endswith("y no una frase, un fichero o una opción?")
+
+
+def test_retype_old_doubtful_becomes_applicable_in_non_technical_brain(client, monkeypatch):
+    """Cambiar las reglas cambia también lo ya analizado: lo que una regla técnica veía dudoso se puede aplicar en un brain no técnico."""
+    from mimirsynth import retype
+    from mimirsynth.models import Brain, RetypeSuggestion
+    calls = []
+    monkeypatch.setattr(retype, "_set_label", lambda g, u, old, new: calls.append((u, old, new)))
+    for slug, pack in (("fam56", "personal-family"), ("inf56", "infrastructure")):
+        client.post("/api/brains", json={"slug": slug, "name": slug})
+        client.post(f"/api/brains/{slug}/ontology/preset/{pack}")
+        with _factory()() as db:
+            b = db.scalar(select(Brain).where(Brain.slug == slug))
+            db.add(RetypeSuggestion(brain_id=b.id, entity_uuid="r1", name="Receta 1.5", current_type="Topic", suggested_type="Document",
+                                    confidence=0.9, status="pending"))
+            db.commit()
+    o = client.get("/api/brains/fam56/retype").json()
+    assert o["counts"] == {"pending": 1} and o["items"][0]["reason"] == ""
+    assert client.post("/api/brains/fam56/retype/apply", json={"ids": [o["items"][0]["id"]]}).json()["applied"] == 1
+    assert calls == [("r1", "Topic", "Document")]
+    assert client.get("/api/brains/inf56/retype").json()["counts"] == {"doubtful": 1}                 # en infraestructura sigue dudosa
+    d = client.get("/api/brains/inf56/retype?status=doubtful").json()["items"]
+    assert d[0]["reason"].startswith("versión") and client.post("/api/brains/inf56/retype/apply", json={"ids": [d[0]["id"]]}).json()["applied"] == 0
 
 
 def test_delete_brain_with_confirmation(client, monkeypatch):

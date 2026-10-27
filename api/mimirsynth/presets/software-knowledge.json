@@ -7,6 +7,15 @@
   "schema.org (SoftwareApplication, SoftwareSourceCode, APIReference)",
   "Architecture Decision Records (ADR)"
  ],
+ "retype": {
+  "review_first": [
+   "Concept",
+   "Document"
+  ],
+  "doubtful_rules": [
+   "option"
+  ]
+ },
  "entity_types": [
   {
    "name": "Repository",
