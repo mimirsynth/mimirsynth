@@ -507,7 +507,7 @@ def test_oidc_default_roles_are_validated(client, local, monkeypatch):  # noqa: 
     with _factory()() as db:
         _brain(db, "ini-docs"); _brain(db, "ini-ops")
     body = {"slug": "inival", "name": "Ini", "issuer": "https://id.example.com", "client_id": "cid", "client_secret": "s"}
-    for bad in ("ini-docs", "ini-docs:curator", "ini-docs:owner", "nope:reader", ":reader"):
+    for bad in ("ini-docs", "ini-docs:curator", "ini-docs:owner", "nope:reader", ":reader", "ini-docs:reader, ini-docs:contributor"):
         r = client.post("/api/oidc-providers", json={**body, "default_roles": bad})
         assert r.status_code == 422 and "acceso inicial" in r.json()["detail"], bad
     r = client.post("/api/oidc-providers", json={**body, "default_roles": " ini-docs:reader ,ini-ops : contributor "})
