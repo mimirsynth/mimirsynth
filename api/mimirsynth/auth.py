@@ -372,7 +372,7 @@ def apply_default_roles(db: Session, user: User, p: OidcProvider) -> None:
 
 def resolve_oidc_user(db: Session, info: dict, p: OidcProvider) -> tuple[User | None, str]:
     """Persona a la que corresponde la identidad del proveedor, o (None, motivo). Entra quien ya está vinculado, quien fue invitado con el mismo
-    email verificado, un administrador declarado en Ajustes o, si se activó, quien tenga un email verificado de un dominio permitido.
+    email verificado, un administrador declarado en Ajustes con email verificado o, si se activó, quien tenga un email verificado de un dominio permitido.
     Una cuenta activa solo se vincula por email si está verificado de verdad: con «aceptar emails sin verificar» se vinculan invitaciones
     (aún sin credenciales), y la cuenta activa se vincula desde Mi cuenta (`link_required`)."""
     sub = info["sub"]
@@ -388,8 +388,8 @@ def resolve_oidc_user(db: Session, info: dict, p: OidcProvider) -> tuple[User | 
             db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
             if user.status == "invited":
                 user.status = "active"
-        elif not user and email in {e.lower() for e in _csv(appsettings.get("admin_emails"))}:
-            user = User(email=email, name=info.get("name") or email, is_admin=True, status="active")  # administrador declarado en Ajustes
+        elif not user and info.get("email_verified") is True and email in {e.lower() for e in _csv(appsettings.get("admin_emails"))}:
+            user = User(email=email, name=info.get("name") or email, is_admin=True, status="active")  # administrador declarado en Ajustes (nunca con email sin verificar)
             db.add(user); db.flush()
             db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
         elif not user and info.get("email_verified") is True and p.auto_provision and email.rpartition("@")[2] in {d.lower().lstrip("@") for d in _csv(p.allowed_domains)}:
