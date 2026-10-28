@@ -21,7 +21,16 @@ Status: **under active development** (0.x). It works end to end, but the API and
 **Full user guide in the [wiki](https://github.com/MimirSynth/mimirsynth/wiki).** Technical summary: [installation](docs/INSTALL.md), [configuration](docs/CONFIGURATION.md), [connecting agents](docs/AGENTS.md), [architecture](docs/ARCHITECTURE.md) and [document memory](docs/DOCUMENTS.md).
 
 ## Quick start
-You need Docker with Compose, an OpenAI-compatible endpoint for embeddings (e.g. Ollama with `nomic-embed-text`) and another for the extraction LLM.
+You need Docker with Compose v2, an OpenAI-compatible endpoint for embeddings (e.g. Ollama with `nomic-embed-text`) and another for the extraction LLM ([which model](docs/CONFIGURATION.md#choosing-the-extraction-model)). Without both endpoints the instance starts, but there is nothing useful to see.
+
+On a bare Linux server (Debian, Ubuntu), first install `curl` and Docker; on macOS or Windows, install Docker Desktop instead. If you run Ollama on the same Linux host, [prepare it](docs/INSTALL.md#preparing-ollama) so the container can reach it.
+```bash
+sudo apt-get update && sudo apt-get install -y curl openssl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER" && newgrp docker    # run docker without sudo
+docker compose version    # must answer v2.x
+```
+Then:
 ```bash
 mkdir mimirsynth && cd mimirsynth
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/docker-compose.yml
@@ -30,7 +39,14 @@ curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/env
 docker compose --profile bundled up -d    # pulls the published image; includes FalkorDB (without the profile, point MIMIRSYNTH_FALKOR_HOST at your own)
 docker compose logs mimirsynth | grep -A3 "FIRST START"    # installation wizard code
 ```
-Open `http://localhost:8000`, enter the code and create the administrator account. Then set up the AI providers under **Administration**.
+Open `http://localhost:8000`, enter the code and create the administrator account. Then, under **Administration**, add the AI engines (**LLM model** and **Embeddings**, with "Test" to check them) and create a brain (**Brain access → Create brain**).
+
+### Connect your first agent
+Under **My account → API tokens**, create a token for that brain with the **Contributor** role (it is shown only once). With Claude Code, over MCP:
+```bash
+claude mcp add --transport http mimirsynth "http://localhost:8000/api/brains/my-brain/mcp" --header "Authorization: Bearer mst_..."
+```
+The agent can now read the memory (`recall`) and propose new facts (`remember`). What a contributor proposes stays in quarantine, under **Proposals**, until a curator or the decider approves it. Other agents, the HTTP API and the Claude Code recall hook: [docs/AGENTS.md](docs/AGENTS.md).
 
 In production, point an external monitor at `/api/health`: the built-in alerts cannot report PostgreSQL going down ([monitoring](docs/INSTALL.md#monitoring-the-instance)).
 

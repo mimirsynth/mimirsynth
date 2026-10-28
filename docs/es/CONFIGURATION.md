@@ -27,6 +27,14 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
 - **Modelo LLM:** extrae entidades y hechos al ingerir propuestas. Para modelos que «razonan» y devuelven JSON vacío, usa un proxy que desactive el *thinking*.
 - **Embeddings:** modelo y dimensión **no se pueden cambiar** una vez creados el índice (los vectores dependen del modelo). Debe ser el mismo que use Graphiti sobre ese FalkorDB.
+
+El LLM de extracción y el modelo de embeddings son **independientes**: pueden venir de proveedores distintos (embeddings en local y LLM por API, por ejemplo), y solo el de embeddings queda atado al índice.
+
+### Elegir el modelo de extracción
+Lo que entra en el grafo es tan bueno como el modelo de extracción: lee cada propuesta, nombra las entidades y devuelve los hechos en JSON.
+- **Recomendado:** en local, un modelo *instruct* de unos **14B parámetros o más** (p. ej. `qwen2.5:14b-instruct` en Ollama, que necesita unos 10 GB de memoria); por API, un modelo pequeño y barato con salida estructurada (la gama *mini* de OpenAI, por ejemplo).
+- **Los modelos pequeños (4B o menos, como `llama3.2:3b`)** sirven para probar la instalación, pero no para una memoria que quieras conservar: espera entidades mal formadas, entidades del texto que se pierden y hechos escritos en inglés aunque el texto esté en otro idioma. Lo que se extrae mal se queda en el grafo hasta que un curador lo corrige.
+- Evita los modelos que «razonan» por defecto salvo que lo desactives: ver la nota del modelo LLM más arriba.
 - **Decisor:** modelo de decisión cerrada (con probabilidades) para el triaje de propuestas y el corrector de tipos. Solo aprueba lo factual con confianza suficiente; nunca rechaza por su cuenta. No supone ningún dominio: juzga cada propuesta frente al ámbito del brain, hecho con su **descripción** (Administración → Acceso al brain → Editar) y los tipos de entidad y de relación de su ontología. Lo que no encaja en ese ámbito va a un curador. Sin descripción ni ontología, solo comprueba que sea una afirmación factual sin instrucciones dirigidas al sistema.
 
 ### Cambiar el modelo de embeddings
