@@ -34,6 +34,8 @@ services:
         condition: service_healthy
     ports:
       - "${MIMIRSYNTH_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Docker Desktop resolves this name by itself; on Linux this line is needed to reach services on the host (e.g. Ollama)
     environment:
       MIMIRSYNTH_DATABASE_URL: "postgresql+psycopg://mimirsynth:${POSTGRES_PASSWORD}@postgres:5432/mimirsynth"
       MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-falkordb}"

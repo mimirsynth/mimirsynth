@@ -4,7 +4,29 @@
 
 ## Requirements
 - Docker with Compose v2 and about 2 GB of free RAM for the application, PostgreSQL and FalkorDB.
-- An **OpenAI-compatible** endpoint for **embeddings** (e.g. [Ollama](https://ollama.com) with `nomic-embed-text`) and another for the **LLM** that extracts facts. They can be local or from a cloud provider, and are configured afterwards in the interface.
+- An **OpenAI-compatible** endpoint for **embeddings** (e.g. [Ollama](https://ollama.com) with `nomic-embed-text`) and another for the **LLM** that extracts facts ([which model](CONFIGURATION.md#choosing-the-extraction-model)). They can be local or from a cloud provider, and are configured afterwards in the interface. Without them the instance starts, but there is nothing useful to see: proposals are not ingested and recall returns nothing.
+
+## Before you start
+On a bare Linux server (e.g. a minimal Debian or Ubuntu), install `curl` and Docker, and check that Compose v2 is there. On macOS or Windows, install [Docker Desktop](https://docs.docker.com/desktop/) instead.
+```bash
+sudo apt-get update && sudo apt-get install -y curl openssl
+curl -fsSL https://get.docker.com | sudo sh    # Docker Engine with the Compose plugin, under a minute
+sudo usermod -aG docker "$USER" && newgrp docker    # run docker without sudo
+docker compose version    # must answer v2.x
+```
+
+### Preparing Ollama
+If the models run on [Ollama](https://ollama.com), download them before you start:
+```bash
+ollama pull nomic-embed-text        # embeddings (768 dimensions, the default)
+ollama pull qwen2.5:14b-instruct    # fact extraction: see "Choosing the extraction model" in CONFIGURATION.md
+```
+- **Ollama on the same host:** the default address, `http://host.docker.internal:11434/v1`, works without changes; the Compose file maps that name to the host, also on Linux. But on Linux Ollama only listens on `127.0.0.1` by default, and the container cannot reach it there. Make it listen on all interfaces and keep port 11434 closed to the outside with your firewall:
+  ```bash
+  sudo systemctl edit ollama    # add, under [Service]:  Environment="OLLAMA_HOST=0.0.0.0"
+  sudo systemctl restart ollama
+  ```
+- **Ollama on another machine:** use its address, e.g. `http://192.168.1.20:11434/v1`.
 
 ## First installation
 Everything comes from the official release: a Compose file and an environment template. You do not need the source code.
@@ -33,7 +55,7 @@ Open the application, enter the code and create the administrator account. Keep 
 ### First steps
 1. Under **Administration → LLM model** and **Embeddings**, add an engine (endpoint, key and model) and mark it as default. "Test" checks that it responds.
 2. Create a **brain** (Administration → Brain access → Create brain) and, if you like, apply an ontology package under Vocabulary → Ontology.
-3. Create an API token for your agents: see [AGENTS.md](AGENTS.md).
+3. Create an API token for your agents and connect the first one: see [AGENTS.md](AGENTS.md).
 4. Optional: SMTP email (invitations and password recovery), OIDC, mandatory two-factor and document folders. See [CONFIGURATION.md](CONFIGURATION.md).
 
 ## HTTPS and reverse proxy
@@ -82,6 +104,7 @@ Building from source is for contributors: see [CONTRIBUTING.md](../CONTRIBUTING.
 ## Common problems
 - **"define POSTGRES_PASSWORD" or "define MIMIRSYNTH_SESSION_SECRET" on start:** they are missing from `.env`.
 - **Approved proposals stay "approved":** no LLM is configured. Add an engine under Administration → LLM model.
+- **Embeddings fail with a connection error, with Ollama on the same Linux host:** Ollama is only listening on `127.0.0.1`; see [Preparing Ollama](#preparing-ollama). If you use your own `docker-compose.yml`, check that the `mimirsynth` service has `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **Recall returns nothing:** check the embeddings (Administration → Embeddings → Test) and that the text index is synchronised (the Ask tab shows its status).
 - **No alert arrived when PostgreSQL went down:** it cannot alert about itself. Watch it with an external monitor: see [Monitoring the instance](#monitoring-the-instance).
 - **I cannot find the installation code:** it only appears while there is no administrator. Restart the container so it generates a new one.

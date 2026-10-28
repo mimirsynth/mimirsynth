@@ -4,7 +4,29 @@
 
 ## Requisitos
 - Docker con Compose v2 y unos 2 GB de RAM libres para la aplicación, PostgreSQL y FalkorDB.
-- Un endpoint compatible con OpenAI para **embeddings** (p. ej. [Ollama](https://ollama.com) con `nomic-embed-text`) y otro para el **LLM** que extrae los hechos. Pueden ser locales o de un proveedor en la nube. Se configuran después, en la interfaz.
+- Un endpoint compatible con OpenAI para **embeddings** (p. ej. [Ollama](https://ollama.com) con `nomic-embed-text`) y otro para el **LLM** que extrae los hechos ([qué modelo](CONFIGURATION.md#elegir-el-modelo-de-extracción)). Pueden ser locales o de un proveedor en la nube. Se configuran después, en la interfaz. Sin ellos la instancia arranca, pero no hay nada útil que ver: las propuestas no se ingieren y el recall no devuelve nada.
+
+## Antes de empezar
+En un servidor Linux vacío (p. ej. un Debian o Ubuntu mínimo), instala `curl` y Docker y comprueba que está Compose v2. En macOS o Windows, instala [Docker Desktop](https://docs.docker.com/desktop/).
+```bash
+sudo apt-get update && sudo apt-get install -y curl openssl
+curl -fsSL https://get.docker.com | sudo sh    # Docker Engine con el plugin de Compose, menos de un minuto
+sudo usermod -aG docker "$USER" && newgrp docker    # usar docker sin sudo
+docker compose version    # debe responder v2.x
+```
+
+### Preparar Ollama
+Si los modelos van en [Ollama](https://ollama.com), descárgalos antes de empezar:
+```bash
+ollama pull nomic-embed-text        # embeddings (768 dimensiones, el valor por defecto)
+ollama pull qwen2.5:14b-instruct    # extracción de hechos: ver «Elegir el modelo de extracción» en CONFIGURATION.md
+```
+- **Ollama en el mismo host:** la dirección por defecto, `http://host.docker.internal:11434/v1`, funciona sin cambios; el fichero de Compose asocia ese nombre al host, también en Linux. Pero en Linux Ollama solo escucha en `127.0.0.1` por defecto, y desde el contenedor no se llega ahí. Haz que escuche en todas las interfaces y mantén el puerto 11434 cerrado hacia fuera con tu cortafuegos:
+  ```bash
+  sudo systemctl edit ollama    # añade, bajo [Service]:  Environment="OLLAMA_HOST=0.0.0.0"
+  sudo systemctl restart ollama
+  ```
+- **Ollama en otra máquina:** usa su dirección, p. ej. `http://192.168.1.20:11434/v1`.
 
 ## Primera instalación
 Todo sale de la release oficial: un fichero de Compose y una plantilla de entorno. No necesitas el código fuente.
@@ -21,6 +43,8 @@ Descarga la imagen oficial (`ghcr.io/mimirsynth/mimirsynth`, para amd64 y arm64)
 - `--profile bundled` arranca también un FalkorDB incluido. Si ya tienes uno, omite el perfil y pon su dirección en `MIMIRSYNTH_FALKOR_HOST`.
 - La aplicación queda en `http://localhost:8000` (cambia el puerto con `MIMIRSYNTH_PORT`).
 
+> No pongas comentarios al final de una línea con valor en `.env` (`CLAVE=valor # comentario`): Docker Compose los leería como parte del valor.
+
 ### Asistente de primer arranque
 Una instancia sin administradores imprime un **código de instalación** en su registro:
 ```bash
@@ -31,7 +55,7 @@ Abre la aplicación, introduce el código y crea la cuenta de administrador. Gua
 ### Primeros pasos
 1. En **Administración → Modelo LLM** y **Embeddings**, añade un motor (endpoint, clave y modelo) y márcalo como predeterminado. «Probar» comprueba que responde.
 2. Crea un **brain** (Administración → Acceso al brain → Crear brain) y, si quieres, aplica un paquete de ontología en Vocabulario → Ontología.
-3. Crea un token de API para tus agentes: ver [AGENTS.md](AGENTS.md).
+3. Crea un token de API para tus agentes y conecta el primero: ver [AGENTS.md](AGENTS.md).
 4. Opcional: correo SMTP (invitaciones y recuperación de contraseña), OIDC, doble factor obligatorio y carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md).
 
 ## HTTPS y proxy inverso
@@ -80,6 +104,7 @@ Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTR
 ## Problemas frecuentes
 - **«define POSTGRES_PASSWORD» o «define MIMIRSYNTH_SESSION_SECRET» al arrancar:** faltan en `.env`.
 - **Las propuestas aprobadas se quedan en «aprobada»:** no hay LLM configurado. Añade un motor en Administración → Modelo LLM.
+- **Los embeddings fallan con un error de conexión, con Ollama en el mismo host Linux:** Ollama solo escucha en `127.0.0.1`; ver [Preparar Ollama](#preparar-ollama). Si usas un `docker-compose.yml` propio, comprueba que el servicio `mimirsynth` tiene `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **El recall no devuelve nada:** comprueba los embeddings (Administración → Embeddings → Probar) y que el índice de texto esté sincronizado (pestaña Preguntar muestra su estado).
 - **No llegó ningún aviso cuando se cayó PostgreSQL:** no puede avisar de sí mismo. Vigílalo con un monitor externo: ver [Vigilar la instancia](#vigilar-la-instancia).
 - **No encuentro el código de instalación:** solo aparece mientras no haya ningún administrador. Reinicia el contenedor para que genere uno nuevo.
