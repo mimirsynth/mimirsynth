@@ -142,11 +142,12 @@ def _unmark() -> None:
 
 
 def status() -> dict:
-    """El marcador y si las sombras están huérfanas: las hay y ningún relleno está en cola ni en marcha."""
+    """El marcador y si las sombras están huérfanas: las hay, ningún relleno ni intercambio está en cola ni en marcha y no están
+    terminadas (`ready` espera al intercambio). O sea, un relleno fallido o abandonado."""
     m = marker()
     with _factory()() as db:
         running = db.scalar(select(Job.id).where(Job.kind.in_((KIND, "embedding.switch")), Job.status.in_(("queued", "running")))) is not None
-    return {"shadow": m, "orphan": bool(m) and not running}
+    return {"shadow": m, "orphan": bool(m) and not running and m.get("state") != "ready"}
 
 
 def check_orphan() -> None:

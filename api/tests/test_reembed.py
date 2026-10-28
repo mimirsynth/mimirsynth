@@ -345,7 +345,7 @@ def test_a_finished_fill_is_ready_and_does_not_notify(env, client, monkeypatch):
     from mimirsynth.store import _factory
     client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
     st = client.get("/api/embedding-engines/reindex").json()
-    assert st["shadow"]["state"] == "ready" and st["orphan"] is True                    # hay sombras y ningún relleno en marcha
+    assert st["shadow"]["state"] == "ready" and st["orphan"] is False                   # terminadas: esperan al intercambio (#69)
     monkeypatch.setattr(settings, "reindex_orphan_hours", 0.0)
     reembed.check_orphan()
     with _factory()() as db:

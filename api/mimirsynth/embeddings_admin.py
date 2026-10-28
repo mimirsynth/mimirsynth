@@ -161,8 +161,8 @@ def _target(db: Session, eid: int) -> EmbeddingEngine:
 
 @router.get("/reindex")
 def reindex_status(_: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """El último relleno (en marcha o terminado) con su progreso y registro, y el marcador de sombras: `orphan` si las hay y ningún
-    relleno está en marcha. Se consulta sin recorrer el grafo."""
+    """El último relleno (en marcha o terminado) con su progreso y registro, y el marcador de sombras: `orphan` si las hay, ningún
+    relleno está en marcha y no esperan al intercambio (relleno fallido o abandonado). Se consulta sin recorrer el grafo."""
     j = db.scalar(select(Job).where(Job.kind == reembed.KIND).order_by(Job.id.desc()).limit(1))
     s = db.scalar(select(Job).where(Job.kind == reembed.KIND_SWITCH).order_by(Job.id.desc()).limit(1))
     return {"job": jobs.out(j, detail=True) if j else None, "switch_job": jobs.out(s, detail=True) if s else None, **reembed.status()}
