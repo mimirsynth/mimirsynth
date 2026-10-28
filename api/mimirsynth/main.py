@@ -3,18 +3,18 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, text
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import appsettings, brand, settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
-from .store import _factory, init_db
+from .store import _factory, engine, init_db
 
 
 def _bootstrap() -> None:
@@ -127,12 +127,31 @@ def get_config():
     return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links(), "default_language": appsettings.get("default_language")}
 
 
-@app.get("/api/health")
-def health():
+HEALTH_TIMEOUT = 2.0  # segundos por comprobación: el HEALTHCHECK del contenedor corta a los 3
+
+
+def _db_ping() -> None:
+    with engine().connect() as c:
+        c.execute(text("SELECT 1"))
+
+
+async def _probe(what: str, fn):
+    """(True, resultado) si `fn` responde a tiempo; si falla o se pasa de HEALTH_TIMEOUT, (False, None) y el motivo solo al log."""
     try:
-        return {"ok": True, "graphs": len(list_graphs())}
+        return True, await asyncio.wait_for(asyncio.to_thread(fn), HEALTH_TIMEOUT)
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(503, f"GraphStore no disponible: {e}") from e
+        logging.getLogger("mimirsynth").warning("health: %s no responde: %s", what, str(e)[:300] or type(e).__name__)
+        return False, None
+
+
+@app.get("/api/health")
+async def health():
+    """Responder ya dice que la app está viva; `db` (PostgreSQL) y `graph` (FalkorDB) dicen si llega a cada uno. Con alguno caído
+    responde 503 con el mismo cuerpo, para que un monitor externo distinga «app caída» (sin respuesta) de «app viva, BD caída»:
+    las notificaciones no pueden avisar de la caída de PostgreSQL porque se guardan en él. Es pública: sin detalles del error."""
+    (db_ok, _), (graph_ok, graphs) = await asyncio.gather(_probe("PostgreSQL", _db_ping), _probe("FalkorDB", list_graphs))
+    body = {"ok": db_ok and graph_ok, "db": db_ok, "graph": graph_ok, "graphs": len(graphs) if graph_ok else None}
+    return JSONResponse(body, status_code=200 if body["ok"] else 503)
 
 
 # --- SPA (build de web/) servida por la propia API: un solo contenedor ---

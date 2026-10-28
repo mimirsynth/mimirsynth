@@ -32,6 +32,8 @@ docker compose logs mimirsynth | grep -A3 "FIRST START"    # installation wizard
 ```
 Open `http://localhost:8000`, enter the code and create the administrator account. Then set up the AI providers under **Administration**.
 
+In production, point an external monitor at `/api/health`: the built-in alerts cannot report PostgreSQL going down ([monitoring](docs/INSTALL.md#monitoring-the-instance)).
+
 ## Configuration
 The environment only carries what is needed to start and connect (table below). Everything else — document limits, recall, job retention, AI providers, folders — is changed under **Administration** and applies without a restart; if one of those variables exists, it only acts as the default value.
 

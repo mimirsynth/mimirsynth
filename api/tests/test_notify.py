@@ -348,6 +348,34 @@ def test_health_check_needs_two_failures_in_a_row_and_recovers(monkeypatch):
         assert db.query(Notification).filter_by(event="graph.down").one().resolved_at is not None
 
 
+def test_health_endpoint_tells_db_down_from_app_down(client, monkeypatch):  # noqa: F811
+    import time
+
+    import mimirsynth.main as m
+    monkeypatch.setattr(m, "list_graphs", lambda: ["a", "b"])
+    r = client.get("/api/health")
+    assert r.status_code == 200 and r.json() == {"ok": True, "db": True, "graph": True, "graphs": 2}
+
+    def db_down():
+        raise ConnectionError("host=pg.interno port=5432 rechazada")
+    monkeypatch.setattr(m, "_db_ping", db_down)
+    r = client.get("/api/health")
+    assert r.status_code == 503 and r.json() == {"ok": False, "db": False, "graph": True, "graphs": 2}   # la app responde: está viva
+    assert "pg.interno" not in r.text                                                                   # es pública: sin el error
+
+    monkeypatch.setattr(m, "_db_ping", lambda: None)
+    monkeypatch.setattr(m, "list_graphs", lambda: (_ for _ in ()).throw(ConnectionError("caído")))
+    r = client.get("/api/health")
+    assert r.status_code == 503 and r.json() == {"ok": False, "db": True, "graph": False, "graphs": None}
+
+    monkeypatch.setattr(m, "list_graphs", lambda: [])
+    monkeypatch.setattr(m, "HEALTH_TIMEOUT", 0.1)
+    monkeypatch.setattr(m, "_db_ping", lambda: time.sleep(1))                                          # BD que no contesta
+    t0 = time.monotonic()
+    r = client.get("/api/health")
+    assert r.status_code == 503 and r.json()["db"] is False and time.monotonic() - t0 < 0.9             # no espera a la BD colgada
+
+
 def test_health_check_failures_threshold_is_a_setting(monkeypatch):
     import mimirsynth.db as dbm
     notify._FAILS.clear()

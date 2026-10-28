@@ -57,7 +57,7 @@ Cuerpo del webhook:
 
 - Cada *N* minutos (por defecto 10; 0 = no) comprueba FalkorDB y los motores LLM, de embeddings y decisor por defecto. Un modelo con clave de pago recibe una llamada mínima por comprobación. Solo se avisa tras **2 fallos seguidos** (ajuste «Fallos seguidos para avisar»; 1 = al primero), así que un 500 o un timeout puntual de un proveedor no genera aviso; la recuperación borra la cuenta.
 - Las **versiones nuevas** se consultan una vez al día en la API de releases de GitHub, **solo si lo activas**. Es la única conexión de salida que hace la instancia por su cuenta.
-- PostgreSQL no puede avisar de su propia caída (no habría dónde guardar el aviso): vigílalo con un monitor externo.
+- PostgreSQL no puede avisar de su propia caída (no habría dónde guardar el aviso): vigílalo con un monitor externo apuntado a `GET /api/health`, que distingue «aplicación caída» de «aplicación viva, base de datos caída». Ver [Vigilar la instancia](INSTALL.md#vigilar-la-instancia).
 
 ## Seguridad
 

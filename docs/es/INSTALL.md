@@ -62,6 +62,18 @@ Guarda también tu `.env`.
 
 Restaurar es el camino inverso: arranca los servicios, restaura la base de datos (`psql`) y devuelve los volúmenes. El índice de texto se puede reconstruir desde el grafo y el de documentos desde los originales.
 
+## Vigilar la instancia
+MimirSynth avisa por sí mismo del grafo y de los modelos de IA ([NOTIFICATIONS.md](NOTIFICATIONS.md)), pero **no de su propio PostgreSQL**: los avisos se guardan en esa base de datos, así que mientras está caída no hay dónde guardarlos. Vigílalo desde fuera con cualquier monitor HTTP (Uptime Kuma, Gatus, un `curl` en cron…) apuntado a `GET /api/health`. No pide sesión y responde en menos de 3 segundos:
+
+| Respuesta | Significado |
+|---|---|
+| `200` `{"ok": true, "db": true, "graph": true, "graphs": 3}` | Todo bien |
+| `503` con `"db": false` | La aplicación está viva pero no llega a PostgreSQL |
+| `503` con `"graph": false` | La aplicación está viva pero FalkorDB no responde |
+| Sin respuesta o error de conexión | La aplicación está caída |
+
+Avisa ante cualquier código distinto de `200`; para distinguir los casos, mira `db` y `graph` en el cuerpo. Cada comprobación espera como mucho 2 segundos, y la causa de un fallo va al log del contenedor (`docker compose logs mimirsynth`), nunca a la respuesta. Si el monitor está en otra máquina, usa la dirección pública detrás del proxy inverso (`https://memoria.example.com/api/health`). La comprobación de salud de Docker del contenedor usa el mismo endpoint, así que `docker ps` lo marca como `unhealthy` en ambos casos.
+
 ## Contribuir
 Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -69,5 +81,6 @@ Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTR
 - **«define POSTGRES_PASSWORD» o «define MIMIRSYNTH_SESSION_SECRET» al arrancar:** faltan en `.env`.
 - **Las propuestas aprobadas se quedan en «aprobada»:** no hay LLM configurado. Añade un motor en Administración → Modelo LLM.
 - **El recall no devuelve nada:** comprueba los embeddings (Administración → Embeddings → Probar) y que el índice de texto esté sincronizado (pestaña Preguntar muestra su estado).
+- **No llegó ningún aviso cuando se cayó PostgreSQL:** no puede avisar de sí mismo. Vigílalo con un monitor externo: ver [Vigilar la instancia](#vigilar-la-instancia).
 - **No encuentro el código de instalación:** solo aparece mientras no haya ningún administrador. Reinicia el contenedor para que genere uno nuevo.
 - **Se perdió el acceso del único administrador:** con acceso al servidor, pon `is_admin = false` a ese usuario en la tabla `users` y reinicia el contenedor: el asistente de primer arranque volverá a aparecer con un código nuevo.

@@ -64,6 +64,18 @@ Also save your `.env`.
 
 Restoring is the reverse path: start the services, restore the database (`psql`) and put the volumes back. The episode text index can be rebuilt from the graph and the document index from the originals.
 
+## Monitoring the instance
+MimirSynth alerts about the graph and the AI models itself ([NOTIFICATIONS.md](NOTIFICATIONS.md)), but **not about its own PostgreSQL**: alerts are stored in that database, so while it is down there is nowhere to keep them. Watch it from outside with any HTTP monitor (Uptime Kuma, Gatus, a `curl` in cron…) pointed at `GET /api/health`. It needs no sign-in and answers in under 3 seconds:
+
+| Answer | Meaning |
+|---|---|
+| `200` `{"ok": true, "db": true, "graph": true, "graphs": 3}` | Everything is fine |
+| `503` with `"db": false` | The application is alive but cannot reach PostgreSQL |
+| `503` with `"graph": false` | The application is alive but FalkorDB does not answer |
+| No answer or connection error | The application is down |
+
+Alert on any status other than `200`; to tell the cases apart, check `db` and `graph` in the body. Each check waits at most 2 seconds, and the cause of a failure goes to the container log (`docker compose logs mimirsynth`), never to the response. If the monitor runs on another machine, use the public address behind the reverse proxy (`https://memory.example.com/api/health`). The container's Docker health check uses the same endpoint, so `docker ps` shows it as `unhealthy` in both cases.
+
 ## Contributing
 Building from source is for contributors: see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -71,5 +83,6 @@ Building from source is for contributors: see [CONTRIBUTING.md](../CONTRIBUTING.
 - **"define POSTGRES_PASSWORD" or "define MIMIRSYNTH_SESSION_SECRET" on start:** they are missing from `.env`.
 - **Approved proposals stay "approved":** no LLM is configured. Add an engine under Administration → LLM model.
 - **Recall returns nothing:** check the embeddings (Administration → Embeddings → Test) and that the text index is synchronised (the Ask tab shows its status).
+- **No alert arrived when PostgreSQL went down:** it cannot alert about itself. Watch it with an external monitor: see [Monitoring the instance](#monitoring-the-instance).
 - **I cannot find the installation code:** it only appears while there is no administrator. Restart the container so it generates a new one.
 - **The only administrator lost access:** with access to the server, set `is_admin = false` for that user in the `users` table and restart the container: the first-start wizard will reappear with a new code.
