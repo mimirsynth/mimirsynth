@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from . import appsettings
 from .deps import audit, require_admin
-from .models import Identity, OidcProvider, User
+from .models import Brain, Identity, OidcProvider, User
 from .secretbox import seal
 from .settings_admin import discover
 from .store import get_db
@@ -37,27 +37,55 @@ class ProviderIn(BaseModel):
     groups_claim: str = "groups"
     admin_group: str = ""
     group_roles: str = ""
+    default_roles: str = ""
+
+
+DEFAULT_ROLES = ("reader", "contributor")  # el acceso inicial lo recibe cualquiera del dominio sin revisión: nunca puede aprobar ni administrar
+
+
+def parse_default_roles(value: str) -> list[tuple[str, str, str]]:
+    """«brain:rol, brain:rol» -> [(entrada, slug, rol)], sin validar contra los brains."""
+    out = []
+    for item in (x.strip() for x in value.split(",")):
+        if item:
+            slug, _, role = item.partition(":")
+            out.append((item, slug.strip(), role.strip()))
+    return out
+
+
+def _check_default_roles(db: Session, value: str) -> str:
+    """Valida el acceso inicial al guardar el proveedor y lo devuelve normalizado."""
+    for item, slug, role in parse_default_roles(value):
+        if not slug or not role:
+            raise HTTPException(422, f"acceso inicial: «{item}» no tiene el formato brain:rol")
+        if role not in DEFAULT_ROLES:
+            raise HTTPException(422, f"acceso inicial: el rol de «{item}» debe ser reader o contributor")
+        if not db.scalar(select(Brain.id).where(Brain.slug == slug)):
+            raise HTTPException(422, f"acceso inicial: no hay ningún brain «{slug}»")
+    return ", ".join(f"{slug}:{role}" for _, slug, role in parse_default_roles(value))
 
 
 def _view(p: OidcProvider, base: str) -> dict:
     return {"slug": p.slug, "name": p.name, "issuer": p.issuer, "client_id": p.client_id, "secret_set": bool(p.client_secret), "scopes": p.scopes, "enabled": p.enabled,
             "trust_unverified_email": p.trust_unverified_email, "auto_provision": p.auto_provision, "allowed_domains": p.allowed_domains, "groups_claim": p.groups_claim,
-            "admin_group": p.admin_group, "group_roles": p.group_roles, "redirect_uri": redirect_uri(p.slug, base)}
+            "admin_group": p.admin_group, "group_roles": p.group_roles, "default_roles": p.default_roles, "redirect_uri": redirect_uri(p.slug, base)}
 
 
 def _base(request) -> str:
     return appsettings.get("public_url").rstrip("/") or str(request.base_url).rstrip("/")
 
 
-def _apply(p: OidcProvider, body: ProviderIn) -> None:
+def _apply(db: Session, p: OidcProvider, body: ProviderIn) -> None:
     issuer = body.issuer.strip()
     if not issuer.startswith(("http://", "https://")):
         raise HTTPException(422, "el emisor debe empezar por http:// o https://")
+    default_roles = _check_default_roles(db, body.default_roles)
     if issuer != p.issuer:
         discover(issuer)  # un emisor que no responde dejaría sin entrada a quien lo use
     p.name, p.issuer, p.client_id, p.scopes, p.enabled = body.name.strip(), issuer, body.client_id.strip(), body.scopes.strip() or "openid profile email", body.enabled
     p.trust_unverified_email, p.auto_provision = body.trust_unverified_email, body.auto_provision
     p.allowed_domains, p.groups_claim, p.admin_group, p.group_roles = body.allowed_domains.strip(), body.groups_claim.strip() or "groups", body.admin_group.strip(), body.group_roles.strip()
+    p.default_roles = default_roles
     if body.client_secret:
         p.client_secret = seal(body.client_secret)
 
@@ -77,7 +105,7 @@ def create_provider(body: ProviderIn, request: Request, user: User = Depends(req
     if not body.client_secret:
         raise HTTPException(422, "indica el client secret")
     p = OidcProvider(slug=slug, position=(db.scalar(select(func.max(OidcProvider.position))) or 0) + 1)
-    _apply(p, body)
+    _apply(db, p, body)
     db.add(p); db.commit()
     audit(db, user, "oidc.create", slug=slug)
     return _view(p, _base(request))
@@ -93,7 +121,7 @@ def _get(db: Session, slug: str) -> OidcProvider:
 @router.put("/{slug}")
 def update_provider(slug: str, body: ProviderIn, request: Request, user: User = Depends(require_admin), db: Session = Depends(get_db)):
     p = _get(db, slug)
-    _apply(p, body)
+    _apply(db, p, body)
     db.commit()
     audit(db, user, "oidc.update", slug=slug)  # nunca se registra el secreto
     return _view(p, _base(request))

@@ -12,7 +12,8 @@ import { getPasskey, passkeyError, passkeysSupported } from "../webauthn";
 import { Btn, EmptyState, Form, LanguageSelect, MutationError, Notice, Panel, PasswordField, TextField } from "../ui";
 
 type Options = { local: boolean; passkeys?: boolean; oidc: boolean; providers?: { slug: string; name: string }[]; setup: boolean; password_min_length?: number };
-const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada de alta en esta instancia. Pide a un administrador que te invite."), disabled: T("Tu cuenta está deshabilitada. Contacta con un administrador.") };
+const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada de alta en esta instancia. Pide a un administrador que te invite."), disabled: T("Tu cuenta está deshabilitada. Contacta con un administrador."),
+  link_required: T("Ya tienes una cuenta con ese email. Entra como siempre y vincula este proveedor desde Mi cuenta → Seguridad.") };
 
 function Card({ name, subtitle, children }: { name: string; subtitle?: string; children: React.ReactNode }) {
   const { i18n } = useTranslation();
