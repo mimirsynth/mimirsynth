@@ -17,6 +17,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - **Effect on existing suggestions:** in brains whose package no longer enables a rule, suggestions that the corrector showed as doubtful for that rule (for example «Receta 1.5» for the version rule) are shown as pending again and can be applied. Nothing changes in `infrastructure` brains.
 
 ### Fixed
+- `GET /api/embedding-engines/reindex` no longer reports `orphan: true` when the shadow fill has finished and is waiting for the switch (#69). `orphan` is now `true` only for a failed or abandoned fill. The `reindex.orphan` alert and the panel already looked at the state, so nothing else changes.
 - Documentation: after changing the embedding model, what to do with `MIMIRSYNTH_EMBEDDING_DIM` and the other `MIMIRSYNTH_EMBEDDING_*` variables in `.env`.
 
 ## [0.7.1] - 2026-10-27
