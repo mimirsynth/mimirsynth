@@ -29,7 +29,6 @@
  "Fallos seguidos para avisar": "Consecutive failures before alerting",
  "General": "General",
  "Gestión de la cuenta": "Account management",
- "GraphStore no disponible: {{e}}": "GraphStore not available: {{e}}",
  "Habitual: 587 (STARTTLS), 465 (SSL) o 25.": "Typical: 587 (STARTTLS), 465 (SSL) or 25.",
  "Hora (HH:MM) a partir de la cual solo se envían los avisos críticos; el resto espera al final del silencio. Vacío = sin horas de silencio.": "Time (HH:MM) from which only critical alerts are sent; the rest wait until the quiet period ends. Empty = no quiet hours.",
  "Hora (HH:MM) en que termina el silencio. Se usa la hora del servidor.": "Time (HH:MM) when the quiet period ends. Server time is used.",

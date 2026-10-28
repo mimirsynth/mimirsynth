@@ -32,6 +32,8 @@ docker compose logs mimirsynth | grep -A3 "FIRST START"    # código del asisten
 ```
 Abre `http://localhost:8000`, introduce el código y crea la cuenta de administrador. Después configura los proveedores de IA en **Administración**.
 
+En producción, apunta un monitor externo a `/api/health`: los avisos de la propia instancia no pueden informar de la caída de PostgreSQL ([vigilancia](docs/es/INSTALL.md#vigilar-la-instancia)).
+
 ## Configuración
 El entorno solo lleva lo necesario para arrancar y conectar (tabla de abajo). Todo lo demás —límites de documentos, recall, retención de trabajos, proveedores de IA, carpetas— se cambia en **Administración → Ajustes** (y las demás pestañas) y se aplica sin reiniciar; si una de esas variables existe, solo hace de valor por defecto.
 
