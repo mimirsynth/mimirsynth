@@ -4,9 +4,10 @@
 // Además prohíbe texto sin traducir en la interfaz: todo texto visible pasa por t()/tr()/T(). Excepción justificada: `// i18n-ok: motivo` en la línea.
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseSync } from "oxc-parser";
 
-const ROOT = new URL("../src", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../src", import.meta.url));  // pathname daría «/C:/…» en Windows
 const files = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? files(path.join(d, e.name)) : /\.tsx?$/.test(e.name) ? [path.join(d, e.name)] : []);
 const keys = new Set();
 const literal = [];

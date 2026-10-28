@@ -7,11 +7,11 @@ import { Btn, Check, ConfirmDialog, CopyBtn, DataState, EmptyState, ListCard, Mo
 
 type Provider = {
   slug: string; name: string; issuer: string; client_id: string; secret_set: boolean; scopes: string; enabled: boolean; trust_unverified_email: boolean; auto_provision: boolean;
-  allowed_domains: string; groups_claim: string; admin_group: string; group_roles: string; redirect_uri: string;
+  allowed_domains: string; default_roles: string; groups_claim: string; admin_group: string; group_roles: string; redirect_uri: string;
 };
 type Draft = Omit<Provider, "secret_set" | "redirect_uri"> & { client_secret: string };
 
-const EMPTY: Draft = { slug: "", name: "", issuer: "", client_id: "", client_secret: "", scopes: "openid profile email", enabled: true, trust_unverified_email: false, auto_provision: false, allowed_domains: "", groups_claim: "groups", admin_group: "", group_roles: "" };
+const EMPTY: Draft = { slug: "", name: "", issuer: "", client_id: "", client_secret: "", scopes: "openid profile email", enabled: true, trust_unverified_email: false, auto_provision: false, allowed_domains: "", default_roles: "", groups_claim: "groups", admin_group: "", group_roles: "" };
 
 /** Alta y edición de un proveedor: conexión, política de alta y roles por grupo. El secreto nunca se muestra; vacío = conservar el guardado. */
 function ProviderForm({ initial, isNew, onClose }: { initial: Draft; isNew: boolean; onClose: () => void }) {
@@ -34,10 +34,11 @@ function ProviderForm({ initial, isNew, onClose }: { initial: Draft; isNew: bool
       <TextField label={t("Scopes")} description={t("Permisos que se piden al proveedor, separados por espacios.")} value={d.scopes} onChange={(e) => set("scopes", e.currentTarget.value)} />
       <Check label={t("Activo")} description={t("Un proveedor desactivado no aparece en la pantalla de entrada.")} checked={d.enabled} onChange={(e) => set("enabled", e.currentTarget.checked)} />
       <Check label={t("Aceptar emails sin verificar")} description={t("Solo si el proveedor no marca el email como verificado. Quien pueda registrar un email ajeno en el proveedor podría entrar como esa persona.")} checked={d.trust_unverified_email} onChange={(e) => set("trust_unverified_email", e.currentTarget.checked)} />
-      <Check label={t("Alta automática")} description={t("Quien entre con un email verificado de uno de los dominios permitidos se da de alta solo, con rol de usuario y sin acceso a ningún brain (salvo el que le den sus grupos).")} checked={d.auto_provision} onChange={(e) => set("auto_provision", e.currentTarget.checked)} />
+      <Check label={t("Alta automática")} description={t("Quien entre con un email verificado de uno de los dominios permitidos se da de alta solo, con rol de usuario, el acceso inicial y el que le den sus grupos.")} checked={d.auto_provision} onChange={(e) => set("auto_provision", e.currentTarget.checked)} />
       <TextField label={t("Dominios permitidos")} description={t("Dominios de email (separados por comas, p. ej. example.com) a los que se aplica el alta automática. Vacío = ninguno.")} value={d.allowed_domains} onChange={(e) => set("allowed_domains", e.currentTarget.value)} />
+      <TextField label={t("Acceso inicial")} description={t("Brains a los que entra quien se da de alta solo, separados por comas, con el formato brain:rol (roles: reader, contributor). Se aplica una vez, al crear la cuenta; después se gestiona en Usuarios. Ejemplo: docs:reader.")} value={d.default_roles} onChange={(e) => set("default_roles", e.currentTarget.value)} />
       <TextField label={t("Claim de grupos")} description={t("Campo con los grupos de la persona en la identidad del proveedor (suele ser «groups»).")} value={d.groups_claim} onChange={(e) => set("groups_claim", e.currentTarget.value)} />
-      <TextField label={t("Grupo de administradores")} description={t("Los miembros de este grupo son administradores de la instancia. Solo concede: quitar a alguien del grupo no le retira el rol.")} value={d.admin_group} onChange={(e) => set("admin_group", e.currentTarget.value)} />
+      <TextField label={t("Grupo de administradores")} description={t("Los miembros de este grupo son administradores de la instancia. Quien sale del grupo pierde el rol en su siguiente inicio de sesión, salvo que sea el último administrador.")} value={d.admin_group} onChange={(e) => set("admin_group", e.currentTarget.value)} />
       <TextField label={t("Roles por grupo")} description={t("Una regla por grupo, separadas por comas, con el formato grupo=brain:rol (roles: reader, contributor, curator, admin). Ejemplo: curadores=docs:curator, lectores=docs:reader.")} value={d.group_roles} onChange={(e) => set("group_roles", e.currentTarget.value)} />
       <MutationError error={save.error} />
       <Group justify="flex-end"><Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn><Btn kind="primary" icon="save" disabled={!ok} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></Group>

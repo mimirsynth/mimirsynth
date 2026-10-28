@@ -67,6 +67,7 @@ class OidcProvider(Base):
     groups_claim: Mapped[str] = mapped_column(String(64), default="groups")
     admin_group: Mapped[str] = mapped_column(String(255), default="")
     group_roles: Mapped[str] = mapped_column(Text, default="")  # grupo=brain:rol, ...
+    default_roles: Mapped[str] = mapped_column(Text, default="")  # brain:rol, ... que recibe una vez quien se da de alta solo (reader o contributor)
     position: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 

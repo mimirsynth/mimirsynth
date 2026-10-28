@@ -462,3 +462,73 @@ def test_ratelimit_falls_back_to_memory_when_db_fails(client, monkeypatch):  # n
     monkeypatch.setattr(ratelimit, "_allow_db", lambda *a: (_ for _ in ()).throw(RuntimeError("caída")))
     assert [ratelimit.allow("k3", 2, 600) for _ in range(3)] == [True, True, False]
     ratelimit.reset()
+
+
+def _brain(db, slug):
+    from mimirsynth.models import Brain
+    b = db.query(Brain).filter_by(slug=slug).one_or_none()
+    if not b:
+        b = Brain(slug=slug, name=slug, graph_name=f"{slug}-g"); db.add(b); db.commit()
+    return b
+
+
+def test_oidc_default_roles_once_on_autoprovision(client, local, monkeypatch):  # noqa: F811
+    """El acceso inicial se da una vez al dar de alta a alguien solo, queda auditado, se suma a los grupos y no vuelve si se quita."""
+    from mimirsynth import appsettings
+    from mimirsynth.models import Audit, Membership, OidcProvider
+    monkeypatch.setattr(appsettings, "get", lambda k: {"admin_emails": ""}[k])
+    with _factory()() as db:
+        docs, ops = _brain(db, "ini-docs").id, _brain(db, "ini-ops").id
+    _provider("ini", auto_provision=True, allowed_domains="ini.example", group_roles="curadores=ini-docs:curator",
+              default_roles="ini-docs:reader, ini-ops:contributor, borrado:reader, ini-ops:curator")  # un brain borrado o un rol mayor se ignoran
+    roles = lambda db, uid: {m.brain_id: m.role for m in db.query(Membership).filter_by(user_id=uid)}  # noqa: E731
+    with _factory()() as db:
+        p = db.query(OidcProvider).filter_by(slug="ini").one()
+        info = {"sub": "ini-1", "email": "nuevo@ini.example", "email_verified": True, "name": "Nuevo", "groups": ["curadores"]}
+        u, why = auth.resolve_oidc_user(db, info, p)
+        assert u and not why and roles(db, u.id) == {docs: "reader", ops: "contributor"}
+        acts = db.query(Audit).filter_by(user_id=u.id, action="member.set").all()
+        assert sorted(a.detail["role"] for a in acts) == ["contributor", "reader"] and {a.detail["via"] for a in acts} == {"oidc-default:ini"}
+        auth.apply_groups(db, u, info, p)
+        assert roles(db, u.id) == {docs: "curator", ops: "contributor"}  # el grupo da un rol mayor: gana el mayor
+        db.query(Membership).filter_by(user_id=u.id, brain_id=ops).delete(); db.commit()  # un administrador lo quita a mano
+        assert auth.resolve_oidc_user(db, info, p)[0].id == u.id
+        auth.apply_groups(db, u, info, p)
+        assert roles(db, u.id) == {docs: "curator"}  # un login posterior no lo repone
+        db.add(User(email="invitada@ini.example", name="Invitada", status="invited")); db.commit()
+        v, _ = auth.resolve_oidc_user(db, {**info, "sub": "ini-2", "email": "invitada@ini.example", "groups": []}, p)
+        assert v and v.status == "active" and roles(db, v.id) == {}  # una invitación trae sus propios roles: no recibe el acceso inicial
+
+
+def test_oidc_default_roles_are_validated(client, local, monkeypatch):  # noqa: F811
+    """Al guardar el proveedor solo se admiten brain:rol con brains que existen y roles reader o contributor."""
+    monkeypatch.setattr("mimirsynth.oidc_providers.discover", lambda issuer: {"authorization_endpoint": "x", "token_endpoint": "y", "issuer": issuer})
+    _admin(client)
+    with _factory()() as db:
+        _brain(db, "ini-docs"); _brain(db, "ini-ops")
+    body = {"slug": "inival", "name": "Ini", "issuer": "https://id.example.com", "client_id": "cid", "client_secret": "s"}
+    for bad in ("ini-docs", "ini-docs:curator", "ini-docs:owner", "nope:reader", ":reader", "ini-docs:reader, ini-docs:contributor"):
+        r = client.post("/api/oidc-providers", json={**body, "default_roles": bad})
+        assert r.status_code == 422 and "acceso inicial" in r.json()["detail"], bad
+    r = client.post("/api/oidc-providers", json={**body, "default_roles": " ini-docs:reader ,ini-ops : contributor "})
+    assert r.status_code == 201 and r.json()["default_roles"] == "ini-docs:reader, ini-ops:contributor"
+
+
+def test_oidc_unverified_email_never_takes_an_active_account(client, local, monkeypatch):  # noqa: F811
+    """Con «aceptar emails sin verificar» se vinculan invitaciones, pero una cuenta activa solo con email verificado o desde Mi cuenta."""
+    from mimirsynth import appsettings
+    from mimirsynth.models import Identity, OidcProvider
+    monkeypatch.setattr(appsettings, "get", lambda k: {"admin_emails": ""}[k])
+    _provider("unv", trust_unverified_email=True)
+    with _factory()() as db:
+        p = db.query(OidcProvider).filter_by(slug="unv").one()
+        db.add(User(email="activa@unv.example", name="Activa", status="active", password_hash="x", is_admin=True))
+        db.add(User(email="invitada@unv.example", name="Invitada", status="invited")); db.commit()
+        info = {"sub": "unv-1", "email": "activa@unv.example", "email_verified": False}
+        assert auth.resolve_oidc_user(db, info, p) == (None, "link_required")
+        assert auth.resolve_oidc_user(db, {k: v for k, v in info.items() if k != "email_verified"}, p) == (None, "link_required")  # sin el campo, igual
+        assert db.query(Identity).filter_by(provider="unv").count() == 0
+        u, _ = auth.resolve_oidc_user(db, {**info, "sub": "unv-2", "email": "invitada@unv.example"}, p)
+        assert u and u.status == "active"  # la invitación aún no tiene credenciales: se vincula
+        u, _ = auth.resolve_oidc_user(db, {**info, "email_verified": True}, p)
+        assert u and u.email == "activa@unv.example"  # con el email verificado, como siempre

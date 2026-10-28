@@ -16,7 +16,7 @@ from . import appsettings, passwords, ratelimit, userlib
 from .config import settings
 from .deps import audit, current_user, needs_2fa_setup
 from .models import Identity, OidcProvider, User, now
-from .oidc_providers import LEGACY, redirect_uri
+from .oidc_providers import DEFAULT_ROLES, LEGACY, parse_default_roles, redirect_uri
 from .store import get_db
 
 router = APIRouter(prefix="/api")
@@ -359,9 +359,22 @@ def apply_groups(db: Session, user: User, info: dict, p: OidcProvider) -> None:
     db.commit()
 
 
+def apply_default_roles(db: Session, user: User, p: OidcProvider) -> None:
+    """Acceso inicial del proveedor, una sola vez al dar de alta a alguien solo: membresías normales (no `RoleGrant`), que un
+    administrador puede cambiar o quitar sin que un login las reponga. Un brain que ya no existe o un rol no permitido se ignoran."""
+    from .models import Brain, Membership
+    for _, slug, role in parse_default_roles(p.default_roles):
+        brain = db.scalar(select(Brain).where(Brain.slug == slug)) if role in DEFAULT_ROLES else None
+        if brain and not db.scalar(select(Membership).where(Membership.user_id == user.id, Membership.brain_id == brain.id)):
+            db.add(Membership(user_id=user.id, brain_id=brain.id, role=role))
+            audit(db, user, "member.set", brain, via=f"oidc-default:{p.slug}", role=role)
+
+
 def resolve_oidc_user(db: Session, info: dict, p: OidcProvider) -> tuple[User | None, str]:
     """Persona a la que corresponde la identidad del proveedor, o (None, motivo). Entra quien ya está vinculado, quien fue invitado con el mismo
-    email verificado, un administrador declarado en Ajustes o, si se activó, quien tenga un email verificado de un dominio permitido."""
+    email verificado, un administrador declarado en Ajustes o, si se activó, quien tenga un email verificado de un dominio permitido.
+    Una cuenta activa solo se vincula por email si está verificado de verdad: con «aceptar emails sin verificar» se vinculan invitaciones
+    (aún sin credenciales), y la cuenta activa se vincula desde Mi cuenta (`link_required`)."""
     sub = info["sub"]
     email = (info.get("email") or info.get("preferred_username") or "").lower() or None
     verified = info.get("email_verified") is True or p.trust_unverified_email
@@ -369,6 +382,8 @@ def resolve_oidc_user(db: Session, info: dict, p: OidcProvider) -> tuple[User | 
     user = db.get(User, ident.user_id) if ident else None
     if not user and email and verified:
         user = db.scalar(select(User).where(User.email == email))
+        if user and user.status == "active" and info.get("email_verified") is not True:
+            return None, "link_required"
         if user and user.status in ("invited", "active"):
             db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
             if user.status == "invited":
@@ -382,6 +397,7 @@ def resolve_oidc_user(db: Session, info: dict, p: OidcProvider) -> tuple[User | 
             db.add(user); db.flush()
             db.add(Identity(user_id=user.id, provider=p.slug, sub=sub, email=email))
             audit(db, user, "user.autoprovision", email=email, provider=p.slug)
+            apply_default_roles(db, user, p)
         else:
             user = None
     if not user:
