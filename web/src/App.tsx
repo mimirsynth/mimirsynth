@@ -22,6 +22,7 @@ import Knowledge from "./pages/Knowledge";
 import Account from "./pages/Account";
 import Jobs from "./pages/Jobs";
 import Notifications, { Summary } from "./pages/Notifications";
+import FirstSteps from "./pages/FirstSteps";
 
 const NAV = [
   { section: T("Memoria"), items: [
@@ -140,7 +141,10 @@ export default function App() {
               <Route path="/vocabulario" element={<Vocabulary graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/consulta" element={<Query graph={brain} />} />
             </>
-          ) : <Route path="*" element={<Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}
+          ) : <Route path="*" element={brains.isPending ? <EmptyState>{t("Cargando…")}</EmptyState>
+            // El administrador ve todos los brains: si la lista está vacía es que no existe ninguno, y nadie más puede crearlo.
+            : me.data.is_admin && brains.data?.length === 0 ? <FirstSteps docs={cfg.data?.links?.docs} />
+            : <Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}
         </Routes>
       </AppShell.Main>
     </AppShell>
