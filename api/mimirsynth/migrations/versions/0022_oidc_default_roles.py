@@ -20,4 +20,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("oidc_providers", "default_roles")
+    with op.batch_alter_table("oidc_providers", schema=None) as batch_op:  # batch: SQLite no admite DROP COLUMN en versiones antiguas
+        batch_op.drop_column("default_roles")

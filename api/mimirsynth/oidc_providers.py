@@ -55,6 +55,7 @@ def parse_default_roles(value: str) -> list[tuple[str, str, str]]:
 
 def _check_default_roles(db: Session, value: str) -> str:
     """Valida el acceso inicial al guardar el proveedor y lo devuelve normalizado."""
+    seen: set[str] = set()
     for item, slug, role in parse_default_roles(value):
         if not slug or not role:
             raise HTTPException(422, f"acceso inicial: «{item}» no tiene el formato brain:rol")
@@ -62,6 +63,9 @@ def _check_default_roles(db: Session, value: str) -> str:
             raise HTTPException(422, f"acceso inicial: el rol de «{item}» debe ser reader o contributor")
         if not db.scalar(select(Brain.id).where(Brain.slug == slug)):
             raise HTTPException(422, f"acceso inicial: no hay ningún brain «{slug}»")
+        if slug in seen:
+            raise HTTPException(422, f"acceso inicial: el brain «{slug}» aparece más de una vez")
+        seen.add(slug)
     return ", ".join(f"{slug}:{role}" for _, slug, role in parse_default_roles(value))
 
 
