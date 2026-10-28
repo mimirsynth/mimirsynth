@@ -10,6 +10,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 - OIDC providers: **initial access** for automatic sign-up (#66). A list of `brain:role` (only `reader` and `contributor`) that a person registered automatically through that provider receives once, when the account is created, as ordinary memberships recorded in the audit log (`member.set`, `via=oidc-default:<provider>`). An administrator can change or remove them and no later sign-in restores them; a group that grants a higher role on the same brain wins. Saving the provider refuses other roles and brains that do not exist. Migration `0022`. See `docs/CONFIGURATION.md`.
 - Documentation: how to watch PostgreSQL with an external monitor, since the built-in alerts are stored in it and cannot report its outage (#68). See «Monitoring the instance» in `docs/INSTALL.md`.
+- Documentation for a first installation on an empty machine: what to install before starting (`curl`, Docker with Compose v2) and how to prepare Ollama, including making it reachable from the container on Linux (#72); a quick start step to connect the first agent over MCP (#75); and which extraction model to choose, what to expect from small models and that the extraction and embeddings models are independent (#74). See `README.md`, «Before you start» in `docs/INSTALL.md` and «Choosing the extraction model» in `docs/CONFIGURATION.md`.
 
 ### Changed
 - **OIDC with «Accept unverified emails»** (#66): an unverified email now links only to an invitation, never to an account that is already active. That person sees a message asking them to sign in as usual and link the provider from My account → Security (`auth_error=link_required`). Before, an unverified email matching an active account, including an administrator's, was enough to sign in as that account. With a verified email nothing changes.
@@ -19,6 +20,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - **Effect on existing suggestions:** in brains whose package no longer enables a rule, suggestions that the corrector showed as doubtful for that rule (for example «Receta 1.5» for the version rule) are shown as pending again and can be applied. Nothing changes in `infrastructure` brains.
 
 ### Fixed
+- `docker-compose.yml`: on Linux, the default embeddings address `http://host.docker.internal:11434/v1` did not resolve inside the container (#73). The `mimirsynth` service now maps that name to the host (`extra_hosts: host-gateway`), as Docker Desktop already did. If you keep your own compose file, add those two lines yourself.
 - `GET /api/embedding-engines/reindex` no longer reports `orphan: true` when the shadow fill has finished and is waiting for the switch (#69). `orphan` is now `true` only for a failed or abandoned fill. The `reindex.orphan` alert and the panel already looked at the state, so nothing else changes.
 - Documentation: after changing the embedding model, what to do with `MIMIRSYNTH_EMBEDDING_DIM` and the other `MIMIRSYNTH_EMBEDDING_*` variables in `.env`.
 

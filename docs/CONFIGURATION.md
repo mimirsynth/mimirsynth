@@ -27,6 +27,14 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.
 - **LLM model:** extracts entities and facts when proposals are ingested. For "reasoning" models that return empty JSON, use a proxy that disables *thinking*.
 - **Embeddings:** model and dimension **cannot be changed** once the index exists (vectors depend on the model). It must be the same one Graphiti uses on that FalkorDB.
+
+The extraction LLM and the embeddings model are **independent**: they can come from different providers (local embeddings and an API LLM, for example), and only the embeddings model is tied to the index.
+
+### Choosing the extraction model
+What ends up in the graph is only as good as the extraction model: it reads each proposal, names the entities and returns the facts as JSON.
+- **Recommended:** locally, an *instruct* model of about **14B parameters or more** (e.g. `qwen2.5:14b-instruct` on Ollama, which needs about 10 GB of memory); through an API, a small, cheap model with structured output (the *mini* tier of OpenAI, for example).
+- **Small models (4B or less, such as `llama3.2:3b`)** are enough to try the installation, but not for a memory you want to keep: expect malformed entities, entities from the text that go missing and facts written in English when the text is in another language. Whatever is extracted badly stays in the graph until a curator fixes it.
+- Avoid models that "reason" by default unless you turn it off: see the LLM model note above.
 - **Decider:** closed-decision model (with probabilities) for proposal triage and the type corrector. It only approves what is factual with enough confidence; it never rejects on its own. It assumes no domain: it judges each proposal against the brain's scope, built from the brain's **description** (Administration → Brain access → Edit) and the entity and relation types of its ontology. A proposal that does not fit that scope goes to a curator. Without description or ontology, it only checks that the proposal is a factual statement with no instructions for the system.
 
 ### Changing the embedding model
