@@ -3,7 +3,7 @@ import type { ComponentPropsWithoutRef, CSSProperties } from "react";
 import { Icon, type IconName } from "./Icon";
 
 export type BtnKind = "primary" | "secondary" | "ghost" | "danger" | "link";
-type Props = Omit<ButtonProps, "variant" | "color" | "size"> & ComponentPropsWithoutRef<"button"> & { kind?: BtnKind; size?: "row"; component?: any; href?: string; target?: string; icon?: IconName };
+type Props = Omit<ButtonProps, "variant" | "color" | "size"> & ComponentPropsWithoutRef<"button"> & { kind?: BtnKind; size?: "row"; component?: any; href?: string; to?: string; target?: string; icon?: IconName };
 
 /** Botón de la aplicación. Toda acción es un botón y por defecto es SECUNDARIO (borde):
  *  - `kind="primary"` (hidromiel): la acción principal de una zona (el envío de un modal, «Buscar»…). Como mucho una por zona.

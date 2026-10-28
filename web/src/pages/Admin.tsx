@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Brain, fmt, get, Me, send } from "../api";
 import AdminFolders from "./AdminFolders";
 import AdminSettings from "./AdminSettings";
@@ -180,7 +181,10 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const { t } = useTranslation();
   const qc = useQueryClient();
   const brains = useQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains") });
-  const [open, setOpen] = useState(false); const [editing, setEditing] = useState(false);
+  // «Crea tu primer brain» (Primeros pasos) llega con ?crear=brain: abre el diálogo y quita el parámetro para que una recarga no lo reabra.
+  const [sp, setSp] = useSearchParams();
+  const [open, setOpen] = useState(() => me.is_admin && sp.get("crear") === "brain"); const [editing, setEditing] = useState(false);
+  useEffect(() => { if (sp.has("crear")) { const p = new URLSearchParams(sp); p.delete("crear"); setSp(p, { replace: true }); } }, [sp, setSp]);
   const [slug, setSlug] = useState(""); const [name, setName] = useState(""); const [graph, setGraph] = useState(""); const [desc, setDesc] = useState("");
   const [del, setDel] = useState(false); const [delGraph, setDelGraph] = useState(false);
   const remove = useMutation({ mutationFn: () => send<{ deleted: string; graph: string; graph_deleted: boolean }>("POST", `brains/${brain}/delete`, { confirm: cur?.slug, delete_graph: delGraph }),
