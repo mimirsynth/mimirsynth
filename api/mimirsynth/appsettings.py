@@ -42,7 +42,7 @@ GROUPS = {
 REGISTRY: list[Def] = [
     Def("default_language", "general", "Idioma por defecto", "Idioma de la interfaz y de los correos para quien no haya elegido uno propio en «Mi cuenta». Cada persona puede cambiarlo.", "choice", choices=(("es", "Español"), ("en", "English"))),
     Def("public_url", "identity", "URL pública", "Dirección con la que se accede a la aplicación; se usa para construir la URL de retorno del inicio de sesión (p. ej. https://mimirsynth.ejemplo.com).", "url"),
-    Def("admin_emails", "identity", "Administradores de la instancia", "Emails (separados por comas) que son administradores al iniciar sesión.", "str"),
+    Def("admin_emails", "identity", "Administradores de la instancia", "Emails (separados por comas) que entran como administradores la primera vez que inician sesión por OIDC, solo si el proveedor marca el email como verificado.", "str"),
     Def("account_url", "identity", "Gestión de la cuenta", "Página de tu proveedor donde se gestionan contraseña, llaves de acceso y doble factor; se enlaza desde «Mi cuenta».", "url"),
     Def("password_min_length", "security", "Longitud mínima de contraseña", "Se aplica al crear o cambiar contraseñas.", "int", "caracteres", 8, 64),
     Def("login_max_attempts", "security", "Intentos fallidos antes de bloquear", "Tras este número de contraseñas incorrectas seguidas la cuenta se bloquea temporalmente.", "int", "", 3, 20),

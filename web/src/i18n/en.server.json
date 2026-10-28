@@ -20,7 +20,7 @@
  "Dirección que aparece como remitente, p. ej. mimirsynth@ejemplo.com.": "Address shown as the sender, e.g. mimirsynth@example.com.",
  "Documentos": "Documents",
  "Duración del bloqueo": "Lockout duration",
- "Emails (separados por comas) que son administradores al iniciar sesión.": "Emails (comma-separated) that are administrators when signing in.",
+ "Emails (separados por comas) que entran como administradores la primera vez que inician sesión por OIDC, solo si el proveedor marca el email como verificado.": "Emails (comma-separated) that become administrators the first time they sign in through OIDC, only if the provider marks the email as verified.",
  "English": "English",
  "Español": "Español",
  "Espera del cambio de modelo": "Model change wait",

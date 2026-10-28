@@ -532,3 +532,19 @@ def test_oidc_unverified_email_never_takes_an_active_account(client, local, monk
         assert u and u.status == "active"  # la invitación aún no tiene credenciales: se vincula
         u, _ = auth.resolve_oidc_user(db, {**info, "email_verified": True}, p)
         assert u and u.email == "activa@unv.example"  # con el email verificado, como siempre
+
+
+def test_oidc_admin_emails_need_a_verified_email(client, local, monkeypatch):  # noqa: F811
+    """Un email de «Administradores de la instancia» solo crea un administrador si el proveedor lo marca como verificado."""
+    from mimirsynth import appsettings
+    from mimirsynth.models import OidcProvider
+    monkeypatch.setattr(appsettings, "get", lambda k: {"admin_emails": "Jefa@adm.example"}[k])
+    _provider("adm", trust_unverified_email=True)
+    with _factory()() as db:
+        p = db.query(OidcProvider).filter_by(slug="adm").one()
+        info = {"sub": "adm-1", "email": "jefa@adm.example", "email_verified": False}
+        assert auth.resolve_oidc_user(db, info, p) == (None, "not_invited")  # aunque el proveedor acepte emails sin verificar
+        assert auth.resolve_oidc_user(db, {k: v for k, v in info.items() if k != "email_verified"}, p) == (None, "not_invited")
+        assert db.query(User).filter_by(email="jefa@adm.example").count() == 0
+        u, why = auth.resolve_oidc_user(db, {**info, "email_verified": True}, p)
+        assert u and not why and u.is_admin and u.status == "active"
