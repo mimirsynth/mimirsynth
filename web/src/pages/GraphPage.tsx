@@ -40,8 +40,9 @@ export default function GraphPage({ graph }: { graph: string }) {
   const colorOf = useRef(new Map<string, string>());
   const color = (l?: string) => { const k = l ?? t("(sin tipo)"); if (!colorOf.current.has(k)) colorOf.current.set(k, PALETTE[colorOf.current.size % PALETTE.length]); return colorOf.current.get(k)!; };
 
-  const t0 = ov.data?.first_episode_at ? new Date(ov.data.first_episode_at).getTime() : Date.now() - 90 * DAY;
-  const total = Math.max(1, Math.ceil((Date.now() - t0) / DAY));
+  const [now] = useState(() => Date.now());  // fijo: si cambiara en cada render, as_of también, y el grafo se pediría sin fin
+  const t0 = ov.data?.first_episode_at ? new Date(ov.data.first_episode_at).getTime() : now - 90 * DAY;
+  const total = Math.max(1, Math.ceil((now - t0) / DAY));
   const asOf = useTime && day !== null ? new Date(t0 + day * DAY + DAY - 1).toISOString() : "";
   useEffect(() => { if (day === null && ov.data) setDay(total); }, [ov.data, total, day]);
   useEffect(() => { setExtra([]); setSel(null); setSelLink(null); }, [graph, seeds, depth, withInvalid, asOf, nodo]);
