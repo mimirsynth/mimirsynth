@@ -313,6 +313,10 @@ def test_proposal_counts(client):
     client.post("/api/brains/cnt/proposals", json={"name": "a", "body": "x"})
     c = client.get("/api/brains/cnt/proposals/counts").json()
     assert c["approved"] + c["ingested"] + c["failed"] == 1 and c["all"] == 1 and c["pending"] == 0
+    assert c["all"] == sum(n for k, n in c.items() if k != "all")  # #79: «all» es la suma de los estados, no un estado más
+    client.post("/api/brains/cnt/proposals", json={"name": "b", "body": "y"})
+    c = client.get("/api/brains/cnt/proposals/counts").json()
+    assert c["all"] == 2 == sum(n for k, n in c.items() if k != "all")
 
 
 def test_additive_migration_adds_new_columns(tmp_path, monkeypatch):

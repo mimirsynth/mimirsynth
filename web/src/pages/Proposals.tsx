@@ -19,7 +19,7 @@ function ProposalsTable({ rows, status, onStatus, counts, onOpen }: { rows: Prop
   const { t } = useTranslation();
   const v = useTableView(rows, PROP_COLS, { key: "at", dir: "desc" });
   const active = v.active;
-  const all = Object.values(counts).reduce((a, b) => a + b, 0);
+  const all = counts.all ?? 0;  // el servidor ya la da; sumar los valores contaba «all» dos veces (#79)
   return (
     <Stack gap="xs">
       <Segments label={t("Estado")} value={status} onChange={onStatus}
