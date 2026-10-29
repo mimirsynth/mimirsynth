@@ -31,7 +31,7 @@ export { RuleList } from "./RuleList";
 export { HIDROMIEL, PIZARRA, NODE_PALETTE, HALO_PALETTE, CANVAS } from "./palette";
 export { FilePicker } from "./FilePicker";
 export { Legend, LegendSection, LegendItem } from "./Legend";
-export { GraphCanvas, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode } from "./GraphCanvas";
+export { GraphCanvas, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "./GraphCanvas";
 export { ColGrid } from "./ColGrid";
 export { Form } from "./Form";
 export { LanguageSelect } from "./LanguageSelect";
