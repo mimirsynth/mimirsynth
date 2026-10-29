@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo } from "../ui";
+import { Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,9 @@ const id = (x: any) => (typeof x === "object" ? x.uuid ?? x.id : x);
 const GROUPINGS: [Grouping, string][] = [["source", T("Tipo de origen")], ["document", T("Documento")], ["author", T("Contribuidor")], ["token", T("Agente / token")], ["label", T("Tipo de entidad")]];
 const MAX_HALOS = 8;  // los orígenes mayores llevan halo propio; el resto se junta en «Otros»
 const OTHER = "__otros__";
+const EFFECTS_KEY = "ms-graph-effects";  // por dispositivo, no en la cuenta: la GPU es del equipo, no de la persona
+const readEffects = (): EffectsMode => { try { const v = localStorage.getItem(EFFECTS_KEY); return v === "full" || v === "reduced" ? v : "auto"; } catch { return "auto"; } };
+const hasWebGL = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
 
 export default function GraphPage({ graph }: { graph: string }) {
   const { t } = useTranslation();
@@ -41,6 +44,11 @@ export default function GraphPage({ graph }: { graph: string }) {
   const [halosOn, setHalosOn] = useState(true);
   const [hiddenOrigins, setHiddenOrigins] = useState<Set<string>>(new Set());
   const [onlyRobust, setOnlyRobust] = useState(false);
+  const [effects, setEffects] = useState<EffectsMode>(readEffects);
+  const [effective, setEffective] = useState<Effects>("full");
+  const [no3d, setNo3d] = useState(false);
+  const pickEffects = (v: EffectsMode) => { setEffects(v); try { localStorage.setItem(EFFECTS_KEY, v); } catch { /* sin almacenamiento: vale para esta visita */ } };
+  const pickDim = (v: string) => { if (v === "3d" && !hasWebGL()) { setNo3d(true); return; } setNo3d(false); setDim(v); };
   useEffect(() => setHiddenOrigins(new Set()), [groupBy]);
   const robustSeen = useRef(false);
   useEffect(() => {  // al filtrar quedan pocos nodos: se encuadran (no en la primera carga)
@@ -113,8 +121,9 @@ export default function GraphPage({ graph }: { graph: string }) {
   const cnodes = useMemo<CanvasNode[]>(() => {
     const shown = new Set(halos.map((h) => h.key));
     return nodes.map((n) => ({ id: n.uuid, color: color(n.labels[0]), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: n.name, visible: nodeVisible(n),
-      groups: [...new Set(srcOf(n).map(haloOf))].filter((k) => shown.has(k)), ring: backed(n) }));
-  }, [nodes, nodeVisible, halos, srcOf, haloOf, backed]); // eslint-disable-line react-hooks/exhaustive-deps
+      groups: [...new Set(srcOf(n).map(haloOf))].filter((k) => shown.has(k)), ring: backed(n),
+      tooltip: `${n.name}\n${n.labels[0] ?? t("(sin tipo)")} · ${t("Conexiones: {{count}}", { count: n.degree ?? 0 })}${robustness ? ` · ${t("Orígenes: {{count}}", { count: srcOf(n).length })}` : ""}` }));
+  }, [nodes, nodeVisible, halos, srcOf, haloOf, backed, robustness]); // eslint-disable-line react-hooks/exhaustive-deps
   const clinks = useMemo<CanvasLink[]>(() => {
     const vis = new Set(cnodes.filter((n) => n.visible).map((n) => n.id));
     return links.map((l) => ({ id: l.uuid, source: id(l.source), target: id(l.target), label: l.name, color: l.status === "invalidated" ? CANVAS.linkInvalid : CANVAS.link,
@@ -195,9 +204,11 @@ export default function GraphPage({ graph }: { graph: string }) {
         <NumberField label={t("Grado mín.")} value={minDeg} min={0} max={20} onChange={(v) => setMinDeg(Number(v) || 0)} w={85} size="xs" />
         <TextField label={t("Buscar nodo")} placeholder={t("Nextcloud…")} value={search} onChange={(e) => doSearch(e.currentTarget.value)} size="xs" w={170} />
         <Segments size="xs" value={layout} onChange={setLayout} data={[{ value: "force", label: t("Fuerza") }, { value: "radial", label: t("Radial") }, { value: "tree", label: t("Árbol") }]} />
-        <Segments size="xs" value={dim} onChange={setDim} data={["2d", "3d"]} />
+        <Segments size="xs" value={dim} onChange={pickDim} data={["2d", "3d"]} />
         <SelectField label={t("Agrupar por")} value={groupBy} onChange={(v) => v && setGroupBy(v as Grouping)} allowDeselect={false} w={160}
           data={GROUPINGS.map(([v, l]) => ({ value: v, label: t(l) }))} />
+        <SelectField label={t("Efectos gráficos")} value={effects} onChange={(v) => v && pickEffects(v as EffectsMode)} allowDeselect={false} w={190}
+          data={[{ value: "auto", label: effects === "auto" && effective === "reduced" ? t("Automático (reducido)") : t("Automático") }, { value: "full", label: t("Completo") }, { value: "reduced", label: t("Reducido") }]} />
         <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} onClick={() => setPaused(!paused)} />
         <IconButton icon="undo" label={t("Deshacer última expansión")} disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
         <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
@@ -209,6 +220,7 @@ export default function GraphPage({ graph }: { graph: string }) {
         <Check size="xs" label={t("Solo confirmados por 2 o más orígenes")} checked={robust} disabled={!robustness} onChange={(e) => setOnlyRobust(e.currentTarget.checked)}
           title={robustness ? undefined : t("Con «Tipo de entidad» no hay orígenes que contar: elige otra agrupación.")} />
       </Group>
+      {no3d && <Notice tone="warn" p="xs">{t("Este navegador no tiene WebGL, así que la vista 3D no está disponible. El grafo sigue en 2D.")}</Notice>}
       {useTime && day !== null && (
         <Group gap="md" wrap="nowrap">
           <Text size="xs" w={190}>{t("Qué sabíamos el {{date}}", { date: fmt(new Date(t0 + day * DAY).toISOString()).split(",")[0] })}</Text>
@@ -218,7 +230,7 @@ export default function GraphPage({ graph }: { graph: string }) {
       <SplitView main={<>
         <div ref={box} className="ms-canvas">
           {own
-            ? <GraphCanvas ref={gc} nodes={cnodes} links={clinks} halos={halos} selectedNode={sel?.uuid} selectedLink={selLink?.uuid} paused={paused}
+            ? <GraphCanvas ref={gc} nodes={cnodes} links={clinks} halos={halos} effects={effects} onEffects={setEffective} busy={base.isFetching ? t("Calculando el grafo…") : undefined} selectedNode={sel?.uuid} selectedLink={selLink?.uuid} paused={paused}
                 onNodeClick={pickNode} onNodeContextMenu={expand} onLinkClick={pickLink} onBackgroundClick={clearPick} />
             : <falkordb-canvas ref={cv} />}
           <Legend open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)}>

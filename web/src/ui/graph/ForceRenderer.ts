@@ -7,12 +7,19 @@ import { CANVAS } from "../palette";
 
 /** Lo que el renderer necesita de cada nodo y arista; el resto de la pantalla no ve d3 ni el canvas. */
 /** `groups`: claves de los halos (orígenes) a los que pertenece el nodo; `ring`: respaldado por 2 o más orígenes. */
-export type RNode = { id: string; color: string; size: number; caption: string; visible: boolean; groups?: string[]; ring?: boolean };
+export type RNode = { id: string; color: string; size: number; caption: string; visible: boolean; groups?: string[]; ring?: boolean; tooltip?: string };
 /** `strong`: hecho respaldado por 2 o más orígenes (se dibuja más grueso). */
 export type RLink = { id: string; source: string; target: string; label: string; color: string; dashed: boolean; visible: boolean; strong?: boolean };
 /** Halo de un origen: envuelve a sus nodos y los atrae hacia su ancla. El orden es el de la leyenda. */
 export type RHalo = { key: string; name: string; color: string };
+/** Efectos gráficos: «full» con todo; «reduced» sin entrada animada, partículas ni minimapa y con menos textos (los halos se quedan). */
+export type Effects = "full" | "reduced";
+export type EffectsMode = "auto" | Effects;
 export type RendererEvents = {
+  /** Nodo bajo el puntero (o null) y su posición en pantalla, para el tooltip. */
+  hover?: (id: string | null, x: number, y: number) => void;
+  /** Cambia el modo efectivo (en automático, al medir fotogramas lentos o con `prefers-reduced-motion`). */
+  effects?: (e: Effects) => void;
   nodeClick?: (id: string) => void;
   nodeContextMenu?: (id: string) => void;
   linkClick?: (id: string) => void;
@@ -28,6 +35,14 @@ const LABEL_ZOOM = 0.7;          // por debajo, las etiquetas de las aristas no 
 const CAPTION_ZOOM = 0.45;
 const CLICK_SLOP = 4;            // píxeles que puede moverse el puntero y seguir siendo un clic
 const MAX_LABELS = 120;          // textos por fotograma: el texto con contorno es lo más caro de dibujar (sobre todo sin GPU)
+const MAX_LABELS_REDUCED = 60;
+const ENTER_MS = 450;            // entrada de un nodo nuevo: aparece y crece
+const SLOW_MS = 34;              // un fotograma más largo que esto (menos de ~30 fps) cuenta como lento…
+const SLOW_FRAMES = 45;          // …y tantos seguidos (unos 2 s de animación) bajan el modo automático a reducido
+const MINIMAP_MIN = 60;          // nodos visibles a partir de los que se muestra el minimapa
+const MINI_W = 150;
+const MINI_H = 110;
+const DIM = 0.15;                // opacidad de lo que queda fuera del foco
 const FOLLOW_MS = 4000;          // un encuadre sigue a la simulación como mucho este tiempo
 const HALO_PAD = 26;             // margen del halo alrededor de cada nodo
 const PULL = 0.15;               // fuerza hacia el ancla de los orígenes: alta para que un origen con pocos enlaces no se disperse
@@ -88,9 +103,18 @@ export class ForceRenderer {
   private cleanup: (() => void)[] = [];
   private halos: RHalo[] = [];
   private anchorSig = "";
+  private mode: EffectsMode = "auto";
+  private effective: Effects = "full";
+  private autoDown = false;     // el modo automático ya bajó a reducido en este lienzo
+  private still: boolean;       // prefers-reduced-motion: nada se mueve solo (ni entrada, ni partículas, ni simulación ni zoom animados), sea cual sea el modo
+  private born = new Map<string, number>();  // inicio de la entrada animada de cada nodo nuevo
+  private lastDraw = 0;
+  private slow = 0;
+  private mini: { x: number; y: number; ox: number; oy: number; s: number } | null = null;
 
   constructor(private canvas: HTMLCanvasElement, private events: RendererEvents = {}) {
     this.ctx = canvas.getContext("2d")!;
+    this.still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.sim = forceSimulation<SNode, SLink>()
       .force("link", forceLink<SNode, SLink>().id((d) => d.id).distance(70).strength(LINK))
       .force("charge", forceManyBody<SNode>().strength(CHARGE).distanceMax(600))
@@ -101,7 +125,7 @@ export class ForceRenderer {
       .stop();
     this.zoomer = zoom<HTMLCanvasElement, unknown>()
       .scaleExtent([0.05, 8])
-      .filter((ev: any) => (ev.type === "wheel" || !this.nodeAt(ev.offsetX, ev.offsetY)) && !ev.button)
+      .filter((ev: any) => (ev.type === "wheel" || (!this.nodeAt(ev.offsetX, ev.offsetY) && !this.inMini(ev.offsetX, ev.offsetY))) && !ev.button)
       .on("zoom", (ev) => { if (ev.sourceEvent) cancelAnimationFrame(this.anim); this.t = ev.transform; this.request(); });  // el usuario manda sobre un encuadre en curso
     select(canvas).call(this.zoomer).on("dblclick.zoom", null);
     const on = <K extends keyof HTMLElementEventMap>(type: K, fn: (ev: HTMLElementEventMap[K]) => void) => {
@@ -111,7 +135,7 @@ export class ForceRenderer {
     on("pointerdown", (ev) => this.onDown(ev));
     on("pointermove", (ev) => this.onMove(ev));
     on("pointerup", (ev) => this.onUp(ev));
-    on("pointerleave", () => { if (this.hover) { this.hover = null; this.canvas.style.cursor = ""; this.request(); } });
+    on("pointerleave", () => { if (this.hover) { this.hover = null; this.canvas.style.cursor = ""; this.events.hover?.(null, 0, 0); this.request(); } });
     on("pointercancel", () => this.endDrag());  // sin esto, un arrastre cancelado dejaría la simulación caliente para siempre
     on("lostpointercapture", () => this.endDrag());
     on("contextmenu", (ev) => {
@@ -121,6 +145,18 @@ export class ForceRenderer {
   }
 
   setEvents(events: RendererEvents) { this.events = events; }
+
+  /** Modo elegido. Elegirlo de nuevo olvida una bajada automática anterior. */
+  setEffects(mode: EffectsMode) {
+    this.mode = mode; this.autoDown = false; this.slow = 0;
+    this.applyEffects();
+  }
+
+  private applyEffects() {
+    const e: Effects = this.mode === "reduced" || (this.mode === "auto" && this.autoDown) ? "reduced" : "full";
+    if (e !== this.effective) { this.effective = e; this.request(); }
+    this.events.effects?.(e);
+  }
 
   resize(w: number, h: number) {
     const dpr = window.devicePixelRatio || 1;
@@ -158,11 +194,15 @@ export class ForceRenderer {
     });
     const reanchor = this.anchor();
     if (sameTopo) {
-      if (reanchor && !this.paused) this.sim.alpha(Math.max(this.sim.alpha(), 0.5)).restart();  // otros halos: los nodos se recolocan animados
+      if (reanchor && this.still) this.settle(0.5);
+      else if (reanchor && !this.paused) this.sim.alpha(Math.max(this.sim.alpha(), 0.5)).restart();  // otros halos: los nodos se recolocan animados
       this.request();
       return;
     }
     const fresh = this.nodes.filter((n) => n.x === undefined);
+    const now = performance.now();
+    for (const id of this.born.keys()) if (!this.byId.has(id)) this.born.delete(id);
+    if (this.effective === "full" && !this.still) for (const n of fresh) this.born.set(n.id, now);
     for (const n of fresh) {
       const nb = this.links.find((l) => (l.source === n && l.target.x !== undefined) || (l.target === n && l.source.x !== undefined));
       const anchor = nb ? (nb.source === n ? nb.target : nb.source) : null;
@@ -170,15 +210,19 @@ export class ForceRenderer {
     }
     this.sim.nodes(this.nodes);
     (this.sim.force("link") as any).links(this.links);
-    if (!kept) {
-      this.sim.alpha(1);
-      const end = performance.now() + SETTLE_MS;
-      while (this.sim.alpha() > this.sim.alphaMin() && performance.now() < end) this.sim.tick();
-      this.fit(0);
+    if (!kept || this.still) {  // un grafo nuevo (o cualquiera, sin movimiento) se asienta antes de pintarlo
+      this.settle(kept ? 0.4 : 1);
+      if (!kept) this.fit(0);
     }
-    this.sim.alpha(kept ? 0.4 : this.sim.alpha());
-    if (!this.paused) this.sim.restart();
+    if (!this.still) { this.sim.alpha(kept ? 0.4 : this.sim.alpha()); if (!this.paused) this.sim.restart(); }
     this.request();
+  }
+
+  /** Pasos síncronos de la simulación, con un presupuesto de tiempo. */
+  private settle(alpha: number) {
+    this.sim.stop().alpha(alpha);
+    const end = performance.now() + (this.still ? SETTLE_MS * 3 : SETTLE_MS);
+    while (this.sim.alpha() > this.sim.alphaMin() && performance.now() < end) this.sim.tick();
   }
 
   /** Coloca un ancla por halo y da a cada nodo como destino la media de las anclas de sus halos: un nodo de dos orígenes
@@ -226,7 +270,7 @@ export class ForceRenderer {
 
   setPaused(p: boolean) {
     this.paused = p;
-    if (p) this.sim.stop(); else this.sim.alpha(Math.max(this.sim.alpha(), 0.1)).restart();
+    if (p || this.still) this.sim.stop(); else this.sim.alpha(Math.max(this.sim.alpha(), 0.1)).restart();
   }
 
   /** Encuadra los nodos visibles (o los que cumplen `only`) con una transición de `ms` milisegundos.
@@ -282,6 +326,7 @@ export class ForceRenderer {
 
   private onDown(ev: PointerEvent) {
     if (ev.button !== 0) return;
+    if (this.inMini(ev.offsetX, ev.offsetY)) { this.miniJump(ev.offsetX, ev.offsetY); return; }
     this.down = { x: ev.offsetX, y: ev.offsetY };
     const n = this.nodeAt(ev.offsetX, ev.offsetY);
     if (!n) return;
@@ -299,9 +344,18 @@ export class ForceRenderer {
       this.request();
       return;
     }
+    if (this.inMini(ev.offsetX, ev.offsetY)) {
+      if (this.hover) this.events.hover?.(null, 0, 0);
+      this.hover = null; this.canvas.style.cursor = "pointer"; this.request();
+      return;
+    }
     const n = this.nodeAt(ev.offsetX, ev.offsetY);
     const h = n?.id ?? (this.linkAt(ev.offsetX, ev.offsetY) ? "link" : null);
-    if (h !== this.hover) { this.hover = h; this.canvas.style.cursor = h ? "pointer" : ""; this.request(); }
+    if (h !== this.hover) {
+      this.hover = h; this.canvas.style.cursor = h ? "pointer" : "";
+      if (n) { const [sx, sy] = this.t.apply([n.x!, n.y!]); this.events.hover?.(n.id, sx, sy - n.size * this.t.k); } else this.events.hover?.(null, 0, 0);
+      this.request();
+    }
   }
 
   private onUp(ev: PointerEvent) {
@@ -324,9 +378,18 @@ export class ForceRenderer {
     if (d?.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); }
   }
 
+  private inMini(x: number, y: number) { const m = this.mini; return !!m && x >= m.x && x <= m.x + MINI_W && y >= m.y && y <= m.y + MINI_H; }
+
+  /** Clic en el minimapa: centra la vista en ese punto con el mismo zoom. */
+  private miniJump(x: number, y: number) {
+    const m = this.mini!, wx = (x - m.ox) / m.s, wy = (y - m.oy) / m.s, k = this.t.k;
+    this.animateTo(() => zoomIdentity.translate(this.w / 2 - k * wx, this.h / 2 - k * wy).scale(k), 300);
+  }
+
   private animateTo(goal: () => ZoomTransform, ms: number) {
     cancelAnimationFrame(this.anim);
     const sel = select(this.canvas);
+    if (this.still) ms = 0;
     if (ms <= 0) { this.zoomer.transform(sel, goal()); return; }
     const from = this.t, start = performance.now();
     const ease = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
@@ -348,6 +411,10 @@ export class ForceRenderer {
 
   private draw() {
     const { ctx, t } = this;
+    const now = performance.now();
+    this.measure(now);
+    const full = this.effective === "full";
+    let animating = false;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = CANVAS.background;
     ctx.fillRect(0, 0, this.w, this.h);
@@ -356,25 +423,33 @@ export class ForceRenderer {
     const onScreen = (x: number, y: number, m = 0) => x >= vx0 - m && x <= vx1 + m && y >= vy0 - m && y <= vy1 + m;
     const links = this.links.filter((l) => this.linkVisible(l));
     const px = 1 / t.k;  // un píxel de pantalla en unidades del mundo
-    this.drawHalos(px);
+    const cap = full ? MAX_LABELS : MAX_LABELS_REDUCED;
+
+    // foco: el nodo señalado (o el seleccionado) y su vecindario; lo demás se atenúa, halos incluidos
+    const hoverNode = this.hover && this.byId.has(this.hover) ? this.hover : null;
+    const focusId = hoverNode ?? this.selectedNode;
+    const near = new Set<string>();
+    if (focusId) { near.add(focusId); for (const l of links) if (l.source.id === focusId || l.target.id === focusId) { near.add(l.source.id); near.add(l.target.id); } }
+    const touches = (l: SLink) => !focusId || l.source.id === focusId || l.target.id === focusId;
+    this.drawHalos(px, focusId ? 0.35 : 1);
 
     // aristas, agrupadas por estilo para trazar cada grupo de una vez
     const groups = new Map<string, SLink[]>();
     for (const l of links) {
       if (l.id === this.selectedLink) continue;
-      const k = `${l.color}|${l.dashed ? 1 : 0}|${l.strong ? 1 : 0}`;
+      const k = `${l.color}|${l.dashed ? 1 : 0}|${l.strong ? 1 : 0}|${touches(l) ? 1 : 0}`;
       (groups.get(k) ?? groups.set(k, []).get(k)!).push(l);
     }
-    const stroke = (ls: SLink[], color: string, dashed: boolean, width: number) => {
+    const stroke = (ls: SLink[], color: string, dashed: boolean, width: number, alpha: number) => {
       ctx.beginPath();
       for (const l of ls) {
         ctx.moveTo(l.source.x!, l.source.y!);
         if (l.bend) { const [cx, cy] = control(l); ctx.quadraticCurveTo(cx, cy, l.target.x!, l.target.y!); } else ctx.lineTo(l.target.x!, l.target.y!);
       }
       ctx.setLineDash(dashed ? [4 * px, 4 * px] : []);
-      ctx.strokeStyle = color; ctx.lineWidth = width * px; ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = color; ctx.lineWidth = width * px; ctx.globalAlpha = 0.75 * alpha;
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.globalAlpha = alpha;
       ctx.beginPath();  // puntas de flecha en el borde del nodo destino
       for (const l of ls) {
         const [cx, cy] = control(l);
@@ -387,17 +462,33 @@ export class ForceRenderer {
       }
       ctx.setLineDash([]);
       ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = 1;
     };
-    for (const [k, ls] of groups) { const [color, dashed, strong] = k.split("|"); stroke(ls, color, dashed === "1", strong === "1" ? 2.6 : 1.2); }
+    for (const [k, ls] of groups) { const [color, dashed, strong, lit] = k.split("|"); stroke(ls, color, dashed === "1", strong === "1" ? 2.6 : 1.2, lit === "1" ? 1 : DIM * 0.6); }
     const selLink = links.find((l) => l.id === this.selectedLink);
-    if (selLink) stroke([selLink], CANVAS.selected, selLink.dashed, 2.5);
+    if (selLink) stroke([selLink], CANVAS.selected, selLink.dashed, 2.5, 1);
+
+    // partículas: solo en las aristas válidas del nodo señalado, y solo mientras se señala (en reposo no se anima nada)
+    if (full && !this.still && hoverNode) {
+      const lit = links.filter((l) => !l.dashed && touches(l)).slice(0, 60);
+      ctx.fillStyle = CANVAS.foreground;
+      for (const l of lit) {
+        const [cx, cy] = control(l);
+        for (let i = 0; i < 2; i++) {
+          const q = (now / 2000 + i / 2 + hash(l.id)) % 1, r = 1 - q;
+          ctx.beginPath();
+          ctx.arc(r * r * l.source.x! + 2 * r * q * cx + q * q * l.target.x!, r * r * l.source.y! + 2 * r * q * cy + q * q * l.target.y!, 2.2 * px, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      animating ||= lit.length > 0;
+    }
 
     // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo).
-    // Si en pantalla hay más de MAX_LABELS, solo las de lo seleccionado o señalado: hay que acercarse para leer el resto.
-    const focusId = this.selectedNode ?? this.hover;
+    // Con foco, solo las suyas; si en pantalla hay más del tope, solo las de lo seleccionado o señalado.
     const mid = (l: SLink): [number, number] => { const [cx, cy] = control(l); return [(l.source.x! + 2 * cx + l.target.x!) / 4, (l.source.y! + 2 * cy + l.target.y!) / 4]; };
-    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && onScreen(...mid(l), 50)) : [];
-    if (labelled.length > MAX_LABELS) labelled = labelled.filter((l) => l.id === this.selectedLink || l.source.id === focusId || l.target.id === focusId);
+    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && touches(l) && onScreen(...mid(l), 50)) : [];
+    if (labelled.length > cap) labelled = labelled.filter((l) => l.id === this.selectedLink || (focusId && touches(l))).slice(0, cap);
     if (selLink && !labelled.includes(selLink)) labelled.push(selLink);
     if (labelled.length) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
@@ -415,25 +506,39 @@ export class ForceRenderer {
       }
     }
 
-    // nodos
+    // nodos: los nuevos entran apareciendo y creciendo; fuera del foco, atenuados
+    const named: SNode[] = [];
     for (const n of this.nodes) {
-      if (!n.visible || n.x === undefined || !onScreen(n.x, n.y!, n.size)) continue;
-      ctx.beginPath(); ctx.arc(n.x, n.y!, n.size, 0, Math.PI * 2);
+      if (!n.visible || n.x === undefined || !onScreen(n.x, n.y!, n.size + 80)) continue;
+      const b = this.born.get(n.id);
+      let e = 1;
+      if (b !== undefined) {
+        e = Math.min(1, (now - b) / ENTER_MS);
+        if (e >= 1) this.born.delete(n.id); else animating = true;
+        e = 1 - Math.pow(1 - e, 3);
+      }
+      const alpha = (focusId && !near.has(n.id) ? DIM : 1) * e;
+      if (alpha > DIM * 0.99) named.push(n);
+      if (!onScreen(n.x, n.y!, n.size)) continue;
+      const r = n.size * (0.4 + 0.6 * e);
+      ctx.globalAlpha = alpha;
+      ctx.beginPath(); ctx.arc(n.x, n.y!, r, 0, Math.PI * 2);
       ctx.fillStyle = n.color; ctx.fill();
       const sel = n.id === this.selectedNode, hov = n.id === this.hover;
       if (n.ring && !sel) {  // respaldado por varios orígenes
-        ctx.beginPath(); ctx.arc(n.x, n.y!, n.size + 3 * px, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(n.x, n.y!, r + 3 * px, 0, Math.PI * 2);
         ctx.lineWidth = 1.5 * px; ctx.strokeStyle = CANVAS.foreground; ctx.stroke();
       }
       if (sel || hov) { ctx.lineWidth = (sel ? 3 : 2) * px; ctx.strokeStyle = sel ? CANVAS.selected : CANVAS.foreground; ctx.stroke(); }
     }
-    // nombres (con el mismo tope de textos por fotograma)
-    const named = this.nodes.filter((n) => n.visible && n.x !== undefined && onScreen(n.x, n.y!, 80));
-    const all = t.k >= CAPTION_ZOOM && named.length <= MAX_LABELS;
+    ctx.globalAlpha = 1;
+    // nombres (con el mismo tope de textos por fotograma; con foco, solo los del vecindario)
+    const shown = focusId ? named.filter((n) => near.has(n.id)) : named;
+    const all = t.k >= CAPTION_ZOOM && shown.length <= cap;
     if (all || focusId) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "top";
       const fs = 1 / Math.max(t.k, 1);
-      for (const n of named) {
+      for (const n of shown) {
         const focus = n.id === this.selectedNode || n.id === this.hover;
         if (!all && !focus) continue;
         const txt = !focus && n.caption.length > 24 ? n.caption.slice(0, 23) + "…" : n.caption;
@@ -443,10 +548,41 @@ export class ForceRenderer {
         ctx.restore();
       }
     }
+    this.drawMinimap(full);
+    if (animating) this.request();
+  }
+
+  /** Modo automático: si los fotogramas seguidos van lentos de forma sostenida, baja a reducido (una vez por lienzo).
+   * Solo cuenta fotogramas consecutivos, es decir, mientras algo se anima: en reposo no se dibuja nada. */
+  private measure(now: number) {
+    const dt = now - this.lastDraw;
+    this.lastDraw = now;
+    if (this.mode !== "auto" || this.effective !== "full" || dt > 250) return;
+    this.slow = dt > SLOW_MS ? this.slow + 1 : Math.max(0, this.slow - 2);
+    if (this.slow >= SLOW_FRAMES) { this.autoDown = true; this.applyEffects(); }
+  }
+
+  /** Minimapa en la esquina con todos los nodos visibles y el rectángulo de la vista; un clic centra ahí. */
+  private drawMinimap(full: boolean) {
+    const vis = this.nodes.filter((n) => n.visible && n.x !== undefined);
+    if (!full || vis.length < MINIMAP_MIN || this.w < MINI_W * 2.5 || this.h < MINI_H * 2.5) { this.mini = null; return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of vis) { x0 = Math.min(x0, n.x!); y0 = Math.min(y0, n.y!); x1 = Math.max(x1, n.x!); y1 = Math.max(y1, n.y!); }
+    const x = this.w - MINI_W - 10, y = this.h - MINI_H - 10, s = Math.min((MINI_W - 12) / Math.max(x1 - x0, 1), (MINI_H - 12) / Math.max(y1 - y0, 1));
+    const ox = x + (MINI_W - (x1 - x0) * s) / 2 - x0 * s, oy = y + (MINI_H - (y1 - y0) * s) / 2 - y0 * s;
+    const { ctx } = this;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.globalAlpha = 0.88; ctx.fillStyle = CANVAS.background; ctx.fillRect(x, y, MINI_W, MINI_H);
+    ctx.globalAlpha = 1; ctx.strokeStyle = CANVAS.label; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, MINI_W - 1, MINI_H - 1);
+    for (const n of vis) { ctx.fillStyle = n.color; ctx.fillRect(ox + n.x! * s - 1, oy + n.y! * s - 1, 2, 2); }
+    const [vx0, vy0] = this.toWorld(0, 0), [vx1, vy1] = this.toWorld(this.w, this.h);
+    const rx0 = Math.max(x, ox + vx0 * s), ry0 = Math.max(y, oy + vy0 * s), rx1 = Math.min(x + MINI_W, ox + vx1 * s), ry1 = Math.min(y + MINI_H, oy + vy1 * s);
+    if (rx1 > rx0 && ry1 > ry0) { ctx.strokeStyle = CANVAS.selected; ctx.strokeRect(rx0, ry0, rx1 - rx0, ry1 - ry0); }
+    this.mini = { x, y, ox, oy, s };
   }
 
   /** Zona translúcida del color de cada origen alrededor de sus nodos visibles (envolvente convexa suavizada), con su nombre y recuento. */
-  private drawHalos(px: number) {
+  private drawHalos(px: number, fade: number) {
     const { ctx } = this;
     for (const h of this.halos) {
       const ns = this.nodes.filter((n) => n.visible && n.x !== undefined && n.groups?.includes(h.key));
@@ -461,9 +597,9 @@ export class ForceRenderer {
       ctx.moveTo(m[0], m[1]);
       hull.forEach((q, i) => { m = mid(q, hull[(i + 1) % hull.length]); ctx.quadraticCurveTo(q[0], q[1], m[0], m[1]); });
       ctx.closePath();
-      ctx.fillStyle = h.color; ctx.globalAlpha = 0.08; ctx.fill();
-      ctx.strokeStyle = h.color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1.2 * px; ctx.setLineDash([]); ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.fillStyle = h.color; ctx.globalAlpha = 0.08 * fade; ctx.fill();
+      ctx.strokeStyle = h.color; ctx.globalAlpha = 0.4 * fade; ctx.lineWidth = 1.2 * px; ctx.setLineDash([]); ctx.stroke();
+      ctx.globalAlpha = fade;
       const top = hull.reduce((a, b) => (b[1] < a[1] ? b : a));  // nombre sobre la corona del halo, a tamaño de pantalla constante
       const label = `${h.name.length > 22 ? h.name.slice(0, 21) + "…" : h.name} · ${ns.length}`;
       ctx.save(); ctx.translate(top[0], top[1] - 4 * px); ctx.scale(px, px);
@@ -471,6 +607,7 @@ export class ForceRenderer {
       ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(label, 0, 0);
       ctx.fillStyle = h.color; ctx.fillText(label, 0, 0);
       ctx.restore();
+      ctx.globalAlpha = 1;
     }
   }
 }
