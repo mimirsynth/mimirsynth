@@ -42,6 +42,12 @@ export default function GraphPage({ graph }: { graph: string }) {
   const [hiddenOrigins, setHiddenOrigins] = useState<Set<string>>(new Set());
   const [onlyRobust, setOnlyRobust] = useState(false);
   useEffect(() => setHiddenOrigins(new Set()), [groupBy]);
+  const robustSeen = useRef(false);
+  useEffect(() => {  // al filtrar quedan pocos nodos: se encuadran (no en la primera carga)
+    if (robustSeen.current === (onlyRobust && groupBy !== "label")) return;
+    robustSeen.current = onlyRobust && groupBy !== "label";
+    requestAnimationFrame(() => gc.current?.fit(400));
+  }, [onlyRobust, groupBy]);
   const cv = useRef<any>(null);  // <falkordb-canvas>: radial, árbol y 3D hasta que el renderer propio los tenga (#95, fase 5)
   const gc = useRef<GraphCanvasHandle>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -95,21 +101,25 @@ export default function GraphPage({ graph }: { graph: string }) {
   const halos = useMemo<CanvasHalo[]>(() => (halosOn ? legendOrigins.filter((o) => !hiddenOrigins.has(o.key)) : []), [halosOn, legendOrigins, hiddenOrigins]);
   const haloOf = useCallback((k: string) => (legendOrigins.some((o) => o.key === k) ? k : OTHER), [legendOrigins]);
 
-  const nodeVisible = useCallback((n: GNode) => !hiddenLabels.has(n.labels[0] ?? t("(sin tipo)")) && (n.degree ?? 0) >= minDeg && (!onlyRobust || srcOf(n).length >= 2),
-    [hiddenLabels, minDeg, onlyRobust, srcOf]); // eslint-disable-line react-hooks/exhaustive-deps
-  const linkVisible = useCallback((l: GLink) => !hiddenRels.has(l.name) && (!onlyRobust || srcOf(l).length >= 2), [hiddenRels, onlyRobust, srcOf]);
+  // la robustez cuenta orígenes de la procedencia: tener dos tipos de entidad no confirma nada (y los hechos no tienen tipo)
+  const robustness = groupBy !== "label";
+  const robust = onlyRobust && robustness;
+  const backed = useCallback((x: GNode | GLink) => robustness && srcOf(x).length >= 2, [robustness, srcOf]);
+  const nodeVisible = useCallback((n: GNode) => !hiddenLabels.has(n.labels[0] ?? t("(sin tipo)")) && (n.degree ?? 0) >= minDeg && (!robust || backed(n)),
+    [hiddenLabels, minDeg, robust, backed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linkVisible = useCallback((l: GLink) => !hiddenRels.has(l.name) && (!robust || backed(l)), [hiddenRels, robust, backed]);
 
   // datos -> renderer propio (fuerza 2D); cambiar la visibilidad no recoloca
   const cnodes = useMemo<CanvasNode[]>(() => {
     const shown = new Set(halos.map((h) => h.key));
     return nodes.map((n) => ({ id: n.uuid, color: color(n.labels[0]), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: n.name, visible: nodeVisible(n),
-      groups: [...new Set(srcOf(n).map(haloOf))].filter((k) => shown.has(k)), ring: srcOf(n).length >= 2 }));
-  }, [nodes, nodeVisible, halos, srcOf, haloOf]); // eslint-disable-line react-hooks/exhaustive-deps
+      groups: [...new Set(srcOf(n).map(haloOf))].filter((k) => shown.has(k)), ring: backed(n) }));
+  }, [nodes, nodeVisible, halos, srcOf, haloOf, backed]); // eslint-disable-line react-hooks/exhaustive-deps
   const clinks = useMemo<CanvasLink[]>(() => {
     const vis = new Set(cnodes.filter((n) => n.visible).map((n) => n.id));
     return links.map((l) => ({ id: l.uuid, source: id(l.source), target: id(l.target), label: l.name, color: l.status === "invalidated" ? CANVAS.linkInvalid : CANVAS.link,
-      dashed: l.status === "invalidated", visible: vis.has(id(l.source)) && vis.has(id(l.target)) && linkVisible(l), strong: srcOf(l).length >= 2 }));
-  }, [links, cnodes, linkVisible, srcOf]);
+      dashed: l.status === "invalidated", visible: vis.has(id(l.source)) && vis.has(id(l.target)) && linkVisible(l), strong: backed(l) }));
+  }, [links, cnodes, linkVisible, backed]);
   const pickNode = useCallback((nid: string) => { const o = nodes.find((x) => x.uuid === nid); if (o) { setSel(o); setSelLink(null); } }, [nodes]);
   const pickLink = useCallback((lid: string) => { const o = links.find((x) => x.uuid === lid); if (o) { setSelLink(o); setSel(null); } }, [links]);
   const clearPick = useCallback(() => { setSel(null); setSelLink(null); }, []);
@@ -196,7 +206,8 @@ export default function GraphPage({ graph }: { graph: string }) {
         <Check size="xs" label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
         <Check size="xs" label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
         <Check size="xs" label={t("Halos por origen")} checked={halosOn && own} disabled={!own} onChange={(e) => setHalosOn(e.currentTarget.checked)} />
-        <Check size="xs" label={t("Solo confirmados por 2 o más orígenes")} checked={onlyRobust} onChange={(e) => setOnlyRobust(e.currentTarget.checked)} />
+        <Check size="xs" label={t("Solo confirmados por 2 o más orígenes")} checked={robust} disabled={!robustness} onChange={(e) => setOnlyRobust(e.currentTarget.checked)}
+          title={robustness ? undefined : t("Con «Tipo de entidad» no hay orígenes que contar: elige otra agrupación.")} />
       </Group>
       {useTime && day !== null && (
         <Group gap="md" wrap="nowrap">
@@ -211,14 +222,14 @@ export default function GraphPage({ graph }: { graph: string }) {
                 onNodeClick={pickNode} onNodeContextMenu={expand} onLinkClick={pickLink} onBackgroundClick={clearPick} />
             : <falkordb-canvas ref={cv} />}
           <Legend open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)}>
-            <LegendSection>{t("Tipos")}</LegendSection>
-            {legendLabels.map(([l, n]) => <LegendItem key={l} label={l} count={n} dot={color(l === t("(sin tipo)") ? undefined : l)} off={hiddenLabels.has(l)} onClick={() => toggle(hiddenLabels, setHiddenLabels, l)} />)}
-            <LegendSection>{t("Relaciones")}</LegendSection>
-            {legendRels.map(([r, n]) => <LegendItem key={r} label={r} count={n} off={hiddenRels.has(r)} onClick={() => toggle(hiddenRels, setHiddenRels, r)} />)}
             {own && halosOn && legendOrigins.length > 0 && <>
               <LegendSection>{t("Orígenes")}</LegendSection>
               {legendOrigins.map((o) => <LegendItem key={o.key} label={o.name} count={o.count} dot={o.color} off={hiddenOrigins.has(o.key)} onClick={() => toggle(hiddenOrigins, setHiddenOrigins, o.key)} />)}
             </>}
+            <LegendSection>{t("Tipos")}</LegendSection>
+            {legendLabels.map(([l, n]) => <LegendItem key={l} label={l} count={n} dot={color(l === t("(sin tipo)") ? undefined : l)} off={hiddenLabels.has(l)} onClick={() => toggle(hiddenLabels, setHiddenLabels, l)} />)}
+            <LegendSection>{t("Relaciones")}</LegendSection>
+            {legendRels.map(([r, n]) => <LegendItem key={r} label={r} count={n} off={hiddenRels.has(r)} onClick={() => toggle(hiddenRels, setHiddenRels, r)} />)}
           </Legend>
         </div></>} aside={
         <Panel withBorder p="sm" h="100%">

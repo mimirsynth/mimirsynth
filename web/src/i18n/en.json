@@ -193,6 +193,7 @@
  "Comunidades": "Communities",
  "Con el token, el agente lee la memoria (recall) y propone hechos nuevos por la API o por MCP; con Claude Code basta un «claude mcp add».": "With the token, the agent reads the memory (recall) and proposes new facts through the API or MCP; with Claude Code a single “claude mcp add” is enough.",
  "Con rol de lector no puedes proponer ni ver propuestas. Pide rol de colaborador a un administrador del brain.": "With the reader role you cannot propose or see proposals. Ask a brain administrator for the contributor role.",
+ "Con «Tipo de entidad» no hay orígenes que contar: elige otra agrupación.": "With «Entity type» there are no origins to count: choose another grouping.",
  "Conceder lectura": "Grant read access",
  "Conecta un agente": "Connect an agent",
  "Conectando con la wiki…": "Connecting to the wiki…",

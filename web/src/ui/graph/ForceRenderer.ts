@@ -27,6 +27,8 @@ const SETTLE_MS = 400;           // presupuesto para pre-asentar un grafo nuevo 
 const LABEL_ZOOM = 0.7;          // por debajo, las etiquetas de las aristas no se leen y solo ensucian
 const CAPTION_ZOOM = 0.45;
 const CLICK_SLOP = 4;            // píxeles que puede moverse el puntero y seguir siendo un clic
+const MAX_LABELS = 120;          // textos por fotograma: el texto con contorno es lo más caro de dibujar (sobre todo sin GPU)
+const FOLLOW_MS = 4000;          // un encuadre sigue a la simulación como mucho este tiempo
 const HALO_PAD = 26;             // margen del halo alrededor de cada nodo
 const PULL = 0.15;               // fuerza hacia el ancla de los orígenes: alta para que un origen con pocos enlaces no se disperse
 const PULL_NONE = 0.04;
@@ -110,6 +112,8 @@ export class ForceRenderer {
     on("pointermove", (ev) => this.onMove(ev));
     on("pointerup", (ev) => this.onUp(ev));
     on("pointerleave", () => { if (this.hover) { this.hover = null; this.canvas.style.cursor = ""; this.request(); } });
+    on("pointercancel", () => this.endDrag());  // sin esto, un arrastre cancelado dejaría la simulación caliente para siempre
+    on("lostpointercapture", () => this.endDrag());
     on("contextmenu", (ev) => {
       const n = this.nodeAt(ev.offsetX, ev.offsetY);
       if (n) { ev.preventDefault(); this.events.nodeContextMenu?.(n.id); }
@@ -119,7 +123,9 @@ export class ForceRenderer {
   setEvents(events: RendererEvents) { this.events = events; }
 
   resize(w: number, h: number) {
-    this.dpr = window.devicePixelRatio || 1;
+    const dpr = window.devicePixelRatio || 1;
+    if (w === this.w && h === this.h && dpr === this.dpr) return;
+    this.dpr = dpr;
     const first = !this.w;
     this.w = w; this.h = h;
     this.canvas.width = Math.max(1, Math.floor(w * this.dpr));
@@ -302,7 +308,7 @@ export class ForceRenderer {
     const d = this.drag, down = this.down;
     this.drag = null; this.down = null;
     if (d) {
-      this.canvas.releasePointerCapture(ev.pointerId);
+      if (this.canvas.hasPointerCapture(ev.pointerId)) this.canvas.releasePointerCapture(ev.pointerId);
       if (d.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); return; }
       this.events.nodeClick?.(d.node.id);
       return;
@@ -310,6 +316,12 @@ export class ForceRenderer {
     if (ev.button !== 0 || !down || Math.hypot(ev.offsetX - down.x, ev.offsetY - down.y) >= CLICK_SLOP) return;  // fue un arrastre del lienzo
     const l = this.linkAt(ev.offsetX, ev.offsetY);
     if (l) this.events.linkClick?.(l.id); else this.events.backgroundClick?.();
+  }
+
+  private endDrag() {
+    const d = this.drag;
+    this.drag = null; this.down = null;
+    if (d?.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); }
   }
 
   private animateTo(goal: () => ZoomTransform, ms: number) {
@@ -322,7 +334,7 @@ export class ForceRenderer {
       const p = ease(Math.min(1, (now - start) / ms)), target = goal();
       const k = from.k * Math.pow(target.k / from.k, p);
       this.zoomer.transform(sel, zoomIdentity.translate(from.x + (target.x - from.x) * p, from.y + (target.y - from.y) * p).scale(k));
-      if (p < 1 || (!this.paused && this.sim.alpha() > 0.03)) this.anim = requestAnimationFrame(step);  // sigue al nodo mientras la simulación lo mueva
+      if (p < 1 || (!this.paused && this.sim.alpha() > 0.03 && now - start < FOLLOW_MS)) this.anim = requestAnimationFrame(step);  // sigue al nodo mientras la simulación lo mueva
     };
     this.anim = requestAnimationFrame(step);
   }
@@ -380,14 +392,18 @@ export class ForceRenderer {
     const selLink = links.find((l) => l.id === this.selectedLink);
     if (selLink) stroke([selLink], CANVAS.selected, selLink.dashed, 2.5);
 
-    // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo)
-    if (t.k >= LABEL_ZOOM || selLink) {
+    // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo).
+    // Si en pantalla hay más de MAX_LABELS, solo las de lo seleccionado o señalado: hay que acercarse para leer el resto.
+    const focusId = this.selectedNode ?? this.hover;
+    const mid = (l: SLink): [number, number] => { const [cx, cy] = control(l); return [(l.source.x! + 2 * cx + l.target.x!) / 4, (l.source.y! + 2 * cy + l.target.y!) / 4]; };
+    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && onScreen(...mid(l), 50)) : [];
+    if (labelled.length > MAX_LABELS) labelled = labelled.filter((l) => l.id === this.selectedLink || l.source.id === focusId || l.target.id === focusId);
+    if (selLink && !labelled.includes(selLink)) labelled.push(selLink);
+    if (labelled.length) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const fs = 1 / Math.max(t.k, 1);  // con mucho zoom el texto no crece sin límite
-      for (const l of t.k >= LABEL_ZOOM ? links : [selLink!]) {
-        const [cx, cy] = control(l);
-        const mx = (l.source.x! + 2 * cx + l.target.x!) / 4, my = (l.source.y! + 2 * cy + l.target.y!) / 4;
-        if (!onScreen(mx, my, 50) || !l.label) continue;
+      for (const l of labelled) {
+        const [mx, my] = mid(l);
         let ang = Math.atan2(l.target.y! - l.source.y!, l.target.x! - l.source.x!);
         if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
         ctx.save();
@@ -411,15 +427,17 @@ export class ForceRenderer {
       }
       if (sel || hov) { ctx.lineWidth = (sel ? 3 : 2) * px; ctx.strokeStyle = sel ? CANVAS.selected : CANVAS.foreground; ctx.stroke(); }
     }
-    // nombres
-    if (t.k >= CAPTION_ZOOM || this.selectedNode || this.hover) {
+    // nombres (con el mismo tope de textos por fotograma)
+    const named = this.nodes.filter((n) => n.visible && n.x !== undefined && onScreen(n.x, n.y!, 80));
+    const all = t.k >= CAPTION_ZOOM && named.length <= MAX_LABELS;
+    if (all || focusId) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "top";
       const fs = 1 / Math.max(t.k, 1);
-      for (const n of this.nodes) {
+      for (const n of named) {
         const focus = n.id === this.selectedNode || n.id === this.hover;
-        if (!n.visible || n.x === undefined || !onScreen(n.x, n.y!, 80) || (t.k < CAPTION_ZOOM && !focus)) continue;
+        if (!all && !focus) continue;
         const txt = !focus && n.caption.length > 24 ? n.caption.slice(0, 23) + "…" : n.caption;
-        ctx.save(); ctx.translate(n.x, n.y! + n.size + 2 * px); ctx.scale(fs, fs);
+        ctx.save(); ctx.translate(n.x!, n.y! + n.size + 2 * px); ctx.scale(fs, fs);
         ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(txt, 0, 0);
         ctx.fillStyle = CANVAS.foreground; ctx.fillText(txt, 0, 0);
         ctx.restore();
