@@ -4,12 +4,13 @@ import { tr, T } from "../i18n";
 import { Center, Divider, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { get, send } from "../api";
+import { get, Me, send } from "../api";
+import { passwordRules } from "../passwordPolicy";
 import Logo from "../Logo";
 import { TwoFactor } from "./TwoFactor";
 import { Passkeys } from "./Passkeys";
 import { getPasskey, passkeyError, passkeysSupported } from "../webauthn";
-import { Btn, EmptyState, Form, LanguageSelect, MutationError, Notice, Panel, PasswordField, TextField } from "../ui";
+import { Btn, EmptyState, Form, LanguageSelect, MutationError, Notice, Panel, PasswordField, RuleList, TextField } from "../ui";
 
 type Options = { local: boolean; passkeys?: boolean; oidc: boolean; providers?: { slug: string; name: string }[]; setup: boolean; password_min_length?: number };
 const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada de alta en esta instancia. Pide a un administrador que te invite."), disabled: T("Tu cuenta está deshabilitada. Contacta con un administrador."),
@@ -27,15 +28,32 @@ function Card({ name, subtitle, children }: { name: string; subtitle?: string; c
   );
 }
 
-/** Dos campos de contraseña que deben coincidir. */
-function usePasswordPair() {
+/** Longitud mínima de la contraseña que fija el administrador (la sirve `auth/options`). */
+export function usePasswordMin() {
+  const opts = useQuery({ queryKey: ["auth-options"], queryFn: () => get<Options>("auth/options") });
+  return opts.data?.password_min_length ?? 12;
+}
+
+/** Dos campos de contraseña que deben coincidir, con las reglas a la vista mientras se escribe (#76).
+ *  `missing` dice qué le falta a la contraseña para poder enviar, o null. */
+export function usePasswordPair(min: number, who: { email?: string | null; name?: string | null } = {}) {
   const [pw, setPw] = useState(""); const [again, setAgain] = useState("");
+  const rules = passwordRules(pw, { min, email: who.email ?? "", name: who.name ?? "" });
+  const valid = rules.every((r) => r.ok);
   const mismatch = again !== "" && pw !== again;
-  const fields = (min: number, label = tr("Contraseña")) => (<>
-    <PasswordField label={label} description={tr("Al menos {{min}} caracteres.", { min: min })} autoComplete="new-password" value={pw} onChange={(e) => setPw(e.currentTarget.value)} />
+  const fields = (label = tr("Contraseña")) => (<>
+    <PasswordField label={label} description={<RuleList rules={rules} checked={pw !== ""} />} autoComplete="new-password" value={pw} onChange={(e) => setPw(e.currentTarget.value)} />
     <PasswordField label={tr("Repite la contraseña")} autoComplete="new-password" value={again} error={mismatch ? tr("No coinciden") : undefined} onChange={(e) => setAgain(e.currentTarget.value)} />
   </>);
-  return { pw, ok: pw !== "" && pw === again, fields };
+  const missing = !valid ? tr("una contraseña que cumpla las reglas") : pw !== again ? tr("repetir la misma contraseña") : null;
+  const reset = () => { setPw(""); setAgain(""); };
+  return { pw, ok: valid && pw === again, missing, fields, reset };
+}
+
+/** Por qué el botón de enviar está deshabilitado: la lista de lo que falta, o nada si no falta nada. */
+export function Missing({ items }: { items: (string | false | null | undefined)[] }) {
+  const list = items.filter(Boolean);
+  return list.length ? <Text size="xs" c="dimmed" ta="center">{tr("Para continuar falta: {{list}}.", { list: list.join(", ") })}</Text> : null;
 }
 
 /** Pantalla de entrada: asistente de primer arranque, o email y contraseña (más OIDC si el administrador lo ha configurado). */
@@ -47,7 +65,7 @@ export function AuthScreen({ name }: { name: string }) {
   const [otp, setOtp] = useState("");
   const [email, setEmail] = useState(""); const [password, setPassword] = useState("");
   const [uname, setUname] = useState(""); const [code, setCode] = useState("");
-  const pair = usePasswordPair();
+  const pair = usePasswordPair(opts.data?.password_min_length ?? 12, { email, name: uname });
   const done = () => qc.invalidateQueries({ queryKey: ["me"] });
   const [methods, setMethods] = useState<string[]>([]);
   const login = useMutation({ mutationFn: () => send<{ mfa?: boolean; methods?: string[] }>("POST", "auth/login", { email, password }), onSuccess: (d) => { if (d.mfa) { setMethods(d.methods ?? ["totp"]); setMode("mfa"); setOtp(""); } else done(); } });
@@ -62,7 +80,6 @@ export function AuthScreen({ name }: { name: string }) {
   const forgot = useMutation({ mutationFn: () => send("POST", "auth/forgot", { email }) });
   const authError = t(ERRORS[new URLSearchParams(window.location.search).get("auth_error") ?? ""]);
   if (!opts.data) return <Center component="main" className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
-  const min = opts.data.password_min_length ?? 12;
 
   if (opts.data.setup) {
     return (
@@ -72,9 +89,10 @@ export function AuthScreen({ name }: { name: string }) {
           <TextField label={t("Código de instalación")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off" />
           <TextField label={t("Tu nombre")} value={uname} onChange={(e) => setUname(e.currentTarget.value)} autoComplete="name" />
           <TextField label={t("Email")} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} autoComplete="username" />
-          {pair.fields(min)}
+          {pair.fields()}
           <MutationError error={setup.error} />
           <Btn kind="primary" type="submit" fullWidth loading={setup.isPending} disabled={!code || !uname || !email || !pair.ok}>{t("Crear administrador")}</Btn>
+          <Missing items={[!code && t("el código de instalación"), !uname && t("tu nombre"), !email && t("el email"), pair.missing]} />
         </Form>
       </Card>
     );
@@ -137,9 +155,8 @@ export function AuthScreen({ name }: { name: string }) {
 export function AcceptScreen({ token, name }: { token: string; name: string }) {
   const { t } = useTranslation();
   const info = useQuery({ queryKey: ["token", token], retry: false, queryFn: () => get<{ purpose: "invite" | "reset"; email: string; name: string }>(`auth/token/${token}`) });
-  const opts = useQuery({ queryKey: ["auth-options"], queryFn: () => get<Options>("auth/options") });
   const [uname, setUname] = useState<string | null>(null);
-  const pair = usePasswordPair();
+  const pair = usePasswordPair(usePasswordMin(), { email: info.data?.email, name: uname ?? info.data?.name });
   const accept = useMutation({ mutationFn: () => send("POST", "auth/accept", { token, password: pair.pw, name: uname ?? undefined }), onSuccess: () => window.location.replace("/") });
   if (info.isLoading) return <Center component="main" className="ms-fullh"><EmptyState>{t("Comprobando el enlace…")}</EmptyState></Center>;
   if (info.error) return <Card name={name}><Notice tone="danger" title={t("Enlace no válido")}>{(info.error as Error).message}{t(". Pide a un administrador que te envíe uno nuevo.")}</Notice><Btn component="a" href="/">{t("Ir al inicio")}</Btn></Card>;
@@ -149,9 +166,10 @@ export function AcceptScreen({ token, name }: { token: string; name: string }) {
       <Form onSubmit={() => accept.mutate()}>
         <TextField label={t("Email")} value={d.email} disabled readOnly />
         {d.purpose === "invite" && <TextField label={t("Tu nombre")} value={uname ?? d.name} onChange={(e) => setUname(e.currentTarget.value)} autoComplete="name" />}
-        {pair.fields(opts.data?.password_min_length ?? 12, t("Contraseña nueva"))}
+        {pair.fields(t("Contraseña nueva"))}
         <MutationError error={accept.error} />
         <Btn kind="primary" type="submit" fullWidth loading={accept.isPending} disabled={!pair.ok}>{d.purpose === "invite" ? t("Crear mi cuenta") : t("Guardar contraseña")}</Btn>
+        <Missing items={[pair.missing]} />
       </Form>
     </Card>
   );
@@ -162,15 +180,17 @@ export function ChangePasswordScreen({ name }: { name: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [current, setCurrent] = useState("");
-  const pair = usePasswordPair();
+  const me = useQuery({ queryKey: ["me"], queryFn: () => get<Me>("me"), retry: false });
+  const pair = usePasswordPair(usePasswordMin(), { email: me.data?.email, name: me.data?.name });
   const m = useMutation({ mutationFn: () => send("POST", "me/password", { current, new: pair.pw }), onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }) });
   return (
     <Card name={name} subtitle={t("Tu contraseña es temporal: elige una nueva para continuar")}>
       <Form onSubmit={() => m.mutate()}>
         <PasswordField label={t("Contraseña temporal")} value={current} onChange={(e) => setCurrent(e.currentTarget.value)} autoComplete="current-password" />
-        {pair.fields(12, t("Contraseña nueva"))}
+        {pair.fields(t("Contraseña nueva"))}
         <MutationError error={m.error} />
         <Btn kind="primary" type="submit" fullWidth loading={m.isPending} disabled={!current || !pair.ok}>{t("Cambiar contraseña")}</Btn>
+        <Missing items={[!current && t("la contraseña temporal"), pair.missing]} />
       </Form>
     </Card>
   );

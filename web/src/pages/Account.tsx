@@ -6,7 +6,8 @@ import { Passkeys } from "./Passkeys";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { fmt, get, send } from "../api";
+import { fmt, get, Me, send } from "../api";
+import { Missing, usePasswordMin, usePasswordPair } from "./AuthPages";
 import TokensPanel, { ROLE } from "./TokensPanel";
 import { Avatar, Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, Page, Panel, Pill, SelectField, TextField, useTableView, MutationError, ConfirmDialog, DataState, PageHeader, FilePicker, Form, LanguageSelect, PasswordField, SettingsBody, SettingsGroup, SettingsLayout, SettingsRow, SubNav, useTabParam } from "../ui";
 
@@ -63,16 +64,17 @@ function Identities({ onMsg }: { onMsg: (m: { tone: "info" | "danger"; text: str
 
 function PasswordForm({ has, onDone }: { has: boolean; onDone: () => void }) {
   const { t } = useTranslation();
-  const [f, setF] = useState({ current: "", pw: "", again: "" });
-  const m = useMutation({ mutationFn: () => send("POST", "me/password", { current: f.current, new: f.pw }), onSuccess: () => { setF({ current: "", pw: "", again: "" }); onDone(); } });
-  const mismatch = f.again !== "" && f.pw !== f.again;
+  const [current, setCurrent] = useState("");
+  const me = useQuery({ queryKey: ["me"], queryFn: () => get<Me>("me"), retry: false });
+  const pair = usePasswordPair(usePasswordMin(), { email: me.data?.email, name: me.data?.name });
+  const m = useMutation({ mutationFn: () => send("POST", "me/password", { current, new: pair.pw }), onSuccess: () => { setCurrent(""); pair.reset(); onDone(); } });
   return (
     <Form onSubmit={() => m.mutate()}>
-      {has && <PasswordField label={t("Contraseña actual")} autoComplete="current-password" value={f.current} onChange={(e) => setF({ ...f, current: e.currentTarget.value })} />}
-      <PasswordField label={t("Contraseña nueva")} autoComplete="new-password" value={f.pw} onChange={(e) => setF({ ...f, pw: e.currentTarget.value })} />
-      <PasswordField label={t("Repite la contraseña nueva")} autoComplete="new-password" value={f.again} error={mismatch ? t("No coinciden") : undefined} onChange={(e) => setF({ ...f, again: e.currentTarget.value })} />
+      {has && <PasswordField label={t("Contraseña actual")} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.currentTarget.value)} />}
+      {pair.fields(t("Contraseña nueva"))}
       <MutationError error={m.error} />
-      <Group><Btn size="row" type="submit" kind="primary" loading={m.isPending} disabled={!f.pw || mismatch || f.again === "" || (has && !f.current)}>{has ? t("Cambiar contraseña") : t("Definir contraseña")}</Btn></Group>
+      <Group><Btn size="row" type="submit" kind="primary" loading={m.isPending} disabled={!pair.ok || (has && !current)}>{has ? t("Cambiar contraseña") : t("Definir contraseña")}</Btn>
+        <Missing items={[has && !current && t("la contraseña actual"), pair.missing]} /></Group>
     </Form>
   );
 }
