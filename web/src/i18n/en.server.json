@@ -258,6 +258,7 @@
  "nombre de relación inválido (letras, números y _)": "invalid relation name (letters, numbers and _)",
  "nombre inválido: PascalCase sin espacios (p. ej. Service)": "invalid name: PascalCase without spaces (e.g. Service)",
  "número de parte inválido": "invalid part number",
+ "orden inválido": "invalid sort order",
  "origen no permitido": "origin not allowed",
  "otro brain usa el mismo grafo; no se puede borrar": "another brain uses the same graph; it cannot be deleted",
  "otro brain ya usa ese grafo": "another brain already uses that graph",
