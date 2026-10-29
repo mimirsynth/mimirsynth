@@ -1,10 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode } from "../ui";
+import { Btn, Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "@falkordb/canvas";
 import { fmt, get, GLink, GNode, GraphData, Grouping, Overview } from "../api";
 import { T } from "../i18n";
 
@@ -30,8 +29,8 @@ export default function GraphPage({ graph }: { graph: string }) {
   const [withInvalid, setWithInvalid] = useState(true);
   const [useTime, setUseTime] = useState(false);
   const [day, setDay] = useState<number | null>(null);
-  const [layout, setLayout] = useState("force");
-  const [dim, setDim] = useState("2d");
+  const [layout, setLayout] = useState<Layout>("force");
+  const [dim, setDim] = useState<"2d" | "3d">("2d");
   const [paused, setPaused] = useState(false);
   const [extra, setExtra] = useState<GraphData[]>([]);
   const [sel, setSel] = useState<GNode | null>(null);
@@ -47,19 +46,21 @@ export default function GraphPage({ graph }: { graph: string }) {
   const [effects, setEffects] = useState<EffectsMode>(readEffects);
   const [effective, setEffective] = useState<Effects>("full");
   const [no3d, setNo3d] = useState(false);
+  const [slow3d, setSlow3d] = useState(false);
   const pickEffects = (v: EffectsMode) => { setEffects(v); try { localStorage.setItem(EFFECTS_KEY, v); } catch { /* sin almacenamiento: vale para esta visita */ } };
-  const pickDim = (v: string) => { if (v === "3d" && !hasWebGL()) { setNo3d(true); return; } setNo3d(false); setDim(v); };
+  const pickDim = (v: string) => { setSlow3d(false); if (v === "3d" && !hasWebGL()) { setNo3d(true); return; } setNo3d(false); setDim(v as "2d" | "3d"); };
+  const onSlow = useCallback(() => setSlow3d(true), []);
   useEffect(() => setHiddenOrigins(new Set()), [groupBy]);
-  const robustSeen = useRef(false);
-  useEffect(() => {  // al filtrar quedan pocos nodos: se encuadran (no en la primera carga)
-    if (robustSeen.current === (onlyRobust && groupBy !== "label")) return;
-    robustSeen.current = onlyRobust && groupBy !== "label";
-    requestAnimationFrame(() => gc.current?.fit(400));
-  }, [onlyRobust, groupBy]);
-  const cv = useRef<any>(null);  // <falkordb-canvas>: radial, árbol y 3D hasta que el renderer propio los tenga (#95, fase 5)
+  // al filtrar quedan pocos nodos y al cambiar los halos se recolocan: se encuadran de nuevo (no en la primera carga)
+  const viewKey = `${onlyRobust && groupBy !== "label"}|${groupBy}|${halosOn}|${[...hiddenOrigins].join(",")}`;
+  const seenKey = useRef(viewKey);
+  useEffect(() => {
+    if (seenKey.current === viewKey) return;
+    seenKey.current = viewKey;
+    requestAnimationFrame(() => gc.current?.fit(600));
+  }, [viewKey]);
   const gc = useRef<GraphCanvasHandle>(null);
-  const box = useRef<HTMLDivElement>(null);
-  const own = layout === "force" && dim === "2d";
+  const force = layout === "force";  // los halos solo tienen sentido en la disposición de fuerza (2D y 3D)
   const colorOf = useRef(new Map<string, string>());
   const color = (l?: string) => { const k = l ?? t("(sin tipo)"); if (!colorOf.current.has(k)) colorOf.current.set(k, PALETTE[colorOf.current.size % PALETTE.length]); return colorOf.current.get(k)!; };
 
@@ -106,7 +107,7 @@ export default function GraphPage({ graph }: { graph: string }) {
     if (rest) out.push({ key: OTHER, name: t("Otros"), count: rest, color: HALO_PALETTE[HALO_PALETTE.length - 1] });
     return out;
   }, [origins, originName, nodes, srcOf]); // eslint-disable-line react-hooks/exhaustive-deps
-  const halos = useMemo<CanvasHalo[]>(() => (halosOn ? legendOrigins.filter((o) => !hiddenOrigins.has(o.key)) : []), [halosOn, legendOrigins, hiddenOrigins]);
+  const halos = useMemo<CanvasHalo[]>(() => (halosOn && force ? legendOrigins.filter((o) => !hiddenOrigins.has(o.key)) : []), [halosOn, force, legendOrigins, hiddenOrigins]);
   const haloOf = useCallback((k: string) => (legendOrigins.some((o) => o.key === k) ? k : OTHER), [legendOrigins]);
 
   // la robustez cuenta orígenes de la procedencia: tener dos tipos de entidad no confirma nada (y los hechos no tienen tipo)
@@ -117,7 +118,7 @@ export default function GraphPage({ graph }: { graph: string }) {
     [hiddenLabels, minDeg, robust, backed]); // eslint-disable-line react-hooks/exhaustive-deps
   const linkVisible = useCallback((l: GLink) => !hiddenRels.has(l.name) && (!robust || backed(l)), [hiddenRels, robust, backed]);
 
-  // datos -> renderer propio (fuerza 2D); cambiar la visibilidad no recoloca
+  // datos -> lienzo (2D o 3D); cambiar la visibilidad no recoloca
   const cnodes = useMemo<CanvasNode[]>(() => {
     const shown = new Set(halos.map((h) => h.key));
     return nodes.map((n) => ({ id: n.uuid, color: color(n.labels[0]), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: n.name, visible: nodeVisible(n),
@@ -133,63 +134,15 @@ export default function GraphPage({ graph }: { graph: string }) {
   const pickLink = useCallback((lid: string) => { const o = links.find((x) => x.uuid === lid); if (o) { setSelLink(o); setSel(null); } }, [links]);
   const clearPick = useCallback(() => { setSel(null); setSelLink(null); }, []);
 
-  // datos -> <falkordb-canvas>
-  useEffect(() => {
-    const c = cv.current; if (!c) return;
-    const vis = new Set(nodes.filter(nodeVisible).map((n) => n.uuid));
-    c.setData({
-      nodes: nodes.map((n) => ({ id: n.uuid, labels: n.labels.length ? n.labels : [t("(sin tipo)")], color: color(n.labels[0]), visible: vis.has(n.uuid), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: "name", data: { name: n.name, summary: n.summary, degree: n.degree } })),
-      links: links.map((l) => ({ id: l.uuid, source: id(l.source), target: id(l.target), relationship: l.name, color: l.status === "invalidated" ? CANVAS.linkInvalid : CANVAS.link, visible: vis.has(id(l.source)) && vis.has(id(l.target)) && linkVisible(l), data: { fact: l.fact, status: l.status } })),
-    });
-  }, [nodes, links, own]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // visibilidad (leyenda / grado mínimo) sin recolocar
-  useEffect(() => {
-    const c = cv.current; const g = c?.getGraphData?.(); if (!g) return;
-    const byId = new Map(nodes.map((n) => [n.uuid, n])), byLink = new Map(links.map((l) => [l.uuid, l]));
-    g.nodes.forEach((n: any) => { const o = byId.get(String(n.id)); if (o) n.visible = nodeVisible(o); });
-    g.links.forEach((l: any) => { const s = byId.get(String(id(l.source))), t = byId.get(String(id(l.target))), o = byLink.get(String(l.id)); l.visible = !!s && !!t && nodeVisible(s) && nodeVisible(t) && (!o || linkVisible(o)); });
-    c.refresh?.();
-  }, [hiddenLabels, hiddenRels, minDeg, onlyRobust, groupBy, own]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // configuración + tamaño
   const expand = useCallback(async (nid: string) => {
     const g = await get<GraphData>("graph", { graph, node: nid, depth: 1, cap: 60, include_invalidated: withInvalid, as_of: asOf, group_by: "source" });
     setExtra((e) => [...e, g]);
   }, [graph, withInvalid, asOf]);
 
-  useEffect(() => {
-    const c = cv.current; if (!c) return;
-    c.setConfig({
-      backgroundColor: CANVAS.background, foregroundColor: CANVAS.foreground, captionsKeys: ["name"],
-      nodeStyle: { fontFamily: "sans-serif" }, linkStyle: { fontFamily: "sans-serif" },
-      isNodeSelected: (n: any) => n.id === sel?.uuid,
-      isLinkSelected: (l: any) => l.id === selLink?.uuid,
-      linkLineDash: (l: any) => (l.data?.status === "invalidated" ? [3, 3] : []),
-      eventHandlers: {
-        onNodeClick: (n: any) => { const o = nodes.find((x) => x.uuid === String(n.id)); if (o) { setSel(o); setSelLink(null); } },
-        onNodeRightClick: (n: any) => expand(String(n.id)),
-        onLinkClick: (l: any) => { const o = links.find((x) => x.uuid === String(l.id)); if (o) { setSelLink(o); setSel(null); } },
-        onBackgroundClick: () => { setSel(null); setSelLink(null); },
-      },
-    });
-    c.refresh?.();
-  }, [nodes, links, sel, selLink, expand, own]);
-
-  useEffect(() => { cv.current?.setLayout?.(layout); }, [layout, own]);
-  useEffect(() => { cv.current?.setDimension?.(dim)?.catch(() => setDim("2d")); }, [dim, own]);
-  useEffect(() => { cv.current?.setAnimation?.(!paused); }, [paused, own]);
-  useEffect(() => {
-    const el = box.current; if (!el) return;
-    const apply = () => { const r = el.getBoundingClientRect(); cv.current?.setWidth?.(Math.floor(r.width)); cv.current?.setHeight?.(Math.floor(r.height)); };
-    const ro = new ResizeObserver(apply); ro.observe(el); apply();
-    return () => ro.disconnect();
-  }, [own]);
-
   const doSearch = (q: string) => {
     setSearch(q); if (!q) return;
     const n = nodes.find((x) => x.name.toLowerCase().includes(q.toLowerCase()));
-    if (n) { setSel(n); setSelLink(null); if (own) gc.current?.fit(600, (x) => x === n.uuid); else cv.current?.zoomToFit?.(2, (x: any) => x.id === n.uuid); }
+    if (n) { setSel(n); setSelLink(null); gc.current?.fit(600, (x) => x === n.uuid); }
   };
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const s = new Set(set); s.has(k) ? s.delete(k) : s.add(k); setter(s); };
   const nodeFacts = sel ? links.filter((l) => id(l.source) === sel.uuid || id(l.target) === sel.uuid) : [];
@@ -203,24 +156,28 @@ export default function GraphPage({ graph }: { graph: string }) {
         <NumberField label={t("Saltos")} value={depth} min={0} max={2} onChange={(v) => setDepth(Number(v) || 0)} w={70} size="xs" />
         <NumberField label={t("Grado mín.")} value={minDeg} min={0} max={20} onChange={(v) => setMinDeg(Number(v) || 0)} w={85} size="xs" />
         <TextField label={t("Buscar nodo")} placeholder={t("Nextcloud…")} value={search} onChange={(e) => doSearch(e.currentTarget.value)} size="xs" w={170} />
-        <Segments size="xs" value={layout} onChange={setLayout} data={[{ value: "force", label: t("Fuerza") }, { value: "radial", label: t("Radial") }, { value: "tree", label: t("Árbol") }]} />
+        <Segments size="xs" value={layout} onChange={(v) => setLayout(v as Layout)} data={[{ value: "force", label: t("Fuerza") }, { value: "radial", label: t("Radial") }, { value: "tree", label: t("Árbol") }]} />
         <Segments size="xs" value={dim} onChange={pickDim} data={["2d", "3d"]} />
         <SelectField label={t("Agrupar por")} value={groupBy} onChange={(v) => v && setGroupBy(v as Grouping)} allowDeselect={false} w={160}
           data={GROUPINGS.map(([v, l]) => ({ value: v, label: t(l) }))} />
         <SelectField label={t("Efectos gráficos")} value={effects} onChange={(v) => v && pickEffects(v as EffectsMode)} allowDeselect={false} w={190}
           data={[{ value: "auto", label: effects === "auto" && effective === "reduced" ? t("Automático (reducido)") : t("Automático") }, { value: "full", label: t("Completo") }, { value: "reduced", label: t("Reducido") }]} />
-        <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} onClick={() => setPaused(!paused)} />
+        <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} disabled={!force} onClick={() => setPaused(!paused)} />
         <IconButton icon="undo" label={t("Deshacer última expansión")} disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
         <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
-        <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const cn = own ? null : cv.current?.shadowRoot?.querySelector("canvas") ?? cv.current?.querySelector?.("canvas"); const png = own ? gc.current?.toPng() : cn?.toDataURL("image/png"); if (png) { const a = document.createElement("a"); a.href = png; a.download = "grafo.png"; a.click(); } }} />
-        <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => (own ? gc.current?.fit(400) : cv.current?.zoomToFit?.(1))} />
+        <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const png = gc.current?.toPng(); if (png) { const a = document.createElement("a"); a.href = png; a.download = "grafo.png"; a.click(); } }} />
+        <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => gc.current?.fit(400)} />
         <Check size="xs" label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
         <Check size="xs" label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
-        <Check size="xs" label={t("Halos por origen")} checked={halosOn && own} disabled={!own} onChange={(e) => setHalosOn(e.currentTarget.checked)} />
+        <Check size="xs" label={t("Halos por origen")} checked={halosOn && force} disabled={!force} title={force ? undefined : t("Los halos solo se dibujan en la disposición de fuerza.")} onChange={(e) => setHalosOn(e.currentTarget.checked)} />
         <Check size="xs" label={t("Solo confirmados por 2 o más orígenes")} checked={robust} disabled={!robustness} onChange={(e) => setOnlyRobust(e.currentTarget.checked)}
           title={robustness ? undefined : t("Con «Tipo de entidad» no hay orígenes que contar: elige otra agrupación.")} />
       </Group>
       {no3d && <Notice tone="warn" p="xs">{t("Este navegador no tiene WebGL, así que la vista 3D no está disponible. El grafo sigue en 2D.")}</Notice>}
+      {slow3d && dim === "3d" && (
+        <Notice tone="warn" p="xs">
+          <Group gap="sm" justify="space-between">{t("El 3D va lento en este equipo, incluso con los efectos reducidos. La vista 2D muestra lo mismo.")}<Btn size="row" onClick={() => pickDim("2d")}>{t("Volver a 2D")}</Btn></Group>
+        </Notice>)}
       {useTime && day !== null && (
         <Group gap="md" wrap="nowrap">
           <Text size="xs" w={190}>{t("Qué sabíamos el {{date}}", { date: fmt(new Date(t0 + day * DAY).toISOString()).split(",")[0] })}</Text>
@@ -228,13 +185,12 @@ export default function GraphPage({ graph }: { graph: string }) {
         </Group>
       )}
       <SplitView main={<>
-        <div ref={box} className="ms-canvas">
-          {own
-            ? <GraphCanvas ref={gc} nodes={cnodes} links={clinks} halos={halos} effects={effects} onEffects={setEffective} busy={base.isFetching ? t("Calculando el grafo…") : undefined} selectedNode={sel?.uuid} selectedLink={selLink?.uuid} paused={paused}
-                onNodeClick={pickNode} onNodeContextMenu={expand} onLinkClick={pickLink} onBackgroundClick={clearPick} />
-            : <falkordb-canvas ref={cv} />}
+        <div className="ms-canvas">
+          <GraphCanvas ref={gc} nodes={cnodes} links={clinks} halos={halos} dim={dim} layout={layout} root={nodo || undefined} effects={effects} onEffects={setEffective} onSlow={onSlow}
+            busy={base.isFetching ? t("Calculando el grafo…") : undefined} selectedNode={sel?.uuid} selectedLink={selLink?.uuid} paused={paused}
+            onNodeClick={pickNode} onNodeContextMenu={expand} onLinkClick={pickLink} onBackgroundClick={clearPick} />
           <Legend open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)}>
-            {own && halosOn && legendOrigins.length > 0 && <>
+            {force && halosOn && legendOrigins.length > 0 && <>
               <LegendSection>{t("Orígenes")}</LegendSection>
               {legendOrigins.map((o) => <LegendItem key={o.key} label={o.name} count={o.count} dot={o.color} off={hiddenOrigins.has(o.key)} onClick={() => toggle(hiddenOrigins, setHiddenOrigins, o.key)} />)}
             </>}

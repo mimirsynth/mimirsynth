@@ -4,27 +4,11 @@ import { quadtree } from "d3-quadtree";
 import { select } from "d3-selection";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { CANVAS } from "../palette";
+import { anchorOrder, hash, placeLayout, type Layout } from "./layouts";
+import { CHARGE, CHARGE_WITH_HALOS, DIM, ease, ENTER_MS, FOLLOW_MS, LINK, LINK_WITH_HALOS, MAX_LABELS, MAX_LABELS_REDUCED, MORPH_MS, PULL, PULL_NONE, SLOW_FRAMES, SLOW_MS,
+  type Effects, type EffectsMode, type GraphRenderer, type RendererEvents, type RHalo, type RLink, type RNode } from "./types";
 
-/** Lo que el renderer necesita de cada nodo y arista; el resto de la pantalla no ve d3 ni el canvas. */
-/** `groups`: claves de los halos (orígenes) a los que pertenece el nodo; `ring`: respaldado por 2 o más orígenes. */
-export type RNode = { id: string; color: string; size: number; caption: string; visible: boolean; groups?: string[]; ring?: boolean; tooltip?: string };
-/** `strong`: hecho respaldado por 2 o más orígenes (se dibuja más grueso). */
-export type RLink = { id: string; source: string; target: string; label: string; color: string; dashed: boolean; visible: boolean; strong?: boolean };
-/** Halo de un origen: envuelve a sus nodos y los atrae hacia su ancla. El orden es el de la leyenda. */
-export type RHalo = { key: string; name: string; color: string };
-/** Efectos gráficos: «full» con todo; «reduced» sin entrada animada, partículas ni minimapa y con menos textos (los halos se quedan). */
-export type Effects = "full" | "reduced";
-export type EffectsMode = "auto" | Effects;
-export type RendererEvents = {
-  /** Nodo bajo el puntero (o null) y su posición en pantalla, para el tooltip. */
-  hover?: (id: string | null, x: number, y: number) => void;
-  /** Cambia el modo efectivo (en automático, al medir fotogramas lentos o con `prefers-reduced-motion`). */
-  effects?: (e: Effects) => void;
-  nodeClick?: (id: string) => void;
-  nodeContextMenu?: (id: string) => void;
-  linkClick?: (id: string) => void;
-  backgroundClick?: () => void;
-};
+export type { Effects, EffectsMode, RendererEvents, RHalo, RLink, RNode };
 
 type SNode = RNode & SimulationNodeDatum & { ax?: number; ay?: number; pull?: number };  // ancla: media de las de sus halos
 type SLink = Omit<RLink, "source" | "target"> & SimulationLinkDatum<SNode> & { source: SNode; target: SNode; bend: number };
@@ -34,30 +18,10 @@ const SETTLE_MS = 400;           // presupuesto para pre-asentar un grafo nuevo 
 const LABEL_ZOOM = 0.7;          // por debajo, las etiquetas de las aristas no se leen y solo ensucian
 const CAPTION_ZOOM = 0.45;
 const CLICK_SLOP = 4;            // píxeles que puede moverse el puntero y seguir siendo un clic
-const MAX_LABELS = 120;          // textos por fotograma: el texto con contorno es lo más caro de dibujar (sobre todo sin GPU)
-const MAX_LABELS_REDUCED = 60;
-const ENTER_MS = 450;            // entrada de un nodo nuevo: aparece y crece
-const SLOW_MS = 34;              // un fotograma más largo que esto (menos de ~30 fps) cuenta como lento…
-const SLOW_FRAMES = 45;          // …y tantos seguidos (unos 2 s de animación) bajan el modo automático a reducido
 const MINIMAP_MIN = 60;          // nodos visibles a partir de los que se muestra el minimapa
 const MINI_W = 150;
 const MINI_H = 110;
-const DIM = 0.15;                // opacidad de lo que queda fuera del foco
-const FOLLOW_MS = 4000;          // un encuadre sigue a la simulación como mucho este tiempo
 const HALO_PAD = 26;             // margen del halo alrededor de cada nodo
-const PULL = 0.15;               // fuerza hacia el ancla de los orígenes: alta para que un origen con pocos enlaces no se disperse
-const PULL_NONE = 0.04;
-const LINK = 0.3;
-const LINK_WITH_HALOS = 0.08;
-const CHARGE = -220;
-const CHARGE_WITH_HALOS = -90;  // con halos, la repulsión no debe deshacer los grupos
-
-/** Hash estable de un id → [0, 1): la posición inicial no depende del orden en que llegan los datos. */
-function hash(s: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  return ((h >>> 0) % 100000) / 100000;
-}
 
 function seed(n: SNode) {
   const a = hash(n.id) * Math.PI * 2, r = 40 + hash(n.id + "r") * 260;
@@ -80,7 +44,7 @@ function distToSegment(px: number, py: number, ax: number, ay: number, bx: numbe
 }
 
 /** Grafo de fuerzas sobre canvas 2D: d3-force para colocar, d3-zoom para mover y ampliar, quadtree para saber qué hay bajo el puntero. */
-export class ForceRenderer {
+export class ForceRenderer implements GraphRenderer {
   private ctx: CanvasRenderingContext2D;
   private nodes: SNode[] = [];
   private links: SLink[] = [];
@@ -111,6 +75,9 @@ export class ForceRenderer {
   private lastDraw = 0;
   private slow = 0;
   private mini: { x: number; y: number; ox: number; oy: number; s: number } | null = null;
+  private layout: Layout = "force";
+  private root: string | undefined;
+  private morph: { from: Map<string, [number, number]>; start: number } | null = null;
 
   constructor(private canvas: HTMLCanvasElement, private events: RendererEvents = {}) {
     this.ctx = canvas.getContext("2d")!;
@@ -193,6 +160,7 @@ export class ForceRenderer {
       return { ...l, source: this.byId.get(l.source)!, target: this.byId.get(l.target)!, bend: i ? dir * Math.ceil(i / 2) * (i % 2 ? 0.18 : -0.18) : 0 };
     });
     const reanchor = this.anchor();
+    if (sameTopo && this.layout !== "force") { this.request(); return; }
     if (sameTopo) {
       if (reanchor && this.still) this.settle(0.5);
       else if (reanchor && !this.paused) this.sim.alpha(Math.max(this.sim.alpha(), 0.5)).restart();  // otros halos: los nodos se recolocan animados
@@ -210,6 +178,11 @@ export class ForceRenderer {
     }
     this.sim.nodes(this.nodes);
     (this.sim.force("link") as any).links(this.links);
+    if (this.layout !== "force") {  // radial y árbol: posiciones calculadas, sin simulación; lo nuevo sale de su vecino
+      this.place(kept > 0);
+      if (!kept) this.fit(0);
+      return;
+    }
     if (!kept || this.still) {  // un grafo nuevo (o cualquiera, sin movimiento) se asienta antes de pintarlo
       this.settle(kept ? 0.4 : 1);
       if (!kept) this.fit(0);
@@ -235,18 +208,7 @@ export class ForceRenderer {
     this.anchorSig = sig;
     const pos = new Map<string, [number, number]>();
     if (keys.length) {
-      const shared = new Map<string, number>();
-      for (const n of this.nodes) {
-        const g = (n.groups ?? []).filter((k) => keys.includes(k));
-        for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) for (const k of [`${g[i]}|${g[j]}`, `${g[j]}|${g[i]}`]) shared.set(k, (shared.get(k) ?? 0) + 1);
-      }
-      const order = [keys[0]], left = keys.slice(1);
-      while (left.length) {  // cadena voraz: a continuación, el que más comparte con el último colocado
-        const last = order[order.length - 1];
-        let bi = 0;
-        left.forEach((k, i) => { if ((shared.get(`${last}|${k}`) ?? 0) > (shared.get(`${last}|${left[bi]}`) ?? 0)) bi = i; });
-        order.push(left.splice(bi, 1)[0]);
-      }
+      const order = anchorOrder(this.nodes, keys);
       const r = order.length === 1 ? 0 : 120 + 30 * Math.sqrt(this.nodes.length);
       order.forEach((k, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / order.length; pos.set(k, [Math.cos(a) * r, Math.sin(a) * r]); });
       const neutral: [number, number] = [0, r + 180];
@@ -263,6 +225,37 @@ export class ForceRenderer {
     return true;
   }
 
+  /** Disposición: fuerza (simulación con anclas por origen) o radial / árbol (posiciones calculadas). `root` fija la raíz de las dos últimas. */
+  setLayout(layout: Layout, root?: string) {
+    if (layout === this.layout && root === this.root) return;
+    const was = this.layout;
+    this.layout = layout; this.root = root;
+    if (!this.nodes.length) return;
+    if (layout === "force") {
+      for (const n of this.nodes) { n.fx = null; n.fy = null; }
+      if (this.still) this.settle(0.6); else if (!this.paused) this.sim.alpha(0.6).restart();
+    } else this.place(true);
+    if (was !== layout) this.fit(this.still ? 0 : MORPH_MS + 200);
+  }
+
+  /** Radial o árbol: fija cada nodo en su sitio; si `animate`, viaja desde donde estaba. */
+  private place(animate: boolean) {
+    this.sim.stop().alpha(0);
+    const pos = placeLayout(this.layout, this.nodes, this.links.map((l) => ({ source: l.source.id, target: l.target.id })), this.root);
+    const from = new Map<string, [number, number]>();
+    for (const n of this.nodes) {
+      const p = pos.get(n.id)!;
+      if (n.x !== undefined) from.set(n.id, [n.x, n.y!]);
+      n.fx = p.x; n.fy = p.y; n.vx = 0; n.vy = 0;
+      if (n.x === undefined || !animate || this.still) { n.x = p.x; n.y = p.y; }
+    }
+    this.morph = animate && !this.still ? { from, start: performance.now() } : null;
+    this.request();
+  }
+
+  /** Algo se está moviendo (simulación o cambio de disposición): un encuadre en curso lo sigue. */
+  private moving() { return this.layout === "force" ? !this.paused && this.sim.alpha() > 0.03 : !!this.morph; }
+
   setSelection(node: string | null, link: string | null) {
     if (node === this.selectedNode && link === this.selectedLink) return;
     this.selectedNode = node; this.selectedLink = link; this.request();
@@ -270,6 +263,7 @@ export class ForceRenderer {
 
   setPaused(p: boolean) {
     this.paused = p;
+    if (this.layout !== "force") return;
     if (p || this.still) this.sim.stop(); else this.sim.alpha(Math.max(this.sim.alpha(), 0.1)).restart();
   }
 
@@ -338,9 +332,10 @@ export class ForceRenderer {
     if (this.drag) {
       const d = this.drag;
       if (!d.moved && Math.hypot(ev.offsetX - d.x0, ev.offsetY - d.y0) < CLICK_SLOP) return;
-      if (!d.moved) { d.moved = true; if (!this.paused) this.sim.alphaTarget(0.3).restart(); }
+      const sim = this.layout === "force" && !this.paused;
+      if (!d.moved) { d.moved = true; if (sim) this.sim.alphaTarget(0.3).restart(); }
       [d.node.fx, d.node.fy] = this.toWorld(ev.offsetX, ev.offsetY);
-      if (this.paused) { d.node.x = d.node.fx; d.node.y = d.node.fy; }
+      if (!sim) { d.node.x = d.node.fx; d.node.y = d.node.fy; }
       this.request();
       return;
     }
@@ -363,7 +358,7 @@ export class ForceRenderer {
     this.drag = null; this.down = null;
     if (d) {
       if (this.canvas.hasPointerCapture(ev.pointerId)) this.canvas.releasePointerCapture(ev.pointerId);
-      if (d.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); return; }
+      if (d.moved) { this.release(d.node); return; }
       this.events.nodeClick?.(d.node.id);
       return;
     }
@@ -375,7 +370,13 @@ export class ForceRenderer {
   private endDrag() {
     const d = this.drag;
     this.drag = null; this.down = null;
-    if (d?.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); }
+    if (d?.moved) this.release(d.node);
+  }
+
+  /** Fin de un arrastre: en fuerza el nodo vuelve a la simulación; en radial y árbol se queda donde se soltó. */
+  private release(n: SNode) {
+    if (this.layout !== "force") return;
+    n.fx = null; n.fy = null; this.sim.alphaTarget(0);
   }
 
   private inMini(x: number, y: number) { const m = this.mini; return !!m && x >= m.x && x <= m.x + MINI_W && y >= m.y && y <= m.y + MINI_H; }
@@ -392,12 +393,11 @@ export class ForceRenderer {
     if (this.still) ms = 0;
     if (ms <= 0) { this.zoomer.transform(sel, goal()); return; }
     const from = this.t, start = performance.now();
-    const ease = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
     const step = (now: number) => {
       const p = ease(Math.min(1, (now - start) / ms)), target = goal();
       const k = from.k * Math.pow(target.k / from.k, p);
       this.zoomer.transform(sel, zoomIdentity.translate(from.x + (target.x - from.x) * p, from.y + (target.y - from.y) * p).scale(k));
-      if (p < 1 || (!this.paused && this.sim.alpha() > 0.03 && now - start < FOLLOW_MS)) this.anim = requestAnimationFrame(step);  // sigue al nodo mientras la simulación lo mueva
+      if (p < 1 || (this.moving() && now - start < FOLLOW_MS)) this.anim = requestAnimationFrame(step);  // sigue al nodo mientras la simulación lo mueva
     };
     this.anim = requestAnimationFrame(step);
   }
@@ -415,6 +415,11 @@ export class ForceRenderer {
     this.measure(now);
     const full = this.effective === "full";
     let animating = false;
+    if (this.morph) {  // cambio de disposición: de donde estaba a su sitio nuevo
+      const p = Math.min(1, (now - this.morph.start) / MORPH_MS), e = ease(p);
+      for (const n of this.nodes) { const f = this.morph.from.get(n.id); if (f && n.fx != null) { n.x = f[0] + (n.fx - f[0]) * e; n.y = f[1] + (n.fy! - f[1]) * e; } }
+      if (p >= 1) this.morph = null; else animating = true;
+    }
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = CANVAS.background;
     ctx.fillRect(0, 0, this.w, this.h);
@@ -427,11 +432,11 @@ export class ForceRenderer {
 
     // foco: el nodo señalado (o el seleccionado) y su vecindario; lo demás se atenúa, halos incluidos
     const hoverNode = this.hover && this.byId.has(this.hover) ? this.hover : null;
-    const focusId = hoverNode ?? this.selectedNode;
+    const focusId = [hoverNode, this.selectedNode].find((id) => id && this.byId.get(id)?.visible) ?? null;  // un nodo oculto por un filtro no hace de foco
     const near = new Set<string>();
     if (focusId) { near.add(focusId); for (const l of links) if (l.source.id === focusId || l.target.id === focusId) { near.add(l.source.id); near.add(l.target.id); } }
     const touches = (l: SLink) => !focusId || l.source.id === focusId || l.target.id === focusId;
-    this.drawHalos(px, focusId ? 0.35 : 1);
+    if (this.layout === "force") this.drawHalos(px, focusId ? 0.35 : 1);
 
     // aristas, agrupadas por estilo para trazar cada grupo de una vez
     const groups = new Map<string, SLink[]>();
@@ -584,6 +589,7 @@ export class ForceRenderer {
   /** Zona translúcida del color de cada origen alrededor de sus nodos visibles (envolvente convexa suavizada), con su nombre y recuento. */
   private drawHalos(px: number, fade: number) {
     const { ctx } = this;
+    const placed: [number, number, number][] = [];  // rótulos ya puestos (centro y ancho en pantalla): dos halos con la misma cima no se pisan
     for (const h of this.halos) {
       const ns = this.nodes.filter((n) => n.visible && n.x !== undefined && n.groups?.includes(h.key));
       if (ns.length < 2) continue;
@@ -602,8 +608,13 @@ export class ForceRenderer {
       ctx.globalAlpha = fade;
       const top = hull.reduce((a, b) => (b[1] < a[1] ? b : a));  // nombre sobre la corona del halo, a tamaño de pantalla constante
       const label = `${h.name.length > 22 ? h.name.slice(0, 21) + "…" : h.name} · ${ns.length}`;
-      ctx.save(); ctx.translate(top[0], top[1] - 4 * px); ctx.scale(px, px);
-      ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.font = FONT;
+      const lw = ctx.measureText(label).width, [sx, sy0] = this.t.apply(top);
+      let sy = sy0 - 4;
+      while (placed.some(([x, y, w]) => Math.abs(x - sx) < (w + lw) / 2 + 4 && Math.abs(y - sy) < 14)) sy -= 14;
+      placed.push([sx, sy, lw]);
+      ctx.save(); ctx.translate(top[0], top[1] + (sy - sy0) * px); ctx.scale(px, px);
+      ctx.textAlign = "center"; ctx.textBaseline = "bottom";
       ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(label, 0, 0);
       ctx.fillStyle = h.color; ctx.fillText(label, 0, 0);
       ctx.restore();
