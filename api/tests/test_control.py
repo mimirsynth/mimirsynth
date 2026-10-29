@@ -334,8 +334,28 @@ def test_ai_status(client, monkeypatch):
     assert set(s) == {"llm", "embedding", "decider"} and "healthy" not in s["llm"]  # sin check no se sondea nada
     client.post("/api/llm-engines", json={"name": "estado", "base_url": "http://g/v1", "model": "m"})  # la BD de tests se comparte: ya puede haber un motor por defecto
     monkeypatch.setattr(aistatus, "_llm_ping", lambda *a: (_ for _ in ()).throw(RuntimeError("401")))
+    monkeypatch.setattr(aistatus, "_probe", lambda *a: 768)
     s = client.get("/api/ai-status?check=true").json()
     assert s["llm"]["configured"] and s["llm"]["source"] == "db" and s["llm"]["healthy"] is False and "401" in s["llm"]["error"]
+    assert s["llm"]["model"] and isinstance(s["llm"]["ms"], int) and s["embedding"]["healthy"] is True
+
+
+def test_ai_status_checks_env_engines(client, monkeypatch):
+    """#78: sin motor en la BD, «Comprobar» sondea el LLM y los embeddings de las variables de entorno."""
+    from mimirsynth import aistatus
+    monkeypatch.setattr(aistatus, "default_engine", lambda db: None)
+    monkeypatch.setattr(aistatus, "default_embedding", lambda db: None)
+    monkeypatch.setattr(aistatus.settings, "llm_base_url", "http://env-llm/v1")
+    monkeypatch.setattr(aistatus.settings, "llm_model", "env-model")
+    monkeypatch.setattr(aistatus.settings, "llm_api_key", "k")
+    pinged = []
+    monkeypatch.setattr(aistatus, "_llm_ping", lambda *a: pinged.append(a))
+    monkeypatch.setattr(aistatus, "_probe", lambda *a: (_ for _ in ()).throw(RuntimeError("HTTP 404: modelo no encontrado")))
+    s = client.get("/api/ai-status?check=true").json()
+    assert pinged == [("http://env-llm/v1", "env-model", "k")]
+    assert s["llm"]["source"] == "env" and s["llm"]["healthy"] is True and s["llm"]["model"] == "env-model"
+    assert s["embedding"]["source"] == "env" and s["embedding"]["healthy"] is False and "404" in s["embedding"]["error"]
+    assert "healthy" not in client.get("/api/ai-status").json()["llm"]  # sin check sigue sin sondear
 
 
 def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
