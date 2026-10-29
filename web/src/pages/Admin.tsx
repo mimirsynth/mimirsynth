@@ -1,4 +1,4 @@
-import { T } from "../i18n";
+import { locale, T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
@@ -161,19 +161,32 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   );
 }
 
-type AiSt = { configured: boolean; source: string | null; name: string | null; healthy?: boolean; error?: string };
+type AiSt = { configured: boolean; source: string | null; name: string | null; healthy?: boolean; error?: string; model?: string; ms?: number };
 function AiStatus({ kind }: { kind: "llm" | "embedding" | "decision" }) {
   const { t } = useTranslation();
   const st = useQuery({ queryKey: ["ai-status", "check"], queryFn: () => get<Record<string, AiSt>>("ai-status", { check: true }), refetchOnWindowFocus: false });
   const k = kind === "decision" ? "decider" : kind;
   const e = st.data?.[k];
+  const env = e?.source === "env";
   const tone: Tone = !e ? "neutral" : !e.configured ? "neutral" : e.healthy === undefined ? (k === "embedding" ? "neutral" : "warn") : e.healthy ? "success" : "danger";
-  const text = !e ? t("comprobando…") : !e.configured ? t("sin configurar") : e.healthy === undefined ? (e.source === "env" ? t("por variables de entorno") : t("configurado")) : e.healthy ? `OK · ${e.name ?? e.source}` : t("caído · {{error}}", { error: e.error ?? "" });
+  const text = !e ? t("comprobando…") : !e.configured ? t("sin configurar") : e.healthy === undefined ? (env ? t("por variables de entorno") : t("configurado")) : `${e.healthy ? "OK" : t("caído")} · ${env ? t("variables de entorno") : e.name}`;
+  const at = new Date(st.dataUpdatedAt).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  // El resultado se queda a la vista hasta la siguiente comprobación: un aviso efímero no da tiempo a leerlo (#78).
+  const result = st.isFetching ? <Text size="xs" c="dimmed">{t("Comprobando la conexión con el proveedor…")}</Text>
+    : e?.healthy !== undefined && <Text size="xs"><Text span className={e.healthy ? "ms-text-ok" : "ms-text-danger"}>{e.healthy ? t("Responde · {{model}} · {{ms}} ms", { model: e.model, ms: e.ms }) : t("Error con {{model}}: {{error}}", { model: e.model, error: e.error })}</Text>
+      <Text span c="dimmed">{" · "}{t("comprobado a las {{at}}", { at })}</Text></Text>;
+  const envHelp = k === "llm" ? t("Se usan las variables MIMIRSYNTH_LLM_* del .env (cambiarlas exige reiniciar la API). Si añades un motor aquí, tiene prioridad sobre ellas.")
+    : t("Se usan las variables MIMIRSYNTH_EMBEDDING_* del .env (cambiarlas exige reiniciar la API). Si añades un motor aquí, tiene prioridad sobre ellas.");
   return (
-    <Group gap="xs">
-      <Pill tone={tone} size="md">{t("Estado")}: {text}</Pill>
-      <Btn size="row" loading={st.isFetching} onClick={() => st.refetch()} icon="refresh">{t("Comprobar")}</Btn>
-    </Group>
+    <Stack gap={4}>
+      <Group gap="xs">
+        <Pill tone={tone} size="md">{t("Estado")}: {text}</Pill>
+        <Btn size="row" loading={st.isFetching} onClick={() => st.refetch()} icon="refresh">{t("Comprobar")}</Btn>
+        {result}
+      </Group>
+      {env && <Text size="xs" c="dimmed">{envHelp}</Text>}
+      <MutationError error={st.error} />
+    </Stack>
   );
 }
 
