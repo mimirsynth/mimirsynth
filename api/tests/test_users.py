@@ -162,6 +162,17 @@ def test_totp_rfc_vector_and_replay():
     assert totp.verify(secret, "12345", now=59) is None
 
 
+def test_password_sequences_wrap_around(monkeypatch):
+    """#91: una escalera de dígitos de 12 siempre da la vuelta (…8901…); también cuenta como secuencia."""
+    from mimirsynth import appsettings, passwords
+    monkeypatch.setattr(appsettings, "get", lambda k: 12)
+    seq = "es una secuencia (abcdef, 123456…)"
+    for pw in ("abcdefghijkl", "987654321098", "012345678901", "567890123456", "zabcdefghijk", "cbazyxwvutsr"):
+        assert passwords.check_policy(pw) == seq, pw
+    for pw in ("Correcto-Caballo-9", "0123456789ab", "1357913579135"):  # mezcla de alfabetos o saltos de 2: no es escalera
+        assert passwords.check_policy(pw) != seq, pw
+
+
 def test_two_factor_enrol_login_recovery_required_and_reset(client, local):  # noqa: F811
     from mimirsynth import mfa, passwords
     from mimirsynth.models import RecoveryCode

@@ -4,11 +4,19 @@ import { tr } from "./i18n";
 // El servidor sigue siendo quien decide; si se cambia una regla allí, hay que cambiarla aquí.
 const COMMON = new Set(["password", "contraseña", "contrasena", "123456789012", "qwertyuiopas", "mimirsynth", "administrador", "letmein", "welcome"]);
 
+const ALPHABETS = ["0123456789", "abcdefghijklmnopqrstuvwxyz"];
+
+/** Escalera de caracteres consecutivos; en dígitos y letras puede dar la vuelta (…8901…, …yzab…). */
 function isSequence(low: string) {
   if (low.length < 6) return false;
   const d = new Set<number>();
   for (let i = 0; i < low.length - 1; i++) d.add(low.charCodeAt(i + 1) - low.charCodeAt(i));
-  return d.size === 1 && (d.has(1) || d.has(-1));
+  if (d.size === 1 && (d.has(1) || d.has(-1))) return true;
+  const alpha = ALPHABETS.find((a) => [...low].every((c) => a.includes(c)));
+  if (!alpha) return false;
+  const n = alpha.length; const w = new Set<number>();
+  for (let i = 0; i < low.length - 1; i++) w.add((alpha.indexOf(low[i + 1]) - alpha.indexOf(low[i]) + n) % n);
+  return w.size === 1 && (w.has(1) || w.has(n - 1));
 }
 
 export type Rule = { label: string; ok: boolean };

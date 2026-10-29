@@ -48,9 +48,22 @@ def check_policy(pw: str, email: str = "", name: str = "") -> str | None:
     return None
 
 
+_ALPHABETS = ("0123456789", "abcdefghijklmnopqrstuvwxyz")
+
+
 def _is_sequence(low: str) -> bool:
-    """Toda la contraseña es una escalera de caracteres consecutivos (abcdefghijkl, 987654321098)."""
+    """Toda la contraseña es una escalera de caracteres consecutivos (abcdefghijkl, 987654321098).
+
+    En dígitos y letras la escalera puede dar la vuelta (…8901…, …yzab…): con 12 caracteres, una de dígitos siempre la da (#91).
+    """
     if len(low) < 6:
         return False
     d = {ord(low[i + 1]) - ord(low[i]) for i in range(len(low) - 1)}
-    return d <= {1} or d <= {-1}
+    if d <= {1} or d <= {-1}:
+        return True
+    for alpha in _ALPHABETS:
+        if all(c in alpha for c in low):
+            n = len(alpha)
+            d = {(alpha.index(low[i + 1]) - alpha.index(low[i])) % n for i in range(len(low) - 1)}
+            return d == {1} or d == {n - 1}
+    return False
