@@ -10,9 +10,12 @@ export type Episode = {
   uuid: string; name: string; source: string; description: string; created_at: string; valid_at: string;
   snippet?: string; content?: string; facts: number | Fact[];
 };
-export type GNode = { uuid: string; name: string; labels: string[]; summary: string; degree: number; x?: number; y?: number };
-export type GLink = { uuid: string; name: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; source: any; target: any };
-export type GraphData = { nodes: GNode[]; links: GLink[]; truncated: boolean };
+/** Agrupaciones de la procedencia (`GET …/graph?group_by=`): claves de origen como «source:message» o «document:12». */
+export type Grouping = "source" | "document" | "author" | "token" | "label";
+export type Provenance = Record<Grouping, string[]>;
+export type GNode = { uuid: string; name: string; labels: string[]; summary: string; degree: number; x?: number; y?: number; provenance?: Provenance };
+export type GLink = { uuid: string; name: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; source: any; target: any; provenance?: Provenance };
+export type GraphData = { nodes: GNode[]; links: GLink[]; truncated: boolean; groups?: Record<Grouping, { key: string; name: string; nodes: number; facts: number }[]> };
 export type Overview = {
   entities: number; episodes: number; facts_total: number; facts_invalidated: number; communities: number;
   by_label: { label: string; count: number }[]; last_episode: { name: string; created_at: string } | null; first_episode_at: string | null;
