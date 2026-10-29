@@ -28,7 +28,10 @@ def needs_rehash(hashed: str) -> bool:
 
 
 def check_policy(pw: str, email: str = "", name: str = "") -> str | None:
-    """Devuelve el motivo por el que la contraseña no vale, o None."""
+    """Devuelve el motivo por el que la contraseña no vale, o None.
+
+    La interfaz enseña estas reglas antes de enviar con un espejo en `web/src/passwordPolicy.ts`: si cambias una, cámbiala allí también.
+    """
     n = int(appsettings.get("password_min_length"))
     if len(pw) < n:
         return f"debe tener al menos {n} caracteres"
