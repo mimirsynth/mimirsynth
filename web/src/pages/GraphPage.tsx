@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, Slider, TextField, NODE_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem } from "../ui";
+import { Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, Slider, TextField, NODE_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, type GraphCanvasHandle, type CanvasNode, type CanvasLink } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -33,8 +33,10 @@ export default function GraphPage({ graph }: { graph: string }) {
   const [hiddenRels, setHiddenRels] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [legendOpen, setLegendOpen] = useState(() => window.innerWidth > 1000);
-  const cv = useRef<any>(null);
+  const cv = useRef<any>(null);  // <falkordb-canvas>: radial, árbol y 3D hasta que el renderer propio los tenga (#95, fase 5)
+  const gc = useRef<GraphCanvasHandle>(null);
   const box = useRef<HTMLDivElement>(null);
+  const own = layout === "force" && dim === "2d";
   const colorOf = useRef(new Map<string, string>());
   const color = (l?: string) => { const k = l ?? t("(sin tipo)"); if (!colorOf.current.has(k)) colorOf.current.set(k, PALETTE[colorOf.current.size % PALETTE.length]); return colorOf.current.get(k)!; };
 
@@ -48,7 +50,7 @@ export default function GraphPage({ graph }: { graph: string }) {
     queryKey: ["graph", graph, seeds, depth, withInvalid, asOf, nodo],
     queryFn: () => get<GraphData>("graph", { graph, seeds, depth: nodo ? Math.max(depth, 1) : depth, cap: 120, include_invalidated: withInvalid, as_of: asOf, node: nodo }),
   });
-  useEffect(() => { if (nodo && base.data) { const n = base.data.nodes.find((x) => x.uuid === nodo); if (n) setSel(n); } }, [nodo, base.data]);
+  useEffect(() => { if (nodo && base.data) { const n = base.data.nodes.find((x) => x.uuid === nodo); if (n) { setSel(n); requestAnimationFrame(() => gc.current?.fit(600, (x) => x === nodo)); } } }, [nodo, base.data]);
   const mentions = useQuery({ queryKey: ["entity-docs", graph, sel?.uuid], enabled: !!sel, staleTime: 60_000,
     queryFn: () => get<{ documents: { document_id: number; title: string; snippet: string; chunks: number }[] }>("docs/mentions", { graph, entity: sel!.uuid }) });
 
@@ -63,7 +65,19 @@ export default function GraphPage({ graph }: { graph: string }) {
 
   const nodeVisible = useCallback((n: GNode) => !hiddenLabels.has(n.labels[0] ?? t("(sin tipo)")) && (n.degree ?? 0) >= minDeg, [hiddenLabels, minDeg]);
 
-  // datos -> canvas
+  // datos -> renderer propio (fuerza 2D); cambiar la visibilidad no recoloca
+  const cnodes = useMemo<CanvasNode[]>(() => nodes.map((n) => ({ id: n.uuid, color: color(n.labels[0]), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: n.name, visible: nodeVisible(n) })),
+    [nodes, nodeVisible]); // eslint-disable-line react-hooks/exhaustive-deps
+  const clinks = useMemo<CanvasLink[]>(() => {
+    const vis = new Set(cnodes.filter((n) => n.visible).map((n) => n.id));
+    return links.map((l) => ({ id: l.uuid, source: id(l.source), target: id(l.target), label: l.name, color: l.status === "invalidated" ? CANVAS.linkInvalid : CANVAS.link,
+      dashed: l.status === "invalidated", visible: vis.has(id(l.source)) && vis.has(id(l.target)) && !hiddenRels.has(l.name) }));
+  }, [links, cnodes, hiddenRels]);
+  const pickNode = useCallback((nid: string) => { const o = nodes.find((x) => x.uuid === nid); if (o) { setSel(o); setSelLink(null); } }, [nodes]);
+  const pickLink = useCallback((lid: string) => { const o = links.find((x) => x.uuid === lid); if (o) { setSelLink(o); setSel(null); } }, [links]);
+  const clearPick = useCallback(() => { setSel(null); setSelLink(null); }, []);
+
+  // datos -> <falkordb-canvas>
   useEffect(() => {
     const c = cv.current; if (!c) return;
     const vis = new Set(nodes.filter(nodeVisible).map((n) => n.uuid));
@@ -71,7 +85,7 @@ export default function GraphPage({ graph }: { graph: string }) {
       nodes: nodes.map((n) => ({ id: n.uuid, labels: n.labels.length ? n.labels : [t("(sin tipo)")], color: color(n.labels[0]), visible: vis.has(n.uuid), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: "name", data: { name: n.name, summary: n.summary, degree: n.degree } })),
       links: links.map((l) => ({ id: l.uuid, source: id(l.source), target: id(l.target), relationship: l.name, color: l.status === "invalidated" ? CANVAS.linkInvalid : CANVAS.link, visible: vis.has(id(l.source)) && vis.has(id(l.target)) && !hiddenRels.has(l.name), data: { fact: l.fact, status: l.status } })),
     });
-  }, [nodes, links]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [nodes, links, own]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // visibilidad (leyenda / grado mínimo) sin recolocar
   useEffect(() => {
@@ -80,7 +94,7 @@ export default function GraphPage({ graph }: { graph: string }) {
     g.nodes.forEach((n: any) => { const o = byId.get(String(n.id)); if (o) n.visible = nodeVisible(o); });
     g.links.forEach((l: any) => { const s = byId.get(String(id(l.source))), t = byId.get(String(id(l.target))); l.visible = !!s && !!t && nodeVisible(s) && nodeVisible(t) && !hiddenRels.has(l.relationship); });
     c.refresh?.();
-  }, [hiddenLabels, hiddenRels, minDeg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hiddenLabels, hiddenRels, minDeg, own]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // configuración + tamaño
   const expand = useCallback(async (nid: string) => {
@@ -104,22 +118,22 @@ export default function GraphPage({ graph }: { graph: string }) {
       },
     });
     c.refresh?.();
-  }, [nodes, links, sel, selLink, expand]);
+  }, [nodes, links, sel, selLink, expand, own]);
 
-  useEffect(() => { cv.current?.setLayout?.(layout); }, [layout]);
-  useEffect(() => { cv.current?.setDimension?.(dim).catch(() => setDim("2d")); }, [dim]);
-  useEffect(() => { cv.current?.setAnimation?.(!paused); }, [paused]);
+  useEffect(() => { cv.current?.setLayout?.(layout); }, [layout, own]);
+  useEffect(() => { cv.current?.setDimension?.(dim)?.catch(() => setDim("2d")); }, [dim, own]);
+  useEffect(() => { cv.current?.setAnimation?.(!paused); }, [paused, own]);
   useEffect(() => {
     const el = box.current; if (!el) return;
     const apply = () => { const r = el.getBoundingClientRect(); cv.current?.setWidth?.(Math.floor(r.width)); cv.current?.setHeight?.(Math.floor(r.height)); };
     const ro = new ResizeObserver(apply); ro.observe(el); apply();
     return () => ro.disconnect();
-  }, []);
+  }, [own]);
 
   const doSearch = (q: string) => {
     setSearch(q); if (!q) return;
     const n = nodes.find((x) => x.name.toLowerCase().includes(q.toLowerCase()));
-    if (n) { setSel(n); setSelLink(null); cv.current?.zoomToFit?.(2, (x: any) => x.id === n.uuid); }
+    if (n) { setSel(n); setSelLink(null); if (own) gc.current?.fit(600, (x) => x === n.uuid); else cv.current?.zoomToFit?.(2, (x: any) => x.id === n.uuid); }
   };
   const toggle = (set: Set<string>, setter: (s: Set<string>) => void, k: string) => { const s = new Set(set); s.has(k) ? s.delete(k) : s.add(k); setter(s); };
   const nodeFacts = sel ? links.filter((l) => id(l.source) === sel.uuid || id(l.target) === sel.uuid) : [];
@@ -138,8 +152,8 @@ export default function GraphPage({ graph }: { graph: string }) {
         <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} onClick={() => setPaused(!paused)} />
         <IconButton icon="undo" label={t("Deshacer última expansión")} disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
         <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
-        <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const cn = cv.current?.shadowRoot?.querySelector("canvas") ?? cv.current?.querySelector?.("canvas"); if (cn) { const a = document.createElement("a"); a.href = cn.toDataURL("image/png"); a.download = "grafo.png"; a.click(); } }} />
-        <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => cv.current?.zoomToFit?.(1)} />
+        <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const cn = own ? null : cv.current?.shadowRoot?.querySelector("canvas") ?? cv.current?.querySelector?.("canvas"); const png = own ? gc.current?.toPng() : cn?.toDataURL("image/png"); if (png) { const a = document.createElement("a"); a.href = png; a.download = "grafo.png"; a.click(); } }} />
+        <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => (own ? gc.current?.fit(400) : cv.current?.zoomToFit?.(1))} />
         <Check size="xs" label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
         <Check size="xs" label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
       </Group>
@@ -151,7 +165,10 @@ export default function GraphPage({ graph }: { graph: string }) {
       )}
       <SplitView main={<>
         <div ref={box} className="ms-canvas">
-          <falkordb-canvas ref={cv} />
+          {own
+            ? <GraphCanvas ref={gc} nodes={cnodes} links={clinks} selectedNode={sel?.uuid} selectedLink={selLink?.uuid} paused={paused}
+                onNodeClick={pickNode} onNodeContextMenu={expand} onLinkClick={pickLink} onBackgroundClick={clearPick} />
+            : <falkordb-canvas ref={cv} />}
           <Legend open={legendOpen} onToggle={() => setLegendOpen(!legendOpen)}>
             <LegendSection>{t("Tipos")}</LegendSection>
             {legendLabels.map(([l, n]) => <LegendItem key={l} label={l} count={n} dot={color(l === t("(sin tipo)") ? undefined : l)} off={hiddenLabels.has(l)} onClick={() => toggle(hiddenLabels, setHiddenLabels, l)} />)}
