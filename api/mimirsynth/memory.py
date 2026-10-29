@@ -2,13 +2,14 @@
 import asyncio
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from . import appsettings, index
 from .config import settings
 from .deps import BrainCtx, audit, brain_access, hash_token, reader
+from .i18n import language
 from .models import ApiToken, Brain
 from .recall import recall
 from .roles import ROLES, rank
@@ -35,9 +36,10 @@ def federated_kwargs(ctx: BrainCtx, body: "RecallIn") -> dict:
 
 
 @router.post("/recall")
-def do_recall(body: RecallIn, ctx: BrainCtx = Depends(reader)):
+def do_recall(body: RecallIn, request: Request, ctx: BrainCtx = Depends(reader)):
     try:
-        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs, **federated_kwargs(ctx, body))
+        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs,
+                      lang=language(request), **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
 

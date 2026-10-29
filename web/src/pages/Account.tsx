@@ -6,7 +6,7 @@ import { Passkeys } from "./Passkeys";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { fmt, get, Me, send } from "../api";
+import { fmt, get, langHeaders, Me, send } from "../api";
 import { Missing, usePasswordMin, usePasswordPair } from "./AuthPages";
 import TokensPanel, { ROLE } from "./TokensPanel";
 import { Avatar, Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, Page, Panel, Pill, SelectField, TextField, useTableView, MutationError, ConfirmDialog, DataState, PageHeader, FilePicker, Form, LanguageSelect, PasswordField, SettingsBody, SettingsGroup, SettingsLayout, SettingsRow, SubNav, useTabParam } from "../ui";
@@ -104,7 +104,7 @@ export default function Account() {
   const refreshMe = () => { qc.invalidateQueries({ queryKey: ["profile"] }); qc.invalidateQueries({ queryKey: ["me"] }); qc.invalidateQueries({ queryKey: ["my-activity"] }); };
   const saveName = useMutation({ mutationFn: (n: string) => send("PATCH", "me/profile", { display_name: n }), onSuccess: () => { setName(null); setMsg({ tone: "info", text: t("Nombre actualizado.") }); refreshMe(); } });
   const upload = useMutation({
-    mutationFn: async (f: File) => { const r = await fetch("/api/me/avatar", { method: "POST", credentials: "include", body: f }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText); },
+    mutationFn: async (f: File) => { const r = await fetch("/api/me/avatar", { method: "POST", credentials: "include", headers: langHeaders(), body: f }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText); },
     onSuccess: () => { setMsg({ tone: "info", text: t("Avatar actualizado.") }); refreshMe(); }, onError: (e) => setMsg({ tone: "danger", text: (e as Error).message }) });
   const saveLocale = useMutation({ mutationFn: (l: string) => send("PATCH", "me/profile", { locale: l }), onSuccess: refreshMe });
   const removeAvatar = useMutation({ mutationFn: () => send("DELETE", "me/avatar"), onSuccess: refreshMe });

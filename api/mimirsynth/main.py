@@ -4,13 +4,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import appsettings, brand, settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
@@ -88,6 +90,16 @@ except Exception:  # noqa: BLE001  (ejecutado sin instalar)
 app = FastAPI(title=f"{brand.NAME} API", version=VERSION, lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=settings.session_secret, https_only=settings.cookie_secure,
                    same_site="lax", max_age=14 * 24 * 3600)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def localized_errors(request, exc: StarletteHTTPException):
+    """Los errores se escriben en español; aquí se traducen al idioma de quien llama (ver i18n.language)."""
+    if isinstance(exc.detail, str):
+        exc.detail = i18n.translate(exc.detail, i18n.language(request))
+    return await http_exception_handler(request, exc)
+
+
 app.add_middleware(
     CORSMiddleware, allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip() != "*"] or ["http://localhost:5173"],
     allow_credentials=True, allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["*"],

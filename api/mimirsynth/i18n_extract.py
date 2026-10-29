@@ -1,5 +1,6 @@
 """Extrae los textos en español que el servidor muestra a las personas (errores de la API, ajustes, etiquetas de trabajos, política de
-contraseñas) para traducirlos en `web/src/i18n/en.server.json`. Las claves con `{{nombre}}` son plantillas: la interfaz las reconoce
+contraseñas) y a los agentes (herramientas del MCP y encabezados del recall, marcados con `i18n.tr`) para traducirlos en
+`web/src/i18n/en.server.json`. Las claves con `{{nombre}}` son plantillas: la interfaz las reconoce
 aunque el texto venga ya con los valores sustituidos.
 Uso: `python -m mimirsynth.i18n_extract` (lista las claves) o `python -m mimirsynth.i18n_extract --missing` (las que faltan en el catálogo)."""
 import ast
@@ -71,6 +72,8 @@ def collect() -> set[str]:
                     t = _template(n.args[1])
                     if t and _has_text(t):
                         keys.add(t)
+                elif fn == "tr" and n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str):
+                    keys.add(n.args[0].value)  # i18n.tr("texto con {{valores}}", lang, …)
                 elif fn == "register" and len(n.args) >= 2 and getattr(n.func, "attr", "") == "register":
                     t = _template(n.args[1])  # jobs.register("kind", "Etiqueta")
                     if t:
@@ -91,6 +94,13 @@ def collect() -> set[str]:
             for n in ast.walk(tree):
                 if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "GROUPS" for t in n.targets) and isinstance(n.value, ast.Dict):
                     keys.update(v.value for v in n.value.values if isinstance(v, ast.Constant))
+        if f.name == "mcp_server.py":  # títulos y descripciones de las herramientas (y de sus parámetros)
+            tools = [n.value for n in tree.body if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "TOOLS" for t in n.targets)]
+            for n in (d for t in tools for d in ast.walk(t)):
+                if isinstance(n, ast.Dict):
+                    for k, v in zip(n.keys, n.values):
+                        if isinstance(k, ast.Constant) and k.value in ("title", "description") and isinstance(v, ast.Constant) and isinstance(v.value, str):
+                            keys.add(v.value)
         if f.name == "passwords.py":
             for n in ast.walk(tree):
                 if isinstance(n, ast.Return) and n.value is not None:

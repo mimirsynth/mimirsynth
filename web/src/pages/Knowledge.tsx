@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { fmt, get, send } from "../api";
+import { fmt, get, langHeaders, send } from "../api";
 import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, PasswordField, Pill, ProgressBar, SelectField, SidePanel, Tabs, TextArea, TextField, useTableView, type ColSort, type SortDir, type Tone, MutationError, ConfirmDialog, EmptyState, PageHeader, Segments, SearchBar, useServerTableView, useTabParam, ListCard, FilePicker } from "../ui";
 import { Link, useSearchParams } from "react-router-dom";
 
@@ -27,7 +27,7 @@ async function uploadFile(slug: string, file: File, progress: (done: number) => 
   const init = await send<{ upload_id: string; part_size: number }>("POST", "docs/uploads", { filename: file.name, size: file.size }, { graph: slug });
   const step = Math.min(init.part_size, PART);
   for (let i = 0, off = 0; off < file.size; i++, off += step) {
-    const r = await fetch(`/api/brains/${slug}/docs/uploads/${init.upload_id}/parts/${i}`, { method: "PUT", credentials: "include", body: file.slice(off, off + step) });
+    const r = await fetch(`/api/brains/${slug}/docs/uploads/${init.upload_id}/parts/${i}`, { method: "PUT", credentials: "include", headers: langHeaders(), body: file.slice(off, off + step) });
     if (!r.ok) { await send("DELETE", `docs/uploads/${init.upload_id}`, undefined, { graph: slug }).catch(() => undefined); throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText); }
     progress(Math.min(off + step, file.size));
   }

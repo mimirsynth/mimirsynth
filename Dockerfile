@@ -12,6 +12,8 @@ LABEL org.opencontainers.image.title="MimirSynth" org.opencontainers.image.descr
 ENV PYTHONUNBUFFERED=1 MIMIRSYNTH_STATIC_DIR=/srv/web
 WORKDIR /srv
 COPY api ./api
+# The API answers in the caller's language with the same server catalogue the web uses (see mimirsynth/i18n.py).
+COPY web/src/i18n/en.server.json ./api/mimirsynth/en.server.json
 RUN pip install --no-cache-dir "./api[pdf]"
 COPY --from=web /w/dist /srv/web
 WORKDIR /srv/api

@@ -15,6 +15,7 @@ from pydantic import ValidationError
 
 from . import appsettings
 from .deps import BrainCtx, brain_access
+from .i18n import language, tr, translate
 from .memory import RecallIn, federated_kwargs
 from .proposals import ProposalIn, create
 from .recall import recall
@@ -59,30 +60,43 @@ def _text(text: str, error: bool = False) -> dict:
     return {"content": [{"type": "text", "text": text}], "isError": error}
 
 
-def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args: dict) -> dict:
+def _tools(lang: str) -> list[dict]:
+    """Las herramientas con sus títulos y descripciones en el idioma de quien llama."""
+    def walk(x):
+        if isinstance(x, dict):
+            return {k: tr(v, lang) if k in ("title", "description") and isinstance(v, str) else walk(v) for k, v in x.items()}
+        return [walk(v) for v in x] if isinstance(x, list) else x
+    return walk(TOOLS)
+
+
+def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args: dict, lang: str) -> dict:
     """Resultado de una herramienta. Los fallos propios de la herramienta vuelven como `isError` (que el modelo puede leer y corregir)."""
     try:
         if name == "recall":
             body = RecallIn(**args)
-            out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs, **federated_kwargs(ctx, body))
-            return _text(out["context"] or "No hay nada relevante en la memoria para esa consulta.")
+            out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs, lang=lang, **federated_kwargs(ctx, body))
+            return _text(out["context"] or tr("No hay nada relevante en la memoria para esa consulta.", lang))
         if name == "remember":
             if not allows(ctx.role, "contributor"):
-                return _text("Este token solo puede leer (rol de lector): no puede proponer memorias.", True)
+                return _text(tr("Este token solo puede leer (rol de lector): no puede proponer memorias.", lang), True)
             p = create(ctx, request, bg, ProposalIn(**args))
-            msg = "Memoria guardada y aprobada; se ingiere en el grafo." if p.status == "approved" else "Memoria propuesta: queda en cuarentena hasta que un curador la apruebe."
-            return _text(f"{msg} (propuesta #{p.id})")
+            if p.status == "approved":
+                return _text(tr("Memoria guardada y aprobada; se ingiere en el grafo (propuesta #{{id}}).", lang, id=p.id))
+            return _text(tr("Memoria propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
     except ValidationError as e:
-        return _text("Argumentos no válidos: " + "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors()), True)
+        errors = "; ".join(f"{'.'.join(map(str, x['loc']))}: {x['msg']}" for x in e.errors())
+        return _text(tr("Argumentos no válidos: {{errors}}", lang, errors=errors), True)
     except Exception as e:  # noqa: BLE001
         log.warning("herramienta %s falló: %s", name, e)
-        return _text(f"La herramienta falló: {e}", True)
+        error = translate(e.detail, lang) if isinstance(e, HTTPException) and isinstance(e.detail, str) else str(e)
+        return _text(tr("La herramienta falló: {{error}}", lang, error=error), True)
     raise KeyError(name)
 
 
 def _handle(msg, ctx: BrainCtx, request: Request, bg: BackgroundTasks) -> dict | None:
+    lang = language(request)
     if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0" or not isinstance(msg.get("method"), str):
-        return _err(msg.get("id") if isinstance(msg, dict) else None, -32600, "petición no válida")
+        return _err(msg.get("id") if isinstance(msg, dict) else None, -32600, tr("petición no válida", lang))
     rid, method, params = msg.get("id"), msg["method"], msg.get("params") or {}
     if "id" not in msg:  # notificación (p. ej. notifications/initialized): sin respuesta
         return None
@@ -90,17 +104,17 @@ def _handle(msg, ctx: BrainCtx, request: Request, bg: BackgroundTasks) -> dict |
         wanted = params.get("protocolVersion")
         return _ok(rid, {"protocolVersion": wanted if wanted in SUPPORTED else SUPPORTED[0], "capabilities": {"tools": {"listChanged": False}},
                          "serverInfo": {"name": "mimirsynth", "title": "MimirSynth", "version": _version("mimirsynth")},
-                         "instructions": f"Memoria del brain «{ctx.brain.name}». Usa `recall` antes de responder sobre su historia y `remember` para proponer conocimiento que deba persistir."})
+                         "instructions": tr("Memoria del brain «{{name}}». Usa `recall` antes de responder sobre su historia y `remember` para proponer conocimiento que deba persistir.", lang, name=ctx.brain.name)})
     if method == "ping":
         return _ok(rid, {})
     if method == "tools/list":
-        return _ok(rid, {"tools": TOOLS})
+        return _ok(rid, {"tools": _tools(lang)})
     if method == "tools/call":
         name, args = params.get("name"), params.get("arguments") or {}
         if name not in {t["name"] for t in TOOLS} or not isinstance(args, dict):
-            return _err(rid, -32602, f"herramienta desconocida o argumentos no válidos: {name}")
-        return _ok(rid, _call(ctx, request, bg, name, args))
-    return _err(rid, -32601, f"método no soportado: {method}")
+            return _err(rid, -32602, tr("herramienta desconocida o argumentos no válidos: {{name}}", lang, name=name))
+        return _ok(rid, _call(ctx, request, bg, name, args, lang))
+    return _err(rid, -32601, tr("método no soportado: {{method}}", lang, method=method))
 
 
 def _check_origin(request: Request) -> None:
@@ -121,7 +135,7 @@ async def mcp(request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(rea
     try:
         payload = json.loads(await request.body())
     except ValueError:
-        return JSONResponse(_err(None, -32700, "JSON no válido"), status_code=400)
+        return JSONResponse(_err(None, -32700, tr("JSON no válido", language(request))), status_code=400)
     from starlette.concurrency import run_in_threadpool
     if isinstance(payload, list):  # lote (2025-03-26)
         out = [r for r in [await run_in_threadpool(_handle, m, ctx, request, bg) for m in payload] if r is not None]
