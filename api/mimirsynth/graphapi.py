@@ -2,12 +2,13 @@
 from datetime import datetime, timezone
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from .db import fact_status, parse_ts, rows
 from sqlalchemy import select
 
 from .deps import BrainCtx, reader
+from .i18n import language, tr
 from .models import VocabAlias
 from .reembed import is_shadow
 from .vocab import alias_map, canon_rel, resolve  # noqa: F401  (canon_rel se reexporta)
@@ -261,8 +262,101 @@ def timeline(
     return events[:limit]
 
 
+# --- Procedencia: de qué orígenes viene cada nodo y cada hecho del visor -------------------------
+GROUPINGS = ("label", "source", "document", "author", "token")
+_PROMOTED = re.compile(r"^documento (\d+) · trozo")  # source_description de un pasaje promovido a memoria (docbridge.promote)
+_DOC_KIND = {"upload": "document", "directory": "directory", "wiki": "wiki"}
+
+
+def _chunks(xs: list, n: int = 1000):
+    for i in range(0, len(xs), n):
+        yield xs[i:i + n]
+
+
+def _episode_origins(ctx: BrainCtx, kinds_of: dict[str, str], lang: str) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
+    """Orígenes de cada episodio según cada agrupación ({episodio: {agrupación: clave}}) y el nombre visible de cada clave.
+    Episodio → `Episodic.source` (`kinds_of`) y, si salió de una propuesta, su autor, su token y el documento del que se promovió."""
+    from .models import ApiToken, DocSource, Document, Proposal, User
+    out: dict[str, dict[str, str]] = {e: {"source": s} for e, s in kinds_of.items() if s}
+    names: dict[str, str] = {}
+    kinds = {"text": tr("Texto", lang), "message": tr("Mensaje", lang), "json": "JSON", "document": tr("Documento", lang),
+             "directory": tr("Carpeta de archivos", lang), "wiki": "Wiki"}
+    ids = sorted(kinds_of)
+    docs: dict[str, int] = {}
+    for part in _chunks(ids):
+        q = (select(Proposal.episode_uuid, Proposal.source_description, Proposal.author_id, User.name, Proposal.token_id, ApiToken.name)
+             .join(User, User.id == Proposal.author_id).outerjoin(ApiToken, ApiToken.id == Proposal.token_id)
+             .where(Proposal.brain_id == ctx.brain.id, Proposal.episode_uuid.in_(part)))
+        for ep, desc, uid, uname, tid, tname in ctx.db.execute(q):
+            o = out.setdefault(ep, {})
+            o["author"], names[f"author:{uid}"] = f"author:{uid}", uname or f"#{uid}"
+            if tid:
+                o["token"], names[f"token:{tid}"] = f"token:{tid}", tname or f"#{tid}"
+            m = _PROMOTED.match(desc or "")
+            if m:
+                docs[ep] = int(m.group(1))
+    if docs:
+        found = {d: (title or fname, kind) for d, title, fname, kind in ctx.db.execute(
+            select(Document.id, Document.title, Document.filename, DocSource.kind).join(DocSource, DocSource.id == Document.source_id)
+            .where(Document.brain_id == ctx.brain.id, Document.id.in_(set(docs.values()))))}
+        for ep, d in docs.items():
+            if d in found:
+                title, kind = found[d]
+                out[ep]["document"], names[f"document:{d}"] = f"document:{d}", title or f"#{d}"
+                out[ep]["source"] = _DOC_KIND.get(kind, "document")
+    for o in out.values():
+        if "source" in o:
+            s = o["source"]
+            o["source"] = f"source:{s}"
+            names.setdefault(o["source"], kinds.get(s, s))
+    return out, names
+
+
+def _provenance(ctx: BrainCtx, nodes: list[dict], links: list[dict], group_by: str, lang: str) -> dict:
+    """Añade a cada nodo y hecho `provenance` (claves de origen por agrupación), `sources` (las de `group_by`) y `source_count`.
+    Un nodo viene de los episodios que lo mencionan y de los de sus hechos visibles; un hecho, de los de `r.episodes` (`_episodes`).
+    Devuelve el catálogo de orígenes por agrupación, de mayor a menor, con su nombre y cuántos nodos y hechos respalda."""
+    node_eps: dict[str, set[str]] = {n["uuid"]: set() for n in nodes}
+    kinds_of: dict[str, str] = {}  # episodio → Episodic.source, leído junto con las menciones para no buscar cada episodio aparte
+    if node_eps:
+        for r in rows(ctx.graph.query("MATCH (e:Episodic)-[:MENTIONS]->(n:Entity) WHERE n.uuid IN $ids "
+                                      "RETURN n.uuid AS uuid, toLower(coalesce(e.source, '')) AS kind, collect(DISTINCT e.uuid) AS eps", {"ids": list(node_eps)})):
+            eps = [x for x in r["eps"] if x]
+            node_eps[r["uuid"]].update(eps)
+            kinds_of.update(dict.fromkeys(eps, r["kind"]))
+    for link in links:
+        for end in (link["source_uuid"], link["target_uuid"]):
+            if end in node_eps:
+                node_eps[end].update(link["_episodes"])
+    missing = sorted({e for x in links for e in x["_episodes"]} - kinds_of.keys())
+    for part in _chunks(missing):  # episodios de un hecho que no mencionan a sus extremos: raros
+        for r in rows(ctx.graph.query("MATCH (e:Episodic) WHERE e.uuid IN $eps RETURN e.uuid AS uuid, toLower(coalesce(e.source, '')) AS source", {"eps": part})):
+            kinds_of[r["uuid"]] = r["source"]
+    for e in missing:
+        kinds_of.setdefault(e, "")  # episodio ya borrado: sin tipo, pero aún puede tener propuesta
+    origins, names = _episode_origins(ctx, kinds_of, lang)
+    tally: dict[str, dict[str, list[int]]] = {g: {} for g in GROUPINGS}
+
+    def fill(item: dict, eps: set[str], labels: list[str] | None, slot: int) -> None:
+        prov = {g: sorted({origins[e][g] for e in eps if g in origins.get(e, {})}) for g in GROUPINGS if g != "label"}
+        prov["label"] = [f"label:{x}" for x in labels] if labels else []
+        for g, keys in prov.items():
+            for k in keys:
+                tally[g].setdefault(k, [0, 0])[slot] += 1
+        item["provenance"], item["sources"], item["source_count"] = prov, prov[group_by], len(prov[group_by])
+
+    for n in nodes:
+        fill(n, node_eps[n["uuid"]], n.get("labels") or [], 0)
+    for link in links:
+        fill(link, set(link["_episodes"]), None, 1)
+    names.update({k: k.removeprefix("label:") for k in tally["label"]})
+    return {g: sorted(({"key": k, "name": names.get(k, k), "nodes": c[0], "facts": c[1]} for k, c in t.items()), key=lambda x: (-x["nodes"], -x["facts"], x["name"]))
+            for g, t in tally.items()}
+
+
 @router.get("/graph")
 def graph_view(
+    request: Request,
     ctx: BrainCtx = Depends(reader),
     seeds: int = Query(25, ge=1, le=100),
     depth: int = Query(1, ge=0, le=2),
@@ -270,8 +364,12 @@ def graph_view(
     node: str = "",
     as_of: str = "",
     include_invalidated: bool = True,
+    group_by: str = Query("", pattern="^(" + "|".join(GROUPINGS) + ")?$"),
 ):
-    """Subgrafo recortado: semillas por grado (o un nodo concreto), expansión hasta `depth` saltos, tope `cap` nodos."""
+    """Subgrafo recortado: semillas por grado (o un nodo concreto), expansión hasta `depth` saltos, tope `cap` nodos.
+    Con `group_by`, cada nodo y hecho lleva su procedencia: `sources`/`source_count` según esa agrupación y `provenance` con todas,
+    para que el visor cambie de agrupación sin volver a pedir el grafo; `groups` es el catálogo de orígenes de cada agrupación.
+    Sin él no se calcula: en un brain grande puede costar más que el propio subgrafo."""
     G = ctx.graph
     at = parse_ts(as_of) if as_of else None
     if node:
@@ -306,14 +404,19 @@ def graph_view(
         if e["status"] == "future" or (e["status"] == "invalidated" and not include_invalidated):
             continue
         links.append({k: e[k] for k in ("uuid", "name", "fact", "valid_at", "invalid_at", "status", "source_uuid", "target_uuid")}
-                      | {"source": e["source_uuid"], "target": e["target_uuid"]})
+                      | {"source": e["source_uuid"], "target": e["target_uuid"], "_episodes": e["episodes"]})
     nodes = rows(G.query(
         "MATCH (n:Entity) WHERE n.uuid IN $ids OPTIONAL MATCH (n)-[r:RELATES_TO]-() "
         "RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels, "
         "substring(n.summary, 0, 300) AS summary, count(r) AS degree",
         {"ids": list(ids)},
     ))
-    return {"nodes": nodes, "links": links, "truncated": len(ids) >= cap}
+    out = {"nodes": nodes, "links": links, "truncated": len(ids) >= cap}
+    if group_by:
+        out |= {"group_by": group_by, "groups": _provenance(ctx, nodes, links, group_by, language(request))}
+    for link in links:
+        del link["_episodes"]
+    return out
 
 
 # --- Vocabulario: relaciones y entidades ------------------------------------------------------
