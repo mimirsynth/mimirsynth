@@ -203,7 +203,7 @@ def test_proposals_quarantine_flow(client):
     assert client.post("/api/brains/cuar/proposals", json={**prop, "confidence": 2}, headers=contrib_h).status_code == 422
     r2 = client.post("/api/brains/cuar/proposals", json={"name": "Directa", "body": "x"}, headers=curator_h)
     assert r2.json()["status"] == "approved"  # el curador no pasa por cuarentena
-    assert len(client.get("/api/brains/cuar/proposals?status=pending", headers=curator_h).json()) == 1
+    assert client.get("/api/brains/cuar/proposals?status=pending", headers=curator_h).json()["total"] == 1
     ok = client.post(f"/api/brains/cuar/proposals/{pid}/approve", json={"note": "ok"}, headers=curator_h)
     assert ok.status_code == 200 and ok.json()["status"] == "approved" and ok.json()["review_note"] == "ok" and ok.json()["review_kind"] == "human"
     assert client.post(f"/api/brains/cuar/proposals/{pid}/reject", json={}, headers=curator_h).status_code == 409
@@ -225,7 +225,7 @@ def test_ingest_marks_status(client, monkeypatch):
     client.post("/api/brains", json={"slug": "ing", "name": "Ing"})
     ok = client.post("/api/brains/ing/proposals", json={"name": "bueno", "body": "x"}).json()  # admin -> aprobada -> ingesta
     bad = client.post("/api/brains/ing/proposals", json={"name": "malo", "body": "x"}).json()
-    st = {p["id"]: p for p in client.get("/api/brains/ing/proposals").json()}
+    st = {p["id"]: p for p in client.get("/api/brains/ing/proposals").json()["items"]}
     assert st[ok["id"]]["status"] == "ingested" and st[ok["id"]]["episode_uuid"] == "uuid-1"
     assert st[bad["id"]]["status"] == "failed" and "LLM caído" in st[bad["id"]]["ingest_error"]
     assert calls == ["ing", "ing"]
@@ -317,6 +317,32 @@ def test_proposal_counts(client):
     client.post("/api/brains/cnt/proposals", json={"name": "b", "body": "y"})
     c = client.get("/api/brains/cnt/proposals/counts").json()
     assert c["all"] == 2 == sum(n for k, n in c.items() if k != "all")
+
+
+def test_proposals_paginated_filtered_and_sorted(client):
+    """#88: la lista se pagina en el servidor (antes cortaba en 200 sin offset) y filtra y ordena sobre el conjunto completo."""
+    client.post("/api/brains", json={"slug": "pag", "name": "Pag"})
+    client.put("/api/brains/pag/members", json={"email": "pepa@x.com", "role": "contributor"})
+    for i in range(7):
+        client.post("/api/brains/pag/proposals", json={"name": f"Dato {i}", "body": "x", "confidence": i / 10})
+    url = "/api/brains/pag/proposals"
+    _as("pepa@x.com", "Pepa")
+    client.post(url, json={"name": "Otro", "body": "x"})
+    mine = client.get(url).json()
+    app.dependency_overrides.pop(current_user)  # de vuelta al administrador
+    r = client.get(url, params={"limit": 3}).json()
+    assert r["total"] == 8 and len(r["items"]) == 3 and r["items"][0]["name"] == "Otro"  # por defecto, lo último enviado primero
+    seen = [p["id"] for off in (0, 3, 6) for p in client.get(url, params={"limit": 3, "offset": off}).json()["items"]]
+    assert len(seen) == len(set(seen)) == 8  # las páginas no se solapan y llegan a todas
+    assert client.get(url, params={"q": "dato"}).json()["total"] == 7
+    assert [p["confidence"] for p in client.get(url, params={"sort": "conf", "order": "asc", "limit": 3}).json()["items"]] == [0, 0.1, 0.2]
+    assert client.get(url, params={"sort": "conf", "order": "desc"}).json()["items"][-1]["confidence"] is None  # sin confianza, al final
+    authors = r["authors"]
+    assert len(authors) == 2
+    assert mine["total"] == 1 and len(mine["authors"]) == 1  # un colaborador solo ve (y filtra por) lo suyo
+    other = next(a for a in authors if a["id"] != mine["authors"][0]["id"])
+    assert client.get(url, params={"author": other["id"]}).json()["total"] == 7
+    assert client.get(url, params={"sort": "nada"}).status_code == 400
 
 
 def test_additive_migration_adds_new_columns(tmp_path, monkeypatch):

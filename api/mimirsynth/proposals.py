@@ -4,13 +4,13 @@ Una aportación aprobada queda lista para ingerir (extracción con Graphiti); es
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
 from . import deciders_admin, ingest
 from .deps import BrainCtx, audit, brain_access
-from .models import Proposal
+from .models import Proposal, User
 from .roles import allows
 
 router = APIRouter(prefix="/api/brains/{slug}/proposals")
@@ -64,17 +64,33 @@ def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalI
     return p
 
 
+_AUTHOR = func.coalesce(User.email, User.name)
+_SORTS = {"name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id}  # el id sigue el orden de envío
+
+
 @router.get("")
-def list_proposals(status: str | None = None, ctx: BrainCtx = Depends(contributor)):
-    """Los curadores ven todas; un colaborador solo las suyas."""
+def list_proposals(status: str | None = None, q: str = Query("", max_length=200), author: int | None = None, sort: str = "at", order: str = "desc",
+                   limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0), ctx: BrainCtx = Depends(contributor)):
+    """Los curadores ven todas; un colaborador solo las suyas. Paginado en el servidor (#88): `total` cuenta lo que pasa los filtros
+    y `authors` lista los autores visibles para el filtro de la columna."""
     if status and status not in STATUSES:
         raise HTTPException(400, "estado inválido")
-    q = select(Proposal).where(Proposal.brain_id == ctx.brain.id)
-    if status:
-        q = q.where(Proposal.status == status)
+    if sort not in _SORTS:
+        raise HTTPException(400, "orden inválido")
+    base = select(Proposal).join(User, User.id == Proposal.author_id).where(Proposal.brain_id == ctx.brain.id)
     if not allows(ctx.role, "curator"):
-        q = q.where(Proposal.author_id == ctx.user.id)
-    return [_out(p) for p in ctx.db.scalars(q.order_by(Proposal.id.desc()).limit(200))]
+        base = base.where(Proposal.author_id == ctx.user.id)
+    authors = ctx.db.execute(base.with_only_columns(User.id, _AUTHOR).distinct().order_by(_AUTHOR)).all()
+    if status:
+        base = base.where(Proposal.status == status)
+    if author:
+        base = base.where(Proposal.author_id == author)
+    if q.strip():
+        base = base.where(Proposal.name.ilike("%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\"))
+    total = ctx.db.scalar(select(func.count()).select_from(base.subquery()))
+    key = _SORTS[sort].asc() if order == "asc" else _SORTS[sort].desc()
+    rows = ctx.db.scalars(base.order_by(key.nulls_last(), Proposal.id.desc()).limit(limit).offset(offset)).all()
+    return {"total": total, "limit": limit, "offset": offset, "authors": [{"id": i, "name": n} for i, n in authors], "items": [_out(p) for p in rows]}
 
 
 @router.get("/counts")

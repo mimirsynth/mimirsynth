@@ -1,8 +1,8 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, NumberField, Page, Panel, Pill, Segments, TextArea, TextField, useTableView, MutationError, EmptyState, PageHeader, Steps, Step, Tone, rowOpen } from "../ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, Pill, Segments, TextArea, TextField, useServerTableView, MutationError, EmptyState, PageHeader, Steps, Step, Tone, rowOpen } from "../ui";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { fmt, get, send } from "../api";
 
@@ -11,39 +11,42 @@ type Prop = { id: number; name: string; body: string; source: string; source_des
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
 
-const PROP_COLS = { name: { get: (p: Prop) => p.name }, author: { get: (p: Prop) => p.author, exact: true }, conf: { get: (p: Prop) => p.confidence ?? -1 }, at: { get: (p: Prop) => p.created_at } };
+type PropList = { total: number; limit: number; offset: number; authors: { id: number; name: string }[]; items: Prop[] };
 const STATUSES = ["pending", "approved", "rejected", "failed", "ingested"];
 const PLURAL: Record<string, string> = { pending: T("Pendientes"), approved: T("Aprobadas"), rejected: T("Rechazadas"), failed: T("Fallidas"), ingested: T("Ingeridas") };
-/** El estado se filtra en el servidor (con la cuenta de cada uno); el resto de columnas, en el navegador. «Todos» = sin filtro de estado. */
-function ProposalsTable({ rows, status, onStatus, counts, onOpen }: { rows: Prop[]; status: string; onStatus: (s: string) => void; counts: Record<string, number>; onOpen: (id: number) => void }) {
+type View = ReturnType<typeof useProposalsView>;
+const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debounced: ["q"], firstDir: { name: "asc", author: "asc" } });
+
+/** Estado, filtros, orden y página se resuelven en el servidor (#88): con muchas propuestas se llega a todas y los filtros abarcan el conjunto entero.
+ *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza y el formulario de alta no se encoge. «Todas» = sin filtro de estado. */
+function ProposalsTable({ data, view, status, onStatus, counts, onOpen }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void; counts: Record<string, number>; onOpen: (id: number) => void }) {
   const { t } = useTranslation();
-  const v = useTableView(rows, PROP_COLS, { key: "at", dir: "desc" });
-  const active = v.active;
+  const { f, setFilter, sortProps, page, setPage, active, clear } = view;
+  const rows = data?.items ?? [];
   const all = counts.all ?? 0;  // el servidor ya la da; sumar los valores contaba «all» dos veces (#79)
-  return (
-    <Stack gap="xs">
-      <Segments label={t("Estado")} value={status} onChange={onStatus}
-        data={[{ value: "all", label: t("Todas"), count: all }, ...STATUSES.map((k) => ({ value: k, label: t(PLURAL[k]), count: counts[k] ?? 0 }))]} />
-      <ClearFilters active={active} onClear={v.clear} shown={v.rows.length} total={v.total} />
-      <FillArea><DataTable fz="sm">
-        <DataTable.Thead><DataTable.Tr>
-          <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Título")}</ColHead>
-          <ColHead sort={v.sortProps("author")} filter={v.select("author")}>{t("Autor")}</ColHead>
-          <ColHead sort={v.sortProps("conf")}>{t("Confianza")}</ColHead>
-          <ColHead>{t("Estado")}</ColHead>
-          <ColHead sort={v.sortProps("at")}>{t("Enviada")}</ColHead>
-        </DataTable.Tr></DataTable.Thead>
-        <DataTable.Tbody>
-          {v.rows.map((p) => (
-            <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
-              <DataTable.Td>{p.name}</DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
-              <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
-            </DataTable.Tr>))}
-          {v.rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
-        </DataTable.Tbody>
-      </DataTable></FillArea>
-    </Stack>
-  );
+  return (<>
+    <Segments label={t("Estado")} value={status} onChange={onStatus}
+      data={[{ value: "all", label: t("Todas"), count: all }, ...STATUSES.map((k) => ({ value: k, label: t(PLURAL[k]), count: counts[k] ?? 0 }))]} />
+    <ClearFilters active={active} onClear={clear} />
+    <FillArea><DataTable fz="sm">
+      <DataTable.Thead><DataTable.Tr>
+        <ColHead sort={sortProps("name")} filter={{ kind: "text", value: f.q, onChange: (v) => setFilter({ q: v }), placeholder: t("Título…") }}>{t("Título")}</ColHead>
+        <ColHead sort={sortProps("author")} filter={{ kind: "select", value: f.author, onChange: (v) => setFilter({ author: v }), allLabel: t("Todos los autores"), options: (data?.authors ?? []).map((a) => ({ value: String(a.id), label: a.name })) }}>{t("Autor")}</ColHead>
+        <ColHead sort={sortProps("conf")}>{t("Confianza")}</ColHead>
+        <ColHead>{t("Estado")}</ColHead>
+        <ColHead sort={sortProps("at")}>{t("Enviada")}</ColHead>
+      </DataTable.Tr></DataTable.Thead>
+      <DataTable.Tbody>
+        {rows.map((p) => (
+          <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
+            <DataTable.Td>{p.name}</DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
+            <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
+          </DataTable.Tr>))}
+        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
+      </DataTable.Tbody>
+    </DataTable></FillArea>
+    <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} />
+  </>);
 }
 
 export default function Proposals({ graph, role }: { graph: string; role: string }) {
@@ -53,11 +56,15 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const canPropose = isCurator || role === "contributor";
   const [status, setStatusRaw] = useState("all");
   const [chose, setChose] = useState(false);
-  const setStatus = (s: string) => { setChose(true); setStatusRaw(s); };
+  const view = useProposalsView();
+  const setStatus = (s: string) => { setChose(true); setStatusRaw(s); view.setPage((p) => ({ ...p, offset: 0 })); };
   const [open, setOpen] = useState<number | null>(null); const [note, setNote] = useState("");
   const [name, setName] = useState(""); const [body, setBody] = useState(""); const [conf, setConf] = useState<number | string>("");
   const base = `brains/${graph}/proposals`;
-  const list = useQuery({ queryKey: ["proposals", graph, status], queryFn: () => get<Prop[]>(base, { status: status === "all" ? undefined : status }) });
+  const { sent, sort, page } = view;
+  const list = useQuery({ queryKey: ["proposals", graph, status, sent.q, sent.author, sort?.key, sort?.dir, page.offset, page.limit], placeholderData: keepPreviousData,
+    queryFn: () => get<PropList>(base, { status: status === "all" ? undefined : status, q: sent.q || undefined, author: sent.author || undefined,
+      sort: sort?.key, order: sort?.dir, limit: page.limit, offset: page.offset }) });
   const cnt = useQuery({ queryKey: ["proposals", graph, "counts"], refetchInterval: 15000, queryFn: () => get<Record<string, number>>(`${base}/counts`) });
   // Sin haber elegido nada, la bandeja abre en «Pendientes» si las hay; si no, en «Todas» (un estado vacío no debe esconder el resto).
   useEffect(() => { if (!chose && cnt.data && (cnt.data.pending ?? 0) > 0) setStatusRaw("pending"); }, [cnt.data, chose]);
@@ -86,7 +93,8 @@ export default function Proposals({ graph, role }: { graph: string; role: string
           </Group>
           <MutationError error={submit.error} />
         </Stack></Panel>)}
-      <ProposalsTable rows={list.data ?? []} status={status} onStatus={setStatus} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />
+      <MutationError error={list.error} />
+      <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />
       <Modal opened={open !== null} onClose={() => setOpen(null)} title={d?.name ?? t("Propuesta")} size="lg" centered>
         {d && <Stack gap="sm">
           <Group gap="xs"><Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>
