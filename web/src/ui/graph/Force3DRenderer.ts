@@ -18,6 +18,8 @@ const TEXT_PX = 12;              // alto del texto en pantalla cuando el nodo es
 const MIN_TEXT_PX = 7;           // …y por debajo de esto, lejos, no se pinta
 const CAPTION_PX = 1;            // píxeles por unidad a partir de los que un nodo lleva nombre (en 2D, el zoom mínimo para los nombres)
 const SETTLE_MS = 400;
+const ALPHA_MIN = 0.02;          // la simulación para antes que la de d3 (0,001): por debajo los nodos apenas se mueven, y en 3D cada fotograma cuesta
+const TICK_MS = 1000 / 60;       // avanza a 60 pasos por segundo aunque los fotogramas vayan más lentos, para asentarse en el mismo tiempo
 const CLICK_SLOP = 4;
 const HALO_PAD = 22;             // margen del volumen del halo alrededor de cada nodo
 const HALO_EVERY = 120;          // mientras algo se mueve, la envolvente se recalcula como mucho cada tantos ms
@@ -78,6 +80,7 @@ export class Force3DRenderer implements GraphRenderer {
   private born = new Map<string, number>();
   private morph: { from: Map<string, [number, number, number]>; start: number } | null = null;
   private lastDraw = 0;
+  private lastTick = 0;
   private slow = 0;
   private pendingFit: (() => void) | null = null;
   private down: { x: number; y: number } | null = null;
@@ -146,7 +149,8 @@ export class Force3DRenderer implements GraphRenderer {
       .force("x", forceX<SNode>((d) => d.ax ?? 0).strength((d) => d.pull ?? PULL_NONE))
       .force("y", forceY<SNode>((d) => d.ay ?? 0).strength((d) => d.pull ?? PULL_NONE))
       .force("z", forceZ<SNode>((d) => d.az ?? 0).strength((d) => d.pull ?? PULL_NONE) as any)
-      .on("tick", () => { this.hullDirty = true; this.request(); })
+      .alphaMin(ALPHA_MIN)
+      .on("tick", () => this.onTick())
       .stop();
 
     const on = <K extends keyof HTMLElementEventMap>(type: K, fn: (ev: HTMLElementEventMap[K]) => void) => {
@@ -171,6 +175,17 @@ export class Force3DRenderer implements GraphRenderer {
   }
 
   setEvents(events: RendererEvents) { this.events = events; }
+
+  /** Un paso de la simulación por fotograma: si los fotogramas van lentos (sin GPU, muchos halos), se recuperan los pasos perdidos
+   * para que el grafo se asiente en el mismo tiempo y deje de pintar. */
+  private onTick() {
+    const now = performance.now(), dt = now - this.lastTick;
+    this.lastTick = now;
+    const extra = dt < 250 ? Math.min(3, Math.round(dt / TICK_MS) - 1) : 0;
+    if (extra > 0) this.sim.tick(extra);
+    this.hullDirty = true;
+    this.request();
+  }
 
   setEffects(mode: EffectsMode) {
     this.mode = mode; this.autoDown = false; this.slow = 0;
