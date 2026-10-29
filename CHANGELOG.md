@@ -24,6 +24,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 ### Fixed
 - `docker-compose.yml`: on Linux, the default embeddings address `http://host.docker.internal:11434/v1` did not resolve inside the container (#73). The `mimirsynth` service now maps that name to the host (`extra_hosts: host-gateway`), as Docker Desktop already did. If you keep your own compose file, add those two lines yourself.
 - `GET /api/embedding-engines/reindex` no longer reports `orphan: true` when the shadow fill has finished and is waiting for the switch (#69). `orphan` is now `true` only for a failed or abandoned fill. The `reindex.orphan` alert and the panel already looked at the state, so nothing else changes.
+- Markdown documents saved with Windows line endings (CRLF), as Obsidian does on Windows, kept their YAML frontmatter and `^block` marks in the indexed text and lost the `title:` from the frontmatter (#83). Line endings are now normalised before the Markdown conventions are applied.
 - Documentation: after changing the embedding model, what to do with `MIMIRSYNTH_EMBEDDING_DIM` and the other `MIMIRSYNTH_EMBEDDING_*` variables in `.env`.
 
 ## [0.7.1] - 2026-10-27

@@ -63,7 +63,7 @@ def collect() -> set[str]:
     for f in sorted(HERE.glob("*.py")):
         if f.name == Path(__file__).name:
             continue
-        tree = ast.parse(f.read_text())
+        tree = ast.parse(f.read_text(encoding="utf-8"))
         for n in ast.walk(tree):
             if isinstance(n, ast.Call):
                 fn = getattr(n.func, "id", getattr(n.func, "attr", ""))
@@ -103,7 +103,7 @@ def collect() -> set[str]:
 if __name__ == "__main__":
     keys = collect()
     if "--missing" in sys.argv:
-        have = set(json.loads(CATALOG.read_text())) if CATALOG.exists() else set()
+        have = set(json.loads(CATALOG.read_text(encoding="utf-8"))) if CATALOG.exists() else set()
         keys = {k for k in keys if k not in have}
         print(json.dumps({k: "" for k in sorted(keys)}, ensure_ascii=False, indent=1))
     else:

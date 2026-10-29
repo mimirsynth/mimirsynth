@@ -16,11 +16,11 @@ def lib(monkeypatch, tmp_path, fake_index):
     root = tmp_path / "notas"
     (root / "sub").mkdir(parents=True)
     (root / ".oculta").mkdir()
-    (root / "a.md").write_text(MD)
-    (root / "sub" / "b.txt").write_text("Texto de la nota b.\n" * 5)
-    (root / ".oculta" / "x.md").write_text("no debe entrar")
+    (root / "a.md").write_text(MD, encoding="utf-8", newline="")
+    (root / "sub" / "b.txt").write_text("Texto de la nota b.\n" * 5, encoding="utf-8", newline="")
+    (root / ".oculta" / "x.md").write_text("no debe entrar", encoding="utf-8", newline="")
     (root / "binario.exe").write_bytes(b"MZ")
-    (tmp_path / "fuera.md").write_text("fuera de la raíz")
+    (tmp_path / "fuera.md").write_text("fuera de la raíz", encoding="utf-8", newline="")
     os.symlink(tmp_path / "fuera.md", root / "escapa.md")
     monkeypatch.setattr(settings, "doc_roots_base", str(tmp_path))
     from sqlalchemy import delete
@@ -67,8 +67,8 @@ def test_directory_source_scan_lifecycle(client, lib):
     res = client.get(f"/api/brains/{slug}/jobs/{r.json()['job']}").json()["result"]
     assert res["added"] == 0 and res["unchanged"] == 2 and res["indexed"] == 0
 
-    (lib / "a.md").write_text(MD + "\nUna sección nueva.\n")                        # cambiado
-    (lib / "sub" / "c.md").write_text("# Nota c\n\nCuerpo.\n")                      # nuevo
+    (lib / "a.md").write_text(MD + "\nUna sección nueva.\n", encoding="utf-8", newline="")                        # cambiado
+    (lib / "sub" / "c.md").write_text("# Nota c\n\nCuerpo.\n", encoding="utf-8", newline="")                      # nuevo
     (lib / "sub" / "b.txt").unlink()                                                # desaparecido
     res = client.get(f"/api/brains/{slug}/jobs/{client.post(f'{base}/sources/{sid}/scan').json()['job']}").json()["result"]
     assert (res["added"], res["changed"], res["removed"], res["indexed"]) == (1, 1, 1, 2)
@@ -277,17 +277,20 @@ def test_legacy_wiki_config_is_migrated(tmp_path, monkeypatch):
 def test_obsidian_markdown_conventions(tmp_path):
     from mimirsynth.docextract import extract
     f = tmp_path / "nota.md"
-    f.write_text('---\ntitle: "Mi nota"\ntags: [a, b]\n---\n# Encabezado\n\nVer [[Otra nota|la otra]] y [[Archivo#Sección]] y [[Simple]].\n![[imagen.png]]\n%%comentario privado%%\nLínea con marca ^abc123\n')
+    f.write_text('---\ntitle: "Mi nota"\ntags: [a, b]\n---\n# Encabezado\n\nVer [[Otra nota|la otra]] y [[Archivo#Sección]] y [[Simple]].\n![[imagen.png]]\n%%comentario privado%%\nLínea con marca ^abc123\n', encoding="utf-8", newline="")
     text, title = extract(f, ".md")
     assert title == "Mi nota" and "tags" not in text and "title:" not in text
     assert "la otra" in text and "Otra nota" not in text and "Archivo › Sección" in text and "Simple" in text and "[[" not in text
     assert "imagen.png" not in text and "comentario privado" not in text and "^abc123" not in text and "Línea con marca" in text
+    # #83: la misma nota guardada con saltos de Windows (CRLF) da el mismo resultado
+    f.write_bytes(f.read_bytes().replace(b"\n", b"\r\n"))
+    assert extract(f, ".md") == (text, title)
 
 
 def test_documents_list_filters_sort_and_pagination(client, lib):
     slug = _brain(client)
     base = f"/api/brains/{slug}/docs"
-    (lib / "sub" / "z_100%.md").write_text("# Zeta 100%\n\nCuerpo.\n")
+    (lib / "sub" / "z_100%.md").write_text("# Zeta 100%\n\nCuerpo.\n", encoding="utf-8", newline="")
     client.post(f"{base}/sources", json={"name": "N", "root": "notas"})
     names = lambda **p: [d["external_id"] for d in client.get(base, params=p).json()["items"]]  # noqa: E731
     assert sorted(names()) == ["a.md", "sub/b.txt", "sub/z_100%.md"]

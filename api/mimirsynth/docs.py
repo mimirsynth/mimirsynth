@@ -297,7 +297,7 @@ def _meta(uid: str, ctx: BrainCtx) -> tuple[Path, dict]:
     try:
         if not uid.isalnum() or not d.is_dir():
             raise FileNotFoundError
-        m = json.loads((d / "meta.json").read_text())
+        m = json.loads((d / "meta.json").read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         raise HTTPException(404, "subida no encontrada")
     if m["brain_id"] != ctx.brain.id or m["user_id"] != ctx.user.id:
@@ -315,7 +315,7 @@ def upload_init(body: UploadIn, ctx: BrainCtx = Depends(contributor_of_brain)):
     uid = uuid.uuid4().hex
     d = docstore.uploads_dir() / uid
     d.mkdir()
-    (d / "meta.json").write_text(json.dumps({"brain_id": ctx.brain.id, "user_id": ctx.user.id, "filename": docstore.clean_name(body.filename), "size": body.size, "title": body.title}))
+    (d / "meta.json").write_text(json.dumps({"brain_id": ctx.brain.id, "user_id": ctx.user.id, "filename": docstore.clean_name(body.filename), "size": body.size, "title": body.title}), encoding="utf-8")
     return {"upload_id": uid, "part_size": min(appsettings.get("doc_part_mb"), 64) * 1024 * 1024}
 
 
