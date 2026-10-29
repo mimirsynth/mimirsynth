@@ -27,6 +27,7 @@ export { ListCard } from "./ListCard";
 export { CodeBlock } from "./CodeBlock";
 export { SecretReveal } from "./SecretReveal";
 export { Steps, Step } from "./Steps";
+export { RuleList } from "./RuleList";
 export { HIDROMIEL, PIZARRA, NODE_PALETTE, CANVAS } from "./palette";
 export { FilePicker } from "./FilePicker";
 export { Legend, LegendSection, LegendItem } from "./Legend";
