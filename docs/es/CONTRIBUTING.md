@@ -10,6 +10,8 @@ git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
 cd api && uv venv && uv pip install -e . pytest && .venv/bin/pytest -q     # API: los tests usan SQLite; los que necesitan PostgreSQL o FalkorDB se omiten solos
 cd ../web && npm install && npm run build                                   # web: incluye el guardián de interfaz (check:ui)
 ```
+Para pasar los tests de la API como el CI, arranca FalkorDB (`docker run -d -p 6379:6379 falkordb/falkordb:v4.22.0`) y define `MIMIRSYNTH_TEST_FALKOR=localhost`. En Windows el intérprete es `.venv\Scripts\python` (`.venv/Scripts/python -m pytest -q`), y la suite también pasa allí. Si un test escribe un fichero de texto, pásale `encoding="utf-8"` (y `newline=""` si importan los bytes exactos): si no, Windows lo escribe con su propia página de códigos y con CRLF.
+
 Para levantar el stack completo desde tu copia (construye la imagen en local en vez de descargar la oficial):
 ```bash
 cp .env.example .env     # define POSTGRES_PASSWORD y MIMIRSYNTH_SESSION_SECRET

@@ -19,7 +19,7 @@ ALIASES = {"generic": "general"}  # nombre del paquete de base anterior (retirad
 
 
 def presets() -> dict[str, dict]:
-    return {p.stem: json.loads(p.read_text()) for p in sorted(PRESETS_DIR.glob("*.json"))}
+    return {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in sorted(PRESETS_DIR.glob("*.json"))}
 
 
 def preset_info() -> list[dict]:

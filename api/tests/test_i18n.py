@@ -11,7 +11,7 @@ WEB = Path(i18n_extract.CATALOG).parent
 
 
 def test_server_catalog_is_complete_and_consistent():
-    cat = json.loads((WEB / "en.server.json").read_text())
+    cat = json.loads((WEB / "en.server.json").read_text(encoding="utf-8"))
     keys = i18n_extract.collect()
     assert sorted(k for k in keys if k not in cat) == [], "faltan traducciones: python -m mimirsynth.i18n_extract --missing"
     assert sorted(k for k in cat if k not in keys) == [], "sobran claves en en.server.json"
@@ -21,7 +21,7 @@ def test_server_catalog_is_complete_and_consistent():
 
 
 def test_ui_catalog_keeps_placeholders():
-    cat = json.loads((WEB / "en.json").read_text())
+    cat = json.loads((WEB / "en.json").read_text(encoding="utf-8"))
     for k, v in cat.items():
         assert v.strip(), k
         assert sorted(re.findall(r"\{\{(\w+)\}\}", k)) == sorted(re.findall(r"\{\{(\w+)\}\}", v)), k

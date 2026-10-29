@@ -128,7 +128,7 @@ def extract(path: Path, ext: str) -> tuple[str, str]:
         p = _Html(); p.feed(_decode(raw)); p.close()
         return _normalize("".join(p.out)), p.title.strip()
     if ext in TEXT_EXT:
-        raw_text = _decode(raw)
+        raw_text = _decode(raw).replace("\r\n", "\n").replace("\r", "\n")  # antes de _markdown: con CRLF no casaban ni el frontmatter ni las marcas ^id (#83)
         front_title = ""
         if ext in (".md", ".markdown"):
             raw_text, front_title = _markdown(raw_text)
