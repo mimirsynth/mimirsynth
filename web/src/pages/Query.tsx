@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { T } from "../i18n";
+import { langHeaders } from "../api";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, ClearFilters, ColHead, DataTable, FillArea, Notice, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, NODE_PALETTE, CANVAS } from "../ui";
 import { useEffect, useRef, useState } from "react";
@@ -47,7 +48,7 @@ export default function Query({ graph }: { graph: string }) {
   const run = async () => {
     setBusy(true); setErr("");
     try {
-      const r = await fetch(`/api/brains/${graph}/query`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
+      const r = await fetch(`/api/brains/${graph}/query`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...langHeaders() }, body: JSON.stringify({ query: q }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.detail ?? r.statusText);
       setRes(j); setTab(j.nodes.length ? "grafo" : "tabla");

@@ -35,6 +35,7 @@ dev = ["pytest>=8", "httpx>=0.27", "ruff>=0.6"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["mimirsynth"]
+artifacts = ["mimirsynth/en.server.json"]  # catálogo del servidor que el Dockerfile copia desde web/src/i18n (ignorado por git)
 
 [tool.ruff]
 line-length = 110

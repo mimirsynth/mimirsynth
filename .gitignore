@@ -20,3 +20,6 @@ sources/
 .playwright-mcp/
 .DS_Store
 *.egg-info/
+
+# Copied into the image at build time from web/src/i18n (see Dockerfile)
+api/mimirsynth/en.server.json

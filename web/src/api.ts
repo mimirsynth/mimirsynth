@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { locale, translateServer } from "./i18n";
 export type Fact = {
   uuid: string; name: string; fact: string; status: "current" | "invalidated" | "future";
@@ -34,11 +35,14 @@ async function check(r: Response) {
   return r.json();
 }
 
+/** El servidor responde (errores incluidos) en el idioma que tiene activo la interfaz, no en el del navegador. */
+export const langHeaders = (): Record<string, string> => ({ "Accept-Language": i18n.language });
+
 export async function get<T>(path: string, params: Record<string, string | number | boolean | undefined> = {}): Promise<T> {
-  return check(await fetch(url(path, params), { credentials: "include" }));
+  return check(await fetch(url(path, params), { credentials: "include", headers: langHeaders() }));
 }
 export async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown, params: Record<string, string | undefined> = {}): Promise<T> {
-  return check(await fetch(url(path, params), { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }));
+  return check(await fetch(url(path, params), { method, credentials: "include", headers: { "Content-Type": "application/json", ...langHeaders() }, body: body === undefined ? undefined : JSON.stringify(body) }));
 }
 
 export type Brain = { slug: string; name: string; description: string; graph_name: string; role: string };

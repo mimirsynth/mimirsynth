@@ -57,5 +57,8 @@ claude mcp add --transport http mimirsynth "$URL/api/brains/my-brain/mcp" --head
 ## Claude Code
 The [`integrations/claude-code`](../integrations/claude-code) folder includes a *hook* that injects recall into every prompt and a script to send learnings as proposals.
 
+## Language
+Error messages, the MCP tool descriptions and instructions, and the headings of the recall context come in the caller's language: the `Accept-Language` header if it asks for a supported language (`es`, `en`), otherwise the language the token's owner chose in My account, otherwise the instance default. Stored memory (facts, episodes, documents) is returned as it was written.
+
 ## API reference
 With the application running, the interactive documentation (OpenAPI) is at `/docs`.

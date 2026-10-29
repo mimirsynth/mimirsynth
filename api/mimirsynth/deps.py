@@ -24,6 +24,7 @@ def hash_token(raw: str) -> str:
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     request.state.token = None
+    request.state.locale = ""  # idioma de las respuestas (ver i18n.language)
     auth = request.headers.get("authorization", "")
     if auth.lower().startswith("bearer "):  # agentes: token de API acotado a un brain
         tok = db.scalar(select(ApiToken).where(ApiToken.token_hash == hash_token(auth[7:].strip()), ApiToken.revoked.is_(False)))
@@ -33,6 +34,7 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
             raise HTTPException(401, "token inválido")
         tok.last_used_at = now(); db.commit()
         request.state.token = tok
+        request.state.locale = tok.user.locale or ""
         return tok.user
     if settings.auth_mode == "off":  # prototipo: un administrador local implícito
         u = db.scalar(select(User).where(User.sub == "local-admin"))
@@ -41,11 +43,13 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
             db.add(u); db.commit()
         elif not u.is_admin:  # en modo prototipo el administrador local siempre es administrador
             u.is_admin = True; db.commit()
+        request.state.locale = u.locale or ""
         return u
     uid = request.session.get("uid")
     u = db.get(User, uid) if uid else None
     if not u or request.session.get("ep", 0) != u.session_epoch:  # sesión cerrada desde «Mi cuenta» en otro dispositivo
         raise HTTPException(401, "no autenticado")
+    request.state.locale = u.locale or ""
     if u.status != "active":
         raise HTTPException(401, "cuenta deshabilitada")
     if needs_2fa_setup(request, u) and not request.url.path.startswith(("/api/me/2fa", "/api/auth/")) and request.url.path not in ("/api/me", "/api/config"):

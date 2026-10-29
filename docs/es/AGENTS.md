@@ -57,5 +57,8 @@ claude mcp add --transport http mimirsynth "$URL/api/brains/mi-brain/mcp" --head
 ## Claude Code
 La carpeta [`integrations/claude-code`](../../integrations/claude-code/README.es.md) incluye un *hook* que inyecta el recall en cada prompt y un script para enviar aprendizajes como propuestas.
 
+## Idioma
+Los mensajes de error, las descripciones e instrucciones de las herramientas del MCP y los encabezados del contexto del recall llegan en el idioma de quien llama: el de la cabecera `Accept-Language` si pide uno disponible (`es`, `en`); si no, el que la persona dueña del token eligió en «Mi cuenta»; si no, el de la instancia. La memoria guardada (hechos, episodios, documentos) se devuelve tal como se escribió.
+
 ## Referencia de la API
 Con la aplicación en marcha, la documentación interactiva (OpenAPI) está en `/docs`.

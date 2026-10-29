@@ -55,7 +55,7 @@ def test_mcp_auth_and_isolation(client):  # noqa: F811
 def test_mcp_recall_tool(client, monkeypatch):  # noqa: F811
     tok = _token(client, "mcp4", "reader")
     seen = {}
-    def fake(brain_id, graph, query, facts, chunks, max_chars, n_docs=None):
+    def fake(brain_id, graph, query, facts, chunks, max_chars, n_docs=None, lang="es"):
         seen.update(graph=graph, query=query, facts=facts, docs=n_docs)
         return {"context": "## Hechos\n- Nextcloud corre en Notus", "facts": [], "chunks": []}
     monkeypatch.setattr(mcp_server, "recall", fake)
@@ -73,7 +73,7 @@ def test_mcp_recall_tool(client, monkeypatch):  # noqa: F811
 def test_mcp_remember_respects_roles(client, monkeypatch):  # noqa: F811
     from mimirsynth import ingest
     monkeypatch.setattr(ingest, "enabled", lambda: False)  # sin LLM: la aprobada no se ingiere
-    c = TestClient(app)
+    c = TestClient(app, headers={"Accept-Language": "es"})
     args = {"name": "Nextcloud en Notus", "body": "Nextcloud corre en el LXC Notus desde octubre.", "confidence": 0.9}
     reader_tok = _token(client, "mcp5", "reader")
     r = rpc(c, "mcp5", "tools/call", {"name": "remember", "arguments": args}, token=reader_tok).json()["result"]
