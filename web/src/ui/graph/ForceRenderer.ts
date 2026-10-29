@@ -1,12 +1,17 @@
 import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from "d3-force";
+import { polygonHull } from "d3-polygon";
 import { quadtree } from "d3-quadtree";
 import { select } from "d3-selection";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { CANVAS } from "../palette";
 
 /** Lo que el renderer necesita de cada nodo y arista; el resto de la pantalla no ve d3 ni el canvas. */
-export type RNode = { id: string; color: string; size: number; caption: string; visible: boolean };
-export type RLink = { id: string; source: string; target: string; label: string; color: string; dashed: boolean; visible: boolean };
+/** `groups`: claves de los halos (orígenes) a los que pertenece el nodo; `ring`: respaldado por 2 o más orígenes. */
+export type RNode = { id: string; color: string; size: number; caption: string; visible: boolean; groups?: string[]; ring?: boolean };
+/** `strong`: hecho respaldado por 2 o más orígenes (se dibuja más grueso). */
+export type RLink = { id: string; source: string; target: string; label: string; color: string; dashed: boolean; visible: boolean; strong?: boolean };
+/** Halo de un origen: envuelve a sus nodos y los atrae hacia su ancla. El orden es el de la leyenda. */
+export type RHalo = { key: string; name: string; color: string };
 export type RendererEvents = {
   nodeClick?: (id: string) => void;
   nodeContextMenu?: (id: string) => void;
@@ -14,7 +19,7 @@ export type RendererEvents = {
   backgroundClick?: () => void;
 };
 
-type SNode = RNode & SimulationNodeDatum;
+type SNode = RNode & SimulationNodeDatum & { ax?: number; ay?: number; pull?: number };  // ancla: media de las de sus halos
 type SLink = Omit<RLink, "source" | "target"> & SimulationLinkDatum<SNode> & { source: SNode; target: SNode; bend: number };
 
 const FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
@@ -22,6 +27,15 @@ const SETTLE_MS = 400;           // presupuesto para pre-asentar un grafo nuevo 
 const LABEL_ZOOM = 0.7;          // por debajo, las etiquetas de las aristas no se leen y solo ensucian
 const CAPTION_ZOOM = 0.45;
 const CLICK_SLOP = 4;            // píxeles que puede moverse el puntero y seguir siendo un clic
+const MAX_LABELS = 120;          // textos por fotograma: el texto con contorno es lo más caro de dibujar (sobre todo sin GPU)
+const FOLLOW_MS = 4000;          // un encuadre sigue a la simulación como mucho este tiempo
+const HALO_PAD = 26;             // margen del halo alrededor de cada nodo
+const PULL = 0.15;               // fuerza hacia el ancla de los orígenes: alta para que un origen con pocos enlaces no se disperse
+const PULL_NONE = 0.04;
+const LINK = 0.3;
+const LINK_WITH_HALOS = 0.08;
+const CHARGE = -220;
+const CHARGE_WITH_HALOS = -90;  // con halos, la repulsión no debe deshacer los grupos
 
 /** Hash estable de un id → [0, 1): la posición inicial no depende del orden en que llegan los datos. */
 function hash(s: string): number {
@@ -72,15 +86,17 @@ export class ForceRenderer {
   private anim = 0;
   private pendingFit: (() => void) | null = null;  // encuadre pedido antes de conocer el tamaño del lienzo
   private cleanup: (() => void)[] = [];
+  private halos: RHalo[] = [];
+  private anchorSig = "";
 
   constructor(private canvas: HTMLCanvasElement, private events: RendererEvents = {}) {
     this.ctx = canvas.getContext("2d")!;
     this.sim = forceSimulation<SNode, SLink>()
-      .force("link", forceLink<SNode, SLink>().id((d) => d.id).distance(70).strength(0.3))
-      .force("charge", forceManyBody<SNode>().strength(-220).distanceMax(600))
+      .force("link", forceLink<SNode, SLink>().id((d) => d.id).distance(70).strength(LINK))
+      .force("charge", forceManyBody<SNode>().strength(CHARGE).distanceMax(600))
       .force("collide", forceCollide<SNode>((d) => d.size + 4))
-      .force("x", forceX<SNode>(0).strength(0.04))
-      .force("y", forceY<SNode>(0).strength(0.04))
+      .force("x", forceX<SNode>((d) => d.ax ?? 0).strength((d) => d.pull ?? PULL_NONE))
+      .force("y", forceY<SNode>((d) => d.ay ?? 0).strength((d) => d.pull ?? PULL_NONE))
       .on("tick", () => this.request())
       .stop();
     this.zoomer = zoom<HTMLCanvasElement, unknown>()
@@ -96,6 +112,8 @@ export class ForceRenderer {
     on("pointermove", (ev) => this.onMove(ev));
     on("pointerup", (ev) => this.onUp(ev));
     on("pointerleave", () => { if (this.hover) { this.hover = null; this.canvas.style.cursor = ""; this.request(); } });
+    on("pointercancel", () => this.endDrag());  // sin esto, un arrastre cancelado dejaría la simulación caliente para siempre
+    on("lostpointercapture", () => this.endDrag());
     on("contextmenu", (ev) => {
       const n = this.nodeAt(ev.offsetX, ev.offsetY);
       if (n) { ev.preventDefault(); this.events.nodeContextMenu?.(n.id); }
@@ -105,7 +123,9 @@ export class ForceRenderer {
   setEvents(events: RendererEvents) { this.events = events; }
 
   resize(w: number, h: number) {
-    this.dpr = window.devicePixelRatio || 1;
+    const dpr = window.devicePixelRatio || 1;
+    if (w === this.w && h === this.h && dpr === this.dpr) return;
+    this.dpr = dpr;
     const first = !this.w;
     this.w = w; this.h = h;
     this.canvas.width = Math.max(1, Math.floor(w * this.dpr));
@@ -117,8 +137,9 @@ export class ForceRenderer {
 
   /** Datos nuevos. Conserva la posición de los nodos que ya estaban; si cambia la topología, recoloca:
    * un grafo nuevo se asienta antes de pintarlo y una expansión crece animada desde el nodo vecino. */
-  setData(nodes: RNode[], links: RLink[]) {
+  setData(nodes: RNode[], links: RLink[], halos: RHalo[] = []) {
     const old = this.byId;
+    this.halos = halos;
     const kept = nodes.filter((n) => old.has(n.id)).length;
     const sameTopo = kept === nodes.length && kept === old.size && links.length === this.links.length && links.every((l, i) => this.links[i]?.id === l.id);
     this.byId = new Map();
@@ -135,7 +156,12 @@ export class ForceRenderer {
       const dir = l.source < l.target ? 1 : -1;  // misma curva vista desde ambos extremos
       return { ...l, source: this.byId.get(l.source)!, target: this.byId.get(l.target)!, bend: i ? dir * Math.ceil(i / 2) * (i % 2 ? 0.18 : -0.18) : 0 };
     });
-    if (sameTopo) { this.request(); return; }
+    const reanchor = this.anchor();
+    if (sameTopo) {
+      if (reanchor && !this.paused) this.sim.alpha(Math.max(this.sim.alpha(), 0.5)).restart();  // otros halos: los nodos se recolocan animados
+      this.request();
+      return;
+    }
     const fresh = this.nodes.filter((n) => n.x === undefined);
     for (const n of fresh) {
       const nb = this.links.find((l) => (l.source === n && l.target.x !== undefined) || (l.target === n && l.source.x !== undefined));
@@ -153,6 +179,44 @@ export class ForceRenderer {
     this.sim.alpha(kept ? 0.4 : this.sim.alpha());
     if (!this.paused) this.sim.restart();
     this.request();
+  }
+
+  /** Coloca un ancla por halo y da a cada nodo como destino la media de las anclas de sus halos: un nodo de dos orígenes
+   * queda entre ambos, en la intersección. Los halos que comparten más nodos van contiguos en el círculo. Los nodos sin
+   * halo van a una zona neutra debajo. Devuelve si algo cambió (para recolocar). */
+  private anchor(): boolean {
+    const keys = this.halos.map((h) => h.key);
+    const sig = keys.join("|") + "#" + this.nodes.map((n) => (n.groups ?? []).join(",")).join(";");
+    if (sig === this.anchorSig) return false;
+    this.anchorSig = sig;
+    const pos = new Map<string, [number, number]>();
+    if (keys.length) {
+      const shared = new Map<string, number>();
+      for (const n of this.nodes) {
+        const g = (n.groups ?? []).filter((k) => keys.includes(k));
+        for (let i = 0; i < g.length; i++) for (let j = i + 1; j < g.length; j++) for (const k of [`${g[i]}|${g[j]}`, `${g[j]}|${g[i]}`]) shared.set(k, (shared.get(k) ?? 0) + 1);
+      }
+      const order = [keys[0]], left = keys.slice(1);
+      while (left.length) {  // cadena voraz: a continuación, el que más comparte con el último colocado
+        const last = order[order.length - 1];
+        let bi = 0;
+        left.forEach((k, i) => { if ((shared.get(`${last}|${k}`) ?? 0) > (shared.get(`${last}|${left[bi]}`) ?? 0)) bi = i; });
+        order.push(left.splice(bi, 1)[0]);
+      }
+      const r = order.length === 1 ? 0 : 120 + 30 * Math.sqrt(this.nodes.length);
+      order.forEach((k, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / order.length; pos.set(k, [Math.cos(a) * r, Math.sin(a) * r]); });
+      const neutral: [number, number] = [0, r + 180];
+      for (const n of this.nodes) {
+        const ps = (n.groups ?? []).map((k) => pos.get(k)).filter((q): q is [number, number] => !!q);
+        if (ps.length) { n.ax = ps.reduce((a, q) => a + q[0], 0) / ps.length; n.ay = ps.reduce((a, q) => a + q[1], 0) / ps.length; n.pull = PULL; }
+        else { [n.ax, n.ay] = neutral; n.pull = PULL_NONE * 2; }
+      }
+    } else for (const n of this.nodes) { n.ax = 0; n.ay = 0; n.pull = PULL_NONE; }
+    (this.sim.force("link") as any).strength(keys.length ? LINK_WITH_HALOS : LINK);  // con halos manda el origen: las aristas tiran menos
+    (this.sim.force("charge") as any).strength(keys.length ? CHARGE_WITH_HALOS : CHARGE);
+    (this.sim.force("x") as any).x((d: SNode) => d.ax ?? 0);  // reinicializa los destinos
+    (this.sim.force("y") as any).y((d: SNode) => d.ay ?? 0);
+    return true;
   }
 
   setSelection(node: string | null, link: string | null) {
@@ -174,7 +238,7 @@ export class ForceRenderer {
     this.animateTo(() => {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (const n of ns) { x0 = Math.min(x0, n.x! - n.size); y0 = Math.min(y0, n.y! - n.size); x1 = Math.max(x1, n.x! + n.size); y1 = Math.max(y1, n.y! + n.size); }
-      const pad = 40, k = Math.min(only ? 2 : 1.5, (this.w - pad * 2) / Math.max(x1 - x0, 1), (this.h - pad * 2) / Math.max(y1 - y0, 1));
+      const pad = this.halos.length ? 64 : 40, k = Math.min(only ? 2 : 1.5, (this.w - pad * 2) / Math.max(x1 - x0, 1), (this.h - pad * 2) / Math.max(y1 - y0, 1));
       return zoomIdentity.translate(this.w / 2 - k * (x0 + x1) / 2, this.h / 2 - k * (y0 + y1) / 2).scale(k);
     }, ms);
   }
@@ -244,7 +308,7 @@ export class ForceRenderer {
     const d = this.drag, down = this.down;
     this.drag = null; this.down = null;
     if (d) {
-      this.canvas.releasePointerCapture(ev.pointerId);
+      if (this.canvas.hasPointerCapture(ev.pointerId)) this.canvas.releasePointerCapture(ev.pointerId);
       if (d.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); return; }
       this.events.nodeClick?.(d.node.id);
       return;
@@ -252,6 +316,12 @@ export class ForceRenderer {
     if (ev.button !== 0 || !down || Math.hypot(ev.offsetX - down.x, ev.offsetY - down.y) >= CLICK_SLOP) return;  // fue un arrastre del lienzo
     const l = this.linkAt(ev.offsetX, ev.offsetY);
     if (l) this.events.linkClick?.(l.id); else this.events.backgroundClick?.();
+  }
+
+  private endDrag() {
+    const d = this.drag;
+    this.drag = null; this.down = null;
+    if (d?.moved) { d.node.fx = null; d.node.fy = null; this.sim.alphaTarget(0); }
   }
 
   private animateTo(goal: () => ZoomTransform, ms: number) {
@@ -264,7 +334,7 @@ export class ForceRenderer {
       const p = ease(Math.min(1, (now - start) / ms)), target = goal();
       const k = from.k * Math.pow(target.k / from.k, p);
       this.zoomer.transform(sel, zoomIdentity.translate(from.x + (target.x - from.x) * p, from.y + (target.y - from.y) * p).scale(k));
-      if (p < 1 || (!this.paused && this.sim.alpha() > 0.03)) this.anim = requestAnimationFrame(step);  // sigue al nodo mientras la simulación lo mueva
+      if (p < 1 || (!this.paused && this.sim.alpha() > 0.03 && now - start < FOLLOW_MS)) this.anim = requestAnimationFrame(step);  // sigue al nodo mientras la simulación lo mueva
     };
     this.anim = requestAnimationFrame(step);
   }
@@ -286,12 +356,13 @@ export class ForceRenderer {
     const onScreen = (x: number, y: number, m = 0) => x >= vx0 - m && x <= vx1 + m && y >= vy0 - m && y <= vy1 + m;
     const links = this.links.filter((l) => this.linkVisible(l));
     const px = 1 / t.k;  // un píxel de pantalla en unidades del mundo
+    this.drawHalos(px);
 
     // aristas, agrupadas por estilo para trazar cada grupo de una vez
     const groups = new Map<string, SLink[]>();
     for (const l of links) {
       if (l.id === this.selectedLink) continue;
-      const k = `${l.color}|${l.dashed ? 1 : 0}`;
+      const k = `${l.color}|${l.dashed ? 1 : 0}|${l.strong ? 1 : 0}`;
       (groups.get(k) ?? groups.set(k, []).get(k)!).push(l);
     }
     const stroke = (ls: SLink[], color: string, dashed: boolean, width: number) => {
@@ -317,18 +388,22 @@ export class ForceRenderer {
       ctx.setLineDash([]);
       ctx.fillStyle = color; ctx.fill();
     };
-    for (const [k, ls] of groups) { const [color, dashed] = k.split("|"); stroke(ls, color, dashed === "1", 1.2); }
+    for (const [k, ls] of groups) { const [color, dashed, strong] = k.split("|"); stroke(ls, color, dashed === "1", strong === "1" ? 2.6 : 1.2); }
     const selLink = links.find((l) => l.id === this.selectedLink);
     if (selLink) stroke([selLink], CANVAS.selected, selLink.dashed, 2.5);
 
-    // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo)
-    if (t.k >= LABEL_ZOOM || selLink) {
+    // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo).
+    // Si en pantalla hay más de MAX_LABELS, solo las de lo seleccionado o señalado: hay que acercarse para leer el resto.
+    const focusId = this.selectedNode ?? this.hover;
+    const mid = (l: SLink): [number, number] => { const [cx, cy] = control(l); return [(l.source.x! + 2 * cx + l.target.x!) / 4, (l.source.y! + 2 * cy + l.target.y!) / 4]; };
+    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && onScreen(...mid(l), 50)) : [];
+    if (labelled.length > MAX_LABELS) labelled = labelled.filter((l) => l.id === this.selectedLink || l.source.id === focusId || l.target.id === focusId);
+    if (selLink && !labelled.includes(selLink)) labelled.push(selLink);
+    if (labelled.length) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "middle";
       const fs = 1 / Math.max(t.k, 1);  // con mucho zoom el texto no crece sin límite
-      for (const l of t.k >= LABEL_ZOOM ? links : [selLink!]) {
-        const [cx, cy] = control(l);
-        const mx = (l.source.x! + 2 * cx + l.target.x!) / 4, my = (l.source.y! + 2 * cy + l.target.y!) / 4;
-        if (!onScreen(mx, my, 50) || !l.label) continue;
+      for (const l of labelled) {
+        const [mx, my] = mid(l);
         let ang = Math.atan2(l.target.y! - l.source.y!, l.target.x! - l.source.x!);
         if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
         ctx.save();
@@ -346,21 +421,56 @@ export class ForceRenderer {
       ctx.beginPath(); ctx.arc(n.x, n.y!, n.size, 0, Math.PI * 2);
       ctx.fillStyle = n.color; ctx.fill();
       const sel = n.id === this.selectedNode, hov = n.id === this.hover;
+      if (n.ring && !sel) {  // respaldado por varios orígenes
+        ctx.beginPath(); ctx.arc(n.x, n.y!, n.size + 3 * px, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5 * px; ctx.strokeStyle = CANVAS.foreground; ctx.stroke();
+      }
       if (sel || hov) { ctx.lineWidth = (sel ? 3 : 2) * px; ctx.strokeStyle = sel ? CANVAS.selected : CANVAS.foreground; ctx.stroke(); }
     }
-    // nombres
-    if (t.k >= CAPTION_ZOOM || this.selectedNode || this.hover) {
+    // nombres (con el mismo tope de textos por fotograma)
+    const named = this.nodes.filter((n) => n.visible && n.x !== undefined && onScreen(n.x, n.y!, 80));
+    const all = t.k >= CAPTION_ZOOM && named.length <= MAX_LABELS;
+    if (all || focusId) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "top";
       const fs = 1 / Math.max(t.k, 1);
-      for (const n of this.nodes) {
+      for (const n of named) {
         const focus = n.id === this.selectedNode || n.id === this.hover;
-        if (!n.visible || n.x === undefined || !onScreen(n.x, n.y!, 80) || (t.k < CAPTION_ZOOM && !focus)) continue;
+        if (!all && !focus) continue;
         const txt = !focus && n.caption.length > 24 ? n.caption.slice(0, 23) + "…" : n.caption;
-        ctx.save(); ctx.translate(n.x, n.y! + n.size + 2 * px); ctx.scale(fs, fs);
+        ctx.save(); ctx.translate(n.x!, n.y! + n.size + 2 * px); ctx.scale(fs, fs);
         ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(txt, 0, 0);
         ctx.fillStyle = CANVAS.foreground; ctx.fillText(txt, 0, 0);
         ctx.restore();
       }
+    }
+  }
+
+  /** Zona translúcida del color de cada origen alrededor de sus nodos visibles (envolvente convexa suavizada), con su nombre y recuento. */
+  private drawHalos(px: number) {
+    const { ctx } = this;
+    for (const h of this.halos) {
+      const ns = this.nodes.filter((n) => n.visible && n.x !== undefined && n.groups?.includes(h.key));
+      if (ns.length < 2) continue;
+      const pts: [number, number][] = [];
+      for (const n of ns) for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, r = n.size + HALO_PAD; pts.push([n.x! + Math.cos(a) * r, n.y! + Math.sin(a) * r]); }
+      const hull = polygonHull(pts);
+      if (!hull) continue;
+      const mid = (a: [number, number], b: [number, number]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      ctx.beginPath();
+      let m = mid(hull[hull.length - 1], hull[0]);
+      ctx.moveTo(m[0], m[1]);
+      hull.forEach((q, i) => { m = mid(q, hull[(i + 1) % hull.length]); ctx.quadraticCurveTo(q[0], q[1], m[0], m[1]); });
+      ctx.closePath();
+      ctx.fillStyle = h.color; ctx.globalAlpha = 0.08; ctx.fill();
+      ctx.strokeStyle = h.color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1.2 * px; ctx.setLineDash([]); ctx.stroke();
+      ctx.globalAlpha = 1;
+      const top = hull.reduce((a, b) => (b[1] < a[1] ? b : a));  // nombre sobre la corona del halo, a tamaño de pantalla constante
+      const label = `${h.name.length > 22 ? h.name.slice(0, 21) + "…" : h.name} · ${ns.length}`;
+      ctx.save(); ctx.translate(top[0], top[1] - 4 * px); ctx.scale(px, px);
+      ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+      ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(label, 0, 0);
+      ctx.fillStyle = h.color; ctx.fillText(label, 0, 0);
+      ctx.restore();
     }
   }
 }

@@ -31,7 +31,7 @@ Las pantallas no usan los primitivos de Mantine para estos elementos: usan siemp
 | Contenedor | `Panel` | Con filete sobre la superficie. |
 | Copiar | `CopyBtn` | |
 | Tema claro/oscuro | `ThemeToggle` | Interruptor con sol y luna. |
-| Grafo (fuerzas, 2D) | `GraphCanvas` | Canvas propio con d3-force: recibe nodos y aristas ya decididos (color, tamaño, visibilidad) y avisa de clic, clic derecho y fondo; `ref` da `fit()` y `toPng()`. Cambiar la visibilidad no recoloca; un grafo nuevo se asienta antes de pintarse y una expansión crece animada. Colores de `CANVAS` (`palette.ts`). |
+| Grafo (fuerzas, 2D) | `GraphCanvas` | Canvas propio con d3-force: recibe nodos, aristas y halos ya decididos (color, tamaño, visibilidad, `groups` de cada nodo, `ring` y `strong` para lo respaldado por varios orígenes) y avisa de clic, clic derecho y fondo; `ref` da `fit()` y `toPng()`. Cambiar la visibilidad no recoloca; un grafo nuevo se asienta antes de pintarse y una expansión crece animada. Cada halo tiene un ancla y un nodo va a la media de las anclas de sus halos, así que uno de dos orígenes queda en la intersección. Colores de `CANVAS` y `HALO_PALETTE` (`palette.ts`). |
 
 Los estilos están en `src/theme.css` (sección «Componentes de la aplicación») y salen de los tokens de la identidad (artefacto de diseño). `npm run check:ui` falla si una pantalla importa de Mantine uno de estos primitivos (Badge, Button, Table, SegmentedControl, Tabs, Modal, NavLink, ActionIcon, Slider, Progress, Tooltip, TextInput, NumberInput, PasswordInput, Textarea, Select, Autocomplete, Checkbox, Switch, Alert, Card, Paper, CopyButton).
 
