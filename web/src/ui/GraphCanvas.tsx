@@ -9,6 +9,8 @@ export type GraphCanvasHandle = {
   fit: (ms?: number, only?: (id: string) => boolean) => void;
   /** PNG de lo que se ve, como data URL. */
   toPng: () => string | null;
+  /** Suelta los nodos fijados al arrastrarlos y recoloca el grafo. */
+  resetPositions: () => void;
 };
 
 /** Lienzo de grafo, en 2D (canvas) o en 3D (WebGL): recibe nodos, aristas y halos ya decididos (color, tamaño, visibilidad, origen) y avisa de los clics.
@@ -52,7 +54,7 @@ export function GraphCanvas({ nodes, links, halos, dim = "2d", layout = "force",
   useEffect(() => { r.current?.setData(nodes, links, halos); }, [nodes, links, halos]);
   useEffect(() => { r.current?.setSelection(selectedNode ?? null, selectedLink ?? null); }, [selectedNode, selectedLink]);
   useEffect(() => { r.current?.setPaused(!!paused); }, [paused]);
-  useImperativeHandle(ref, () => ({ fit: (ms, only) => r.current?.fit(ms, only), toPng: () => r.current?.toPng() ?? null }), []);
+  useImperativeHandle(ref, () => ({ fit: (ms, only) => r.current?.fit(ms, only), toPng: () => r.current?.toPng() ?? null, resetPositions: () => r.current?.resetPositions() }), []);
 
   const tipText = tip ? nodes.find((n) => n.id === tip.id)?.tooltip : undefined;
   return (

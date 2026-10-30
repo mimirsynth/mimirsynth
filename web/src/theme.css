@@ -327,14 +327,15 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-split-main { flex: none; height: 420px; }
   .ms-split-aside { width: auto; height: 260px; flex-shrink: 0; }
 }
-.ms-legend-box { position: absolute; top: 8px; left: 8px; max-width: 200px; max-height: 75%; overflow: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); opacity: 0.95; font-size: 12px; color: var(--ms-ink); }
+.ms-legend-box { position: absolute; top: 8px; left: 8px; max-width: 240px; max-height: calc(100% - 16px); overflow-x: hidden; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); opacity: 0.95; font-size: 12px; color: var(--ms-ink); }
 .ms-legend-head { display: flex; justify-content: space-between; gap: 8px; padding: 0; font: inherit; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ms-muted); background: none; border: 0; cursor: pointer; }
 .ms-legend-sec { margin-top: 4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ms-muted); }
-.ms-legend-item { display: flex; align-items: center; gap: 6px; padding: 1px 0; font: inherit; color: inherit; text-align: left; background: none; border: 0; cursor: pointer; }
+.ms-legend-item { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 1px 0; font: inherit; color: inherit; text-align: left; background: none; border: 0; cursor: pointer; }
 .ms-legend-item[data-off] { opacity: 0.35; }
 .ms-legend-dot { width: 10px; height: 10px; border-radius: 5px; flex-shrink: 0; }
 .ms-legend-line { width: 14px; height: 2px; background: #5c7cfa; flex-shrink: 0; }
-.ms-legend-n { color: var(--ms-muted); }
+.ms-legend-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-legend-n { color: var(--ms-muted); flex-shrink: 0; }
 .ms-field { --input-placeholder-color: var(--ms-muted); }
 .ms-btn[data-kind="primary"][data-disabled] { opacity: 0.7; filter: grayscale(0.55); }
 .ms-mobilebar { display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--ms-raised); border-bottom: 1px solid var(--ms-line); }

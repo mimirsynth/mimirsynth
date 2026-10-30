@@ -6,11 +6,12 @@ import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY
 import type { Simulation, SimulationNodeDatum } from "d3-force";
 import { CANVAS } from "../palette";
 import { anchorOrder, hash, placeLayout, type Layout } from "./layouts";
-import { CHARGE, CHARGE_WITH_HALOS, DIM, ease, ENTER_MS, FOLLOW_MS, LINK, LINK_WITH_HALOS, MAX_LABELS, MAX_LABELS_REDUCED, MORPH_MS, PULL, PULL_NONE, SLOW_FRAMES, SLOW_MS,
+import { CHARGE, CHARGE_WITH_HALOS, DIM, ease, ENTER_MS, FADE_MS, FOCUS_DELAY, FOLLOW_MS, LINK, LINK_WITH_HALOS, MAX_LABELS, MAX_LABELS_REDUCED, MORPH_MS, PARTICLE_MS, PULL, PULL_NONE, SLOW_FRAMES, SLOW_MS,
   type Effects, type EffectsMode, type GraphRenderer, type RendererEvents, type RHalo, type RLink, type RNode } from "./types";
 
-type SNode = RNode & SimulationNodeDatum & { z?: number; vz?: number; fz?: number | null; ax?: number; ay?: number; az?: number; pull?: number };
-type SLink = Omit<RLink, "source" | "target"> & { source: SNode; target: SNode; bend: number };
+// `lit`: 1 a plena luz, 0 atenuado por el foco (con fundido); `pinned`: fijado al arrastrarlo
+type SNode = RNode & SimulationNodeDatum & { z?: number; vz?: number; fz?: number | null; ax?: number; ay?: number; az?: number; pull?: number; lit?: number; pinned?: boolean };
+type SLink = Omit<RLink, "source" | "target"> & { source: SNode; target: SNode; bend: number; lit?: number };
 
 const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 const FONT_PX = 28;              // tamaño del texto en su textura (se dibuja grande para que se lea nítido)
@@ -23,7 +24,8 @@ const TICK_MS = 1000 / 60;       // avanza a 60 pasos por segundo aunque los fot
 const CLICK_SLOP = 4;
 const HALO_PAD = 22;             // margen del volumen del halo alrededor de cada nodo
 const HALO_EVERY = 120;          // mientras algo se mueve, la envolvente se recalcula como mucho cada tantos ms
-const HALO_ALPHA = 0.45;         // opacidad del borde del volumen; el interior queda casi transparente
+const HALO_ALPHA = 0.3;          // opacidad del borde del volumen; el interior queda casi transparente
+const MANY_LINKS = 150;          // con más aristas visibles, las que no están en foco se aclaran para que el 3D se pueda leer
 const LEVEL_DEPTH = 70;          // radial y árbol: cada nivel, un paso hacia el fondo
 const CURVE = 8;                 // tramos de una arista curva
 const TEXT_CACHE = 600;
@@ -70,6 +72,11 @@ export class Force3DRenderer implements GraphRenderer {
   private selectedNode: string | null = null;
   private selectedLink: string | null = null;
   private hover: string | null = null;
+  private focusHover: string | null = null;  // nodo señalado que ya hace de foco: el ratón se quedó FOCUS_DELAY sobre él
+  private focusTimer = 0;
+  private fadeAt = 0;
+  private haloLit = 1;
+  private pins: THREE.Sprite[] = [];
   private halos: RHalo[] = [];
   private anchorSig = "";
   private mode: EffectsMode = "auto";
@@ -103,6 +110,7 @@ export class Force3DRenderer implements GraphRenderer {
   private particles: THREE.Points;
   private ringTex: THREE.CanvasTexture;
   private rings: THREE.Sprite[] = [];
+  private pinTex: THREE.CanvasTexture;
   private labels: THREE.Sprite[] = [];
   private text = new Map<string, { tex: THREE.CanvasTexture; aspect: number }>();
   private haloObjs = new Map<string, { mesh: THREE.Mesh; mat: THREE.ShaderMaterial }>();
@@ -133,12 +141,17 @@ export class Force3DRenderer implements GraphRenderer {
     this.scene.add(this.arrows);
     const pg = new THREE.BufferGeometry();
     pg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * 120), 3));
-    this.particles = new THREE.Points(pg, new THREE.PointsMaterial({ color: CANVAS.foreground, size: 4, sizeAttenuation: true }));
+    this.particles = new THREE.Points(pg, new THREE.PointsMaterial({ color: CANVAS.foreground, size: 3, sizeAttenuation: true, transparent: true, depthWrite: false }));
     this.particles.frustumCulled = false;
     this.scene.add(this.particles);
     this.ringTex = (() => {
       const c = document.createElement("canvas"); c.width = c.height = 64;
       const x = c.getContext("2d")!; x.strokeStyle = CANVAS.foreground; x.lineWidth = 5; x.beginPath(); x.arc(32, 32, 27, 0, Math.PI * 2); x.stroke();
+      const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+    })();
+    this.pinTex = (() => {
+      const c = document.createElement("canvas"); c.width = c.height = 32;
+      const x = c.getContext("2d")!; x.beginPath(); x.arc(16, 16, 12, 0, Math.PI * 2); x.fillStyle = CANVAS.foreground; x.fill(); x.lineWidth = 4; x.strokeStyle = CANVAS.background; x.stroke();
       const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
     })();
 
@@ -162,6 +175,7 @@ export class Force3DRenderer implements GraphRenderer {
     on("pointermove", (ev) => this.onMove(ev));
     on("pointerup", (ev) => this.onUp(ev));
     on("pointerleave", () => this.setHover(null));
+    on("dblclick", (ev) => { const n = this.nodeAt(ev.offsetX, ev.offsetY); if (n?.pinned) this.unpin([n]); });
     on("pointercancel", () => this.endDrag());
     on("lostpointercapture", () => this.endDrag());
     on("contextmenu", (ev) => { const n = this.nodeAt(ev.offsetX, ev.offsetY); if (n) { ev.preventDefault(); this.events.nodeContextMenu?.(n.id); } });
@@ -306,7 +320,7 @@ export class Force3DRenderer implements GraphRenderer {
     if (!this.nodes.length) return;
     this.anchorSig = ""; this.anchor();
     if (layout === "force") {
-      for (const n of this.nodes) { n.fx = null; n.fy = null; n.fz = null; }
+      for (const n of this.nodes) { n.fx = null; n.fy = null; n.fz = null; n.pinned = false; }
       if (this.still) this.settle(0.6); else if (!this.paused) this.sim.alpha(0.6).restart();
     } else this.place(true);
     this.hullDirty = true;
@@ -321,7 +335,7 @@ export class Force3DRenderer implements GraphRenderer {
     for (const n of this.nodes) {
       const q = p.get(n.id)!;
       if (n.x !== undefined) from.set(n.id, [n.x, n.y!, n.z ?? 0]);
-      n.fx = q.x; n.fy = -q.y; n.fz = -q.level * LEVEL_DEPTH; n.vx = n.vy = n.vz = 0;
+      n.fx = q.x; n.fy = -q.y; n.fz = -q.level * LEVEL_DEPTH; n.vx = n.vy = n.vz = 0; n.pinned = false;
       if (n.x === undefined || !animate || this.still) { n.x = n.fx; n.y = n.fy; n.z = n.fz; }
     }
     this.morph = animate && !this.still ? { from, start: performance.now() } : null;
@@ -379,9 +393,10 @@ export class Force3DRenderer implements GraphRenderer {
     this.controls.dispose();
     for (const h of this.haloObjs.values()) { h.mesh.geometry.dispose(); h.mat.dispose(); }
     for (const t of this.text.values()) t.tex.dispose();
-    for (const s of [...this.rings, ...this.labels]) (s.material as THREE.SpriteMaterial).dispose();
+    clearTimeout(this.focusTimer);
+    for (const s of [...this.rings, ...this.pins, ...this.labels]) (s.material as THREE.SpriteMaterial).dispose();
     this.scene.traverse((o) => { const m = o as THREE.Mesh; if (m.geometry) m.geometry.dispose(); if (m.material) (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x.dispose()); });
-    this.ringTex.dispose(); this.sphere.dispose(); this.sphereLow.dispose();
+    this.ringTex.dispose(); this.pinTex.dispose(); this.sphere.dispose(); this.sphereLow.dispose();
     this.gl.dispose();
     this.gl.forceContextLoss();  // cada vuelta a 3D abriría otro contexto WebGL, y el navegador admite pocos
   }
@@ -408,9 +423,17 @@ export class Force3DRenderer implements GraphRenderer {
     return (h.object === this.lines ? this.lineOwner : this.dashOwner)[Math.floor(h.index / 2)];
   }
 
+  /** El foco por señalar llega con retraso: pasar de largo por varios nodos no enciende ni apaga nada. */
+  private aim(id: string | null) {
+    clearTimeout(this.focusTimer);
+    if (id === this.focusHover) return;
+    this.focusTimer = window.setTimeout(() => { this.focusHover = id; this.request(); }, FOCUS_DELAY);
+  }
+
   private setHover(id: string | null) {
     if (id === this.hover) return;
     this.hover = id; this.canvas.style.cursor = id ? "pointer" : "";
+    this.aim(id && id !== "link" ? id : null);
     const n = id ? this.byId.get(id) : undefined;
     if (n) { const [sx, sy, px] = this.screen(n); this.events.hover?.(n.id, sx, sy - n.size * px); } else this.events.hover?.(null, 0, 0);
     this.request();
@@ -472,9 +495,22 @@ export class Force3DRenderer implements GraphRenderer {
     if (d?.moved) this.release(d.node);
   }
 
+  /** Fin de un arrastre: el nodo se queda donde se soltó. En fuerza queda fijado (con una marca) hasta un doble clic o «Restablecer posiciones». */
   private release(n: SNode) {
     if (this.layout !== "force") return;
-    n.fx = null; n.fy = null; n.fz = null; this.sim.alphaTarget(0);
+    n.pinned = true; this.sim.alphaTarget(0); this.request();
+  }
+
+  private unpin(ns: SNode[]) {
+    for (const n of ns) { n.fx = null; n.fy = null; n.fz = null; n.pinned = false; }
+    if (this.still || this.paused) this.settle(0.5); else this.sim.alpha(Math.max(this.sim.alpha(), 0.5)).restart();
+    this.hullDirty = true;
+    this.request();
+  }
+
+  resetPositions() {
+    if (this.layout === "force") this.unpin(this.nodes.filter((n) => n.pinned)); else this.place(true);
+    this.fit(this.still ? 0 : MORPH_MS + 200);
   }
 
   // --- dibujo --------------------------------------------------------------------------------
@@ -511,11 +547,19 @@ export class Force3DRenderer implements GraphRenderer {
     }
     const cap = full ? MAX_LABELS : MAX_LABELS_REDUCED;
     const links = this.links.filter((l) => this.linkVisible(l));
-    const hoverNode = this.hover && this.byId.has(this.hover) ? this.hover : null;
+    // como en 2D: el foco por señalar llega con retraso y se atenúa con un fundido; con «Reducido» o menos movimiento, solo lo seleccionado
+    const calm = !full || this.still;
+    const hoverNode = !calm && this.focusHover && this.byId.has(this.focusHover) ? this.focusHover : null;
     const focusId = [hoverNode, this.selectedNode].find((id) => id && this.byId.get(id)?.visible) ?? null;  // un nodo oculto por un filtro no hace de foco
     const near = new Set<string>();
     if (focusId) { near.add(focusId); for (const l of links) if (l.source.id === focusId || l.target.id === focusId) { near.add(l.source.id); near.add(l.target.id); } }
     const touches = (l: SLink) => !focusId || l.source.id === focusId || l.target.id === focusId;
+    const dt = now - this.fadeAt > 100 ? 16 : now - this.fadeAt, step = dt / FADE_MS;
+    this.fadeAt = now;
+    const toward = (cur: number | undefined, to: number) => { const c = cur ?? 1; if (c === to) return c; animating = true; return c < to ? Math.min(to, c + step) : Math.max(to, c - step); };
+    this.haloLit = toward(this.haloLit, focusId ? 0 : 1);
+    for (const n of this.nodes) n.lit = toward(n.lit, !focusId || near.has(n.id) ? 1 : 0);
+    for (const l of links) l.lit = toward(l.lit, touches(l) ? 1 : 0);
     const tint = (c: string, alpha: number, out: THREE.Color) => out.copy(this.color(c)).lerp(this.bg, 1 - alpha);
     const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
     const tmp = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
@@ -523,7 +567,8 @@ export class Force3DRenderer implements GraphRenderer {
     // nodos: los nuevos entran creciendo; fuera del foco, apagados hacia el fondo
     this.drawn = [];
     const named: { n: SNode; px: number; d: number }[] = [];
-    let ringCount = 0;
+    let ringCount = 0, pinCount = 0;
+    const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
     const ring = (n: SNode, r: number, color: string) => {
       let s = this.rings[ringCount];
       if (!s) { s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.ringTex, transparent: true, alphaTest: 0.1, depthWrite: false })); this.rings.push(s); this.scene.add(s); }
@@ -536,15 +581,21 @@ export class Force3DRenderer implements GraphRenderer {
       const b = this.born.get(n.id);
       let e = 1;
       if (b !== undefined) { e = Math.min(1, (now - b) / ENTER_MS); if (e >= 1) this.born.delete(n.id); else animating = true; e = 1 - Math.pow(1 - e, 3); }
-      const alpha = (focusId && !near.has(n.id) ? DIM : 1) * e;
+      const lit = n.lit ?? 1, alpha = (DIM + (1 - DIM) * lit) * e;
       const r = n.size * (0.4 + 0.6 * e);
       m.compose(pos(n), q.identity(), sc.setScalar(r));
       this.nodeMesh.setMatrixAt(this.drawn.length, m);
       this.nodeMesh.setColorAt(this.drawn.length, tint(n.color, alpha, tmp));
       this.drawn.push(n);
       const sel = n.id === this.selectedNode, hov = n.id === this.hover;
-      if (sel) ring(n, r + 3, CANVAS.selected); else if (hov) ring(n, r + 2.5, CANVAS.foreground); else if (n.ring && alpha > DIM) ring(n, r + 3, CANVAS.foreground);
-      if (alpha > DIM * 0.99) { const [, , px] = this.screen(n); named.push({ n, px, d: pos(n).distanceTo(this.camera.position) }); }
+      if (sel) ring(n, r + 3, CANVAS.selected); else if (hov) ring(n, r + 2.5, CANVAS.foreground); else if (n.ring && lit > 0.5) ring(n, r + 3, CANVAS.foreground);
+      if (n.pinned) {  // fijado al arrastrarlo: un punto en el borde (doble clic lo suelta)
+        let s = this.pins[pinCount];
+        if (!s) { s = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.pinTex, transparent: true, alphaTest: 0.1, depthWrite: false })); this.pins.push(s); this.scene.add(s); }
+        s.position.copy(pos(n)).addScaledVector(camUp, r * 0.75).addScaledVector(camRight, r * 0.75); s.scale.setScalar(Math.max(3, r * 0.6)); s.visible = true;
+        pinCount++;
+      }
+      if (near.has(n.id) || lit > 0.02) { const [, , px] = this.screen(n); named.push({ n, px, d: pos(n).distanceTo(this.camera.position) }); }
     }
     const geo = full ? this.sphere : this.sphereLow;
     if (this.nodeMesh.geometry !== geo) this.nodeMesh.geometry = geo;
@@ -552,15 +603,18 @@ export class Force3DRenderer implements GraphRenderer {
     this.nodeMesh.instanceMatrix.needsUpdate = true;
     if (this.nodeMesh.instanceColor) this.nodeMesh.instanceColor.needsUpdate = true;
     for (let i = ringCount; i < this.rings.length; i++) this.rings[i].visible = false;
+    for (let i = pinCount; i < this.pins.length; i++) this.pins[i].visible = false;
 
     // aristas: tramos rectos (o curvas en varios tramos), las invalidadas discontinuas; flecha en el borde del destino
     const solid: number[] = [], solidC: number[] = [], dash: number[] = [], dashC: number[] = [], dashD: number[] = [];
     this.lineOwner = []; this.dashOwner = [];
     let arrowCount = 0;
     const up = new THREE.Vector3(0, 1, 0), a0 = new THREE.Vector3(), a1 = new THREE.Vector3();
+    const base = links.length > MANY_LINKS ? 0.32 : 0.55;  // con cientos de aristas, más tenues: solo las del foco se leen claras
     for (const l of links) {
       const sel = l.id === this.selectedLink;
-      const alpha = sel ? 1 : touches(l) ? (l.strong ? 1 : 0.6) : DIM * 0.6;  // más brillo para lo respaldado por varios orígenes
+      const on = focusId && touches(l) ? (l.strong ? 1 : 0.85) : l.strong ? Math.min(1, base + 0.35) : base;  // más brillo para lo respaldado por varios orígenes
+      const alpha = sel ? 1 : DIM * 0.5 + (on - DIM * 0.5) * (l.lit ?? 1);
       const c = tint(sel ? CANVAS.selected : l.color, alpha, tmp);
       const steps = l.bend ? CURVE : 1;
       for (let i = 0; i < steps; i++) {
@@ -599,11 +653,12 @@ export class Force3DRenderer implements GraphRenderer {
     // partículas: solo en las aristas válidas del nodo señalado, y solo mientras se señala
     const pp = this.particles.geometry.getAttribute("position") as THREE.BufferAttribute;
     let pc = 0;
-    if (full && !this.still && hoverNode) {
-      for (const l of links.filter((x) => !x.dashed && touches(x)).slice(0, 60)) for (let i = 0; i < 2; i++) {
-        this.along(l, (now / 2000 + i / 2 + hash(l.id)) % 1, v);
+    if (hoverNode) {  // lentas, pequeñas y discretas, y entran con el mismo fundido que el foco
+      for (const l of links.filter((x) => !x.dashed && touches(x)).slice(0, 60)) {
+        this.along(l, (now / PARTICLE_MS + hash(l.id)) % 1, v);
         pp.setXYZ(pc++, v.x, v.y, v.z);
       }
+      (this.particles.material as THREE.PointsMaterial).opacity = 0.45 * (1 - this.haloLit);
       animating ||= pc > 0;
     }
     pp.needsUpdate = true;
@@ -629,13 +684,13 @@ export class Force3DRenderer implements GraphRenderer {
     };
     // como en 2D: de lejos, sin nombres salvo el del nodo señalado o seleccionado; de cerca, los más próximos a la cámara
     const own = (n: SNode) => n.id === this.selectedNode || n.id === this.hover;
-    const shown = named.filter((x) => own(x.n) || (x.px >= CAPTION_PX && (!focusId || near.has(x.n.id)))).sort((a, b) => Number(own(b.n)) - Number(own(a.n)) || a.d - b.d).slice(0, cap);
+    const shown = named.filter((x) => own(x.n) || x.px >= CAPTION_PX).sort((a, b) => Number(own(b.n)) - Number(own(a.n)) || a.d - b.d).slice(0, cap);
     for (const { n, px } of shown) {
       const focus = own(n);
-      label(!focus && n.caption.length > 24 ? n.caption.slice(0, 23) + "…" : n.caption, CANVAS.foreground, pos(n), px, n.size + 2, 1, focus ? TEXT_PX : 0);
+      label(!focus && n.caption.length > 24 ? n.caption.slice(0, 23) + "…" : n.caption, CANVAS.foreground, pos(n), px, n.size + 2, focus ? 1 : n.lit ?? 1, focus ? TEXT_PX : 0);
     }
-    let rel = links.filter((l) => l.label && touches(l));
-    if (!focusId && rel.length > cap) rel = rel.filter((l) => l.id === this.selectedLink);
+    // tipo de relación: solo de lo enfocado o seleccionado (en 3D, con todas, los rótulos tapan el grafo)
+    const rel = links.filter((l) => l.label && (l.id === this.selectedLink || (focusId && touches(l))));
     for (const l of rel.slice(0, cap)) {
       const mid = this.along(l, 0.5), d = mid.distanceTo(this.camera.position);
       const px = this.h / (2 * d * Math.tan((this.camera.fov * Math.PI) / 360));
@@ -651,7 +706,7 @@ export class Force3DRenderer implements GraphRenderer {
       const on = halosOn && !!h.mesh.userData.ok;
       h.mesh.visible = on;
       if (!on) continue;
-      const fade = focusId ? 0.35 : 1, halo = this.halos.find((x) => x.key === k);
+      const fade = 0.35 + 0.65 * this.haloLit, halo = this.halos.find((x) => x.key === k);
       h.mat.uniforms.opacity.value = HALO_ALPHA * fade;
       const top = h.mesh.userData.top as THREE.Vector3, name = halo?.name ?? k;  // nombre sobre la cima del volumen
       const d = top.distanceTo(this.camera.position), px = this.h / (2 * d * Math.tan((this.camera.fov * Math.PI) / 360));

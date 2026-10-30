@@ -5,13 +5,14 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import { CANVAS } from "../palette";
 import { anchorOrder, hash, placeLayout, type Layout } from "./layouts";
-import { CHARGE, CHARGE_WITH_HALOS, DIM, ease, ENTER_MS, FOLLOW_MS, LINK, LINK_WITH_HALOS, MAX_LABELS, MAX_LABELS_REDUCED, MORPH_MS, PULL, PULL_NONE, SLOW_FRAMES, SLOW_MS,
+import { CHARGE, CHARGE_WITH_HALOS, DIM, ease, ENTER_MS, FADE_MS, FOCUS_DELAY, FOLLOW_MS, LINK, LINK_WITH_HALOS, MAX_LABELS, MAX_LABELS_REDUCED, MORPH_MS, PARTICLE_MS, PULL, PULL_NONE, SLOW_FRAMES, SLOW_MS,
   type Effects, type EffectsMode, type GraphRenderer, type RendererEvents, type RHalo, type RLink, type RNode } from "./types";
 
 export type { Effects, EffectsMode, RendererEvents, RHalo, RLink, RNode };
 
-type SNode = RNode & SimulationNodeDatum & { ax?: number; ay?: number; pull?: number };  // ancla: media de las de sus halos
-type SLink = Omit<RLink, "source" | "target"> & SimulationLinkDatum<SNode> & { source: SNode; target: SNode; bend: number };
+// ancla: media de las de sus halos; `lit`: 1 a plena luz, 0 atenuado por el foco (se acerca a su destino con un fundido); `pinned`: fijado al arrastrarlo
+type SNode = RNode & SimulationNodeDatum & { ax?: number; ay?: number; pull?: number; lit?: number; pinned?: boolean };
+type SLink = Omit<RLink, "source" | "target"> & SimulationLinkDatum<SNode> & { source: SNode; target: SNode; bend: number; lit?: number };
 
 const FONT = "11px system-ui, -apple-system, 'Segoe UI', sans-serif";
 const SETTLE_MS = 400;           // presupuesto para pre-asentar un grafo nuevo antes de pintarlo
@@ -60,6 +61,10 @@ export class ForceRenderer implements GraphRenderer {
   private selectedNode: string | null = null;
   private selectedLink: string | null = null;
   private hover: string | null = null;
+  private focusHover: string | null = null;  // nodo señalado que ya hace de foco: el ratón se quedó FOCUS_DELAY sobre él
+  private focusTimer = 0;
+  private fadeAt = 0;                        // último paso de los fundidos del foco
+  private haloLit = 1;
   private drag: { node: SNode; x0: number; y0: number; moved: boolean } | null = null;
   private down: { x: number; y: number } | null = null;
   private anim = 0;
@@ -102,7 +107,8 @@ export class ForceRenderer implements GraphRenderer {
     on("pointerdown", (ev) => this.onDown(ev));
     on("pointermove", (ev) => this.onMove(ev));
     on("pointerup", (ev) => this.onUp(ev));
-    on("pointerleave", () => { if (this.hover) { this.hover = null; this.canvas.style.cursor = ""; this.events.hover?.(null, 0, 0); this.request(); } });
+    on("pointerleave", () => { this.aim(null); if (this.hover) { this.hover = null; this.canvas.style.cursor = ""; this.events.hover?.(null, 0, 0); this.request(); } });
+    on("dblclick", (ev) => { const n = this.nodeAt(ev.offsetX, ev.offsetY); if (n?.pinned) this.unpin([n]); });
     on("pointercancel", () => this.endDrag());  // sin esto, un arrastre cancelado dejaría la simulación caliente para siempre
     on("lostpointercapture", () => this.endDrag());
     on("contextmenu", (ev) => {
@@ -232,7 +238,7 @@ export class ForceRenderer implements GraphRenderer {
     this.layout = layout; this.root = root;
     if (!this.nodes.length) return;
     if (layout === "force") {
-      for (const n of this.nodes) { n.fx = null; n.fy = null; }
+      for (const n of this.nodes) { n.fx = null; n.fy = null; n.pinned = false; }
       if (this.still) this.settle(0.6); else if (!this.paused) this.sim.alpha(0.6).restart();
     } else this.place(true);
     if (was !== layout) this.fit(this.still ? 0 : MORPH_MS + 200);
@@ -246,7 +252,7 @@ export class ForceRenderer implements GraphRenderer {
     for (const n of this.nodes) {
       const p = pos.get(n.id)!;
       if (n.x !== undefined) from.set(n.id, [n.x, n.y!]);
-      n.fx = p.x; n.fy = p.y; n.vx = 0; n.vy = 0;
+      n.fx = p.x; n.fy = p.y; n.vx = 0; n.vy = 0; n.pinned = false;
       if (n.x === undefined || !animate || this.still) { n.x = p.x; n.y = p.y; }
     }
     this.morph = animate && !this.still ? { from, start: performance.now() } : null;
@@ -286,6 +292,7 @@ export class ForceRenderer implements GraphRenderer {
 
   destroy() {
     this.sim.stop();
+    clearTimeout(this.focusTimer);
     cancelAnimationFrame(this.frame); cancelAnimationFrame(this.anim);
     select(this.canvas).on(".zoom", null);
     this.cleanup.forEach((f) => f());
@@ -341,13 +348,14 @@ export class ForceRenderer implements GraphRenderer {
     }
     if (this.inMini(ev.offsetX, ev.offsetY)) {
       if (this.hover) this.events.hover?.(null, 0, 0);
-      this.hover = null; this.canvas.style.cursor = "pointer"; this.request();
+      this.hover = null; this.aim(null); this.canvas.style.cursor = "pointer"; this.request();
       return;
     }
     const n = this.nodeAt(ev.offsetX, ev.offsetY);
     const h = n?.id ?? (this.linkAt(ev.offsetX, ev.offsetY) ? "link" : null);
     if (h !== this.hover) {
       this.hover = h; this.canvas.style.cursor = h ? "pointer" : "";
+      this.aim(n?.id ?? null);
       if (n) { const [sx, sy] = this.t.apply([n.x!, n.y!]); this.events.hover?.(n.id, sx, sy - n.size * this.t.k); } else this.events.hover?.(null, 0, 0);
       this.request();
     }
@@ -373,10 +381,30 @@ export class ForceRenderer implements GraphRenderer {
     if (d?.moved) this.release(d.node);
   }
 
-  /** Fin de un arrastre: en fuerza el nodo vuelve a la simulación; en radial y árbol se queda donde se soltó. */
+  /** Fin de un arrastre: el nodo se queda donde se soltó, para apartarlo y ver lo que lo rodea. En fuerza queda fijado
+   * (con una marca) hasta un doble clic o «Restablecer posiciones». */
   private release(n: SNode) {
     if (this.layout !== "force") return;
-    n.fx = null; n.fy = null; this.sim.alphaTarget(0);
+    n.pinned = true; this.sim.alphaTarget(0); this.request();
+  }
+
+  /** Suelta nodos fijados y deja que la simulación los recoloque. */
+  private unpin(ns: SNode[]) {
+    for (const n of ns) { n.fx = null; n.fy = null; n.pinned = false; }
+    if (this.still || this.paused) this.settle(0.5); else this.sim.alpha(Math.max(this.sim.alpha(), 0.5)).restart();
+    this.request();
+  }
+
+  resetPositions() {
+    if (this.layout === "force") { this.unpin(this.nodes.filter((n) => n.pinned)); this.fit(this.still ? 0 : MORPH_MS + 200); }
+    else { this.place(true); this.fit(this.still ? 0 : MORPH_MS + 200); }
+  }
+
+  /** El foco por señalar llega con retraso: pasar de largo por varios nodos no enciende ni apaga nada. */
+  private aim(id: string | null) {
+    clearTimeout(this.focusTimer);
+    if (id === this.focusHover) return;
+    this.focusTimer = window.setTimeout(() => { this.focusHover = id; this.request(); }, FOCUS_DELAY);
   }
 
   private inMini(x: number, y: number) { const m = this.mini; return !!m && x >= m.x && x <= m.x + MINI_W && y >= m.y && y <= m.y + MINI_H; }
@@ -430,19 +458,27 @@ export class ForceRenderer implements GraphRenderer {
     const px = 1 / t.k;  // un píxel de pantalla en unidades del mundo
     const cap = full ? MAX_LABELS : MAX_LABELS_REDUCED;
 
-    // foco: el nodo señalado (o el seleccionado) y su vecindario; lo demás se atenúa, halos incluidos
-    const hoverNode = this.hover && this.byId.has(this.hover) ? this.hover : null;
+    // foco: el nodo señalado un momento (o el seleccionado) y su vecindario; lo demás se atenúa con un fundido, halos incluidos.
+    // Con «Reducido» o con menos movimiento en el sistema, señalar no atenúa nada: solo el nodo seleccionado hace de foco.
+    const calm = !full || this.still;
+    const hoverNode = !calm && this.focusHover && this.byId.has(this.focusHover) ? this.focusHover : null;
     const focusId = [hoverNode, this.selectedNode].find((id) => id && this.byId.get(id)?.visible) ?? null;  // un nodo oculto por un filtro no hace de foco
     const near = new Set<string>();
     if (focusId) { near.add(focusId); for (const l of links) if (l.source.id === focusId || l.target.id === focusId) { near.add(l.source.id); near.add(l.target.id); } }
     const touches = (l: SLink) => !focusId || l.source.id === focusId || l.target.id === focusId;
-    if (this.layout === "force") this.drawHalos(px, focusId ? 0.35 : 1);
+    const dt = now - this.fadeAt > 100 ? 16 : now - this.fadeAt, step = dt / FADE_MS;  // tras un rato quieto, el primer paso es el de un fotograma
+    this.fadeAt = now;
+    const fade = (cur: number | undefined, to: number) => { const c = cur ?? 1; if (c === to) return c; animating = true; return c < to ? Math.min(to, c + step) : Math.max(to, c - step); };
+    this.haloLit = fade(this.haloLit, focusId ? 0 : 1);
+    for (const n of this.nodes) n.lit = fade(n.lit, !focusId || near.has(n.id) ? 1 : 0);
+    for (const l of links) l.lit = fade(l.lit, touches(l) ? 1 : 0);
+    if (this.layout === "force") this.drawHalos(px, 0.35 + 0.65 * this.haloLit);
 
     // aristas, agrupadas por estilo para trazar cada grupo de una vez
     const groups = new Map<string, SLink[]>();
     for (const l of links) {
       if (l.id === this.selectedLink) continue;
-      const k = `${l.color}|${l.dashed ? 1 : 0}|${l.strong ? 1 : 0}|${touches(l) ? 1 : 0}`;
+      const k = `${l.color}|${l.dashed ? 1 : 0}|${l.strong ? 1 : 0}|${Math.round((l.lit ?? 1) * 20) / 20}`;
       (groups.get(k) ?? groups.set(k, []).get(k)!).push(l);
     }
     const stroke = (ls: SLink[], color: string, dashed: boolean, width: number, alpha: number) => {
@@ -469,30 +505,29 @@ export class ForceRenderer implements GraphRenderer {
       ctx.fillStyle = color; ctx.fill();
       ctx.globalAlpha = 1;
     };
-    for (const [k, ls] of groups) { const [color, dashed, strong, lit] = k.split("|"); stroke(ls, color, dashed === "1", strong === "1" ? 2.6 : 1.2, lit === "1" ? 1 : DIM * 0.6); }
+    for (const [k, ls] of groups) { const [color, dashed, strong, lit] = k.split("|"); stroke(ls, color, dashed === "1", strong === "1" ? 2.6 : 1.2, DIM * 0.6 + (1 - DIM * 0.6) * Number(lit)); }
     const selLink = links.find((l) => l.id === this.selectedLink);
     if (selLink) stroke([selLink], CANVAS.selected, selLink.dashed, 2.5, 1);
 
-    // partículas: solo en las aristas válidas del nodo señalado, y solo mientras se señala (en reposo no se anima nada)
-    if (full && !this.still && hoverNode) {
+    // partículas: solo en las aristas válidas del nodo señalado, y solo mientras se señala (en reposo no se anima nada).
+    // Lentas, pequeñas y discretas, y entran con el mismo fundido que el foco.
+    if (hoverNode) {
       const lit = links.filter((l) => !l.dashed && touches(l)).slice(0, 60);
-      ctx.fillStyle = CANVAS.foreground;
+      ctx.fillStyle = CANVAS.foreground; ctx.globalAlpha = 0.45 * (1 - this.haloLit);
       for (const l of lit) {
-        const [cx, cy] = control(l);
-        for (let i = 0; i < 2; i++) {
-          const q = (now / 2000 + i / 2 + hash(l.id)) % 1, r = 1 - q;
-          ctx.beginPath();
-          ctx.arc(r * r * l.source.x! + 2 * r * q * cx + q * q * l.target.x!, r * r * l.source.y! + 2 * r * q * cy + q * q * l.target.y!, 2.2 * px, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        const [cx, cy] = control(l), q = (now / PARTICLE_MS + hash(l.id)) % 1, r = 1 - q;
+        ctx.beginPath();
+        ctx.arc(r * r * l.source.x! + 2 * r * q * cx + q * q * l.target.x!, r * r * l.source.y! + 2 * r * q * cy + q * q * l.target.y!, 1.6 * px, 0, Math.PI * 2);
+        ctx.fill();
       }
+      ctx.globalAlpha = 1;
       animating ||= lit.length > 0;
     }
 
     // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo).
     // Con foco, solo las suyas; si en pantalla hay más del tope, solo las de lo seleccionado o señalado.
     const mid = (l: SLink): [number, number] => { const [cx, cy] = control(l); return [(l.source.x! + 2 * cx + l.target.x!) / 4, (l.source.y! + 2 * cy + l.target.y!) / 4]; };
-    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && touches(l) && onScreen(...mid(l), 50)) : [];
+    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && (touches(l) || (l.lit ?? 1) > 0.02) && onScreen(...mid(l), 50)) : [];
     if (labelled.length > cap) labelled = labelled.filter((l) => l.id === this.selectedLink || (focusId && touches(l))).slice(0, cap);
     if (selLink && !labelled.includes(selLink)) labelled.push(selLink);
     if (labelled.length) {
@@ -503,6 +538,7 @@ export class ForceRenderer implements GraphRenderer {
         let ang = Math.atan2(l.target.y! - l.source.y!, l.target.x! - l.source.x!);
         if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
         ctx.save();
+        ctx.globalAlpha = l.id === this.selectedLink ? 1 : l.lit ?? 1;
         ctx.translate(mx, my); ctx.rotate(ang); ctx.scale(fs, fs);
         const txt = l.label.length > 28 ? l.label.slice(0, 27) + "…" : l.label;
         ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(txt, 0, -6);
@@ -522,8 +558,8 @@ export class ForceRenderer implements GraphRenderer {
         if (e >= 1) this.born.delete(n.id); else animating = true;
         e = 1 - Math.pow(1 - e, 3);
       }
-      const alpha = (focusId && !near.has(n.id) ? DIM : 1) * e;
-      if (alpha > DIM * 0.99) named.push(n);
+      const lit = n.lit ?? 1, alpha = (DIM + (1 - DIM) * lit) * e;
+      if (near.has(n.id) || lit > 0.02) named.push(n);
       if (!onScreen(n.x, n.y!, n.size)) continue;
       const r = n.size * (0.4 + 0.6 * e);
       ctx.globalAlpha = alpha;
@@ -535,11 +571,17 @@ export class ForceRenderer implements GraphRenderer {
         ctx.lineWidth = 1.5 * px; ctx.strokeStyle = CANVAS.foreground; ctx.stroke();
       }
       if (sel || hov) { ctx.lineWidth = (sel ? 3 : 2) * px; ctx.strokeStyle = sel ? CANVAS.selected : CANVAS.foreground; ctx.stroke(); }
+      if (n.pinned) {  // fijado al arrastrarlo: un punto en el borde (doble clic lo suelta)
+        const a = -Math.PI / 4, cx = n.x + Math.cos(a) * r, cy = n.y! + Math.sin(a) * r;
+        ctx.globalAlpha = Math.max(alpha, 0.6);
+        ctx.beginPath(); ctx.arc(cx, cy, 3 * px, 0, Math.PI * 2);
+        ctx.fillStyle = CANVAS.foreground; ctx.fill(); ctx.lineWidth = 1.5 * px; ctx.strokeStyle = CANVAS.background; ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
-    // nombres (con el mismo tope de textos por fotograma; con foco, solo los del vecindario)
-    const shown = focusId ? named.filter((n) => near.has(n.id)) : named;
-    const all = t.k >= CAPTION_ZOOM && shown.length <= cap;
+    // nombres (con el mismo tope de textos por fotograma; con foco, solo los del vecindario: los demás se desvanecen con su nodo)
+    const shown = named;
+    const all = t.k >= CAPTION_ZOOM && (focusId ? named.filter((n) => near.has(n.id)).length : named.length) <= cap;
     if (all || focusId) {
       ctx.font = FONT; ctx.textAlign = "center"; ctx.textBaseline = "top";
       const fs = 1 / Math.max(t.k, 1);
@@ -547,7 +589,7 @@ export class ForceRenderer implements GraphRenderer {
         const focus = n.id === this.selectedNode || n.id === this.hover;
         if (!all && !focus) continue;
         const txt = !focus && n.caption.length > 24 ? n.caption.slice(0, 23) + "…" : n.caption;
-        ctx.save(); ctx.translate(n.x!, n.y! + n.size + 2 * px); ctx.scale(fs, fs);
+        ctx.save(); ctx.globalAlpha = focus ? 1 : n.lit ?? 1; ctx.translate(n.x!, n.y! + n.size + 2 * px); ctx.scale(fs, fs);
         ctx.lineWidth = 3; ctx.strokeStyle = CANVAS.background; ctx.strokeText(txt, 0, 0);
         ctx.fillStyle = CANVAS.foreground; ctx.fillText(txt, 0, 0);
         ctx.restore();
