@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 
 from . import appsettings, docindex, docstore, index, jobs, secretguard
 from .config import settings
-from .deps import BrainCtx, audit, contributor_of_brain, reader
+from .deps import BrainCtx, admin_of_brain, audit, contributor_of_brain, reader
 from .docextract import ExtractError, chunk, extract
 from .embed import gate, get_embedder
 from .models import Brain, DocSource, Document
@@ -45,14 +45,15 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
 
 def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
-    """Extrae, trocea, calcula embeddings y sustituye los trozos del documento. Deja el resultado en su estado (active | error)
-    y devuelve el error (vacío si fue bien)."""
+    """Extrae, trocea, calcula embeddings y sustituye los trozos del documento. Deja el resultado en su estado (active | duplicate |
+    error) y devuelve el error (vacío si fue bien)."""
     with _SEM, _factory()() as db:
         d = db.get(Document, doc_id)
         if not d:
             return ""
         d.status, d.error = "indexing", ""
         db.commit()
+        promote = False
         try:
             if not index.enabled():
                 raise RuntimeError("el índice documental requiere PostgreSQL con pgvector")
@@ -79,6 +80,13 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
                 raise ExtractError("el documento no tiene contenido")
             if title and (d.meta or {}).get("title_auto"):
                 d.title = title[:500]
+            h, before = norm_hash(text), (d.meta or {}).get("norm_hash")
+            orig = _original_of(db, d, h)
+            d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "duplicate_of"}, "norm_hash": h, **({"duplicate_of": orig.id} if orig else {})}
+            db.commit()  # el hash, visible ya para quien se indexe a la vez
+            promote = bool(before and before != h)  # cambió el texto: sus duplicados ya no lo son
+            if orig:
+                raise _Duplicate
             vecs: list[list[float]] = []
             _PROGRESS[doc_id] = {"done": 0, "total": len(chunks)}
             with gate.writing():  # vectores y trozos del mismo motor aunque se esté cambiando de modelo (ver reembed)
@@ -92,6 +100,9 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
                         job.progress(_PROGRESS[doc_id]["done"], len(chunks), "calculando embeddings")
                 docindex.replace_chunks(d.brain_id, d.id, chunks, vecs, d.sha256)
             d.chunks, d.status = len(chunks), "active"
+        except _Duplicate:  # el mismo texto ya está indexado en el brain: ni trozos ni embeddings (#117)
+            docindex.delete_document(d.id)
+            d.chunks, d.status = 0, "duplicate"
         except jobs.Cancelled:
             d.status, d.error = "error", "indexación cancelada"
             _PROGRESS.pop(doc_id, None)
@@ -100,10 +111,75 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
         except Exception as e:  # noqa: BLE001
             log.exception("indexación fallida del documento %s", doc_id)
             d.status, d.error = "error", str(e)[:500]
+            promote = True  # un original sin indexar no puede dejar a sus duplicados fuera del recall
         _PROGRESS.pop(doc_id, None)
         d.last_seen_at = datetime.now(timezone.utc)
         db.commit()
-        return d.error if d.status == "error" else ""
+        err = d.error if d.status == "error" else ""
+    if promote:
+        promote_duplicates(doc_id)
+    return err
+
+
+class _Duplicate(Exception):
+    pass
+
+
+def norm_hash(text: str) -> str:
+    """Huella del texto extraído sin contar mayúsculas ni espacios: la misma normalización con la que el recall descarta pasajes
+    repetidos (#107), para que «el mismo texto» signifique lo mismo al indexar y al recordar."""
+    return hashlib.sha256(" ".join(text.lower().split()).encode()).hexdigest()
+
+
+def _original_of(db, d: Document, h: str) -> Document | None:
+    """El documento más antiguo del brain, indexado o indexándose, con el mismo texto. La deduplicación es por brain: entre brains ya
+    marca el origen la federación."""
+    return db.scalar(select(Document).where(Document.brain_id == d.brain_id, Document.id != d.id, Document.status.in_(("active", "indexing")),
+                                            Document.meta["norm_hash"].as_string() == h).order_by(Document.id).limit(1))
+
+
+def promote_duplicates(original_id: int) -> int | None:
+    """El original de unos duplicados ha desaparecido, ha cambiado de texto o no se ha podido indexar: el duplicado más antiguo se
+    indexa y el resto pasa a apuntarle. Devuelve el documento promovido."""
+    with _factory()() as db:
+        dups = db.scalars(select(Document).where(Document.status == "duplicate", Document.meta["duplicate_of"].as_integer() == original_id)
+                          .order_by(Document.id)).all()
+        if not dups:
+            return None
+        first = dups[0]
+        first.status, first.meta = "pending", {k: v for k, v in (first.meta or {}).items() if k != "duplicate_of"}
+        for r in dups[1:]:
+            r.meta = {**(r.meta or {}), "duplicate_of": first.id}
+        db.commit()
+        fid = first.id
+    start_index(fid)
+    return fid
+
+
+def find_duplicates(brain_id: int) -> dict:
+    """Marca como duplicados los documentos ya indexados con el mismo texto que otro más antiguo del brain (los indexados antes de
+    #117 no tienen huella: se calcula desde su texto normalizado, sin volver a extraer). Quita del índice sus trozos."""
+    hashed = marked = 0
+    with _factory()() as db:
+        first: dict[str, int] = {}
+        for d in db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status == "active").order_by(Document.id)):
+            h = (d.meta or {}).get("norm_hash")
+            if not h:
+                try:
+                    h = norm_hash(docstore.resolve(d.text_ref).read_text(encoding="utf-8")) if d.text_ref else ""
+                except (OSError, ValueError):
+                    h = ""
+                if not h:
+                    continue
+                d.meta, hashed = {**(d.meta or {}), "norm_hash": h}, hashed + 1
+            if h in first:
+                docindex.delete_document(d.id)
+                d.status, d.chunks, d.meta = "duplicate", 0, {**(d.meta or {}), "duplicate_of": first[h]}
+                marked += 1
+            else:
+                first[h] = d.id
+        db.commit()
+    return {"hashed": hashed, "marked": marked}
 
 
 @jobs.register("doc.index", "Indexar documento", limit=2, resume=True)
@@ -141,7 +217,7 @@ def _out(d: Document, source_name: str = "") -> dict:
     return {"id": d.id, "source_id": d.source_id, "source": source_name, "title": d.title, "filename": d.filename, "mime": d.mime, "size": d.size,
             "sha256": d.sha256, "status": d.status, "error": d.error, "chunks": d.chunks, "progress": _PROGRESS.get(d.id),
             "created_at": d.first_seen_at, "updated_at": d.source_updated_at or d.last_seen_at, "url": d.url, "external_id": d.external_id,
-            "secrets": secretguard.describe((d.meta or {}).get("secrets"))}
+            "secrets": secretguard.describe((d.meta or {}).get("secrets")), "duplicate_of": (d.meta or {}).get("duplicate_of") if d.status == "duplicate" else None}
 
 
 def _doc(ctx: BrainCtx, doc_id: int) -> Document:
@@ -280,7 +356,17 @@ def delete_document(doc_id: int, ctx: BrainCtx = Depends(contributor_of_brain)):
     ctx.db.delete(d)
     ctx.db.commit()
     audit(ctx.db, ctx.user, "document.delete", ctx.brain, id=doc_id, title=title)
+    promote_duplicates(doc_id)  # si era el original de otros, el más antiguo pasa a indexarse
     return {"ok": True}
+
+
+@router.post("/duplicates")
+def mark_duplicates(ctx: BrainCtx = Depends(admin_of_brain)):
+    """Busca entre los documentos ya indexados los que repiten el texto de otro y los saca del índice (los nuevos ya se detectan al
+    indexar). No borra nada del origen."""
+    out = find_duplicates(ctx.brain.id)
+    audit(ctx.db, ctx.user, "document.duplicates", ctx.brain, **out)
+    return out
 
 
 @router.post("/{doc_id:int}/reindex")

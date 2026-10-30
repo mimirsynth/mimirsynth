@@ -48,6 +48,7 @@ Originals live on a **stack volume** mounted by the application (`MIMIRSYNTH_DOC
 2. **Compare:** by `source_updated_at` and `content_hash`, decide what is new, changed, equal or gone. Equal documents are not touched.
 3. **Extract:** Markdown, text, HTML, RST and PDF to normalised text keeping the heading structure.
 4. **Chunk:** by headings and paragraphs (~900 characters with overlap), recording the heading path and each chunk's position.
+   - **Duplicates:** if the extracted text (ignoring case and spacing, the same rule recall uses for passages) is already indexed in another document of the brain, the document is marked `duplicate`, points to the oldest one and is neither chunked nor embedded. It is listed in Knowledge with its own status filter and a link to the original. If the original is deleted, leaves its source, its text changes or it cannot be indexed, the oldest duplicate gets indexed in its place. Deduplication is per brain; across brains federation already labels the origin. **Find duplicates** (brain administrators) checks documents indexed before this existed, from their normalised text, without extracting them again.
 5. **Embed:** in batches, with the configured embedding engine, respecting its rate limit.
 6. **Replace:** a changed document's chunks are replaced in a single transaction, so a query never sees a half-indexed document.
 7. **Retire:** a document no longer in the source becomes `deleted` and leaves the search; the record is kept for history.

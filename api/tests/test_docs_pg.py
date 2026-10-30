@@ -155,3 +155,53 @@ def test_secrets_are_masked_before_indexing_and_block_removes_the_document(clien
     scan = client.get("/api/brains/sec/secrets/scan").json()
     assert scan["documents"] == 0                                                          # solo analiza documentos indexados
     client.post("/api/brains/sec/delete", json={"confirm": "sec"})
+
+
+def test_duplicates_are_not_indexed_and_the_oldest_is_promoted(client):
+    from sqlalchemy import select
+
+    from mimirsynth.models import Document
+    from mimirsynth.store import _factory
+    client.post("/api/brains", json={"slug": "dup", "name": "Dup", "graph_name": "g-dup"})
+    q = {"q": "servidor de copias nocturnas"}
+    a = up(client, "dup", "a.md", "# Nota\n\nEl servidor de copias nocturnas es Boreas.\n")
+    b = up(client, "dup", "b.md", "# nota\n\nEl  servidor de copias NOCTURNAS es Boreas.\n")             # mismo texto con otras mayúsculas y espacios
+    ib = client.get(f"/api/brains/dup/docs/{b['id']}", params={"chunks": 10}).json()
+    assert ib["status"] == "duplicate" and ib["duplicate_of"] == a["id"] and ib["chunks"] == 0 and ib["chunk_list"] == []
+    assert {h["document_id"] for h in client.get("/api/brains/dup/docs/search", params=q).json()["results"]} == {a["id"]}
+    listed = client.get("/api/brains/dup/docs", params={"status": "duplicate"}).json()
+    assert [d["id"] for d in listed["items"]] == [b["id"]] and listed["status_counts"] == {"active": 1, "duplicate": 1}
+    assert client.delete(f"/api/brains/dup/docs/{a['id']}").status_code == 200                        # sin el original, el duplicado se indexa
+    ib = client.get(f"/api/brains/dup/docs/{b['id']}").json()
+    assert ib["status"] == "active" and ib["chunks"] > 0 and ib["duplicate_of"] is None
+    assert {h["document_id"] for h in client.get("/api/brains/dup/docs/search", params=q).json()["results"]} == {b["id"]}
+    # duplicados indexados antes de #117 (sin huella): se detectan a petición, sin volver a extraer
+    from mimirsynth import docs
+    real = docs._original_of
+    docs._original_of = lambda *a: None   # como si se hubiera indexado sin la comprobación
+    try:
+        c = up(client, "dup", "c.md", "# Nota\n\nEl servidor de copias nocturnas es Boreas.\n\n")
+    finally:
+        docs._original_of = real
+    with _factory()() as db:
+        for d in db.scalars(select(Document).where(Document.id.in_([b["id"], c["id"]]))):
+            d.meta = {k: v for k, v in (d.meta or {}).items() if k != "norm_hash"}
+        db.commit()
+    assert client.get(f"/api/brains/dup/docs/{c['id']}").json()["status"] == "active"
+    assert client.post("/api/brains/dup/docs/duplicates").json() == {"hashed": 2, "marked": 1}
+    ic = client.get(f"/api/brains/dup/docs/{c['id']}").json()
+    assert ic["status"] == "duplicate" and ic["duplicate_of"] == b["id"]
+    assert {h["document_id"] for h in client.get("/api/brains/dup/docs/search", params=q).json()["results"]} == {b["id"]}
+    assert client.post("/api/brains/dup/docs/duplicates").json() == {"hashed": 0, "marked": 0}       # idempotente
+    # si el original no se puede indexar, su duplicado no se queda fuera del recall: se promueve
+    real_embed = docs._embed
+    docs._embed = lambda texts: (_ for _ in ()).throw(RuntimeError("motor caído"))
+    try:
+        client.post(f"/api/brains/dup/docs/{b['id']}/reindex")
+    finally:
+        docs._embed = real_embed
+    ic = client.get(f"/api/brains/dup/docs/{c['id']}").json()
+    assert client.get(f"/api/brains/dup/docs/{b['id']}").json()["status"] == "error" and ic["status"] == "error" and ic["duplicate_of"] is None
+    client.post(f"/api/brains/dup/docs/{b['id']}/reindex"); client.post(f"/api/brains/dup/docs/{c['id']}/reindex")   # vuelto el motor
+    assert [client.get(f"/api/brains/dup/docs/{x['id']}").json()["status"] for x in (b, c)] == ["active", "duplicate"]
+    client.post("/api/brains/dup/delete", json={"confirm": "dup"})

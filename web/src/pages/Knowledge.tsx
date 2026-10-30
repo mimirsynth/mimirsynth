@@ -10,7 +10,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 type Doc = {
   url?: string; id: number; source: string; title: string; filename: string; size: number; status: string; error: string; chunks: number;
-  progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string; secrets?: SecretFinding[];
+  progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string; secrets?: SecretFinding[]; duplicate_of?: number | null;
 };
 type Chunk = { chunk_idx: number; heading_path: string; page: number | null; text: string };
 type Hit = { document_id: number; chunk: number; title: string; citation: string; text: string; similarity: number; updated_at: string };
@@ -19,8 +19,8 @@ type Source = { id: number; kind: string; name: string; documents: number; by_st
 type Adapter = { id: string; label: string; collection_label: string; fields: { name: string; label: string; secret: boolean; required: boolean; placeholder: string; help: string }[] };
 type Up = { key: string; name: string; size: number; done: number; state: "subiendo" | "listo" | "duplicado" | "error"; msg?: string };
 
-const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger" };
-const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: T("en cola"), error: "error" };
+const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger", duplicate: "neutral" };
+const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: T("en cola"), error: "error", duplicate: T("duplicado") };
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const PART = 32 * 1024 * 1024; // las partes son más pequeñas que el límite habitual de los proxies (~100 MB)
 
@@ -83,6 +83,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const promote = useMutation({ mutationFn: (p: NonNullable<typeof promo>) => send<{ id: number; status: string }>("POST", `docs/${p.doc}/promote`, { chunk: p.chunk, text: p.text, name: p.name || undefined }, { graph }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["proposals", graph] }); qc.invalidateQueries({ queryKey: ["jobs", graph] }); } });
   const remove = useMutation({ mutationFn: (d: Doc) => send("DELETE", `docs/${d.id}`, undefined, { graph }), onSuccess: () => { setDel(null); setOpen(null); qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } });
+  const dedupe = useMutation({ mutationFn: () => send<{ hashed: number; marked: number }>("POST", "docs/duplicates", undefined, { graph }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } });
   const reindex = useMutation({ mutationFn: (id: number) => send("POST", `docs/${id}/reindex`, undefined, { graph }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["doc", graph] }); } });
 
   const roots = useQuery({ queryKey: ["docs-roots", graph], enabled: isAdmin, queryFn: () => get<{ roots: { name: string; available: boolean }[] }>("docs/roots", { graph }) });
@@ -165,7 +167,15 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                 </Stack>)}
               <Segments label={t("Estado")} value={f.status || "all"} onChange={(v) => setFilter({ status: v === "all" ? "" : v })}
                 data={[{ value: "all", label: t("Todos"), count: Object.values(docs.data?.status_counts ?? {}).reduce((a, b) => a + b, 0) }, ...Object.entries(LABEL).filter(([k]) => (docs.data?.status_counts[k] ?? 0) > 0 || f.status === k).map(([k, v]) => ({ value: k, label: v[0].toUpperCase() + v.slice(1), count: docs.data?.status_counts[k] ?? 0 }))]} />
-              <ClearFilters active={active} onClear={clear} />
+              <Group gap="xs" justify="space-between">
+                <ClearFilters active={active} onClear={clear} />
+                {isAdmin && <Group gap="xs" ml="auto">
+                  {dedupe.data && <Text size="xs" c="dimmed">{dedupe.data.marked ? t("{{n}} duplicados sacados del índice.", { n: dedupe.data.marked }) : t("No hay duplicados entre los documentos indexados.")}</Text>}
+                  <Btn size="row" icon="search" loading={dedupe.isPending} onClick={() => dedupe.mutate()}
+                    title={t("Los documentos nuevos se comprueban al indexarse. Esto revisa los que ya estaban indexados y saca del índice los que repiten el texto de otro, sin borrar nada del origen.")}>{t("Buscar duplicados")}</Btn>
+                </Group>}
+              </Group>
+              <MutationError error={dedupe.error} />
               <FillArea>
                 <DataTable fz="sm">
                   <DataTable.Thead><DataTable.Tr>
@@ -252,6 +262,12 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             <Text size="xs" c="dimmed" className="ms-data">{t("{{filename}} · sha256 {{hash}}… · subido {{date}}", { filename: detail.data.filename, hash: detail.data.sha256.slice(0, 12), date: fmt(detail.data.created_at) })}</Text>
             {detail.data.error && <Notice tone="danger">{detail.data.error}</Notice>}
             <SecretsNotice found={detail.data.secrets} original />
+            {detail.data.status === "duplicate" && detail.data.duplicate_of && <Notice title={t("Duplicado")}>
+              <Stack gap={4}>
+                <Text size="xs">{t("Tiene el mismo texto que otro documento del brain, así que no se trocea ni se calculan sus embeddings: el recall usa el original. Si el original desaparece, este pasa a indexarse.")}</Text>
+                <Group><Btn size="row" onClick={() => setOpen(detail.data!.duplicate_of!)}>{t("Ver el original")}</Btn></Group>
+              </Stack>
+            </Notice>}
             <Group gap={6}>
               <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>{t("Descargar original")}</Btn>
               <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>{t("Ver texto completo")}</Btn>
