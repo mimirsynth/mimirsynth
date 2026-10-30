@@ -5,7 +5,7 @@ import { useState } from "react";
 import { get, send } from "../api";
 import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog } from "../ui";
 
-type T = { name: string; description: string };
+type T = { name: string; description: string; functional?: boolean };
 type Rule = { source: string; target: string; edge_types: string[] };
 type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rule[]; instructions?: string }; configured: boolean; presets: string[]; presets_info?: { name: string; title: string; description: string; version: number; standards: string[]; entity_types: number; edge_types: number }[]; preset_update?: { name: string; installed: number; available: number } | null };
 type Done = { op: number; summary: string };
@@ -26,7 +26,7 @@ function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: 
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((ty) => (
           <DataTable.Tr key={ty.name}>
-            <DataTable.Td><Text fw={500} size="sm">{ty.name}</Text></DataTable.Td>
+            <DataTable.Td><Group gap={6} wrap="nowrap"><Text fw={500} size="sm">{ty.name}</Text>{ty.functional && <Pill size="xs" tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("un solo valor")}</Pill>}</Group></DataTable.Td>
             <DataTable.Td><Text size="sm" c="dimmed" lineClamp={2}>{ty.description}</Text></DataTable.Td>
             <DataTable.Td>{used(ty.name)}</DataTable.Td>
             {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
@@ -70,6 +70,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const [done, setDone] = useState<Done | null>(null);
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [functional, setFunctional] = useState(false);
   const [src, setSrc] = useState<string | null>(null);
   const [tgt, setTgt] = useState<string | null>(null);
   const [edges, setEdges] = useState<string[]>([]);
@@ -84,7 +85,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const upd = q.data?.preset_update;
   const updInfo = info.find((i) => i.name === upd?.name);
   const saveRel = useMutation({
-    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc }, { graph })),
+    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional }, { graph })),
     onSuccess: finished });
   const delRel = useMutation({ mutationFn: () => send<Done>("DELETE", `vocab/relations/${(dlg as { item: T }).item.name}`, undefined, { graph }), onSuccess: finished });
   const saveRule = useMutation({ mutationFn: () => send<Done>("PUT", "vocab/map", { source: src, target: tgt, edge_types: edges }, { graph }), onSuccess: finished });
@@ -93,7 +94,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
 
   const reset = () => { saveRel.reset(); delRel.reset(); saveRule.reset(); delRule.reset(); saveInstr.reset(); };
-  const openRel = (item?: T) => { reset(); setName(item?.name ?? ""); setDesc(item?.description ?? ""); setDlg({ kind: "rel", item }); };
+  const openRel = (item?: T) => { reset(); setName(item?.name ?? ""); setDesc(item?.description ?? ""); setFunctional(!!item?.functional); setDlg({ kind: "rel", item }); };
   const openRule = (item?: Rule) => { reset(); setSrc(item?.source ?? null); setTgt(item?.target ?? null); setEdges(item?.edge_types ?? []); setDlg({ kind: "rule", item }); };
   const openInstr = () => { reset(); setDesc(o?.instructions ?? ""); setDlg({ kind: "instr" }); };
   const entityNames = ["Entity", ...(o?.entity_types.map((t) => t.name) ?? [])];
@@ -140,6 +141,8 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
         <Stack>
           <TextField label={t("Nombre")} description={t("PascalCase, sin espacios (p. ej. RunsOn)")} value={name} disabled={dlg?.kind === "rel" && !!dlg.item} onChange={(e) => setName(e.currentTarget.value)} />
           <TextArea label={t("Descripción")} description={t("Cuándo se usa esta relación; guía al ingestor")} minRows={3} autosize value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
+          <Check label={t("Un solo valor a la vez")} checked={functional} onChange={(e) => setFunctional(e.currentTarget.checked)}
+            description={t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes en Contradicciones → Medir en todas las relaciones.")} />
           <MutationError error={saveRel.error} />
           <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></Group>
         </Stack>

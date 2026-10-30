@@ -21,6 +21,7 @@ La campana (barra lateral → Notificaciones) lista los avisos que puedes ver y 
 | `docsource.error` | aviso | Una fuente de documentos no se pudo sincronizar |
 | `security.lockout` | aviso | Una cuenta se ha bloqueado por demasiados intentos fallidos |
 | `reindex.orphan` | aviso | Un cambio de modelo de embeddings (relleno en sombra) lleva fallido o parado más horas de las configuradas, con sus vectores sombra ocupando memoria |
+| `conflicts.found` | información | Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor (ver «Relaciones de un solo valor y contradicciones» en [ONTOLOGY.md](ONTOLOGY.md)); se comprueba una vez al día |
 | `refquery.regressed` | aviso | Tras un cambio de modelo de embeddings, las consultas de referencia de un brain dejan de encontrar esperados, o muestran falsos positivos nuevos, respecto a la ejecución de antes del cambio (como información si no hay ejecución anterior con la que comparar) |
 | `update.available` | información | Hay una versión más reciente (opcional, ver más abajo) |
 

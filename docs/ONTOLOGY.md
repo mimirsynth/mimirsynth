@@ -24,6 +24,14 @@ The ontology of a brain tells the ingestor which **entity types** and **relation
 ## Versions and updates
 Each package has a **version**. The brain remembers which package and version it applied. When a newer version ships, Vocabulary → Ontology offers **Update**, which **adds what is missing** (types, relations, rules) and never touches what you already have or changed by hand. **Replace ontology** discards everything and applies the package as is. Entities already in the graph never change.
 
+## Single-valued relations and contradictions
+A relation type can be marked as **single-valued** (`"functional": true`; in Vocabulary → Ontology, «A single value at a time»): a subject cannot have two current targets, such as where a device is installed or whom a person reports to. If it does, Vocabulary → **Contradictions** shows them so that a curator chooses which one stays current; the others are invalidated with the date of the one kept, and this can be undone from the vocabulary history. No AI model is used: the newest fact is suggested, and if two have the same date the person decides. Once a day every brain with a marked relation is checked and, if there are cases, an alert is raised (`conflicts.found`, information).
+
+- **No relation is single-valued by default.** Many look single-valued and are not (a service can run in several places; an IP changes with a date). The packages mark only `LocatedAt` in `infrastructure`, `ReportsTo` in `team-projects` and `LivesAt` in `personal-family`.
+- **Measure before marking:** «Measure across all relations» counts, without changing anything, what share of subjects has more than one current target in each relation. Also from the command line, read-only: `python -m mimirsynth.conflicts <graph> [--brain-id N]`.
+- Relations are compared after normalising format and aliases, and two targets with the same name except for case and spacing count as the same (that is a vocabulary duplicate, not a contradiction).
+- In a brain that already had the package applied, **Update** does not touch existing relations, so the mark is set by hand.
+
 ## Type corrector
 The type corrector (Vocabulary → Type corrector) does not assume any domain: each package says, in its `retype` block, what to review and what to set aside before asking the decider.
 

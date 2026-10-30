@@ -27,6 +27,7 @@ EVENTS = {
     "security.lockout": ("warning", "Una cuenta se ha bloqueado por intentos fallidos"),
     "reindex.orphan": ("warning", "Un cambio de modelo de embeddings lleva tiempo sin terminar y sus vectores sombra ocupan memoria"),
     "refquery.regressed": ("warning", "Las consultas de referencia de un brain empeoran tras un cambio de modelo de embeddings"),
+    "conflicts.found": ("info", "Hay hechos vigentes que se contradicen en una relación de un solo valor"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
@@ -247,7 +248,7 @@ async def worker(version: str = "0.0.0") -> None:
     if jobs.INLINE:  # pruebas: nada en segundo plano
         return
     await asyncio.sleep(15)
-    last_health = last_update = last_prune = last_reindex = 0.0
+    last_health = last_update = last_prune = last_reindex = last_conflicts = 0.0
     while True:
         try:
             await asyncio.to_thread(process_due)
@@ -266,6 +267,10 @@ async def worker(version: str = "0.0.0") -> None:
                 last_reindex = t
                 from . import reembed
                 await asyncio.to_thread(reembed.check_orphan)
+            if t - last_conflicts >= 86400:
+                last_conflicts = t
+                from . import conflicts
+                await asyncio.to_thread(conflicts.check_all)
         except Exception:  # noqa: BLE001
             log.exception("fallo en el ciclo de notificaciones")
         await asyncio.sleep(10)

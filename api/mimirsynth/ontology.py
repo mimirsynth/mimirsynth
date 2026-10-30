@@ -39,6 +39,10 @@ class TypeDef(BaseModel):
         return v
 
 
+class EdgeTypeDef(TypeDef):
+    functional: bool = False  # un solo valor a la vez («está en», «informa a»): dos destinos vigentes son una posible contradicción (#113)
+
+
 class MapDef(BaseModel):
     source: str
     target: str
@@ -47,7 +51,7 @@ class MapDef(BaseModel):
 
 class OntologyIn(BaseModel):
     entity_types: list[TypeDef] = []
-    edge_types: list[TypeDef] = []
+    edge_types: list[EdgeTypeDef] = []
     edge_type_map: list[MapDef] = []
     instructions: str = Field("", max_length=4000)  # guía libre para la extracción (custom_extraction_instructions)
     preset: dict | None = None  # {"name", "version"} del paquete aplicado: permite avisar de actualizaciones

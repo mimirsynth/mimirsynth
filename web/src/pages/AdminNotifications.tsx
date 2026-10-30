@@ -33,6 +33,7 @@ export const EVENT_LABELS = [
   T("Una fuente de documentos no se pudo sincronizar"), T("El grafo (FalkorDB) no responde"), T("Hay una versión nueva de MimirSynth"), T("Una cuenta se ha bloqueado por intentos fallidos"),
   T("Un cambio de modelo de embeddings lleva tiempo sin terminar y sus vectores sombra ocupan memoria"),
   T("Las consultas de referencia de un brain empeoran tras un cambio de modelo de embeddings"),
+  T("Hay hechos vigentes que se contradicen en una relación de un solo valor"),
 ];
 
 function ChannelForm({ initial, id, cat, onClose }: { initial: Draft; id: number | null; cat: Catalog; onClose: () => void }) {
