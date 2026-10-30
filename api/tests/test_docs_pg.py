@@ -3,6 +3,8 @@
 import hashlib
 import os
 import tempfile
+import threading
+import time
 
 PG = os.environ.get("MIMIRSYNTH_TEST_PG")
 if PG:
@@ -101,9 +103,19 @@ def test_recall_includes_documents_with_budget_and_threshold(client, monkeypatch
     assert off["documents"] == [] and off["documents_state"] == "off" and "## Documentos" not in off["context"]
     none = client.post("/api/brains/pr/recall", json={"query": "receta del bizcocho de zanahoria"}).json()
     assert none["documents"] == [] and "## Documentos" not in none["context"]            # lo irrelevante no gasta tokens
-    monkeypatch.setattr(settings, "doc_search_timeout", 0.0001)
+    real, done = recall.search_documents, threading.Event()
+    def slow_search(*a):   # la búsqueda documental tarda más que el tiempo máximo
+        try:
+            time.sleep(1.0)
+            return real(*a)
+        finally:
+            done.set()
+    monkeypatch.setattr(recall, "search_documents", slow_search)
+    monkeypatch.setattr(settings, "doc_search_timeout", 0.2)
     slow = client.post("/api/brains/pr/recall", json={"query": "puerto del resolvedor interno DNS"}).json()
-    assert slow["documents_state"] in ("timeout", "ok") and "context" in slow             # nunca rompe el recall
+    assert slow["documents_state"] == "timeout" and slow["documents"] == [] and "## Documentos" not in slow["context"]
+    assert slow["ms"]["total"] < 800                                                     # responde sin esperar a los documentos
+    assert done.wait(5)   # que la búsqueda pendiente termine antes de borrar el brain
     client.post("/api/brains/pr/delete", json={"confirm": "pr"})
 
 
