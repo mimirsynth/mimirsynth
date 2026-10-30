@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from . import appsettings, jobs, notify
+from . import appsettings, jobs, notify, secretguard
 from .deps import BrainCtx, audit, brain_access
 from .models import Brain, RefQuery, RefRun
 from .store import _factory
@@ -77,6 +77,19 @@ def _run_out(r: RefRun, full: bool = False) -> dict:
     return out
 
 
+def _clean(ctx: BrainCtx, text: str) -> str:
+    """Un texto de una consulta de referencia pasa por el detector de secretos del brain: al guardar como esperado un hecho del grafo,
+    que no pasó por él al ingerirse, no se copia una credencial a otra tabla."""
+    try:
+        return secretguard.guard(ctx.brain, text)[0]
+    except secretguard.Blocked as e:
+        raise HTTPException(422, f"la consulta de referencia contiene secretos ({', '.join(e.labels)})") from None
+
+
+def _items_of(ctx: BrainCtx, items: list[Item]) -> list[dict]:
+    return [{"text": _clean(ctx, i.text), "kind": i.kind} for i in items]
+
+
 def _get(ctx: BrainCtx, qid: int) -> RefQuery:
     q = ctx.db.get(RefQuery, qid)
     if not q or q.brain_id != ctx.brain.id:
@@ -99,8 +112,8 @@ def list_queries(ctx: BrainCtx = Depends(curator)):
 def create_query(body: QueryIn, ctx: BrainCtx = Depends(curator)):
     if _count(ctx) >= MAX_QUERIES:
         raise HTTPException(409, f"un brain admite como mucho {MAX_QUERIES} consultas de referencia")
-    q = RefQuery(brain_id=ctx.brain.id, query=body.query.strip(), expect=[i.model_dump() for i in body.expect],
-                 avoid=[i.model_dump() for i in body.avoid], docs=body.docs, note=body.note, created_by=ctx.user.id)
+    q = RefQuery(brain_id=ctx.brain.id, query=_clean(ctx, body.query.strip()), expect=_items_of(ctx, body.expect),
+                 avoid=_items_of(ctx, body.avoid), docs=body.docs, note=_clean(ctx, body.note), created_by=ctx.user.id)
     ctx.db.add(q); ctx.db.commit()
     audit(ctx.db, ctx.user, "refquery.create", ctx.brain, id=q.id)
     return _q_out(q)
@@ -110,15 +123,15 @@ def create_query(body: QueryIn, ctx: BrainCtx = Depends(curator)):
 def update_query(qid: int, body: QueryPatch, ctx: BrainCtx = Depends(curator)):
     q = _get(ctx, qid)
     if body.query is not None:
-        q.query = body.query.strip()
+        q.query = _clean(ctx, body.query.strip())
     if body.expect is not None:
-        q.expect = [i.model_dump() for i in body.expect]
+        q.expect = _items_of(ctx, body.expect)
     if body.avoid is not None:
-        q.avoid = [i.model_dump() for i in body.avoid]
+        q.avoid = _items_of(ctx, body.avoid)
     if body.docs is not None or body.clear_docs:
         q.docs = None if body.clear_docs else body.docs
     if body.note is not None:
-        q.note = body.note
+        q.note = _clean(ctx, body.note)
     q.updated_at = datetime.now(timezone.utc)
     ctx.db.commit()
     audit(ctx.db, ctx.user, "refquery.update", ctx.brain, id=q.id)
@@ -155,8 +168,8 @@ def import_queries(body: ImportIn, ctx: BrainCtx = Depends(curator)):
         if _norm(it.query) in have:
             continue
         have.add(_norm(it.query))
-        ctx.db.add(RefQuery(brain_id=ctx.brain.id, query=it.query.strip(), expect=[i.model_dump() for i in it.expect],
-                            avoid=[i.model_dump() for i in it.avoid], docs=it.docs, note=it.note, created_by=ctx.user.id))
+        ctx.db.add(RefQuery(brain_id=ctx.brain.id, query=_clean(ctx, it.query.strip()), expect=_items_of(ctx, it.expect),
+                            avoid=_items_of(ctx, it.avoid), docs=it.docs, note=_clean(ctx, it.note), created_by=ctx.user.id))
         added += 1
     ctx.db.commit()
     audit(ctx.db, ctx.user, "refquery.import", ctx.brain, added=added, replace=body.replace)
@@ -203,11 +216,31 @@ def submit_run(brain_id: int, params: dict, reason: str, user_id: int | None = N
     return rid
 
 
+KEEP_RUNS = 20  # ejecuciones que se conservan por brain (cada una guarda el detalle de todas sus consultas)
+
+
+def _brains_with_queries() -> list[int]:
+    with _factory()() as db:
+        return list(db.scalars(select(RefQuery.brain_id).distinct()).all())
+
+
+def run_before_switch() -> list[int]:
+    """Al empezar un cambio de modelo de embeddings, mientras el recall usa todavía el modelo anterior: la ejecución base con la que
+    se comparará la de después del cambio."""
+    return [submit_run(b, {}, "embedding.before") for b in _brains_with_queries()]
+
+
 def run_after_switch() -> list[int]:
     """Tras un cambio de modelo de embeddings: una ejecución en cada brain que tenga consultas de referencia."""
-    with _factory()() as db:
-        brains = db.scalars(select(RefQuery.brain_id).distinct()).all()
-    return [submit_run(b, {}, "embedding.switched") for b in brains]
+    return [submit_run(b, {}, "embedding.switched") for b in _brains_with_queries()]
+
+
+def _purge(db, brain_id: int) -> None:
+    old = db.scalars(select(RefRun.id).where(RefRun.brain_id == brain_id, RefRun.status.in_(("done", "error")))
+                     .order_by(RefRun.id.desc()).offset(KEEP_RUNS)).all()
+    if old:
+        db.query(RefRun).filter(RefRun.id.in_(old)).delete(synchronize_session=False)
+        db.commit()
 
 
 def _norm(t: str) -> str:
@@ -245,13 +278,32 @@ def summarize(results: list[dict]) -> dict:
             "ms_p50": round(statistics.median(ms)) if ms else None, "ms_max": max(ms) if ms else None}
 
 
-def compare(summary: dict, prev: dict | None) -> dict | None:
-    """Diferencia con la ejecución anterior con los ajustes en vigor. Empeora si se encuentran menos esperados o aparecen más falsos
-    positivos o más consultas con la sección de documentos al revés."""
-    if not prev:
+def _items(results: list[dict]) -> tuple[dict, dict, dict]:
+    """Por cada (consulta, texto, tipo): si se encontró. Y por consulta: si la sección de documentos salió como se esperaba."""
+    ok = [r for r in results or [] if not r.get("error")]
+    expect = {(r["id"], _norm(i["text"]), i.get("kind", "any")): bool(i["found_in"]) for r in ok for i in r["expect"]}
+    avoid = {(r["id"], _norm(i["text"]), i.get("kind", "any")): bool(i["found_in"]) for r in ok for i in r["avoid"]}
+    docs = {r["id"]: r["docs_ok"] for r in ok if r.get("docs_ok") is not None}
+    return expect, avoid, docs
+
+
+def compare(results: list[dict], prev: list[dict] | None) -> dict | None:
+    """Diferencia con la ejecución anterior con los ajustes en vigor, **solo sobre lo que está en las dos**: las mismas consultas y
+    los mismos textos esperados y prohibidos. Añadir, borrar o editar una consulta no cuenta como empeorar. Empeora si se deja de
+    encontrar algún esperado que antes salía, aparece algún falso positivo que antes no salía, o una consulta pasa a tener la
+    sección de documentos al revés."""
+    if prev is None:
         return None
-    d = {k: summary[k] - prev.get(k, 0) for k in ("found", "false_positives", "docs_mismatch", "expected")}
-    d["regressed"] = d["found"] < 0 or d["false_positives"] > 0 or d["docs_mismatch"] > 0
+    (ce, ca, cd), (pe, pa, pd) = _items(results), _items(prev)
+    ke, ka, kd = ce.keys() & pe.keys(), ca.keys() & pa.keys(), cd.keys() & pd.keys()
+    lost = sorted(k for k in ke if pe[k] and not ce[k])
+    new_fp = sorted(k for k in ka if ca[k] and not pa[k])
+    docs_worse = sorted(k for k in kd if pd[k] and not cd[k])
+    d = {"found": sum(ce[k] for k in ke) - sum(pe[k] for k in ke), "false_positives": sum(ca[k] for k in ka) - sum(pa[k] for k in ka),
+         "docs_mismatch": sum(not cd[k] for k in kd) - sum(not pd[k] for k in kd),
+         "compared": len({k[0] for k in ke | ka} | kd), "lost": [{"id": k[0], "text": k[1]} for k in lost[:20]],
+         "new_false_positives": [{"id": k[0], "text": k[1]} for k in new_fp[:20]]}
+    d["regressed"] = bool(lost or new_fp or docs_worse)
     return d
 
 
@@ -295,14 +347,19 @@ def _job_run(ctx: "jobs.JobCtx", p: dict) -> dict:
         prev = next((x for x in db.scalars(select(RefRun).where(RefRun.brain_id == bid, RefRun.id < p["run_id"], RefRun.status == "done")
                                             .order_by(RefRun.id.desc()).limit(50)) if not x.params), None)
         summary["previous_run"] = prev.id if prev else None
-        summary["delta"] = compare(summary, prev.summary if prev else None)
+        summary["delta"] = compare(results, prev.results if prev else None)
         r = db.get(RefRun, p["run_id"])
         r.status, r.summary, r.results, r.finished_at = "done", summary, results, datetime.now(timezone.utc)
         db.commit()
+        _purge(db, bid)
     d = summary["delta"]
-    if reason == "embedding.switched" and d and d["regressed"]:
+    if reason == "embedding.switched" and d is None:   # sin base no se puede decir si empeora: se dice, en vez de callar
+        notify.emit("refquery.regressed", f"Las consultas de referencia de «{name}» no tienen con qué compararse tras el cambio de modelo",
+                    f"No hay una ejecución anterior con los ajustes en vigor, así que no se sabe si el modelo nuevo empeora. La ejecución #{p['run_id']} "
+                    "queda como referencia para el próximo cambio.", severity="info", brain_id=bid, key=f"refquery:{slug}")
+    elif reason == "embedding.switched" and d["regressed"]:
         notify.emit("refquery.regressed", f"Las consultas de referencia de «{name}» empeoran tras el cambio de modelo",
-                    f"Esperados encontrados: {d['found']:+d}. Falsos positivos: {d['false_positives']:+d}. Revisa la similitud mínima de un pasaje "
-                    f"(Administración → Recuerdo) y la ejecución #{p['run_id']} en Preguntar → Consultas de referencia.",
-                    brain_id=bid, key=f"refquery:{slug}")
+                    f"Sobre {d['compared']} consultas comparables: esperados que dejan de salir {len(d['lost'])}, falsos positivos nuevos "
+                    f"{len(d['new_false_positives'])}. Revisa la similitud mínima de un pasaje (Administración → Recuerdo) y la ejecución "
+                    f"#{p['run_id']} en Preguntar → Consultas de referencia.", brain_id=bid, key=f"refquery:{slug}")
     return {"run_id": p["run_id"], **{k: summary[k] for k in ("queries", "expected", "found", "false_positives")}}

@@ -110,4 +110,62 @@ def test_evaluate_unit():
     out = {"facts": [{"fact": "a b C d"}], "chunks": [{"text": "nada"}], "documents": [{"text": "zz top"}], "ms": {"total": 5}}
     r = RQ.evaluate(q, out)
     assert [i["found_in"] for i in r["expect"]] == [["fact"], ["doc"]] and r["found"] == 2 and r["false_positives"] == 0 and r["docs_ok"] is False
-    assert RQ.compare({"found": 2, "false_positives": 0, "docs_mismatch": 0, "expected": 2}, {"found": 3, "false_positives": 0, "docs_mismatch": 0, "expected": 2})["regressed"]
+    prev = [r]
+    worse = [{**r, "expect": [{**r["expect"][0], "found_in": []}, r["expect"][1]]}]
+    d = RQ.compare(worse, prev)
+    assert d["regressed"] and d["found"] == -1 and d["lost"] == [{"id": 1, "text": "b c"}] and d["compared"] == 1
+    assert RQ.compare(prev, None) is None
+
+
+def _res(qid, expect=(), avoid=(), docs_ok=None):
+    return {"id": qid, "query": str(qid), "expected": len(expect), "found": sum(expect), "false_positives": sum(avoid), "docs_ok": docs_ok,
+            "expect": [{"text": f"e{qid}-{n}", "kind": "any", "found_in": ["fact"] if f else []} for n, f in enumerate(expect)],
+            "avoid": [{"text": f"a{qid}-{n}", "kind": "any", "found_in": ["chunk"] if f else []} for n, f in enumerate(avoid)]}
+
+
+def test_compare_only_what_is_in_both_runs():
+    base = [_res(1, expect=[True, True]), _res(2, expect=[True])]
+    assert not RQ.compare([_res(1, expect=[True, True])], base)["regressed"]                          # borrar una consulta no empeora
+    added = RQ.compare(base + [_res(3, avoid=[True], docs_ok=False)], base)                             # ni añadir una que ya falla
+    assert not added["regressed"] and added["compared"] == 2 and added["false_positives"] == 0
+    edited = [_res(1, expect=[True, True]), {**_res(2, expect=[False]), "expect": [{"text": "otro texto", "kind": "any", "found_in": []}]}]
+    assert not RQ.compare(edited, base)["regressed"]                                                  # ni cambiar lo que espera
+    assert RQ.compare([_res(1, expect=[True, False]), _res(2, expect=[True])], base)["regressed"]      # dejar de encontrar sí
+    assert RQ.compare([_res(1, expect=[True, True], docs_ok=False)], [_res(1, expect=[True, True], docs_ok=True)])["regressed"]
+
+
+def test_baseline_before_switch_and_notice_without_one(client, monkeypatch):  # noqa: F811
+    _setup(client, "rq6", monkeypatch)
+    client.post("/api/brains/rq6/refqueries", json={"query": "¿Dónde corre Vaultwarden?", "expect": [{"text": "Altair"}]})
+    runs = RQ.run_after_switch()                                                          # sin ninguna ejecución previa
+    with _factory()() as db:
+        bid = db.query(Brain.id).filter(Brain.slug == "rq6").scalar()
+        assert [r.summary["delta"] for r in (db.get(RefRun, x) for x in runs) if r.brain_id == bid] == [None]
+        n = db.query(Notification).filter(Notification.event == "refquery.regressed", Notification.key == "refquery:rq6").one()
+        assert n.severity == "info" and "no tienen con qué compararse" in n.title                    # se dice, en vez de callar
+    before = RQ.run_before_switch()                                                       # la base, con el modelo anterior
+    STATE["worse"] = True
+    after = RQ.run_after_switch()
+    with _factory()() as db:
+        b = next(r for r in (db.get(RefRun, x) for x in before) if r.brain_id == bid)
+        a = next(r for r in (db.get(RefRun, x) for x in after) if r.brain_id == bid)
+        assert b.reason == "embedding.before" and a.summary["previous_run"] == b.id and a.summary["delta"]["regressed"]
+
+
+def test_old_runs_are_purged(client, monkeypatch):  # noqa: F811
+    _setup(client, "rq7", monkeypatch)
+    monkeypatch.setattr(RQ, "KEEP_RUNS", 3)
+    client.post("/api/brains/rq7/refqueries", json={"query": "q", "expect": [{"text": "Altair"}]})
+    for _ in range(5):
+        client.post("/api/brains/rq7/refqueries/runs", json={})
+    assert len(client.get("/api/brains/rq7/refqueries/runs").json()["items"]) == 3
+
+
+def test_query_texts_go_through_the_secret_detector(client, monkeypatch):  # noqa: F811
+    _setup(client, "rq8", monkeypatch)
+    token = "ghp_" + "A1b2C3d4E5f6G7h8J9k0" * 2   # con forma de token de GitHub, montado para no dejarlo literal en el código
+    q = client.post("/api/brains/rq8/refqueries", json={"query": "token del runner", "expect": [{"text": f"el runner usa {token}", "kind": "fact"}]}).json()
+    assert token not in str(q) and "[secreto eliminado" in q["expect"][0]["text"]          # un hecho del grafo no reintroduce el secreto
+    client.patch("/api/brains/rq8", json={"secret_mode": "block"})
+    r = client.post("/api/brains/rq8/refqueries/import", json={"items": [{"query": f"usa {token}"}]})
+    assert r.status_code == 422 and token not in r.text

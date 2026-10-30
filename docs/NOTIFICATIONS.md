@@ -21,7 +21,7 @@ The bell (sidebar → Notifications) lists the alerts you can see and how many a
 | `docsource.error` | warning | A document source could not be synced |
 | `security.lockout` | warning | An account was locked after too many failed sign-ins |
 | `reindex.orphan` | warning | An embedding model change (shadow fill) has been failed or stalled for longer than the configured hours, with its shadow vectors taking up memory |
-| `refquery.regressed` | warning | After an embedding model change, a brain's reference queries find fewer expected items, or show more false positives, than in the previous run |
+| `refquery.regressed` | warning | After an embedding model change, a brain's reference queries stop finding expected items, or show new false positives, compared with the run before the change (as information if there is no earlier run to compare with) |
 | `update.available` | info | A newer release exists (opt-in, see below) |
 
 Messages carry metadata (what failed, where, how many times, a truncated error), **never the text of memories**.

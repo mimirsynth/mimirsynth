@@ -87,10 +87,11 @@ Una consulta combina, sin llamar a un LLM:
 
 Cada brain puede guardar **consultas de referencia** (Preguntar → Consultas de referencia; curadores o superior): una pregunta con los textos que su recall **debe** traer y los que **no** (falsos positivos conocidos), y si la sección de documentos debe salir o no. Un texto cuenta como encontrado si aparece, sin contar mayúsculas ni espacios, en algún resultado; con `fact:`, `chunk:` o `doc:` delante se exige ese tipo.
 
-- **Ejecutar** las mide con los ajustes en vigor: esperados encontrados, falsos positivos y consultas con la sección de documentos al revés (también por tipo), mediana de latencia y diferencia con la ejecución anterior con los ajustes en vigor. Corre como trabajo, con progreso.
+- **Ejecutar** las mide con los ajustes en vigor: esperados encontrados, falsos positivos y consultas con la sección de documentos al revés (también por tipo), mediana de latencia y diferencia con la ejecución anterior con los ajustes en vigor. La diferencia solo cuenta lo que está en las dos ejecuciones (las mismas consultas y los mismos textos), así que añadir, borrar o editar una consulta no la empeora; empeora si deja de salir un esperado que salía, aparece un falso positivo nuevo o la sección de documentos pasa a salir al revés. Corre como trabajo, con progreso, y se conservan las últimas 20 ejecuciones de cada brain.
 - **Simular** repite la medida con otros umbrales de similitud de los pasajes (por ejemplo `0,68 0,70 0,72`) **sin cambiar el ajuste**.
 - Se crean a mano, se **importan y exportan** en JSON, o se guardan desde Preguntar marcando cada resultado como «Debe salir» o «Sobra».
-- **Tras un cambio de modelo de embeddings** se ejecutan solas en cada brain que tenga consultas; si empeoran respecto a la anterior, se avisa con el evento `refquery.regressed`.
+- **En un cambio de modelo de embeddings** se ejecutan solas dos veces en cada brain que tenga consultas: al empezar el relleno, con el modelo anterior, como base, y al terminar el cambio. Si empeoran, se avisa con el evento `refquery.regressed`; si no hay base con la que comparar, el mismo evento lo dice (como información) en vez de callar.
+- Los textos de una consulta pasan por el detector de secretos del brain: guardar como esperado un hecho del grafo (que no pasó por él al ingerirse) no copia una credencial.
 
 ## Vocabulario
 

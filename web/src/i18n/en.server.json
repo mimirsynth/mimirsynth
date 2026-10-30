@@ -263,6 +263,7 @@
  "la carpeta no existe o no es accesible: {{p}}": "the folder does not exist or is not accessible: {{p}}",
  "la carpeta no se puede leer con el usuario de la aplicación": "the folder cannot be read by the application user",
  "la confirmación no coincide con el slug del brain": "the confirmation does not match the brain's slug",
+ "la consulta de referencia contiene secretos ({{v}})": "the reference query contains secrets ({{v}})",
  "la contraseña actual no es correcta": "the current password is not correct",
  "la contraseña no es correcta": "the password is not correct",
  "la cuenta está deshabilitada": "the account is disabled",

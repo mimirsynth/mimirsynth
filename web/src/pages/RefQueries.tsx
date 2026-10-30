@@ -10,7 +10,8 @@ export type Item = { text: string; kind: "any" | "fact" | "chunk" | "doc" };
 export type RefQuery = { id?: number; query: string; expect: Item[]; avoid: Item[]; docs: boolean | null; note: string };
 type Found = Item & { found_in: string[] };
 type Result = { id: number; query: string; error?: string; expected: number; found: number; false_positives: number; docs_ok: boolean | null; ms?: number; expect: Found[]; avoid: Found[] };
-type Delta = { found: number; false_positives: number; docs_mismatch: number; expected: number; regressed: boolean };
+type Delta = { found: number; false_positives: number; docs_mismatch: number; compared: number; regressed: boolean;
+  lost: { id: number; text: string }[]; new_false_positives: { id: number; text: string }[] };
 type Summary = { queries: number; errors: number; expected: number; found: number; recall: number | null; false_positives: number; docs_mismatch: number;
   by_kind: Record<string, { found: number; false_positives: number }>; ms_p50: number | null; ms_max: number | null; previous_run: number | null; delta: Delta | null };
 type Run = { id: number; status: string; reason: string; params: Record<string, number>; summary: Summary | null; error: string; created_at: string; finished_at: string | null; results?: Result[] };
@@ -18,6 +19,7 @@ type Run = { id: number; status: string; reason: string; params: Record<string, 
 const KIND: Record<string, string> = { any: T("cualquiera"), fact: T("hecho"), chunk: T("fragmento"), doc: T("documento") };
 const DOCS = [{ value: "any", label: T("Da igual") }, { value: "yes", label: T("Debe haber pasajes de documentos") }, { value: "no", label: T("No debe haber pasajes de documentos") }];
 const PARAM: Record<string, string> = { min_sim: T("umbral"), docs: T("pasajes"), facts: T("hechos"), chunks: T("fragmentos") };
+const REASON: Record<string, string> = { "embedding.before": T("antes del cambio de modelo"), "embedding.switched": T("tras el cambio de modelo") };
 const empty: RefQuery = { query: "", expect: [], avoid: [], docs: null, note: "" };
 
 const lines = (items: Item[]) => items.map((i) => (i.kind === "any" ? i.text : `${i.kind}: ${i.text}`)).join("\n");
@@ -71,7 +73,8 @@ function DeltaPill({ d }: { d: Delta | null | undefined }) {
   const better = d.found > 0 || d.false_positives < 0;
   return <Group gap={6} wrap="nowrap">
     <Pill size="xs" tone={d.regressed ? "danger" : better ? "success" : "neutral"}>{d.regressed ? t("empeora") : better ? t("mejora") : t("igual")}</Pill>
-    <Text size="xs" c="dimmed">{t("encontrados {{f}} · falsos positivos {{fp}}", { f: sign(d.found), fp: sign(d.false_positives) })}</Text>
+    <Text size="xs" c="dimmed" title={t("Solo cuenta lo que está en las dos ejecuciones: las mismas consultas y los mismos textos.")}>
+      {t("encontrados {{f}} · falsos positivos {{fp}} · {{n}} consultas comparadas", { f: sign(d.found), fp: sign(d.false_positives), n: d.compared })}</Text>
   </Group>;
 }
 
@@ -121,7 +124,7 @@ export default function RefQueries({ graph }: { graph: string }) {
             <DataTable.Th>{t("Falsos positivos")}</DataTable.Th><DataTable.Th>{t("Documentos al revés")}</DataTable.Th><DataTable.Th>{t("Mediana")}</DataTable.Th><DataTable.Th>{t("Frente a la anterior")}</DataTable.Th><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{runs.data.items.map((r) => (
             <DataTable.Tr key={r.id}>
-              <DataTable.Td>{fmt(r.created_at)}{r.reason === "embedding.switched" && <Pill size="xs" tone="alt">{t("cambio de modelo")}</Pill>}</DataTable.Td>
+              <DataTable.Td>{fmt(r.created_at)}{REASON[r.reason] && <Pill size="xs" tone="alt">{t(REASON[r.reason])}</Pill>}</DataTable.Td>
               <DataTable.Td><Params p={r.params} /></DataTable.Td>
               {r.summary ? <>
                 <DataTable.Td>{`${r.summary.found}/${r.summary.expected}`}{r.summary.recall !== null ? ` (${Math.round(r.summary.recall * 100)} %)` : ""}</DataTable.Td>
@@ -157,7 +160,12 @@ export default function RefQueries({ graph }: { graph: string }) {
         {d?.summary && <Stack gap="sm">
           <Group gap="xs"><Params p={d.params} /><DeltaPill d={d.summary.delta} />
             <Text size="xs" c="dimmed">{t("por tipo: hechos {{f}}, fragmentos {{c}}, documentos {{d}} encontrados", { f: d.summary.by_kind.fact.found, c: d.summary.by_kind.chunk.found, d: d.summary.by_kind.doc.found })}</Text></Group>
-          {d.summary.delta?.regressed && <Notice tone="warn">{t("Empeora respecto a la ejecución anterior con los ajustes en vigor.")}</Notice>}
+          {d.summary.delta?.regressed && <Notice tone="warn" title={t("Empeora respecto a la ejecución anterior con los ajustes en vigor.")}>
+            <Stack gap={2}>
+              {d.summary.delta.lost.map((x, n) => <Text key={`l${n}`} size="xs">{t("Deja de salir:")} {x.text}</Text>)}
+              {d.summary.delta.new_false_positives.map((x, n) => <Text key={`f${n}`} size="xs">{t("Falso positivo nuevo:")} {x.text}</Text>)}
+            </Stack>
+          </Notice>}
           <DataTable fz="sm">
             <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Consulta")}</DataTable.Th><DataTable.Th>{t("Esperados")}</DataTable.Th><DataTable.Th>{t("Falsos positivos")}</DataTable.Th><DataTable.Th>{t("Documentos")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
             <DataTable.Tbody>{(d.results ?? []).map((r) => (

@@ -1222,12 +1222,10 @@
  "ajustes en vigor": "current settings",
  "al revés": "wrong way round",
  "bien": "right",
- "cambio de modelo": "model change",
  "cualquiera": "any",
  "da igual": "either way",
  "documento": "document",
  "en curso": "running",
- "encontrados {{f}} · falsos positivos {{fp}}": "found {{f}} · false positives {{fp}}",
  "falta:": "missing:",
  "fragmento": "excerpt",
  "fragmentos": "excerpts",
@@ -1238,5 +1236,11 @@
  "umbral": "threshold",
  "empeora": "worse",
  "mejora": "better",
- "igual": "same"
+ "igual": "same",
+ "Deja de salir:": "No longer appears:",
+ "Falso positivo nuevo:": "New false positive:",
+ "Solo cuenta lo que está en las dos ejecuciones: las mismas consultas y los mismos textos.": "Only what is in both runs counts: the same queries and the same texts.",
+ "antes del cambio de modelo": "before the model change",
+ "encontrados {{f}} · falsos positivos {{fp}} · {{n}} consultas comparadas": "found {{f}} · false positives {{fp}} · {{n}} queries compared",
+ "tras el cambio de modelo": "after the model change"
 }
