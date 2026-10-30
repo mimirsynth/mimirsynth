@@ -52,6 +52,7 @@ class DocumentIn(BaseModel):
 
 class NewsIn(BaseModel):
     since: str = Field("", max_length=40)
+    offset: int = Field(0, ge=0, le=5000)   # solo con `since`; sin él se sigue desde la marca del token
     limit: int = Field(30, ge=1, le=100)
     max_chars: int = Field(6000, ge=500, le=30000)
     federated: bool = True
@@ -154,9 +155,14 @@ class _Out:
     def __init__(self, max_chars: int):
         self.parts, self.size, self.max = [], 0, max_chars
 
-    def add(self, line: str) -> bool:
+    def add(self, line: str, force: bool = False) -> bool:
+        """Con `force`, una línea que no cabe se recorta en vez de saltarse: la cabecera y el primer elemento de cada página van
+        siempre, para que una página nunca quede vacía y quien siga la paginación avance."""
         if self.size + len(line) + 1 > self.max:
-            return False
+            if not force:
+                return False
+            room = max(self.max - self.size - 2, 80)
+            line = line if len(line) <= room else line[:room].rstrip() + "…"
         self.parts.append(line); self.size += len(line) + 1
         return True
 
@@ -173,11 +179,14 @@ def _entity_facts(g: _Graph, uuid: str, status: str, limit: int) -> tuple[list[d
     return [{**_fact(f, amap=g.amap), "origin": g.origin} for f in rows(res)], total
 
 
-def _heading(hits: list[tuple[_Graph, dict]], lang: str) -> str:
+def _heading(hits: list[tuple[_Graph, dict]], lang: str, max_chars: int) -> str:
+    """Nombre, tipo y uuid, y el resumen de la entidad recortado a una quinta parte del tope: la cabecera no se come la página."""
     g, e = hits[0]
     kind = ", ".join(e["labels"])
-    return f"# {e['name']}" + (f" ({kind})" if kind else "") + f" [{e['uuid']}]" + _origin(g.origin, lang) + (
-        "\n" + e["summary"].strip()[:400] if e.get("summary") else "")
+    summary = (e.get("summary") or "").strip()
+    room = min(400, max_chars // 5)
+    summary = summary if len(summary) <= room else summary[:room].rstrip() + "…"
+    return f"# {e['name']}" + (f" ({kind})" if kind else "") + f" [{e['uuid']}]" + _origin(g.origin, lang) + ("\n" + summary if summary else "")
 
 
 def facts_about(ctx: BrainCtx, body: FactsIn, lang: str) -> str:
@@ -192,15 +201,15 @@ def facts_about(ctx: BrainCtx, body: FactsIn, lang: str) -> str:
     ids = {f["uuid"] for f in page}
     src = {k: v for g, fs in by_graph for k, v in _sources(g.graph, [f for f in fs if f["uuid"] in ids]).items()}
     out = _Out(body.max_chars)
-    out.add(_heading(hits, lang))
+    out.add(_heading(hits, lang, body.max_chars), force=True)
     if not page:
-        out.add(tr("No hay hechos con ese filtro.", lang) if body.offset == 0 else tr("No quedan más hechos (hay {{total}}).", lang, total=total))
+        out.add(tr("No hay hechos con ese filtro.", lang) if body.offset == 0 else tr("No quedan más hechos (hay {{total}}).", lang, total=total), force=True)
         return out.text()
-    out.add(tr("Hechos {{first}}–{{last}} de {{total}}, del más reciente al más antiguo. Entre corchetes, el uuid de cada hecho.", lang,
-               first=body.offset + 1, last=body.offset + len(page), total=total))
+    out.add(tr("Hechos desde el {{first}} de {{total}}, del más reciente al más antiguo. Entre corchetes, el uuid de cada hecho.", lang,
+               first=body.offset + 1, total=total), force=True)
     shown = 0
     for f in page:
-        if not out.add(_fact_line(f, src.get(f["uuid"], ""), lang)):
+        if not out.add(_fact_line(f, src.get(f["uuid"], ""), lang), force=shown == 0):   # al menos uno: la página siguiente siempre avanza
             break
         shown += 1
     nxt = body.offset + shown
@@ -223,15 +232,15 @@ def timeline(ctx: BrainCtx, body: TimelineIn, lang: str) -> str:
     events.sort(key=lambda ev: (parse_ts(ev[0]) or datetime.min.replace(tzinfo=timezone.utc), ev[2]["uuid"]), reverse=True)
     page = events[body.offset:body.offset + body.limit]
     out = _Out(body.max_chars)
-    out.add(_heading(hits, lang))
+    out.add(_heading(hits, lang, body.max_chars), force=True)
     if not page:
-        out.add(tr("No hay cambios en ese intervalo.", lang))
+        out.add(tr("No hay cambios en ese intervalo.", lang), force=True)
         return out.text()
-    out.add(tr("Cambios {{first}}–{{last}} de {{total}}, del más reciente al más antiguo.", lang, first=body.offset + 1, last=body.offset + len(page), total=len(events)))
+    out.add(tr("Cambios desde el {{first}} de {{total}}, del más reciente al más antiguo.", lang, first=body.offset + 1, total=len(events)), force=True)
     shown = 0
     for at, kind, f in page:
         what = tr("aprendido", lang) if kind == "learned" else tr("dejó de ser cierto", lang)
-        if not out.add(f"- {_fmt_date(at)} · {what}: {f['fact']} [{f['uuid']}]" + _origin(f["origin"], lang)):
+        if not out.add(f"- {_fmt_date(at)} · {what}: {f['fact']} [{f['uuid']}]" + _origin(f["origin"], lang), force=shown == 0):
             break
         shown += 1
     nxt = body.offset + shown
@@ -287,48 +296,62 @@ def _since(raw: str, lang: str) -> datetime:
 
 
 def whats_new(ctx: BrainCtx, request: Request, body: NewsIn, lang: str) -> str:
-    """Hechos aprendidos e invalidados desde `since`. Sin `since`, desde la última vez que este token preguntó (y esta llamada pasa a
-    ser la última); la primera vez, la última semana."""
+    """Hechos aprendidos e invalidados desde `since`, del más antiguo al más reciente; con `since` se pagina con `offset`.
+    Sin `since`, desde donde se quedó la última llamada sin fecha de este token (la primera vez, la última semana). Si no cabe todo, la
+    marca queda en el último hecho mostrado y la llamada siguiente sigue desde ahí, así que no se pierde nada; si cabe, pasa a ser ahora."""
     from .models import ApiToken
+    fmt = "%Y-%m-%dT%H:%M:%S.%f"   # Graphiti guarda ISO 8601 en UTC: comparar como texto basta
     now = datetime.now(timezone.utc)
     tok = ctx.db.get(ApiToken, request.state.token.id) if getattr(request.state, "token", None) else None
     if body.since:
         since = _since(body.since, lang)
+        key, offset = since.strftime(fmt), body.offset
     else:
         last = tok.news_seen_at if tok else None
-        since = (last if last.tzinfo else last.replace(tzinfo=timezone.utc)) if last else now - timedelta(days=NEWS_DAYS)
-    key = since.strftime("%Y-%m-%dT%H:%M:%S.%f")   # Graphiti guarda ISO 8601 en UTC: comparar como texto basta
-    added, gone, n_added, n_gone = [], [], 0, 0
-    for g in _graphs(ctx, body.federated):
-        for kind, cond, order in (("added", "r.created_at >= $s", "r.created_at"),
-                                  ("gone", "r.invalid_at IS NOT NULL AND coalesce(r.expired_at, r.invalid_at) >= $s", "coalesce(r.expired_at, r.invalid_at)")):
-            n = g.graph.query(f"MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE {cond} RETURN count(r)", {"s": key}).result_set[0][0]
-            fs = rows(g.graph.query(f"MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE {cond} RETURN {FACT_RETURN} ORDER BY {order} DESC, r.uuid LIMIT $n",
-                                    {"s": key, "n": body.limit}))
-            fs = [{**_fact(f, amap=g.amap), "origin": g.origin} for f in fs]
-            if kind == "added":
-                added += fs; n_added += n
-            else:
-                gone += fs; n_gone += n
-    if tok and not body.since:
-        tok.news_seen_at = now
-        ctx.db.commit()
-    added.sort(key=lambda f: (str(f["created_at"] or ""), f["uuid"]), reverse=True)
-    gone.sort(key=lambda f: (str(f["expired_at"] or f["invalid_at"] or ""), f["uuid"]), reverse=True)
+        last = (last if last.tzinfo else last.replace(tzinfo=timezone.utc)) if last else None
+        since = last or now - timedelta(days=NEWS_DAYS)
+        key, offset = ((last + timedelta(microseconds=1)) if last else since).strftime(fmt), 0   # lo que ya se vio no se repite
+    graphs = _graphs(ctx, body.federated)
+    sections = []
+    for kind, cond, when in (("added", "r.created_at >= $s", "r.created_at"),
+                             ("gone", "r.invalid_at IS NOT NULL AND coalesce(r.expired_at, r.invalid_at) >= $s", "coalesce(r.expired_at, r.invalid_at)")):
+        at = (lambda f: str(f["created_at"] or "")) if kind == "added" else (lambda f: str(f["expired_at"] or f["invalid_at"] or ""))
+        facts, total = [], 0
+        for g in graphs:
+            total += g.graph.query(f"MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE {cond} RETURN count(r)", {"s": key}).result_set[0][0]
+            res = g.graph.query(f"MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE {cond} RETURN {FACT_RETURN} ORDER BY {when}, r.uuid LIMIT $n",
+                                {"s": key, "n": offset + body.limit})
+            facts += [{**_fact(f, amap=g.amap), "origin": g.origin} for f in rows(res)]
+        facts.sort(key=lambda f: (parse_ts(at(f)) or now, f["uuid"]))
+        sections.append((kind, facts[offset:offset + body.limit], total, at))
     out = _Out(body.max_chars)
-    out.add(tr("# Novedades desde {{since}}", lang, since=since.strftime("%Y-%m-%d %H:%M UTC")))
-    if not n_added and not n_gone:
-        out.add(tr("No hay hechos nuevos ni invalidados desde entonces.", lang))
+    out.add(tr("# Novedades desde {{since}}, de lo más antiguo a lo más reciente", lang, since=since.strftime("%Y-%m-%d %H:%M UTC")), force=True)
+    if not any(n for _, _, n, _ in sections):
+        out.add(tr("No hay hechos nuevos ni invalidados desde entonces.", lang), force=True)
+        if tok and not body.since:
+            tok.news_seen_at = now
+            ctx.db.commit()
         return out.text()
-    for title, fs, n in ((tr("## Hechos nuevos ({{n}})", lang, n=n_added), added[:body.limit], n_added),
-                         (tr("## Hechos que dejaron de ser ciertos ({{n}})", lang, n=n_gone), gone[:body.limit], n_gone)):
-        if not n or not out.add(title):
+    cut = []   # (último mostrado, mostrados) de cada sección que no se ha mostrado entera
+    for kind, page, n, at in sections:
+        if not n:
             continue
+        title = tr("## Hechos nuevos ({{n}})", lang, n=n) if kind == "added" else tr("## Hechos que dejaron de ser ciertos ({{n}})", lang, n=n)
         shown = 0
-        for f in fs:
-            if not out.add(_fact_line(f, "", lang)):
-                break
-            shown += 1
-        if shown < n:
-            out.add(tr("… y {{left}} más: pide una fecha más reciente o usa facts_about con una entidad.", lang, left=n - shown))
+        if out.add(title, force=True):
+            for f in page:
+                if not out.add(_fact_line(f, "", lang), force=shown == 0):   # al menos uno por sección: siempre se avanza
+                    break
+                shown += 1
+        if offset + shown < n:
+            cut.append((parse_ts(at(page[shown - 1])) if shown else None, shown))
+    if body.since:
+        if cut:
+            out.parts.append(tr("Quedan más: vuelve a llamar con el mismo since y offset={{next}}.", lang, next=offset + min(n for _, n in cut)))
+    elif tok:
+        marks = [m for m, _ in cut if m]
+        tok.news_seen_at = min(marks) if cut and marks else now
+        ctx.db.commit()
+        if cut:
+            out.parts.append(tr("Quedan más: vuelve a llamar sin since para seguir desde el último que se ha mostrado.", lang))
     return out.text()

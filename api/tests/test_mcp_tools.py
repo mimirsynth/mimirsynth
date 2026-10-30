@@ -91,20 +91,25 @@ def test_facts_timeline_and_news(client, graphs):  # noqa: F811
 
     # paginación y topes
     err, txt = call(c, "mt", tok, "facts_about", entity="Notus", limit=10)
-    assert "Hechos 1–10 de 26" in txt and txt.count("\n- ") == 10 and "Quedan 16 hechos: vuelve a llamar con offset=10." in txt
+    assert "Hechos desde el 1 de 26" in txt and txt.count("\n- ") == 10 and "Quedan 16 hechos: vuelve a llamar con offset=10." in txt
     txt = call(c, "mt", tok, "facts_about", entity="Notus", limit=10, offset=20)[1]
-    assert "Hechos 21–26 de 26" in txt and "Quedan" not in txt and "[p00]" in txt
+    assert "Hechos desde el 21 de 26" in txt and "Quedan" not in txt and "[p00]" in txt
     assert "No quedan más hechos (hay 26)." in call(c, "mt", tok, "facts_about", entity="Notus", offset=40)[1]
     txt = call(c, "mt", tok, "facts_about", entity="Notus", limit=100, max_chars=500)[1]
+    assert len(txt) < 650 and "Quedan" in txt                                               # el tope corta y dice cómo seguir
+    graphs.query("MATCH (n:Entity {uuid:$u}) SET n.summary = $s", {"u": NOTUS, "s": "Resumen muy largo. " * 60})
+    for tool in ("facts_about", "timeline"):                                                 # una cabecera larga no deja la página vacía
+        txt = call(c, "mt", tok, tool, entity="Notus", limit=50, max_chars=500)[1]
+        assert txt.count("\n- ") >= 1 and "offset=0" not in txt and "con offset=" in txt and len(txt) < 650
     assert len(txt) < 600 and "Quedan" in txt                                               # el tope corta y dice cómo seguir
 
     # timeline: aprendido y dejó de ser cierto, con filtro de fechas
     err, txt = call(c, "mt", tok, "timeline", entity="Nextcloud")
-    assert not err and "Cambios 1–4 de 4" in txt
+    assert not err and "Cambios desde el 1 de 4" in txt
     assert txt.index("2026-06-01 · dejó de ser cierto: Nextcloud corre en Eridani [f1]") < txt.index("2026-03-01 · aprendido: Nextcloud usa Postgres [g1] · de «mtl»") \
         < txt.index("2026-01-01 · aprendido: Nextcloud corre en Eridani [f1]")
-    assert "Cambios 1–2 de 2" in call(c, "mt", tok, "timeline", entity="Nextcloud", since="2026-05-01")[1]
-    assert "Cambios 1–2 de 2" in call(c, "mt", tok, "timeline", entity="Nextcloud", until="2026-03-01", federated=True)[1]
+    assert "Cambios desde el 1 de 2" in call(c, "mt", tok, "timeline", entity="Nextcloud", since="2026-05-01")[1]
+    assert "Cambios desde el 1 de 2" in call(c, "mt", tok, "timeline", entity="Nextcloud", until="2026-03-01", federated=True)[1]
     assert "No hay cambios" in call(c, "mt", tok, "timeline", entity="Nextcloud", since="2027-01-01")[1]
 
     # whats_new: con fecha, y sin ella desde la última llamada de este token
@@ -120,7 +125,28 @@ def test_facts_timeline_and_news(client, graphs):  # noqa: F811
     assert "[fnew]" in call(c, "mt", other, "whats_new")[1]                                 # cada token lleva su propia marca
     err, txt = call(c, "mt", tok, "whats_new", since="ayer")
     assert err and "Fecha no válida" in txt
-    assert call(c, "mt", tok, "whats_new", since="2026-01-01", limit=2)[1].count("… y ") == 1
+    txt = call(c, "mt", tok, "whats_new", since="2026-01-01", limit=2)[1]                    # con fecha: de lo más antiguo, por páginas
+    assert txt.index("[f1]") < txt.index("[p00]") and "offset=2" in txt
+    assert "[p01]" in call(c, "mt", tok, "whats_new", since="2026-01-01", limit=2, offset=2)[1]
+
+
+@pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_whats_new_without_date_never_skips_what_did_not_fit(client, graphs):  # noqa: F811
+    from datetime import timedelta
+    assert client.post("/api/brains", json={"slug": "mtn", "name": "MTN", "graph_name": OWN}).status_code == 201
+    tok = _tok(client, "mtn")
+    c = TestClient(app, headers={"Accept-Language": "es"})
+    t0 = datetime.now(timezone.utc) - timedelta(hours=1)
+    for i in range(5):
+        _rel(graphs, NOTUS, "sala", f"n{i}", f"Notus novedad {i}", (t0 + timedelta(minutes=i)).isoformat())
+    seen = []
+    for _ in range(4):                                                                       # 5 hechos de 2 en 2: 2 + 2 + 1, y nada más
+        txt = call(c, "mtn", tok, "whats_new", limit=2, federated=False)[1]
+        seen.append([f"n{i}" for i in range(5) if f"[n{i}]" in txt])
+    assert seen == [["n0", "n1"], ["n2", "n3"], ["n4"], []]
+    assert "sin since para seguir" not in txt and "No hay hechos nuevos" in txt
+    _rel(graphs, NOTUS, "sala", "n5", "Notus novedad 5", datetime.now(timezone.utc).isoformat())
+    assert "[n5]" in call(c, "mtn", tok, "whats_new", max_chars=500, federated=False)[1]  # tras ponerse al día, la marca es ahora
 
 
 def test_get_document_passage_full_text_and_federation(client, fake_index):  # noqa: F811

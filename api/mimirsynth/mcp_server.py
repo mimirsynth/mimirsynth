@@ -74,9 +74,10 @@ TOOLS = [
          "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo del texto devuelto (por defecto 8000)."},
          "origin": {"type": "string", "description": "Si el pasaje viene de otro brain («de «x»» en `recall`), su identificador."}},
          "required": ["document"]}, "annotations": {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}},
-    {"name": "whats_new", "title": "Novedades", "description": "Qué ha cambiado en la memoria desde una fecha: hechos aprendidos y hechos que dejaron de ser ciertos. Sin `since`, desde la última vez que este token preguntó (la primera vez, la última semana), así que sirve para ponerse al día al empezar una sesión sin guardar la fecha.",
+    {"name": "whats_new", "title": "Novedades", "description": "Qué ha cambiado en la memoria desde una fecha, de lo más antiguo a lo más reciente: hechos aprendidos y hechos que dejaron de ser ciertos. Sin `since`, desde donde se quedó la última llamada sin fecha de este token (la primera vez, la última semana): si no cabe todo, la llamada siguiente sin fecha sigue por ahí, así que sirve para ponerse al día al empezar una sesión sin guardar la fecha.",
      "inputSchema": {"type": "object", "properties": {
          "since": {"type": "string", "description": "Desde cuándo (ISO 8601: 2026-10-01 o 2026-10-01T09:00:00Z). Vacío = desde la última llamada sin fecha."},
+         "offset": {"type": "integer", "minimum": 0, "maximum": 5000, "description": "Con `since`, cuántos saltar para pedir la página siguiente."},
          "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "Máximo de hechos por sección (por defecto 30)."},
          "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo de la respuesta (por defecto 6000)."},
          "federated": {"type": "boolean", "description": "Incluir lo que otros brains prestan a este (por defecto sí)."}}},
