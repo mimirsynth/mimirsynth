@@ -35,5 +35,8 @@ Presta la memoria de este brain, solo para leer, a otro brain, o mira qué brain
 ## Secretos
 Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave: **enmascararlo** (lo predeterminado), **bloquearlo** o **solo avisar**, además de una lista de excepciones y **Analizar lo ya guardado**. Solo los administradores del brain ven esta tarjeta. Ver [[Secretos]].
 
+## Exportar
+Una copia de este brain en un paquete (grafo, curación, propuestas, documentos y consultas de referencia; nunca miembros, tokens ni secretos), cifrada si se quiere, para guardarla aparte o llevarla a otra instancia. Se prepara como un trabajo y se descarga una vez. Solo los administradores del brain ven esta tarjeta. Ver [[Exportar un brain]].
+
 ## Tokens de API del brain
 Tokens para plugins y MCP, acotados a este brain. El rol del token **nunca supera el tuyo** y no puede ser administrador. Se muestran **una sola vez** al crearlos. Puedes ver el prefijo, el propietario y el último uso, y **revocarlos**. Uso en [[Conectar agentes]]. Tus propios tokens de todos los brains están también en [[Mi cuenta]].

@@ -30,6 +30,7 @@ class Kind:
     label: str
     limit: int = 2
     resume: bool = False  # se relanza solo si el servicio se reinicia con el trabajo a medias (debe ser idempotente)
+    interrupted: str = ""  # what the failed job says after a restart, when the generic text is not enough
 
 
 _KINDS: dict[str, Kind] = {}
@@ -39,9 +40,9 @@ _LOCK = threading.Lock()
 INLINE = False  # pruebas: ejecuta cada trabajo en el hilo que lo encola, sin pool
 
 
-def register(kind: str, label: str, limit: int = 2, resume: bool = False):
+def register(kind: str, label: str, limit: int = 2, resume: bool = False, interrupted: str = ""):
     def deco(fn):
-        _KINDS[kind] = Kind(fn, label, limit, resume)
+        _KINDS[kind] = Kind(fn, label, limit, resume, interrupted)
         return fn
     return deco
 
@@ -193,7 +194,8 @@ def recover() -> dict:
         stale = db.scalars(select(Job).where(Job.status.in_(("queued", "running")))).all()
         todo = []
         for j in stale:
-            j.status, j.finished_at, j.error = "failed", _now(), "interrumpido por un reinicio del servicio"
+            k = _KINDS.get(j.kind)
+            j.status, j.finished_at, j.error = "failed", _now(), (k and k.interrupted) or "interrumpido por un reinicio del servicio"
             out["interrupted"] += 1
             if j.kind in _KINDS and _KINDS[j.kind].resume:
                 todo.append((j.kind, j.brain_id, dict(j.params or {}), j.title, j.created_by, j.dedupe_key, j.id))

@@ -23,6 +23,7 @@ Each column can be sorted and filtered.
 | **Tokens** | `token.create`, `token.revoke` |
 | **Proposals** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (the decider's verdict), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rejected by the [[Secrets]] policy, with the rules, never the value) |
 | **Secrets** | `secrets.scan` (counts per rule) |
+| **Export** | `brain.export` (the options, never the password), `brain.export.download` |
 | **Vocabulary** | `vocab.alias.add`, `vocab.alias.delete`, `vocab.revert`, `vocab.duplicates.ignore`, `vocab.*` (merges and entity and relation type changes), `ontology.update`, `retype.scan`, `retype.apply`, `retype.revert`, `conflict.resolve` (a contradiction resolved), `conflict.dismiss` and `conflict.undismiss` (marked as not a contradiction, and shown again) |
 | **Reference queries** | `refquery.create`, `refquery.update`, `refquery.delete`, `refquery.import`, `refquery.run` |
 | **Documents** | `document.upload`, `document.delete`, `document.reindex`, `document.duplicates` (Find duplicates), `docsource.create/update/delete/scan`, `docroot.create/delete` |

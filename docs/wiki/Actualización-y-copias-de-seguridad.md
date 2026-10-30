@@ -49,6 +49,8 @@ Guarda además tu **`.env`**, y en particular `MIMIRSYNTH_SESSION_SECRET`: sin �
 
 Los nombres de los volúmenes llevan el prefijo del proyecto de Compose (normalmente el nombre de la carpeta); míralos con `docker volume ls`.
 
+Esto copia la instancia entera. Para guardar **un solo brain** aparte, o llevarlo a otra instancia, ver [[Exportar un brain]].
+
 ## Qué se puede reconstruir
 - El **índice de texto de los episodios** se regenera desde el grafo («Reindexar ahora» en [[Preguntar]]).
 - El **índice de documentos** se regenera desde los originales del almacén (reindexar el documento).

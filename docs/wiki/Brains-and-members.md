@@ -35,5 +35,8 @@ Lend this brain's memory, read-only, to another brain, or see which brains lend 
 ## Secrets
 What to do when a proposal or a document carries a password, a token or a key: **mask** it (the default), **block** it or **only warn**, plus a list of exceptions and **Scan what is already stored**. Only brain administrators see this card. See [[Secrets]].
 
+## Export
+A copy of this brain in a package (graph, curation, proposals, documents and reference queries; never members, tokens or secrets), optionally encrypted, to keep apart or to take to another instance. Prepared as a job and downloaded once. Only brain administrators see this card. See [[Export a brain]].
+
 ## The brain's API tokens
 Tokens for plugins and MCP, scoped to this brain. The token's role **never exceeds yours** and it cannot be administrator. They are shown **only once** when created. You can see the prefix, the owner and the last use, and **revoke** them. Usage in [[Connect agents]]. Your own tokens across all brains are also in [[My account]].

@@ -216,3 +216,23 @@ def test_duplicates_are_not_indexed_and_the_oldest_is_promoted(client):
     assert [client.get(f"/api/brains/dup/docs/{x['id']}").json()["status"] for x in (b, c)] == ["active", "duplicate"]   # gana el más antiguo
     assert client.get(f"/api/brains/dup/docs/{c['id']}", params={"chunks": 10}).json()["chunk_list"] == []
     client.post("/api/brains/dup/delete", json={"confirm": "dup"})
+
+
+def test_export_with_vectors(client, monkeypatch):
+    """The export's vectors (#130): the chunks of the search index with their embeddings, read from pgvector."""
+    import io
+    import json
+    import tarfile
+
+    from mimirsynth import jobs
+    monkeypatch.setattr(jobs, "INLINE", True)
+    client.post("/api/brains", json={"slug": "px", "name": "PX", "graph_name": "g-px-none"})
+    d = up(client, "px", "red.md", "# Red\n\nEl resolvedor interno escucha en el puerto 53.\n")
+    jid = client.post("/api/brains/px/exports", json={"vectors": True}).json()["id"]
+    pkg = client.get(f"/api/brains/px/exports/{jid}/download")
+    assert pkg.status_code == 200
+    with tarfile.open(fileobj=io.BytesIO(pkg.content), mode="r:gz") as t:
+        man = json.loads(t.extractfile("manifest.json").read())
+        chunks = [json.loads(x) for x in t.extractfile("vectors/doc_chunks.jsonl").read().splitlines()]
+    assert man["graph"]["dump_omitted"] == "no_graph" and man["vectors"]["doc_chunks"] == len(chunks) > 0
+    assert chunks[0]["document_id"] == d["id"] and len(chunks[0]["embedding"]) == 64 and "puerto 53" in chunks[0]["text"]

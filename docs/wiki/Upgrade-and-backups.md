@@ -49,6 +49,8 @@ Also save your **`.env`**, and in particular `MIMIRSYNTH_SESSION_SECRET`: withou
 
 Volume names carry the Compose project prefix (normally the folder name); see them with `docker volume ls`.
 
+This copies the whole instance. To keep **one brain** apart, or to take it to another instance, see [[Export a brain]].
+
 ## What can be rebuilt
 - The **episode text index** is regenerated from the graph ("Reindex now" in [[Ask]]).
 - The **document index** is regenerated from the originals in the store (reindex the document).

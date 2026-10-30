@@ -40,6 +40,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Miembros** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrador |
 | **Tokens** | `GET/POST /tokens` · `DELETE /tokens/{id}` | lector (de tu propio rol hacia abajo) |
 | **El propio brain** | `PATCH /api/brains/{slug}` (nombre, descripción, slug, política de secretos) · `GET /api/brains/{slug}/secrets/scan` | administrador |
+| **Exportar** | `POST /exports` (`vectors`, `password` opcional) · `GET /exports` · `GET /exports/{id}/download` (una vez; 410 cuando ya se descargó o caducó). Ver [[Exportar un brain]] | administrador |
 | | `POST /api/brains/{slug}/delete` | propietario |
 
 ### Qué ha cambiado desde la 0.6
