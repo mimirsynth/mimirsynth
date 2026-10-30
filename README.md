@@ -9,16 +9,30 @@ Memory for AI agents, based on the CoALA cognitive framework and built on a temp
 Status: **under active development** (0.x). It works end to end, but the API and the schema may change between versions.
 
 ## What it offers
-- **Temporal memory:** facts with validity dates, history and a timeline; nothing is overwritten.
-- **Brains:** isolated knowledge domains, each with its own graph, ontology, members and tokens.
-- **Proposal quarantine:** what agents write is reviewed by a curator (or an automatic decider) before it enters the graph.
-- **Hybrid recall** (facts, episode text and documents) designed to be injected into an agent's prompt.
-- **Document memory:** upload files, or connect folders and wikis (Outline) as sources, with semantic search.
-- **Users:** own accounts with two-factor, invitations and email recovery; optional OIDC; per-brain roles; audit log.
-- **Web interface** to explore the graph, curate the vocabulary, review proposals and administer the instance. English and Spanish.
-- **Claude Code integration:** recall hook and proposal-based writing ([`integrations/claude-code`](integrations/claude-code)).
+**Memory that keeps its history**
+- **Temporal facts:** every fact has validity dates; when it stops being true it is invalidated, never overwritten, so you can ask what was known at any moment.
+- **Brains:** isolated knowledge domains, each with its own graph, ontology, members and tokens. A brain can **lend read access** to another (federation), with an expiry and revocable at any time.
+- **Ontology packages** (general, infrastructure, team projects, personal and family, software knowledge), versioned and updatable without losing your own changes.
 
-**Full user guide in the [wiki](https://github.com/MimirSynth/mimirsynth/wiki).** Technical summary: [installation](docs/INSTALL.md), [configuration](docs/CONFIGURATION.md), [connecting agents](docs/AGENTS.md), [architecture](docs/ARCHITECTURE.md) and [document memory](docs/DOCUMENTS.md).
+**What goes in is reviewed**
+- **Proposal quarantine:** what agents write waits for a curator, or for an automatic decider that judges it against the brain's scope.
+- **Secret detector:** credentials in proposals and documents are masked, blocked or flagged, as each brain chooses.
+- **Upkeep tools:** type corrector, duplicate merging, relation aliases and **contradictions** between current facts in single-valued relations.
+
+**Recall for agents**
+- **Hybrid recall** of facts, episode text and document passages, ready to be injected into an agent's prompt, in the caller's language.
+- **Built-in MCP server** (`recall` and `remember`), REST API and a [Claude Code integration](integrations/claude-code).
+- **Reference queries** per brain to measure recall quality and catch regressions, for instance when changing the embedding model, which can be done from the interface.
+
+**Documents**
+- Upload files, or connect folders and wikis (Outline, Confluence, Notion) as sources; duplicates are detected and indexed only once.
+
+**Web interface and administration**
+- Explore the graph (2D, radial, tree and 3D, with halos showing where each piece of knowledge came from), ask questions, review proposals and curate the vocabulary. In **English and Spanish**.
+- Own accounts with two-factor and **passkeys**, several OIDC providers with group-based roles, per-brain roles and an audit log.
+- **Notifications** in the app and through Telegram, ntfy, Gotify, webhook or email; `update.sh` to back up, update and roll back in one step.
+
+**Full user guide in the [wiki](https://github.com/MimirSynth/mimirsynth/wiki)** (also [in Spanish](https://github.com/MimirSynth/mimirsynth/wiki/Inicio)). Technical documentation: [installation](docs/INSTALL.md), [configuration](docs/CONFIGURATION.md), [connecting agents](docs/AGENTS.md), [architecture](docs/ARCHITECTURE.md), [ontology](docs/ONTOLOGY.md), [document memory](docs/DOCUMENTS.md), [federation](docs/FEDERATION.md) and [notifications](docs/NOTIFICATIONS.md).
 
 ## Quick start
 You need Docker with Compose v2, an OpenAI-compatible endpoint for embeddings (e.g. Ollama with `nomic-embed-text`) and another for the extraction LLM ([which model](docs/CONFIGURATION.md#choosing-the-extraction-model)). Without both endpoints the instance starts, but there is nothing useful to see.
@@ -70,4 +84,4 @@ Mímir is the guardian of the well of knowledge (Mímisbrunnr) in Norse mytholog
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). Dependencies have their own licenses; FalkorDB, for example, is *source-available* (SSPL): see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#dependencies-and-licenses).
 
 ## Contributing
-Read [CONTRIBUTING.md](CONTRIBUTING.md). For vulnerabilities, see [SECURITY.md](SECURITY.md).
+Read [CONTRIBUTING.md](CONTRIBUTING.md). The project works in English, and Spanish is welcome in issues and discussions. For vulnerabilities, see [SECURITY.md](SECURITY.md).

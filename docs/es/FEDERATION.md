@@ -1,3 +1,5 @@
+[English](../FEDERATION.md) · **Español**
+
 # Federación entre brains
 
 Un brain puede prestar su lectura a otro. El que recibe ve entonces, en sus propios recalls, lo que sabe el que presta, fusionado con lo suyo y marcado con su origen. No se copia nada: los datos se quedan en el brain que presta.
@@ -25,10 +27,10 @@ Nunca se comparte: embeddings, resúmenes de entidades, tokens, miembros, propue
 
 ## Cómo la usa una consulta
 
-`recall` (REST y MCP) consulta el brain de destino y todos los orígenes que le prestan, y fusiona las listas con Reciprocal Rank Fusion ponderado (lo que el destino ya sabe pesa algo más que lo prestado). Un hecho que el destino ya tiene no se repite desde un origen. Lo prestado lleva su origen: `· de «slug»` en el contexto inyectado y un campo `origin` en el JSON, además de una lista `federated` con el estado de cada origen (`ok`, `error`, `off`). Un origen que falla nunca rompe la consulta.
+`recall` (REST y MCP) consulta el brain de destino y todos los orígenes que le prestan, y fusiona las listas con Reciprocal Rank Fusion ponderado (lo que el destino ya sabe pesa algo más que lo prestado). Un hecho que el destino ya tiene no se repite desde un origen. Lo prestado lleva su origen: `· de «slug»` en el contexto inyectado (en el idioma de quien llama: `· from «slug»` en inglés) y un campo `origin` en el JSON, además de una lista `federated` con el estado de cada origen (`ok`, `error`, `off`). Un origen que falla nunca rompe la consulta.
 
 Pasa `federated: false` a `recall` para obtener solo la memoria propia del brain. La pantalla Consulta muestra el origen de cada elemento prestado.
 
 ## Gestionar las concesiones
 
-Administración → Brains → Federación muestra a quién presta este brain (con alcance, vigencia, último uso y un botón Revocar) y quién le presta a él. La API REST está en `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).
+Administración → Acceso al brain → Federación muestra a quién presta este brain (con alcance, vigencia, último uso y un botón Revocar) y quién le presta a él. La API REST está en `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).

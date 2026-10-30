@@ -75,12 +75,12 @@ It does, in this order:
 3. **Updates**: pins `MIMIRSYNTH_VERSION` in `.env` and recreates only the application (migrations run on start). It adopts the release's `docker-compose.yml` only if yours is the unmodified one of the version you were running; otherwise it keeps yours and tells you (`--update-compose` forces it, `--keep-compose` never touches it).
 4. **Checks** that it answers with the new version and is healthy, and shows the database revision. If it does not verify, it tells you how to go back.
 
-To go back: `./update.sh --rollback` restores the previous image and files; add `--with-db` to restore the database too (anything written since the backup is lost). An external FalkorDB is not part of the backup: save it yourself. Without the script, the manual way is `docker compose pull` and `docker compose --profile bundled up -d`, after a backup.
+To go back: `./update.sh --rollback` puts back the previous `docker-compose.yml` and `.env` (and with them the previous image), keeping the failed ones as `*.rolledback`; add `--with-db` to restore the database too (anything written since the backup is lost). The rollback does not restore the documents volume or FalkorDB (they are in the backup, to restore by hand if needed), and an external FalkorDB is not part of the backup at all: save it yourself. Without the script, the manual way is `docker compose pull` and `docker compose --profile bundled up -d`, after a backup.
 
 ## Backups
 Three things must be saved, and they must be consistent with each other:
 - **PostgreSQL** (users, brains, proposals, indexes): `docker compose exec -T postgres pg_dump -U mimirsynth mimirsynth > mimirsynth.sql`
-- **The `docstore` volume** (originals of uploaded documents).
+- **The `docstore` volume** (originals of uploaded documents, wiki page snapshots and the extracted text of every document).
 - **FalkorDB** (the knowledge): the `graphdata` volume, or a dump with `redis-cli --rdb`.
 Also save your `.env`.
 

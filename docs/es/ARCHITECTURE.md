@@ -41,11 +41,12 @@ Un **brain** es un dominio de conocimiento aislado: su grafo, su ontología (tip
 
 ## Usuarios y roles
 
-- **Cuentas propias** (email y contraseña con argon2id, bloqueo tras intentos fallidos, invitaciones y recuperación por enlace de un solo uso, correo por SMTP opcional) y **doble factor TOTP** con códigos de recuperación, que el administrador puede exigir.
+- **Cuentas propias** (email y contraseña con argon2id, bloqueo tras intentos fallidos, invitaciones y recuperación por enlace de un solo uso, correo por SMTP opcional), **doble factor TOTP** con códigos de recuperación, que el administrador puede exigir, y **llaves de acceso** (WebAuthn) para entrar sin contraseña o como segundo paso.
 - **OIDC opcional, con uno o varios proveedores** (Keycloak, Authentik, Entra ID, PocketID…): por defecto solo entra quien ya tiene cuenta o invitación; cada proveedor puede permitir, opcionalmente, el alta automática por dominios y conceder roles según sus grupos.
 - **Rol por brain:** lector < colaborador < curador < administrador < propietario. El administrador de la instancia ve todo.
 - **Tokens de API** acotados a un brain, para agentes y plugins; nunca superan el rol de quien los crea y no administran la instancia.
 - Las acciones de administración y de acceso quedan en un **registro de auditoría**.
+- **Idioma:** la interfaz y los correos están en inglés y en español, a elección de cada persona.
 
 ## Escritura: cuarentena de propuestas
 
@@ -99,11 +100,11 @@ La ontología se define por brain (paquetes estándar en `api/mimirsynth/presets
 
 ## Trabajos
 
-Ingesta, escaneo de carpetas y reindexado pasan por una cola general con progreso, cancelación y reintento. Los reescaneos programados sin incidencias se purgan solos; los plazos se cambian en Administración → Ajustes.
+Ingesta, escaneo de carpetas y reindexado pasan por una cola general con progreso, cancelación y reintento. Los reescaneos programados sin incidencias se purgan solos; los plazos se cambian en Administración → Ingesta y trabajos.
 
 ## Configuración
 
-El entorno solo lleva lo necesario para arrancar y conectar (ver `.env.example`). Todo lo demás se cambia en la interfaz (Administración → Ajustes) y se aplica sin reiniciar; las variables de entorno equivalentes funcionan como valor por defecto. Los secretos guardados en la base de datos se cifran con una clave derivada de `MIMIRSYNTH_SESSION_SECRET`: si cambia, hay que volver a introducirlos.
+El entorno solo lleva lo necesario para arrancar y conectar (ver `.env.example`). Todo lo demás se cambia en la interfaz (Administración) y se aplica sin reiniciar; las variables de entorno equivalentes funcionan como valor por defecto. Los secretos guardados en la base de datos se cifran con una clave derivada de `MIMIRSYNTH_SESSION_SECRET`: si cambia, hay que volver a introducirlos.
 
 ## Dependencias y licencias
 

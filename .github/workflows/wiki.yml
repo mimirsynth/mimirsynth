@@ -1,0 +1,29 @@
+name: Wiki
+# docs/wiki/ is the source of the GitHub wiki: every push to main that touches it republishes the whole wiki,
+# so pages edited directly on GitHub are overwritten.
+on:
+  push:
+    branches: [main]
+    paths: ["docs/wiki/**"]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: {group: wiki, cancel-in-progress: false}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Publish docs/wiki to the wiki
+        env:
+          TOKEN: ${{ github.token }}
+          SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
+          rsync -a --delete --exclude .git docs/wiki/ wiki/
+          cd wiki
+          git add -A
+          if git diff --cached --quiet; then echo "Wiki already up to date"; exit 0; fi
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Sync from ${GITHUB_SHA::7}: ${SUBJECT%%$'\n'*}"
+          git push -q origin HEAD

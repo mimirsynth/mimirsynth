@@ -4,6 +4,17 @@
 
 Thanks for wanting to help! MimirSynth is under active development: before starting on a large change, open an *issue* or a *discussion* to talk it over.
 
+## Language
+MimirSynth is **English-first** and **Spanish-friendly**: English is the working language so that anyone can take part, and most of the people around the project speak Spanish, so Spanish stays a first-class language for users.
+
+- **In English:** commit messages, pull request titles and descriptions, issue titles, labels, code (identifiers, comments, docstrings, log messages) and the source version of every document.
+- **Spanish is welcome** in issues, discussions and comments. If you are not comfortable writing in English, write in Spanish: a maintainer will add an English title or summary, and the original stays as it is. Conversations can carry on in either language.
+- **Existing Spanish comments** in the code are translated when you touch that code, not in sweeping translation-only PRs that conflict with everyone else's work.
+- **Documentation** is written in English first and kept translated into Spanish (see [Documentation](#documentation)).
+- **The interface** is fully available in English and Spanish. For now its translation catalogues still use the Spanish text as the key (see *Translations* below); moving the source to English is planned.
+
+¿Prefieres leer esto en castellano? [docs/es/CONTRIBUTING.md](docs/es/CONTRIBUTING.md).
+
 ## Set up the environment
 ```bash
 git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
@@ -25,7 +36,18 @@ For hot reload: `uvicorn mimirsynth.main:app --port 8010` (with `MIMIRSYNTH_AUTH
 - **Translations:** every visible text goes through `t("…")`. The source language is Spanish (the text itself is the key) and the English catalogue is `web/src/i18n/en.json`; messages the server shows go in `web/src/i18n/en.server.json`, which the API also uses to answer in the caller's language (texts for agents that are not an `HTTPException` are marked with `i18n.tr("…", lang)`). `npm run i18n` checks that nothing is untranslated, and `python -m mimirsynth.i18n_extract --missing` lists missing server texts. To add a language, add its catalogue and an entry in `LANGUAGES` (`web/src/i18n/index.ts`).
 - **Text and data:** do not introduce names, addresses or data from your own infrastructure in code, tests or documentation: use generic examples.
 - **Secrets:** never commit them. Sensitive values live encrypted in the database, not in the repository.
-- **Commits:** English messages in the style `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`.
+- **Commits:** English messages in the style `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`. PR titles follow the same style, because PRs are squash-merged and the title becomes the commit on `main`.
+
+## Documentation
+| Where | What | Languages |
+|---|---|---|
+| `README.md` / `README.es.md` | What MimirSynth is and the quick start | English and Spanish |
+| `docs/` / `docs/es/` | Technical documentation that accompanies the code | English and Spanish |
+| `docs/wiki/` | The user guide, published to the [wiki](https://github.com/MimirSynth/mimirsynth/wiki) | English and Spanish pages, in pairs |
+| `CHANGELOG.md` | Release notes | English |
+
+- A change in behaviour updates the documentation it affects **in the same PR**, in both languages. If you cannot write the Spanish part, say so in the PR and a maintainer will add it before merging.
+- **The wiki is edited here, not on GitHub.** Every page in `docs/wiki/` is published to the wiki when it reaches `main`, and the publication overwrites anything edited directly on the wiki. English pages have English names (`Quick-start.md`) and Spanish pages Spanish names (`Guía-rápida.md`); each starts with a link to its counterpart, and links between pages use `[[Page name]]`. A new page goes into `_Sidebar.md` and, when it is a main entry point, into `Home.md` and `Inicio.md`.
 
 ## Pull requests
 One PR, one purpose. Describe the why, link the issue and tick the template's checklist. Continuous integration must pass.

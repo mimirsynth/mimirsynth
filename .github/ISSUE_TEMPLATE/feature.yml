@@ -2,6 +2,9 @@ name: Feature request
 description: An improvement or a new feature
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: "Write in English if you can; Spanish is welcome too and a maintainer will add an English title. · Si lo prefieres, escribe en castellano."
   - type: textarea
     id: problem
     attributes: {label: What problem does it solve}

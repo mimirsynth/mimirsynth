@@ -1,0 +1,1 @@
+MimirSynth · [Repository](https://github.com/MimirSynth/mimirsynth) · [Issues](https://github.com/MimirSynth/mimirsynth/issues) · [Contributing / Contribuir](https://github.com/MimirSynth/mimirsynth/blob/main/CONTRIBUTING.md) · [Roadmap](https://github.com/orgs/mimirsynth/projects/2) · Apache-2.0

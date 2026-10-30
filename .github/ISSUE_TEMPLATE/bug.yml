@@ -2,6 +2,9 @@ name: Bug
 description: Something does not work as it should
 labels: [bug]
 body:
+  - type: markdown
+    attributes:
+      value: "Write in English if you can; Spanish is welcome too and a maintainer will add an English title. · Si lo prefieres, escribe en castellano."
   - type: textarea
     id: what
     attributes: {label: What happens, description: What you expected and what actually happened}

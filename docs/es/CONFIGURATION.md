@@ -5,7 +5,7 @@
 La configuración tiene dos niveles:
 
 1. **Entorno (`.env`):** solo lo necesario para arrancar y conectar. Se lee al iniciar.
-2. **Interfaz (Administración → Ajustes y demás secciones):** todo lo demás. Se aplica sin reiniciar y cada cambio queda en la auditoría. Si una variable de entorno equivalente existe, hace de valor por defecto, y «Restaurar» en la interfaz vuelve a él.
+2. **Interfaz (Administración):** todo lo demás. Se aplica sin reiniciar y cada cambio queda en la auditoría. Si una variable de entorno equivalente existe, hace de valor por defecto, y «Restaurar» en la interfaz vuelve a él.
 
 ## Variables de entorno
 Plantilla comentada: `env.example` en la [última release](https://github.com/MimirSynth/mimirsynth/releases/latest) (o [`.env.example`](../../.env.example) en el repositorio).
@@ -26,7 +26,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 ## Proveedores de IA
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
 - **Modelo LLM:** extrae entidades y hechos al ingerir propuestas. Para modelos que «razonan» y devuelven JSON vacío, usa un proxy que desactive el *thinking*.
-- **Embeddings:** modelo y dimensión **no se pueden cambiar** una vez creados el índice (los vectores dependen del modelo). Debe ser el mismo que use Graphiti sobre ese FalkorDB.
+- **Embeddings:** los vectores dependen del modelo, así que cambiar el modelo o su dimensión con el índice ya creado obliga a recalcularlos: usa **Reindexar** (ver más abajo), nunca edites el motor sin más. Debe ser el mismo que use Graphiti sobre ese FalkorDB.
 
 El LLM de extracción y el modelo de embeddings son **independientes**: pueden venir de proveedores distintos (embeddings en local y LLM por API, por ejemplo), y solo el de embeddings queda atado al índice.
 
@@ -72,7 +72,7 @@ La compuerta es por proceso: supone que el servicio corre en un solo proceso (co
 **Administración → General → Idioma por defecto** fija el idioma de la interfaz y de los correos para quien no haya elegido uno. Cada persona elige el suyo en Mi cuenta → Perfil. Se incluyen inglés y español.
 
 ## Memoria documental
-- **Carpetas:** Administración → Carpetas registra las raíces bajo `/sources` que los administradores de un brain pueden usar como fuentes. En Conocimiento se añaden fuentes de tipo directorio, wiki (Outline) o subidas.
+- **Carpetas:** Administración → Carpetas registra las raíces bajo `/sources` que los administradores de un brain pueden usar como fuentes. En Conocimiento se añaden fuentes de tipo carpeta y wiki (Outline, Confluence, Notion); las subidas van a la fuente «Subidas» de cada brain. Ver [DOCUMENTS.md](DOCUMENTS.md).
 - **Límites:** tamaño máximo de fichero, de cada parte de subida y del texto extraído (Administración → Límites).
 - **Recall:** similitud mínima, pasajes por consulta y tiempo máximo de la búsqueda documental (Administración → Recuerdo). La similitud depende del modelo de embeddings: recalíbrala si lo cambias.
 
