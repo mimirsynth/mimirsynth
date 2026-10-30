@@ -39,7 +39,7 @@ def _rx(p: str, flags: int = 0) -> re.Pattern:
 
 
 RULES: list[Rule] = [
-    Rule("private_key", "clave privada", _rx(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]*?(?:-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----|\Z)")),
+    Rule("private_key", "clave privada", _rx(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----[\s\S]{0,8192}?-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----")),  # sin final no es una clave: una cabecera citada no enmascara el resto
     Rule("aws_access_key", "clave de acceso de AWS", _rx(r"\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b")),
     Rule("github_token", "token de GitHub", _rx(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})\b")),
     Rule("gitlab_token", "token de GitLab", _rx(r"\bgl(?:pat|dt|rt|cbt|ptt|ft|imt|agent|oas)-[A-Za-z0-9_\-]{20,}")),
@@ -56,8 +56,9 @@ RULES: list[Rule] = [
     Rule("authorization", "cabecera Authorization", _rx(r"\bauthorization\s*[:=]\s*[\"']?(?:bearer|basic|token|bot)\s+([A-Za-z0-9._~+/=\-]{8,})", re.IGNORECASE), group=1),
     Rule("url_credentials", "contraseña en una URL", _rx(r"\b[a-z][a-z0-9+.\-]{1,20}://[^\s:/@\"'<>]{1,128}:([^\s@/\"'<>]{1,256})@[^\s@/\"'<>]", re.IGNORECASE), group=1),
     Rule("assigned_secret", "posible secreto asignado", _rx(
-        r"\b(?:[a-z0-9]+[_\-.])*(?:password|passwd|pwd|secret|token|api[_\-.]?key|access[_\-.]?key|private[_\-.]?key|client[_\-.]?secret|auth)"
-        r"(?:[_\-.][a-z0-9]+)*[\"']?\s*(?::=|=|:)\s*[\"']?([^\s\"'`,;<>(){}\[\]]{12,256})", re.IGNORECASE), group=1, certain=False),
+        # prefijos y sufijos acotados: sin límite, «a-a-a-…» hacía la búsqueda cuadrática (20 KB tardaban 10 s)
+        r"\b(?:[a-z0-9]{1,24}[_\-.]){0,4}(?:password|passwd|pwd|secret|token|api[_\-.]?key|access[_\-.]?key|private[_\-.]?key|client[_\-.]?secret|auth)"
+        r"(?:[_\-.][a-z0-9]{1,24}){0,4}[\"']?\s*(?::=|=|:)\s*[\"']?([^\s\"'`,;<>(){}\[\]]{12,256})", re.IGNORECASE), group=1, certain=False),
 ]
 BY_ID = {r.id: r for r in RULES}
 
@@ -81,9 +82,13 @@ def _looks_random(v: str) -> bool:
     return classes >= 3 and entropy(v) >= 3.0
 
 
+# Valores de muestra con forma de secreto: una excepción que encaja con todos apagaría el detector en silencio.
+_SAMPLES = ("ghp_A1b2C3d4E5f6G7h8J9k0A1b2C3d4E5f6G7h8", "AKIAQ7RZ4M2K9WXP3T6N", "Zq8!mW2#pL5v", "eyJhbGciOiJIUzI1NiJ9", "s3cr3t-Pa55")
+
+
 def parse_allow(lines: str) -> tuple[set[str], list[re.Pattern]]:
     """Excepciones de un brain: una por línea. `rule:<id>` desactiva una regla; cualquier otra línea es una expresión regular que, si
-    encaja en el valor detectado, lo da por bueno. Lanza ValueError con la línea que no se entiende."""
+    encaja en el valor detectado, lo da por bueno. Lanza ValueError con la línea que no se entiende o que lo daría todo por bueno."""
     off, pats = set(), []
     for raw in (lines or "").splitlines():
         line = raw.strip()
@@ -95,10 +100,15 @@ def parse_allow(lines: str) -> tuple[set[str], list[re.Pattern]]:
                 raise ValueError(f"regla desconocida: {rid}")
             off.add(rid)
             continue
+        if len(line) > 200:
+            raise ValueError(f"expresión demasiado larga (máximo 200 caracteres): «{line[:60]}…»")
         try:
-            pats.append(re.compile(line))
+            pat = re.compile(line)
         except re.error as e:
             raise ValueError(f"expresión no válida «{line[:60]}»: {e}") from e
+        if pat.search("") or all(pat.search(s) for s in _SAMPLES):
+            raise ValueError(f"la expresión «{line[:60]}» encaja con cualquier valor: desactivaría el detector; usa rule:<id> para apagar una regla")
+        pats.append(pat)
     return off, pats
 
 

@@ -1168,5 +1168,6 @@
  "Una propuesta con un secreto seguro se rechaza con un mensaje que dice qué tipo es, y un documento con uno no se indexa. Los posibles se marcan.": "A proposal with a certain secret is rejected with a message saying which type it is, and a document with one is not indexed. Possible ones are flagged.",
  "posible": "possible",
  "seguro": "certain",
- "Propuestas analizadas: {{p}}. Documentos analizados: {{d}}.": "Proposals scanned: {{p}}. Documents scanned: {{d}}."
+ "Propuestas analizadas: {{p}}. Documentos analizados: {{d}}.": "Proposals scanned: {{p}}. Documents scanned: {{d}}.",
+ "El original que se descarga no se modifica: conserva el valor tal cual.": "The downloadable original is not modified: it keeps the value as it is."
 }

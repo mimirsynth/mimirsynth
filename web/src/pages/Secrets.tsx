@@ -23,7 +23,7 @@ const HELP: Record<string, string> = {
 };
 
 /** Resumen de lo que el detector de secretos encontró en una propuesta o un documento, sin el valor. */
-export function SecretsNotice({ found }: { found?: SecretFinding[] }) {
+export function SecretsNotice({ found, original }: { found?: SecretFinding[]; original?: boolean }) {
   const { t } = useTranslation();
   if (!found?.length) return null;
   const list = (action: string) => {
@@ -38,6 +38,7 @@ export function SecretsNotice({ found }: { found?: SecretFinding[] }) {
         {masked && <Text size="xs">{t("Enmascarados antes de guardar: {{v}}.", { v: masked })}</Text>}
         {flagged && <Text size="xs">{t("Marcados para revisar (no se han tocado): {{v}}.", { v: flagged })}</Text>}
         {blocked && <Text size="xs">{t("No se ha indexado porque el brain bloquea los secretos: {{v}}.", { v: blocked })}</Text>}
+        {original && <Text size="xs">{t("El original que se descarga no se modifica: conserva el valor tal cual.")}</Text>}
       </Stack>
     </Notice>
   );

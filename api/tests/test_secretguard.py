@@ -109,3 +109,16 @@ def test_scan_existing_is_read_only_and_never_returns_values(client):  # noqa: F
     with _factory()() as db:                                                                # no cambia nada
         assert TOKEN in db.query(Proposal).filter(Proposal.name == "Vieja").one().body
     assert _audits("secrets.scan")
+
+
+def test_flagged_waits_even_for_a_curator_and_audit_hides_it(client, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(ingest, "enabled", lambda: False)
+    _brain(client, "sg-cur", "warn")
+    cur = {"Authorization": "Bearer " + client.post("/api/brains/sg-cur/tokens", json={"name": "k", "role": "curator"}).json()["token"]}
+    p = client.post("/api/brains/sg-cur/proposals", headers=cur, json={"name": f"Clave {TOKEN}", "body": "texto"}).json()
+    assert p["status"] == "pending" and p["review_kind"] == ""                               # no se aprueba al enviarla
+    ok = client.post("/api/brains/sg-cur/proposals", headers=cur, json={"name": "Limpia", "body": "texto"}).json()
+    assert ok["status"] == "approved"                                                        # sin hallazgos, como siempre
+    names = [json.loads(a)["name"] for a in _audits("proposal.submit") if '"Clave' in a]
+    assert names == ["Clave […]"]                                                           # el título marcado no llega a la auditoría
+    assert all(TOKEN not in a for a in _audits("proposal.submit"))

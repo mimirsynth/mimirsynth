@@ -61,7 +61,7 @@ def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalI
         raise HTTPException(422, tr("La propuesta contiene secretos ({{labels}}). Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).",
                                     language(request), labels=", ".join(labels[r] for r in rules)))
     found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
-    direct = allows(ctx.role, "curator")
+    direct = allows(ctx.role, "curator") and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
     tok = getattr(request.state, "token", None)
     p = Proposal(brain_id=ctx.brain.id, author_id=ctx.user.id, token_id=tok.id if tok else None, name=name[:255], body=text, source=body.source,
                  source_description=body.source_description, reference_time=body.reference_time, confidence=body.confidence,
@@ -69,9 +69,9 @@ def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalI
     if direct:
         p.reviewer_id, p.reviewed_at, p.review_kind = ctx.user.id, datetime.now(timezone.utc), "direct"
     ctx.db.add(p); ctx.db.commit()
-    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, name=p.name, **({"secrets": found} if found else {}))
+    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, name=secretguard.safe_name(p), **({"secrets": found} if found else {}))
     if direct and ingest.enabled():
-        ingest.submit_ingest(p.id, ctx.brain.id, p.name, ctx.user.id)
+        ingest.submit_ingest(p.id, ctx.brain.id, secretguard.safe_name(p), ctx.user.id)
     elif not direct:
         bg.add_task(deciders_admin.triage_proposal, p.id)  # sin decisor configurado no hace nada; con secretos marcados, tampoco
     return p
@@ -155,7 +155,7 @@ def _review(ctx: BrainCtx, pid: int, status: str, note: str) -> dict:
 def approve(pid: int, body: ReviewIn, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)):
     out = _review(ctx, pid, "approved", body.note)
     if ingest.enabled():
-        ingest.submit_ingest(pid, ctx.brain.id, out.get("name", ""), ctx.user.id)
+        ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(_get(ctx, pid)), ctx.user.id)
     return out
 
 
@@ -167,7 +167,7 @@ def retry_ingest(pid: int, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)
     p = _get(ctx, pid)
     if p.status not in ("approved", "failed"):
         raise HTTPException(409, f"la propuesta está {p.status}")
-    return {"queued": True, "job": ingest.submit_ingest(pid, ctx.brain.id, p.name, ctx.user.id)}
+    return {"queued": True, "job": ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(p), ctx.user.id)}
 
 
 @router.post("/{pid}/reject")

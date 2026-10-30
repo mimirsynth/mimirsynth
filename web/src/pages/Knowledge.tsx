@@ -251,7 +251,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             <Group gap={6}><Pill size="xs" tone={TONE[detail.data.status] ?? "neutral"}>{t(LABEL[detail.data.status] ?? detail.data.status)}</Pill><Pill size="xs">{human(detail.data.size)}</Pill><Pill size="xs">{detail.data.chunks} {t("trozos")}</Pill></Group>
             <Text size="xs" c="dimmed" className="ms-data">{t("{{filename}} · sha256 {{hash}}… · subido {{date}}", { filename: detail.data.filename, hash: detail.data.sha256.slice(0, 12), date: fmt(detail.data.created_at) })}</Text>
             {detail.data.error && <Notice tone="danger">{detail.data.error}</Notice>}
-            <SecretsNotice found={detail.data.secrets} />
+            <SecretsNotice found={detail.data.secrets} original />
             <Group gap={6}>
               <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>{t("Descargar original")}</Btn>
               <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>{t("Ver texto completo")}</Btn>

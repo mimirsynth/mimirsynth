@@ -86,3 +86,26 @@ def test_empty_and_labels():
     assert S.scan("") == [] and S.redact("", []) == ""
     f = S.scan(CASES["npm_token"])
     assert S.redact(CASES["npm_token"], f, marker="[{label}]", labels={"npm_token": "npm token"}) == "[npm token]"
+
+
+def test_long_separator_runs_stay_linear():
+    """Un prefijo sin límite en `assigned_secret` hacía la búsqueda cuadrática: 100 KB de «ab-» tardaban más de dos minutos."""
+    import time
+    t0 = time.time()
+    assert S.scan("ab-" * 33000) == [] and S.scan("a-" * 10000) == []
+    assert time.time() - t0 < 1.0
+
+
+def test_quoted_pem_header_masks_nothing():
+    text = "Para buscar claves: grep '-----BEGIN PRIVATE KEY-----' en los ficheros.\n" + "texto normal " * 100
+    assert S.scan(text) == []
+    assert [f.rule for f in S.scan(CASES["private_key"] + "\n\nY después sigue la nota.")] == ["private_key"]
+
+
+def test_allow_list_rejects_patterns_that_accept_everything():
+    for broad in (".*", ".", "\S", "[a-z]*"):
+        with pytest.raises(ValueError, match="cualquier valor"):
+            S.parse_allow(broad)
+    with pytest.raises(ValueError, match="demasiado larga"):
+        S.parse_allow("x" * 201)
+    S.parse_allow("^ghp_\nrule:jwt")

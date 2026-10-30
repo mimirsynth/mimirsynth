@@ -97,6 +97,14 @@ def audit_existing(db, brain: Brain, max_items: int = 500, max_bytes: int = 200 
             "items": items, "items_truncated": len(items) >= max_items}
 
 
+def safe_name(p) -> str:
+    """El título de una propuesta para la auditoría y los trabajos: lo marcado en él (que en «solo avisar» queda tal cual) se tapa."""
+    name = p.name
+    for f in sorted((f for f in p.secret_findings or [] if f.get("field") == "name" and f.get("action") == "flagged"), key=lambda f: -f["start"]):
+        name = name[:f["start"]] + "[…]" + name[f["end"]:]
+    return name
+
+
 def flagged(findings: list[dict] | None) -> bool:
     return any(f.get("action") == "flagged" for f in findings or [])
 
