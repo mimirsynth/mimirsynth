@@ -12,7 +12,7 @@ from sqlalchemy import select, text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
@@ -135,6 +135,7 @@ app.include_router(corrections.router)
 app.include_router(proposals.router)
 app.include_router(refqueries.router)
 app.include_router(conflicts.router)
+app.include_router(entity_page.router)
 
 
 @app.get("/api/config")

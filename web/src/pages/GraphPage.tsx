@@ -206,7 +206,8 @@ export default function GraphPage({ graph }: { graph: string }) {
           <FillArea>
             {sel ? (
               <Stack gap="xs">
-                <Text fw={700}>{sel.name}</Text>
+                <Group justify="space-between" gap="xs"><Text fw={700}>{sel.name}</Text>
+                  <Btn size="row" icon="graph" component={Link} to={`/entidad/${sel.uuid}`}>{t("Ver página")}</Btn></Group>
                 <Group gap={4}>{sel.labels.map((l) => <Pill key={l} size="xs">{l}</Pill>)}<Pill size="xs">{t("grado")} {sel.degree}</Pill></Group>
                 <Text size="xs" c="dimmed" className="ms-prose">{sel.summary}</Text>
                 <Sources keys={srcOf(sel)} name={(k) => originName.get(k) ?? k} />

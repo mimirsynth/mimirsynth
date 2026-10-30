@@ -20,7 +20,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Text index** | `GET /index/status` · `POST /index/sync` | reader · curator |
 | **Overview** | `GET /overview` · `GET /overview/activity` | reader |
 | **Episodes** | `GET /episodes` · `GET /episodes/sources` · `GET /episodes/{uuid}` | reader |
-| **Facts** | `GET /facts` · `GET /facts/relations` · `GET /timeline` | reader |
+| **Facts** | `GET /facts` · `GET /facts/relations` · `GET /timeline` · `GET /entities?q=` · `GET /entities/{uuid}` | reader |
 | | `PATCH /facts/{uuid}` · `POST …/invalidate` · `POST …/reactivate` · `DELETE …` | curator |
 | **Graph and query** | `GET /graph` (optional `group_by`) · `POST /query` (read-only Cypher) | reader |
 | **Proposals** | `GET /proposals` (paginated) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` · `POST /proposals/corrections` | contributor |
@@ -45,6 +45,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 ### What changed since 0.6
 - **`POST /mcp`**: the MCP server, with the tools `recall`, `facts_about`, `timeline`, `get_document` and `whats_new` (reader) and `remember` and `correct` (contributor).
 - **`POST /recall`** takes `federated` (default `true`): it also searches what other brains lend to this one, marks lent items with `origin` and adds a `federated` list with the state of each source. **`/grants`** manages what this brain lends (`scope`: `graph`, `docs` or `both`; optional expiry in `days`); the receiving brain can decline with `DELETE`.
+- **`GET /entities/{uuid}`** is the [[Entity page]] in one call: the entity, its facts grouped by direction and relation (`current` and `previous`, oldest first, with a `conflict` flag for single-valued relations and `generic` for catch-all ones such as `RELATES_TO`, which go last), its neighbours and the episodes that mention it; the documents that mention it come from `GET /docs/mentions?entity=`. `as_of` (a date) gives what was current that day; `origin` reads an entity lent by another brain. `GET /entities?q=` finds entities by name or merged name.
 - **`GET /proposals`** is paginated: it takes `status`, `kind` (`memory` or `correction`), `q` (title), `author` (user id), `sort` (`id`, `name`, `author`, `conf`, `at`), `order` (`asc`/`desc`), `limit` (default 50, maximum 500) and `offset`, and returns `{total, limit, offset, authors, items}` instead of a bare list. A contributor only sees their own.
 - **`GET /proposals/counts`** counts per state (only of one `kind` when given), plus `kinds` (each kind across every state) and `corrections_pending`.
 - **`POST /proposals`** returns the proposal plus `secrets_notice`: which types of secret were masked or flagged, in the caller's language, never the value (empty when nothing was found).

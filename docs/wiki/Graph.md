@@ -40,7 +40,7 @@ Loading provenance adds some time in very large brains.
 
 ## Interaction
 - **Hover a node:** after a short pause its neighbourhood is highlighted and the rest dims; a tooltip shows its name, type, connections and origins, and particles run along its current facts.
-- **Click a node:** keeps its neighbourhood highlighted (also with reduced effects) and opens the side panel with its summary, its type and **degree**, its **Origins**, its **facts** (invalidated ones struck through) and the **documents that mention it** (linking to [[Knowledge]]).
+- **Click a node:** keeps its neighbourhood highlighted (also with reduced effects) and opens the side panel with its summary, its type and **degree**, its **Origins**, its **facts** (invalidated ones struck through) and the **documents that mention it** (linking to [[Knowledge]]). **View page** opens its [[Entity page]].
 - **Click an edge:** shows the fact, between which entities, since when it is valid, when it stopped being true (if it did) and its **Origins**.
 - **Right-click a node:** **expands its neighbourhood**; the new nodes grow out of it. **Undo last expansion** removes the last one.
 - **Wheel** to zoom, **drag the background** to move; **Fit to view** frames everything.

@@ -23,6 +23,7 @@ import Account from "./pages/Account";
 import Jobs from "./pages/Jobs";
 import Notifications, { Summary } from "./pages/Notifications";
 import FirstSteps from "./pages/FirstSteps";
+import EntityPage from "./pages/EntityPage";
 
 const NAV = [
   { section: T("Memoria"), items: [
@@ -140,6 +141,7 @@ export default function App() {
               <Route path="/tipos" element={<Navigate to="/vocabulario?tab=corrector" replace />} />
               <Route path="/vocabulario" element={<Vocabulary graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/consulta" element={<Query graph={brain} />} />
+              <Route path="/entidad/:uuid" element={<EntityPage graph={brain} role={cur?.role ?? "reader"} />} />
             </>
           ) : <Route path="*" element={brains.isPending ? <EmptyState>{t("Cargando…")}</EmptyState>
             // El administrador ve todos los brains: si la lista está vacía es que no existe ninguno, y nadie más puede crearlo.

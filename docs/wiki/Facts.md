@@ -11,7 +11,7 @@ With the **List** and **Timeline** tabs:
 
 ## Reading a card
 - The fact text.
-- Labels: **source entity → relation → target entity**.
+- Labels: **source entity → relation → target entity**. Click an entity to open its [[Entity page]].
 - Dates: *current since*, *invalidated* (if applicable) and *recorded on* (when the system learned it). Telling apart when it happened from when it was recorded is what gives the history.
 - **Invalidated** facts are shown dimmed.
 

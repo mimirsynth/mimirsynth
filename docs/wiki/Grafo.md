@@ -40,7 +40,7 @@ Cargar la procedencia añade algo de tiempo en brains muy grandes.
 
 ## Interacción
 - **Pasar por encima de un nodo:** tras una breve pausa se resalta su vecindad y el resto se atenúa; una descripción emergente muestra su nombre, tipo, conexiones y orígenes, y unas partículas recorren sus hechos vigentes.
-- **Clic en un nodo:** mantiene resaltada su vecindad (también con los efectos reducidos) y abre el panel lateral con su resumen, su tipo y su **grado**, sus **Orígenes**, sus **hechos** (los invalidados tachados) y los **documentos que lo mencionan** (con enlace a [[Conocimiento]]).
+- **Clic en un nodo:** mantiene resaltada su vecindad (también con los efectos reducidos) y abre el panel lateral con su resumen, su tipo y su **grado**, sus **Orígenes**, sus **hechos** (los invalidados tachados) y los **documentos que lo mencionan** (con enlace a [[Conocimiento]]). **Ver página** abre su [[Página de entidad]].
 - **Clic en una arista:** muestra el hecho, entre qué entidades, desde cuándo es válido, cuándo dejó de ser cierto (si es el caso) y sus **Orígenes**.
 - **Clic derecho en un nodo:** **expande su vecindad**; los nodos nuevos brotan de él. **Deshacer última expansión** quita la última.
 - **Rueda** para el zoom, **arrastrar el fondo** para moverte; **Ajustar a la vista** encuadra todo.

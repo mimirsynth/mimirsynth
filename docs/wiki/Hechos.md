@@ -11,7 +11,7 @@ Con las pestañas **Lista** y **Línea temporal**:
 
 ## Cómo leer una tarjeta
 - El texto del hecho.
-- Etiquetas: **entidad origen → relación → entidad destino**.
+- Etiquetas: **entidad origen → relación → entidad destino**. Clic en una entidad para abrir su [[Página de entidad]].
 - Fechas: *vigente desde*, *invalidado* (si aplica) y *registrado el* (cuándo lo supo el sistema). Distinguir cuándo ocurrió de cuándo se registró es lo que da la historia.
 - Los hechos **invalidados** se muestran atenuados.
 
