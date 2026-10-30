@@ -79,6 +79,7 @@ Es idempotente y reanudable: si falla a mitad, la siguiente pasada continúa. Co
 - **Integración en el recall, sin encarecerlo:** el contexto de los agentes gana una sección «Documentos», pero solo cuando aporta.
   - **Presupuesto duro:** como máximo 2 pasajes de ~1.000 caracteres (unos 600 tokens en total), siempre citados.
   - **Solo si hay relevancia:** por debajo de un umbral de puntuación no se añade nada, de modo que una consulta que no trata de documentos no gasta tokens.
+  - **Sin repeticiones:** un pasaje con el mismo texto que otro ya elegido (el mismo contenido en dos documentos, o en un origen que presta sus documentos) se salta, de modo que el presupuesto se reparte entre pasajes distintos.
   - **Sin lentitud:** la búsqueda documental corre en paralelo con la de hechos y episodios y tiene su propio tiempo máximo; si se pasa, se omite la sección en lugar de retrasar la respuesta.
   - **Desactivable** por petición, y el agente puede pedir después el documento completo o el contexto ampliado de un pasaje solo cuando lo necesite (`GET /docs/{id}/context?chunk=…`, `GET /docs/{id}/file`).
   - Hechos, fragmentos de episodios y documentos se muestran por separado: son tipos de evidencia distintos.

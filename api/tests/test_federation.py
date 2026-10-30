@@ -137,10 +137,13 @@ def test_documents_fused_with_origin(monkeypatch):
     hit = lambda i, sim, **k: {"id": i, "document_id": i, "chunk_idx": 0, "heading_path": "", "page": None, "title": f"Doc{i}", "text": "alpha beta gamma", "similarity": sim, **k}
     monkeypatch.setattr(R.index, "enabled", lambda: True)
     monkeypatch.setattr(R.appsettings, "get", lambda k: 0.5)
-    monkeypatch.setattr(docindex, "search", lambda bid, *a, **k: [hit(1, .9)] if bid == 1 else [hit(1, .9)])   # mismo id de trozo en ambos brains: no se confunden
+    monkeypatch.setattr(docindex, "search", lambda bid, *a, **k: [hit(1, .9)] if bid == 1 else [hit(1, .9, text="alpha beta delta")])   # mismo id de trozo en ambos brains: no se confunden
     passages, state = R.search_documents(1, [0.0], "alpha beta", 4, [R.Source(2, "g", "otro", "O", "both"), R.Source(3, "g", "solografo", "S", "graph")])
     assert state == "ok" and [p.get("origin") for p in passages] == [None, "otro"]
     assert "· de «otro»" in R.docs_block(passages)
+    monkeypatch.setattr(docindex, "search", lambda bid, *a, **k: [hit(1, .9)])   # el mismo texto en el origen no se repite: manda lo propio
+    passages, _ = R.search_documents(1, [0.0], "alpha beta", 4, [R.Source(2, "g", "otro", "O", "both")])
+    assert [p.get("origin") for p in passages] == [None]
 
 
 def test_memory_endpoint_passes_sources_only_when_granted(client, monkeypatch):  # noqa: F811
