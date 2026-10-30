@@ -32,6 +32,14 @@ El formulario encima de la lista, con:
 
 El botón es **Proponer** para un colaborador y **Añadir** para un curador (queda aprobada al enviarla). Consejos para escribir bien: [[Escribir buena memoria]].
 
+## Correcciones
+Una **corrección** es una propuesta que no añade memoria: pide **invalidar un hecho** que ya no es cierto. Los agentes la envían con la herramienta MCP `correct` o con `POST /proposals/corrections`, apuntando al hecho por su uuid (el que dan `facts_about`, `timeline` y `whats_new`), con el motivo y, opcionalmente, el texto que lo sustituye y la fecha en que dejó de ser cierto.
+- Su título empieza por «Corrección:» y su detalle enseña el **hecho que se invalida** (sujeto → relación → destino, desde cuándo estaba vigente y su uuid), el **motivo** y **lo que lo sustituye**.
+- El decisor **nunca** aprueba una corrección y, por MCP, siempre espera a una persona, aunque el token sea de curador. Por la API REST, si la envía un curador se aplica al momento.
+- Al aprobarla, el hecho **se invalida, nunca se borra**, con la fecha de la corrección; lo muestra el paso **Hecho invalidado**. Si hay sustituto, se ingiere como cualquier memoria, con esa fecha. La invalidación queda también en el historial del vocabulario, como las que se hacen desde [[Hechos]] o [[Contradicciones]].
+- Si el hecho dejó de estar vigente mientras la corrección esperaba, aprobarla da un error y la corrección sigue pendiente: recházala.
+- **Reactivar el hecho**, en la propia corrección, lo deja como estaba. El sustituto ya ingerido no se toca.
+
 ## Secretos en las propuestas
 Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `remember` del MCP), su título y su contenido pasan por el **detector de secretos**: claves de nube y de proveedores de IA, tokens, claves privadas, JWT, cabeceras `Authorization`, contraseñas en URLs… Algunos hallazgos son **seguros**; un valor de aspecto aleatorio asignado a `password`, `secret` o `token` es solo **posible**. Lo que pasa depende de la política del brain (Administración → Acceso al brain → **Secretos**):
 
@@ -54,6 +62,7 @@ Al abrirla ves una **línea de tiempo**:
 ## Acciones del curador
 - **Aprobar / Rechazar** (con nota opcional).
 - **Ingerir ahora** o **Reintentar ingesta** cuando una aprobada no se ha ingerido o falló.
+- **Reactivar el hecho** en una corrección aplicada.
 
 ## Avisos que puedes ver
 - **«Sin motor LLM configurado»:** las aprobadas no se ingieren y se quedan en «Aprobadas». Un administrador debe configurarlo en [[Proveedores de IA]].
@@ -61,4 +70,4 @@ Al abrirla ves una **línea de tiempo**:
 - **Ingesta fallida:** mira el motivo en el detalle y en [[Trabajos]]. Los errores más comunes son un límite de peticiones del proveedor o un modelo que no devuelve JSON válido (los modelos «razonadores» a veces necesitan un proxy que desactive el *thinking*).
 
 ## Desde un agente
-Los agentes crean propuestas por la API REST o con la herramienta `remember` del servidor MCP: [[Conectar agentes]]. Desde un documento, el botón **Promover a memoria** de [[Conocimiento]] crea una propuesta con el pasaje y su procedencia.
+Los agentes crean propuestas por la API REST o con la herramienta `remember` del servidor MCP, y correcciones con la herramienta `correct`: [[Conectar agentes]]. Desde un documento, el botón **Promover a memoria** de [[Conocimiento]] crea una propuesta con el pasaje y su procedencia.

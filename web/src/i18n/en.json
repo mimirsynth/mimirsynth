@@ -1271,5 +1271,14 @@
  "Elige cuál se queda": "Choose which one stays",
  "Hechos vigentes con el mismo sujeto y la misma relación y destinos distintos del mismo tipo, en las relaciones marcadas como de un solo valor en la ontología. Se propone dejar el de fecha de validez más reciente; al resolver, los demás se invalidan y se puede deshacer desde el historial del vocabulario. No se usa ningún modelo de IA.": "Current facts with the same subject and relation and different targets of the same type, in the relations marked as single-valued in the ontology. The one with the newest validity date is suggested; when resolved, the others are invalidated, and it can be undone from the vocabulary history. No AI model is used.",
  "Proporción de sujetos con más de un destino vigente del mismo tipo, de menor a mayor. Las candidatas a un solo valor son las de proporción baja con algún caso; una con muchos casos probablemente admite varios valores. Solo lee: no cambia nada.": "Share of subjects with more than one current target of the same type, from lowest to highest. Single-valued candidates are those with a low share and some cases; one with many cases probably allows several values. Read-only: nothing changes.",
- "solo fecha de aprendizaje: decide tú": "learning date only: your call"
+ "solo fecha de aprendizaje: decide tú": "learning date only: your call",
+ "Hecho que se invalida": "Fact to invalidate",
+ "Ingesta del sustituto": "Ingestion of the replacement",
+ "Invalidado con fecha {{date}} · aplicado {{at}}": "Invalidated as of {{date}} · applied {{at}}",
+ "Lo que lo sustituye": "What replaces it",
+ "Reactivado después · {{at}}": "Reactivated later · {{at}}",
+ "Reactivar el hecho": "Reactivate the fact",
+ "Se invalidará al aprobarla, con fecha {{date}}.": "It will be invalidated on approval, as of {{date}}.",
+ "Sin sustituto: solo se invalida el hecho.": "No replacement: the fact is only invalidated.",
+ "vigente desde {{date}}": "current since {{date}}"
 }

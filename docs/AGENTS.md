@@ -35,6 +35,14 @@ A contributor ends up `pending`; a curator, `approved` and ingested right away. 
 
 Do not store passwords or tokens: store **where** they are kept (for example, which password manager). Anything shaped like a credential is masked before it is stored or, if the brain blocks them, the proposal is rejected with a 422 saying which type of secret it is (see «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md)). Over MCP, `remember` does the same.
 
+## Correct: a fact that is no longer true
+```bash
+curl -s -X POST "$URL/api/brains/my-brain/proposals/corrections" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"fact_uuid": "…", "reason": "Moved to db02 on 19 Oct", "replacement": "The production database runs on db02 since 19 Oct.", "invalid_at": "2026-10-19T00:00:00Z"}'
+```
+A correction points to one fact by its uuid (the one `facts_about`, `timeline` and `whats_new` give over MCP) and asks to invalidate it. It goes through the same quarantine as any proposal and the same roles (contributor to propose), but the decider never approves it on its own: a curator does, from Proposals, where it shows the fact as it was, the reason and the replacement. Over MCP it always stays pending, even with a curator token: invalidating is decided by a person. Through the REST endpoint, a curator who sends one applies it at once. On approval the fact is **invalidated, never deleted**, as of `invalid_at` (the time of the proposal by default), and the replacement, if any, is ingested as a normal memory with that date. The invalidation goes to the vocabulary history like any other, and **Reactivate the fact** in the proposal puts it back as it was. A fact that does not exist or is already invalidated returns a readable error, and so does a fact lent by another brain, which is read-only here: correct it in its own brain.
+
 ## MCP server
 Agents that speak the **Model Context Protocol** can use the same memory without writing HTTP calls. Each brain exposes an MCP endpoint (Streamable HTTP, stateless, tools only) at:
 
@@ -46,6 +54,7 @@ POST $URL/api/brains/my-brain/mcp        Authorization: Bearer $TOKEN
 |---|---|---|
 | `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars`, `federated` |
 | `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` |
+| `correct` | contributor | Proposes invalidating a fact by its uuid (see «Correct» above). Arguments: `fact_uuid`, `reason`, and optionally `replacement`, `invalid_at`, `source_description`, `confidence` |
 | `facts_about` | reader | Everything known about an entity: current facts and those that stopped being true, newest first, with dates, the episode each one was learned from and the **uuid of each fact** in brackets (what a correction needs). The entity is found by name (case and spacing do not matter), by a name merged into it or by its uuid; if several entities share the name, it returns the candidates instead of choosing one. Arguments: `entity`, and optionally `status` (`all`, `current`, `invalidated`), `limit` (20, up to 100), `offset`, `max_chars`, `federated` |
 | `timeline` | reader | How what is known about an entity changed: when each fact was learned and, if it applies, when it stopped being true, newest first. Arguments: `entity`, and optionally `since`, `until` (`YYYY-MM-DD`), `limit` (30, up to 200), `offset`, `max_chars`, `federated` |
 | `get_document` | reader | Reads a document: with `chunk`, that passage and the text around it (the numbers in `[doc 12, chunk 3]` from `recall`); without it, the full text in parts of `max_chars` (8000 by default) with `offset` to continue. A passage lent by another brain is read with `origin` (that brain's identifier, as shown by `recall`). Arguments: `document`, and optionally `chunk`, `radius`, `offset`, `max_chars`, `origin` |

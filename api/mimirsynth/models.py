@@ -231,6 +231,8 @@ class Proposal(Base):
     ingest_error: Mapped[str] = mapped_column(Text, default="")
     ingest_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # tipos usados y relaciones fuera de la ontología
     secret_findings: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [{rule, start, end, action}] sobre el texto guardado; nunca el valor
+    kind: Mapped[str] = mapped_column(String(16), default="memory", server_default="memory")  # memory | correction (#109)
+    correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the correction of a fact: see corrections.py
     episode_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

@@ -29,15 +29,21 @@ Usa el transporte HTTP «streamable», sin estado y solo con herramientas: sirve
 ```bash
 claude mcp add --transport http mimirsynth "https://tu-servidor/api/brains/mi-brain/mcp" --header "Authorization: Bearer mst_..."
 ```
-El servidor ofrece dos herramientas:
+El servidor ofrece estas herramientas:
 
 | Herramienta | Rol mínimo del token | Qué hace |
 |---|---|---|
 | `recall` | Lector | Devuelve el contexto de memoria para una pregunta, igual que el recall HTTP. Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars` y `federated` |
 | `remember` | Colaborador | Propone una memoria, con las mismas reglas que las propuestas HTTP (cuarentena para un colaborador, aprobada al instante para un curador). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time` y `confidence` |
+| `facts_about` | Lector | Todo lo que se sabe de una entidad: los hechos vigentes y los que dejaron de ser ciertos, del más reciente al más antiguo, con fechas, el episodio del que se aprendió cada uno y el **uuid de cada hecho** entre corchetes. La entidad se busca por nombre (sin distinguir mayúsculas ni espacios), por un nombre fusionado en ella o por su uuid; un nombre ambiguo devuelve las candidatas. Argumentos: `entity` y, opcionalmente, `status`, `limit`, `offset`, `max_chars` y `federated` |
+| `timeline` | Lector | Cómo cambió lo que se sabe de una entidad: cuándo se aprendió cada hecho y cuándo dejó de ser cierto. Argumentos: `entity` y, opcionalmente, `since`, `until`, `limit`, `offset`, `max_chars` y `federated` |
+| `get_document` | Lector | Lee un pasaje con el texto de alrededor (los números de `[doc N, trozo M]` que da `recall`) o un documento entero por tramos. Un pasaje que presta otro brain se lee con `origin`. Argumentos: `document` y, opcionalmente, `chunk`, `radius`, `offset`, `max_chars` y `origin` |
+| `whats_new` | Lector | Hechos aprendidos y hechos que dejaron de ser ciertos desde una fecha, de lo más antiguo a lo más reciente. Sin `since`, desde donde se quedó la última llamada sin fecha de este token, así que un agente se pone al día al empezar una sesión sin guardar nada. Argumentos: opcionalmente `since`, `offset`, `limit`, `max_chars` y `federated` |
+| `correct` | Colaborador | Propone invalidar un hecho que ya no es cierto, por su uuid, con el motivo y, opcionalmente, el texto que lo sustituye. **Siempre espera a una persona**, aunque el token sea de curador (ver [[Propuestas]]). Argumentos: `fact_uuid`, `reason` y, opcionalmente, `replacement`, `invalid_at`, `source_description` y `confidence` |
 
 - El token decide el brain y el rol, así que las herramientas no llevan argumento de brain. Para usar dos brains, añade dos servidores con nombres distintos.
-- Con un token de **lector**, `remember` responde con un error que el modelo puede leer («este token solo puede leer»).
+- Con un token de **lector**, `remember` y `correct` responden con un error que el modelo puede leer («este token solo puede leer»).
+- Todas las respuestas tienen un tope de tamaño (`max_chars`) y dicen cómo pedir la página siguiente, y lo que prestan otros brains sale etiquetado con su origen.
 - Solo se aceptan **tokens de API**, nunca la sesión del navegador; una petición desde una página web de otro origen se rechaza.
 - Cuando una herramienta falla (argumentos no válidos, un secreto bloqueado…), el error vuelve al modelo como resultado de la herramienta, para que pueda corregirse.
 

@@ -23,8 +23,8 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Facts** | `GET /facts` · `GET /facts/relations` · `GET /timeline` | reader |
 | | `PATCH /facts/{uuid}` · `POST …/invalidate` · `POST …/reactivate` · `DELETE …` | curator |
 | **Graph and query** | `GET /graph` (optional `group_by`) · `POST /query` (read-only Cypher) | reader |
-| **Proposals** | `GET /proposals` (paginated) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` | contributor |
-| | `POST /proposals/{id}/approve` · `…/reject` · `…/ingest` | curator |
+| **Proposals** | `GET /proposals` (paginated) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` · `POST /proposals/corrections` | contributor |
+| | `POST /proposals/{id}/approve` · `…/reject` · `…/ingest` · `…/reactivate` | curator |
 | **Documents** | `GET /docs` · `GET /docs/search` · `GET /docs/{id}` · `…/text` · `…/file` · `…/context` · `…/entities` · `GET /docs/mentions` · `GET /docs/sources` | reader |
 | | `POST /docs/uploads` (+ parts and `complete`) · `POST /docs/{id}/promote` | contributor |
 | | `DELETE /docs/{id}` · `POST /docs/{id}/reindex` · `POST /docs/duplicates` · sources (`/docs/sources`, scan, wikis) | administrator |
@@ -43,9 +43,10 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | | `POST /api/brains/{slug}/delete` | owner |
 
 ### What changed since 0.6
-- **`POST /mcp`**: the MCP server, with the tools `recall` (reader) and `remember` (contributor).
+- **`POST /mcp`**: the MCP server, with the tools `recall`, `facts_about`, `timeline`, `get_document` and `whats_new` (reader) and `remember` and `correct` (contributor).
 - **`POST /recall`** takes `federated` (default `true`): it also searches what other brains lend to this one, marks lent items with `origin` and adds a `federated` list with the state of each source. **`/grants`** manages what this brain lends (`scope`: `graph`, `docs` or `both`; optional expiry in `days`); the receiving brain can decline with `DELETE`.
 - **`GET /proposals`** is paginated: it takes `status`, `q` (title), `author` (user id), `sort` (`name`, `author`, `conf`, `at`), `order` (`asc`/`desc`), `limit` (default 50, maximum 500) and `offset`, and returns `{total, limit, offset, authors, items}` instead of a bare list. A contributor only sees their own.
+- **`POST /proposals/corrections`** proposes invalidating a fact: `{fact_uuid, reason, replacement?, invalid_at?}`. A curator applies it at once; `POST /proposals/{id}/reactivate` undoes an applied one. See [[Proposals]].
 - **`GET /graph?group_by=`** (`label`, `source`, `document`, `author`, `token`) adds the provenance: each node and fact carries `sources`, `source_count` and `provenance` (the keys for every grouping), and the response adds `groups` with each origin's name and counts. Without `group_by` nothing is computed: in a large brain it can cost more than the subgraph itself.
 - **`GET /docs/{id}/entities`** returns, besides the mentioned `entities`, the `relations` between them (current only, unless `expired=true`), `total` and `expired_count`.
 - **`POST /docs/duplicates`** starts the *Find duplicate documents* job and returns its id; documents whose text repeats another's are marked `duplicate` and taken out of the index.

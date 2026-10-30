@@ -30,7 +30,7 @@ def test_mcp_protocol_basics(client):  # noqa: F811
     assert rpc(c, "mcp1", "initialize", {"protocolVersion": "1999-01-01"}, token=tok).json()["result"]["protocolVersion"] == mcp_server.SUPPORTED[0]  # versión desconocida: la nuestra
     assert rpc(c, "mcp1", "notifications/initialized", rid=None, token=tok).status_code == 202  # notificación: sin cuerpo
     assert rpc(c, "mcp1", "ping", token=tok).json()["result"] == {}
-    assert [t["name"] for t in rpc(c, "mcp1", "tools/list", token=tok).json()["result"]["tools"]] == ["recall", "remember", "facts_about", "timeline", "get_document", "whats_new"]
+    assert [t["name"] for t in rpc(c, "mcp1", "tools/list", token=tok).json()["result"]["tools"]] == ["recall", "remember", "correct", "facts_about", "timeline", "get_document", "whats_new"]
     assert rpc(c, "mcp1", "no/existe", token=tok).json()["error"]["code"] == -32601
     assert rpc(c, "mcp1", "tools/call", {"name": "borrar_todo", "arguments": {}}, token=tok).json()["error"]["code"] == -32602
     assert c.post("/api/brains/mcp1/mcp", content=b"{no es json", headers={"Authorization": f"Bearer {tok}"}).status_code == 400

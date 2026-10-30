@@ -32,6 +32,14 @@ The form above the list, with:
 
 The button is **Propose** for a contributor and **Add** for a curator (it is approved on submission). Writing tips: [[Writing good memory]].
 
+## Corrections
+A **correction** is a proposal that does not add memory: it asks to **invalidate one fact** that is no longer true. Agents send it with the MCP tool `correct` or `POST /proposals/corrections`, pointing to the fact by its uuid (the one `facts_about`, `timeline` and `whats_new` give), with the reason and, optionally, the text that replaces it and the date it stopped being true.
+- Its title starts with "Correction:" and its detail shows the **fact to invalidate** (subject → relation → target, since when it was current and its uuid), the **reason** and **what replaces it**.
+- The decider **never** approves a correction, and over MCP it always waits for a person, even with a curator token. Through the REST API, a curator who sends one applies it at once.
+- On approval the fact is **invalidated, never deleted**, as of the correction date; the step **Fact invalidated** shows it. If there is a replacement, it is ingested like any memory, with that date. The invalidation also goes to the vocabulary history, like those made from [[Facts]] or [[Contradictions]].
+- If the fact stopped being current while the correction waited, approving it gives an error and the correction stays pending: reject it.
+- **Reactivate the fact** in the correction puts the fact back as it was. An ingested replacement is left as it is.
+
 ## Secrets in proposals
 Before a proposal is stored (from the interface, the API or the `remember` tool over MCP), its title and content go through the **secret detector**: cloud and AI provider keys, tokens, private keys, JWTs, `Authorization` headers, passwords in URLs… Some findings are **certain**; a random-looking value assigned to `password`, `secret` or `token` is only **possible**. What happens depends on the brain's policy (Administration → Brain access → **Secrets**):
 
@@ -54,6 +62,7 @@ When you open it you see a **timeline**:
 ## Curator actions
 - **Approve / Reject** (with an optional note).
 - **Ingest now** or **Retry ingestion** when an approved one has not been ingested or failed.
+- **Reactivate the fact** in an applied correction.
 
 ## Notices you may see
 - **"No LLM engine configured":** approved proposals are not ingested and stay in "Approved". An administrator must configure it in [[AI providers]].
@@ -61,4 +70,4 @@ When you open it you see a **timeline**:
 - **Ingestion failed:** see the reason in the detail and in [[Jobs]]. The most common errors are a provider rate limit or a model that does not return valid JSON ("reasoning" models sometimes need a proxy that disables *thinking*).
 
 ## From an agent
-Agents create proposals through the REST API or the `remember` tool of the MCP server: [[Connect agents]]. From a document, the **Promote to memory** button in [[Knowledge]] creates a proposal with the passage and its provenance.
+Agents create proposals through the REST API or the `remember` tool of the MCP server, and corrections with the `correct` tool: [[Connect agents]]. From a document, the **Promote to memory** button in [[Knowledge]] creates a proposal with the passage and its provenance.
