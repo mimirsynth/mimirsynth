@@ -13,7 +13,6 @@
     "i18n": "node scripts/i18n.mjs"
   },
   "dependencies": {
-    "@falkordb/canvas": "^0.3.3",
     "@mantine/core": "^9.7.3",
     "@mantine/hooks": "^9.7.3",
     "@tabler/icons-react": "^3.49.0",

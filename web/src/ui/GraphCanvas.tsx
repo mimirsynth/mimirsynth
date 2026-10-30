@@ -4,6 +4,10 @@ import type { Layout } from "./graph/layouts";
 import type { Effects, EffectsMode, GraphRenderer, RendererEvents, RHalo, RLink, RNode } from "./graph/types";
 
 export type { Effects, EffectsMode, Layout, RHalo as CanvasHalo, RLink as CanvasLink, RNode as CanvasNode };
+const EFFECTS_KEY = "ms-graph-effects";  // por dispositivo, no en la cuenta: la GPU es del equipo, no de la persona
+/** Modo de efectos gráficos guardado en este dispositivo (lo comparten Grafo y Consulta). */
+export const readEffects = (): EffectsMode => { try { const v = localStorage.getItem(EFFECTS_KEY); return v === "full" || v === "reduced" ? v : "auto"; } catch { return "auto"; } };
+export const saveEffects = (v: EffectsMode) => { try { localStorage.setItem(EFFECTS_KEY, v); } catch { /* sin almacenamiento: vale para esta visita */ } };
 export type GraphCanvasHandle = {
   /** Encuadra los nodos visibles, o solo los que cumplen `only`, con una transición de `ms` milisegundos. */
   fit: (ms?: number, only?: (id: string) => boolean) => void;

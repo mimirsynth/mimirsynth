@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { Btn, Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
+import { Btn, Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -14,8 +14,6 @@ const id = (x: any) => (typeof x === "object" ? x.uuid ?? x.id : x);
 const GROUPINGS: [Grouping, string][] = [["source", T("Tipo de origen")], ["document", T("Documento")], ["author", T("Contribuidor")], ["token", T("Agente / token")], ["label", T("Tipo de entidad")]];
 const MAX_HALOS = 8;  // los orígenes mayores llevan halo propio; el resto se junta en «Otros»
 const OTHER = "__otros__";
-const EFFECTS_KEY = "ms-graph-effects";  // por dispositivo, no en la cuenta: la GPU es del equipo, no de la persona
-const readEffects = (): EffectsMode => { try { const v = localStorage.getItem(EFFECTS_KEY); return v === "full" || v === "reduced" ? v : "auto"; } catch { return "auto"; } };
 /** Radio por grado con escala de raíz: de 5 a 12, para que los nodos con muchas conexiones no tapen a sus vecinos. */
 const nodeSize = (degree: number) => 5 + 7 * Math.sqrt(Math.min(degree, 40) / 40);
 const hasWebGL = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
@@ -49,7 +47,7 @@ export default function GraphPage({ graph }: { graph: string }) {
   const [effective, setEffective] = useState<Effects>("full");
   const [no3d, setNo3d] = useState(false);
   const [slow3d, setSlow3d] = useState(false);
-  const pickEffects = (v: EffectsMode) => { setEffects(v); try { localStorage.setItem(EFFECTS_KEY, v); } catch { /* sin almacenamiento: vale para esta visita */ } };
+  const pickEffects = (v: EffectsMode) => { setEffects(v); saveEffects(v); };
   const pickDim = (v: string) => { setSlow3d(false); if (v === "3d" && !hasWebGL()) { setNo3d(true); return; } setNo3d(false); setDim(v as "2d" | "3d"); };
   const onSlow = useCallback(() => setSlow3d(true), []);
   useEffect(() => setHiddenOrigins(new Set()), [groupBy]);
