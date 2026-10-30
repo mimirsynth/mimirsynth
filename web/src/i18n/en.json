@@ -1177,5 +1177,6 @@
  "Tiene el mismo texto que otro documento del brain, así que no se trocea ni se calculan sus embeddings: el recall usa el original. Si el original desaparece, este pasa a indexarse.": "It has the same text as another document in the brain, so it is not chunked and no embeddings are computed: recall uses the original. If the original goes away, this one gets indexed.",
  "Ver el original": "View the original",
  "duplicado": "duplicate",
- "{{n}} duplicados sacados del índice.": "{{n}} duplicates taken out of the index."
+ "{{n}} duplicados sacados del índice.": "{{n}} duplicates taken out of the index.",
+ "La búsqueda de duplicados no ha terminado; mira el detalle en Trabajos.": "The duplicate search did not finish; see the details in Jobs."
 }

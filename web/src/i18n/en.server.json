@@ -13,6 +13,7 @@
  "Avisar de versiones nuevas": "Notify about new versions",
  "Aviso repetido": "Repeated alert",
  "Busca en la memoria del brain y devuelve contexto listo para usar: hechos vigentes (y algunos caducados, marcados), fragmentos de episodios y pasajes de documentos, con su procedencia. Úsala antes de responder sobre decisiones, configuraciones o historia del proyecto.": "Searches the brain's memory and returns ready-to-use context: current facts (and some expired ones, marked as such), episode excerpts and document passages, with their provenance. Use it before answering about decisions, configurations or project history.",
+ "Buscar documentos duplicados": "Find duplicate documents",
  "Cada cuántos minutos se comprueba que el grafo y los modelos de IA responden (un modelo con clave de pago recibe una llamada mínima). 0 = no comprobar.": "How many minutes between checks that the graph and the AI models respond (a model behind a paid key receives one minimal call). 0 = do not check.",
  "Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada.": "How many minutes between copies of the episode text into the index. 0 = disabled.",
  "Cambio de modelo de embeddings (intercambio)": "Embedding model change (swap)",

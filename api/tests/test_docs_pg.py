@@ -185,14 +185,24 @@ def test_duplicates_are_not_indexed_and_the_oldest_is_promoted(client):
         docs._original_of = real
     with _factory()() as db:
         for d in db.scalars(select(Document).where(Document.id.in_([b["id"], c["id"]]))):
-            d.meta = {k: v for k, v in (d.meta or {}).items() if k != "norm_hash"}
+            d.norm_hash = None
         db.commit()
     assert client.get(f"/api/brains/dup/docs/{c['id']}").json()["status"] == "active"
-    assert client.post("/api/brains/dup/docs/duplicates").json() == {"hashed": 2, "marked": 1}
-    ic = client.get(f"/api/brains/dup/docs/{c['id']}").json()
-    assert ic["status"] == "duplicate" and ic["duplicate_of"] == b["id"]
-    assert {h["document_id"] for h in client.get("/api/brains/dup/docs/search", params=q).json()["results"]} == {b["id"]}
-    assert client.post("/api/brains/dup/docs/duplicates").json() == {"hashed": 0, "marked": 0}       # idempotente
+    from mimirsynth import jobs
+    jobs.INLINE = True   # la búsqueda corre como trabajo; aquí, en el mismo hilo
+    try:
+        def dedupe():
+            jid = client.post("/api/brains/dup/docs/duplicates").json()["job"]
+            job = client.get(f"/api/brains/dup/jobs/{jid}").json()
+            assert job["status"] == "done", job
+            return job["result"]
+        assert dedupe() == {"hashed": 2, "marked": 1}
+        ic = client.get(f"/api/brains/dup/docs/{c['id']}").json()
+        assert ic["status"] == "duplicate" and ic["duplicate_of"] == b["id"]
+        assert {h["document_id"] for h in client.get("/api/brains/dup/docs/search", params=q).json()["results"]} == {b["id"]}
+        assert dedupe() == {"hashed": 0, "marked": 0}                                            # idempotente
+    finally:
+        jobs.INLINE = False
     # si el original no se puede indexar, su duplicado no se queda fuera del recall: se promueve
     real_embed = docs._embed
     docs._embed = lambda texts: (_ for _ in ()).throw(RuntimeError("motor caído"))
@@ -202,6 +212,7 @@ def test_duplicates_are_not_indexed_and_the_oldest_is_promoted(client):
         docs._embed = real_embed
     ic = client.get(f"/api/brains/dup/docs/{c['id']}").json()
     assert client.get(f"/api/brains/dup/docs/{b['id']}").json()["status"] == "error" and ic["status"] == "error" and ic["duplicate_of"] is None
-    client.post(f"/api/brains/dup/docs/{b['id']}/reindex"); client.post(f"/api/brains/dup/docs/{c['id']}/reindex")   # vuelto el motor
-    assert [client.get(f"/api/brains/dup/docs/{x['id']}").json()["status"] for x in (b, c)] == ["active", "duplicate"]
+    client.post(f"/api/brains/dup/docs/{c['id']}/reindex"); client.post(f"/api/brains/dup/docs/{b['id']}/reindex")   # vuelto el motor, el nuevo primero
+    assert [client.get(f"/api/brains/dup/docs/{x['id']}").json()["status"] for x in (b, c)] == ["active", "duplicate"]   # gana el más antiguo
+    assert client.get(f"/api/brains/dup/docs/{c['id']}", params={"chunks": 10}).json()["chunk_list"] == []
     client.post("/api/brains/dup/delete", json={"confirm": "dup"})

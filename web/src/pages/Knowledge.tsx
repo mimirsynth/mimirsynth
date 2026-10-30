@@ -83,8 +83,11 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const promote = useMutation({ mutationFn: (p: NonNullable<typeof promo>) => send<{ id: number; status: string }>("POST", `docs/${p.doc}/promote`, { chunk: p.chunk, text: p.text, name: p.name || undefined }, { graph }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["proposals", graph] }); qc.invalidateQueries({ queryKey: ["jobs", graph] }); } });
   const remove = useMutation({ mutationFn: (d: Doc) => send("DELETE", `docs/${d.id}`, undefined, { graph }), onSuccess: () => { setDel(null); setOpen(null); qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } });
-  const dedupe = useMutation({ mutationFn: () => send<{ hashed: number; marked: number }>("POST", "docs/duplicates", undefined, { graph }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } });
+  const dedupe = useMutation({ mutationFn: () => send<{ job: number }>("POST", "docs/duplicates", undefined, { graph }) });
+  const dedupeJob = useQuery({ queryKey: ["job", graph, dedupe.data?.job], enabled: !!dedupe.data, queryFn: () => get<{ status: string; error?: string; result: { hashed: number; marked: number } | null }>(`jobs/${dedupe.data!.job}`, { graph }),
+    refetchInterval: (qr) => (["queued", "running"].includes(qr.state.data?.status ?? "queued") ? 1500 : false) });
+  const dedupeDone = dedupeJob.data?.status === "done" ? dedupeJob.data.result : null;
+  useEffect(() => { if (dedupeDone) { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } }, [dedupeDone, graph, qc]);
   const reindex = useMutation({ mutationFn: (id: number) => send("POST", `docs/${id}/reindex`, undefined, { graph }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["doc", graph] }); } });
 
   const roots = useQuery({ queryKey: ["docs-roots", graph], enabled: isAdmin, queryFn: () => get<{ roots: { name: string; available: boolean }[] }>("docs/roots", { graph }) });
@@ -170,8 +173,9 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               <Group gap="xs" justify="space-between">
                 <ClearFilters active={active} onClear={clear} />
                 {isAdmin && <Group gap="xs" ml="auto">
-                  {dedupe.data && <Text size="xs" c="dimmed">{dedupe.data.marked ? t("{{n}} duplicados sacados del índice.", { n: dedupe.data.marked }) : t("No hay duplicados entre los documentos indexados.")}</Text>}
-                  <Btn size="row" icon="search" loading={dedupe.isPending} onClick={() => dedupe.mutate()}
+                  {dedupeDone && <Text size="xs" c="dimmed">{dedupeDone.marked ? t("{{n}} duplicados sacados del índice.", { n: dedupeDone.marked }) : t("No hay duplicados entre los documentos indexados.")}</Text>}
+                  {dedupeJob.data && ["failed", "cancelled"].includes(dedupeJob.data.status) && <Text size="xs" className="ms-text-danger">{t("La búsqueda de duplicados no ha terminado; mira el detalle en Trabajos.")}</Text>}
+                  <Btn size="row" icon="search" loading={dedupe.isPending || (!!dedupe.data && !dedupeDone && !["failed", "cancelled"].includes(dedupeJob.data?.status ?? ""))} onClick={() => dedupe.mutate()}
                     title={t("Los documentos nuevos se comprueban al indexarse. Esto revisa los que ya estaban indexados y saca del índice los que repiten el texto de otro, sin borrar nada del origen.")}>{t("Buscar duplicados")}</Btn>
                 </Group>}
               </Group>
