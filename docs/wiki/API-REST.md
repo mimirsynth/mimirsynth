@@ -23,8 +23,8 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Hechos** | `GET /facts` · `GET /facts/relations` · `GET /timeline` | lector |
 | | `PATCH /facts/{uuid}` · `POST …/invalidate` · `POST …/reactivate` · `DELETE …` | curador |
 | **Grafo y consulta** | `GET /graph` (`group_by` opcional) · `POST /query` (Cypher de solo lectura) | lector |
-| **Propuestas** | `GET /proposals` (paginado) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` | colaborador |
-| | `POST /proposals/{id}/approve` · `…/reject` · `…/ingest` | curador |
+| **Propuestas** | `GET /proposals` (paginado) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` · `POST /proposals/corrections` | colaborador |
+| | `POST /proposals/{id}/approve` · `…/reject` · `…/ingest` · `…/reactivate` | curador |
 | **Documentos** | `GET /docs` · `GET /docs/search` · `GET /docs/{id}` · `…/text` · `…/file` · `…/context` · `…/entities` · `GET /docs/mentions` · `GET /docs/sources` | lector |
 | | `POST /docs/uploads` (+ partes y `complete`) · `POST /docs/{id}/promote` | colaborador |
 | | `DELETE /docs/{id}` · `POST /docs/{id}/reindex` · `POST /docs/duplicates` · fuentes (`/docs/sources`, escanear, wikis) | administrador |
@@ -43,9 +43,10 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | | `POST /api/brains/{slug}/delete` | propietario |
 
 ### Qué ha cambiado desde la 0.6
-- **`POST /mcp`**: el servidor MCP, con las herramientas `recall` (lector) y `remember` (colaborador).
+- **`POST /mcp`**: el servidor MCP, con las herramientas `recall`, `facts_about`, `timeline`, `get_document` y `whats_new` (lector) y `remember` y `correct` (colaborador).
 - **`POST /recall`** admite `federated` (por defecto `true`): busca también en lo que otros brains prestan a este, marca lo prestado con `origin` y añade una lista `federated` con el estado de cada origen. **`/grants`** gestiona lo que este brain presta (`scope`: `graph`, `docs` o `both`; caducidad opcional en `days`); el brain que recibe puede renunciar con `DELETE`.
 - **`GET /proposals`** está paginado: admite `status`, `q` (título), `author` (id de usuario), `sort` (`name`, `author`, `conf`, `at`), `order` (`asc`/`desc`), `limit` (por defecto 50, máximo 500) y `offset`, y devuelve `{total, limit, offset, authors, items}` en lugar de una lista sin más. Un colaborador solo ve las suyas.
+- **`POST /proposals/corrections`** propone invalidar un hecho: `{fact_uuid, reason, replacement?, invalid_at?}`. Si la envía un curador, se aplica al momento; `POST /proposals/{id}/reactivate` deshace una aplicada. Ver [[Propuestas]].
 - **`GET /graph?group_by=`** (`label`, `source`, `document`, `author`, `token`) añade la procedencia: cada nodo y cada hecho llevan `sources`, `source_count` y `provenance` (las claves de todas las agrupaciones), y la respuesta añade `groups` con el nombre y los recuentos de cada origen. Sin `group_by` no se calcula nada: en un brain grande puede costar más que el propio subgrafo.
 - **`GET /docs/{id}/entities`** devuelve, además de las `entities` mencionadas, las `relations` entre ellas (solo las vigentes, salvo `expired=true`), `total` y `expired_count`.
 - **`POST /docs/duplicates`** lanza el trabajo *Buscar documentos duplicados* y devuelve su id; los documentos cuyo texto repite el de otro quedan marcados como `duplicate` y salen del índice.

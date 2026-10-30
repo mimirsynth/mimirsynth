@@ -35,6 +35,14 @@ Un colaborador queda en estado `pending`; un curador, `approved` e ingerida al m
 
 No guardes contraseñas ni tokens: guarda **dónde** están (por ejemplo, en qué gestor de contraseñas). Lo que tenga forma de credencial se enmascara antes de guardarse o, si el brain lo bloquea, la propuesta se rechaza con un 422 que dice qué tipo de secreto es (ver «Secretos» en [ARCHITECTURE.md](ARCHITECTURE.md)). Por MCP, `remember` aplica lo mismo.
 
+## Corregir: un hecho que ya no es cierto
+```bash
+curl -s -X POST "$URL/api/brains/mi-brain/proposals/corrections" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"fact_uuid": "…", "reason": "Pasó a db02 el 19-oct", "replacement": "La base de datos de producción corre en db02 desde el 19-oct.", "invalid_at": "2026-10-19T00:00:00Z"}'
+```
+Una corrección apunta a un hecho por su uuid (el que dan `facts_about`, `timeline` y `whats_new` por MCP) y pide invalidarlo. Pasa por la misma cuarentena que cualquier propuesta y con los mismos roles (colaborador para proponer), pero el decisor nunca la aprueba solo: lo hace un curador desde Propuestas, donde se ve el hecho tal como estaba, el motivo y el sustituto. Por MCP queda siempre pendiente, aunque el token sea de curador: invalidar lo decide una persona. Por el endpoint REST, si la envía un curador se aplica al momento. Al aprobarla, el hecho **se invalida, nunca se borra**, con fecha `invalid_at` (por defecto, la de la propuesta) y el sustituto, si lo hay, se ingiere como una memoria normal con esa fecha. La invalidación queda en el historial del vocabulario como cualquier otra, y **Reactivar el hecho** en la propia propuesta lo deja como estaba. Un hecho que no existe o que ya está invalidado devuelve un error legible, y también uno prestado por otro brain, que aquí es de solo lectura: se corrige en su brain.
+
 ## Servidor MCP
 Los agentes que hablan el **Model Context Protocol** pueden usar la misma memoria sin escribir llamadas HTTP. Cada brain expone un endpoint MCP (HTTP «streamable», sin estado, solo herramientas) en:
 
@@ -46,6 +54,7 @@ POST $URL/api/brains/mi-brain/mcp        Authorization: Bearer $TOKEN
 |---|---|---|
 | `recall` | lector | Devuelve el contexto de memoria para una consulta (igual que el endpoint `recall`). Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars`, `federated` |
 | `remember` | colaborador | Propone una memoria (mismas reglas que el endpoint de propuestas: cuarentena para colaboradores, aprobada al instante para curadores). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time`, `confidence` |
+| `correct` | colaborador | Propone invalidar un hecho por su uuid (ver «Corregir» más arriba). Argumentos: `fact_uuid`, `reason` y, opcionalmente, `replacement`, `invalid_at`, `source_description`, `confidence` |
 | `facts_about` | lector | Todo lo que se sabe de una entidad: los hechos vigentes y los que dejaron de ser ciertos, del más reciente al más antiguo, con fechas, el episodio del que se aprendió cada uno y el **uuid de cada hecho** entre corchetes (lo que necesita una corrección). La entidad se busca por nombre (sin distinguir mayúsculas ni espacios), por un nombre fusionado en ella o por su uuid; si varias comparten el nombre, devuelve las candidatas en vez de elegir una. Argumentos: `entity` y, opcionalmente, `status` (`all`, `current`, `invalidated`), `limit` (20, hasta 100), `offset`, `max_chars`, `federated` |
 | `timeline` | lector | Cómo cambió lo que se sabe de una entidad: cuándo se aprendió cada hecho y, si procede, cuándo dejó de ser cierto, del más reciente al más antiguo. Argumentos: `entity` y, opcionalmente, `since`, `until` (`AAAA-MM-DD`), `limit` (30, hasta 200), `offset`, `max_chars`, `federated` |
 | `get_document` | lector | Lee un documento: con `chunk`, ese pasaje y el texto de alrededor (los números de `[doc 12, trozo 3]` que da `recall`); sin él, el texto completo por tramos de `max_chars` (8000 por defecto), con `offset` para seguir. Un pasaje que presta otro brain se lee con `origin` (el identificador de ese brain, como lo muestra `recall`). Argumentos: `document` y, opcionalmente, `chunk`, `radius`, `offset`, `max_chars`, `origin` |

@@ -8,7 +8,11 @@ import { useEffect, useState } from "react";
 import { fmt, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
-  created_at: string; reviewed_at: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; secrets?: SecretFinding[] };
+  created_at: string; reviewed_at: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; secrets?: SecretFinding[];
+  kind?: string; correction?: Correction | null };
+/** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
+type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
+  invalid_at: string; applied_at?: string; reverted_at?: string };
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
 
@@ -50,6 +54,25 @@ function ProposalsTable({ data, view, status, onStatus, counts, onOpen }: { data
   </>);
 }
 
+/** What to look at before approving a correction: the affected fact as it was, the reason and the text that replaces it. */
+function CorrectionDetail({ c, replacement }: { c: Correction; replacement: string }) {
+  const { t } = useTranslation();
+  return (<Stack gap="xs">
+    <Panel withBorder p="sm"><Stack gap={4}>
+      <Text size="xs" fw={600}>{t("Hecho que se invalida")}</Text>
+      <Text className="ms-prose">{c.fact.fact}</Text>
+      <Text size="xs" c="dimmed">{c.fact.source} → {c.fact.name} → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: c.fact.valid_at.slice(0, 10) })}` : ""} · <code>{c.fact_uuid}</code></Text>
+    </Stack></Panel>
+    <Panel withBorder p="sm"><Stack gap={4}>
+      <Text size="xs" fw={600}>{t("Motivo")}</Text><Text className="ms-prose">{c.reason}</Text>
+    </Stack></Panel>
+    <Panel withBorder p="sm"><Stack gap={4}>
+      <Text size="xs" fw={600}>{t("Lo que lo sustituye")}</Text>
+      {replacement.trim() ? <Text className="ms-prose">{replacement}</Text> : <Text size="xs" c="dimmed">{t("Sin sustituto: solo se invalida el hecho.")}</Text>}
+    </Stack></Panel>
+  </Stack>);
+}
+
 export default function Proposals({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -76,6 +99,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
     onSuccess: () => { setName(""); setBody(""); setConf(""); refresh(); } });
   const review = useMutation({ mutationFn: (a: { id: number; verb: "approve" | "reject" }) => send("POST", `${base}/${a.id}/${a.verb}`, { note }),
     onSuccess: () => { setOpen(null); setNote(""); refresh(); } });
+  const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/ingest`), onSuccess: () => { setOpen(null); setTimeout(refresh, 8000); refresh(); } });
   const d = detail.data;
   if (role === "reader") return <Page><PageHeader title={t("Propuestas")} description={<>{t("Con rol de lector no puedes proponer ni ver propuestas. Pide rol de colaborador a un administrador del brain.")}</>} /></Page>;
@@ -100,7 +124,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
         {d && <Stack gap="sm">
           <Group gap="xs"><Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>
             <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {d.confidence ?? t("no indicada")}</Text></Group>
-          <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>
+          {d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} /> : <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>}
           <SecretsNotice found={d.secrets} />
           <Steps>
             <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text></Step>
@@ -116,18 +140,26 @@ export default function Proposals({ graph, role }: { graph: string; role: string
               {!d.review_kind && !d.decision && d.status === "pending" && <Text size="xs" c="dimmed">{t("Pendiente de un curador.")}</Text>}
               {!d.review_kind && !d.decision && d.status !== "pending" && d.review_note && <Text size="xs" c="dimmed">{d.review_note}</Text>}
             </Step>
-            <Step title={t("Ingesta en el grafo")} tone={d.status === "ingested" ? "success" : d.status === "failed" ? "danger" : "neutral"}>
+            {d.correction && <Step title={t("Hecho invalidado")} tone={d.correction.reverted_at ? "neutral" : d.correction.applied_at ? "success" : "neutral"}>
+              {d.correction.applied_at ? <Text size="xs" c="dimmed">{t("Invalidado con fecha {{date}} · aplicado {{at}}", { date: d.correction.invalid_at.slice(0, 10), at: fmt(d.correction.applied_at) })}</Text>
+                : <Text size="xs" c="dimmed">{t("Se invalidará al aprobarla, con fecha {{date}}.", { date: d.correction.invalid_at.slice(0, 10) })}</Text>}
+              {d.correction.reverted_at && <Text size="xs" c="dimmed">{t("Reactivado después · {{at}}", { at: fmt(d.correction.reverted_at) })}</Text>}
+            </Step>}
+            {(!d.correction || d.body.trim()) && <Step title={d.correction ? t("Ingesta del sustituto") : t("Ingesta en el grafo")} tone={d.status === "ingested" ? "success" : d.status === "failed" ? "danger" : "neutral"}>
               {d.status === "ingested" && <Group gap="xs"><Text size="xs" c="dimmed">{t("Episodio")} {d.episode_uuid ?? ""} · {fmt(d.ingested_at)}</Text>
                 {d.episode_uuid && <CopyBtn value={d.episode_uuid} label={t("Copiar id")} doneLabel={t("Copiado")} />}</Group>}
               {d.status === "ingested" && d.ingest_report && <Text size="xs" c="dimmed">{d.ingest_report.entities} {t("entidades (")}{d.ingest_report.untyped_entities} {t("sin tipo) ·")} {d.ingest_report.edges} {t("hechos")}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</Text>}
               {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error || t("error sin detalle")}</Notice>}
               {d.status === "approved" && <Text size="xs" c="dimmed">{t("Pendiente de ingestar.")}</Text>}
               {(d.status === "pending" || d.status === "rejected") && <Text size="xs" c="dimmed">{t("No aplica.")}</Text>}
-            </Step>
+            </Step>}
           </Steps>
           {isCurator && (d.status === "failed" || d.status === "approved") && <Group justify="flex-end">
             <MutationError error={retry.error} />
             <Btn kind="primary" loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn></Group>}
+          {isCurator && d.correction?.applied_at && !d.correction.reverted_at && <Group justify="flex-end">
+            <MutationError error={reactivate.error} />
+            <Btn kind="secondary" loading={reactivate.isPending} onClick={() => reactivate.mutate(d.id)} icon="undo">{t("Reactivar el hecho")}</Btn></Group>}
           {isCurator && d.status === "pending" && <>
             <TextArea size="xs" autosize minRows={2} label={t("Nota (opcional)")} value={note} onChange={(e) => setNote(e.currentTarget.value)} />
             <MutationError error={review.error} />

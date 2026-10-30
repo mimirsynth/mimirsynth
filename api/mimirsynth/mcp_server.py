@@ -4,6 +4,7 @@ Un endpoint por brain, `POST /api/brains/{slug}/mcp`, con el mismo token de API 
   · `recall`   (rol lector): contexto de memoria para una consulta (hechos vigentes y caducados, fragmentos de episodios y pasajes de documentos).
   · `remember` (rol colaborador): propone una memoria. Un colaborador entra en cuarentena; un curador la aprueba al instante, como en la API.
   · `facts_about`, `timeline`, `get_document`, `whats_new` (rol lector): para profundizar después de `recall` (ver mcp_tools.py).
+  · `correct` (contributor role): proposes invalidating a fact by its uuid (see corrections.py).
 Solo herramientas, sin SSE ni sesiones: cada petición se resuelve sola. Solo se admiten tokens de API (nunca la cookie de sesión del navegador)."""
 import json
 import logging
@@ -46,6 +47,15 @@ TOOLS = [
          "reference_time": {"type": "string", "format": "date-time", "description": "Cuándo ocurrió (ISO 8601); por defecto, ahora."},
          "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que es cierto."}},
          "required": ["name", "body"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}},
+    {"name": "correct", "title": "Proponer una corrección", "description": "Propone invalidar un hecho que ya no es cierto, por su uuid (el que dan `facts_about`, `timeline` o `whats_new`), con el motivo y, si lo sabes, el texto que lo sustituye. Queda siempre en cuarentena hasta que una persona con rol de curador la apruebe, también si este token es de curador; al aprobarla, el hecho se invalida, nunca se borra, y el sustituto se guarda como memoria nueva.",
+     "inputSchema": {"type": "object", "properties": {
+         "fact_uuid": {"type": "string", "description": "uuid del hecho que ya no es cierto."},
+         "reason": {"type": "string", "maxLength": 2000, "description": "Por qué ya no es cierto, con lo necesario para que un curador lo compruebe."},
+         "replacement": {"type": "string", "maxLength": 50000, "description": "Lo que es cierto ahora, si lo sabes (se guarda como memoria nueva)."},
+         "invalid_at": {"type": "string", "format": "date-time", "description": "Desde cuándo dejó de ser cierto (ISO 8601); por defecto, ahora."},
+         "source_description": {"type": "string", "maxLength": 255, "description": "De dónde viene (por ejemplo, el agente o la sesión)."},
+         "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que la corrección es cierta."}},
+         "required": ["fact_uuid", "reason"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}},
     {"name": "facts_about", "title": "Hechos de una entidad", "description": "Todo lo que la memoria sabe de una entidad (un servicio, un host, una persona…): sus hechos vigentes y los que dejaron de ser ciertos, con fechas, de dónde se aprendieron y el uuid de cada hecho entre corchetes. Úsala para profundizar después de `recall`. Si el nombre es ambiguo devuelve las candidatas para que repitas con su uuid.",
      "inputSchema": {"type": "object", "properties": {
          "entity": {"type": "string", "description": "Nombre de la entidad (no distingue mayúsculas; sirven los nombres fusionados) o su uuid."},
@@ -120,6 +130,12 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
             if p.status == "approved":
                 return _text(tr("Memoria guardada y aprobada; se ingiere en el grafo (propuesta #{{id}}).", lang, id=p.id))
             return _text(tr("Memoria propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
+        if name == "correct":
+            if not allows(ctx.role, "contributor"):
+                return _text(tr("Este token solo puede leer (rol de lector): no puede proponer correcciones.", lang), True)
+            from .corrections import CorrectionIn, create as create_correction
+            p = create_correction(ctx, request, CorrectionIn(**args), direct=False)   # invalidating is decided by a person, even with a curator token
+            return _text(tr("Corrección propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
         if name == "facts_about":
             return _text(mcp_tools.facts_about(ctx, mcp_tools.FactsIn(**args), lang))
         if name == "timeline":
@@ -151,7 +167,7 @@ def _handle(msg, ctx: BrainCtx, request: Request, bg: BackgroundTasks) -> dict |
         wanted = params.get("protocolVersion")
         return _ok(rid, {"protocolVersion": wanted if wanted in SUPPORTED else SUPPORTED[0], "capabilities": {"tools": {"listChanged": False}},
                          "serverInfo": {"name": "mimirsynth", "title": "MimirSynth", "version": _version("mimirsynth")},
-                         "instructions": tr("Memoria del brain «{{name}}». Usa `recall` antes de responder sobre su historia y `remember` para proponer conocimiento que deba persistir. Para profundizar: `facts_about` y `timeline` de una entidad, `get_document` para leer un pasaje y `whats_new` al empezar una sesión.", lang, name=ctx.brain.name)})
+                         "instructions": tr("Memoria del brain «{{name}}». Usa `recall` antes de responder sobre su historia y `remember` para proponer conocimiento que deba persistir. Para profundizar: `facts_about` y `timeline` de una entidad, `get_document` para leer un pasaje y `whats_new` al empezar una sesión. Si un hecho ya no es cierto, `correct` con su uuid.", lang, name=ctx.brain.name)})
     if method == "ping":
         return _ok(rid, {})
     if method == "tools/list":

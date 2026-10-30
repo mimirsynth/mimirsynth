@@ -38,7 +38,7 @@ def _out(p: Proposal, full: bool = False) -> dict:
          "status": p.status, "author": p.author.email or p.author.name, "created_at": p.created_at, "reviewed_at": p.reviewed_at,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
-         "secrets": secretguard.describe(p.secret_findings)}
+         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "correction": p.correction}
     d["body"] = p.body if full else p.body[:300]
     return d
 
@@ -152,7 +152,14 @@ def _review(ctx: BrainCtx, pid: int, status: str, note: str) -> dict:
 
 
 @router.post("/{pid}/approve")
-def approve(pid: int, body: ReviewIn, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)):
+def approve(pid: int, body: ReviewIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)):
+    p = _get(ctx, pid)
+    if p.kind == "correction":  # applied on approval, and only approved if it could be applied (#109)
+        from . import corrections
+        if p.status != "pending":
+            raise HTTPException(409, f"la propuesta ya está {p.status}")
+        corrections.apply(ctx, p, language(request), note=body.note)
+        return _out(p)
     out = _review(ctx, pid, "approved", body.note)
     if ingest.enabled():
         ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(_get(ctx, pid)), ctx.user.id)
@@ -165,7 +172,7 @@ def retry_ingest(pid: int, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)
     if not ingest.enabled():
         raise HTTPException(503, "ingesta no configurada (MIMIRSYNTH_LLM_BASE_URL y MIMIRSYNTH_LLM_MODEL)")
     p = _get(ctx, pid)
-    if p.status not in ("approved", "failed"):
+    if p.status not in ("approved", "failed") or (p.kind == "correction" and not p.body.strip()):
         raise HTTPException(409, f"la propuesta está {p.status}")
     return {"queued": True, "job": ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(p), ctx.user.id)}
 

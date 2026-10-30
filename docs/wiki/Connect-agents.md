@@ -29,15 +29,21 @@ It uses the Streamable HTTP transport, stateless and tools only: any MCP client 
 ```bash
 claude mcp add --transport http mimirsynth "https://your-server/api/brains/my-brain/mcp" --header "Authorization: Bearer mst_..."
 ```
-The server offers two tools:
+The server offers these tools:
 
 | Tool | Minimum token role | What it does |
 |---|---|---|
 | `recall` | Reader | Returns the memory context for a question, the same as the HTTP recall. Arguments: `query` and, optionally, `facts`, `chunks`, `docs`, `max_chars` and `federated` |
 | `remember` | Contributor | Proposes a memory, with the same rules as the HTTP proposals (quarantine for a contributor, approved at once for a curator). Arguments: `name`, `body` and, optionally, `source`, `source_description`, `reference_time` and `confidence` |
+| `facts_about` | Reader | Everything known about an entity: current facts and those that stopped being true, newest first, with dates, the episode each one was learned from and the **uuid of each fact** in brackets. The entity is found by name (case and spacing do not matter), by a name merged into it or by its uuid; an ambiguous name returns the candidates. Arguments: `entity` and, optionally, `status`, `limit`, `offset`, `max_chars` and `federated` |
+| `timeline` | Reader | How what is known about an entity changed: when each fact was learned and when it stopped being true. Arguments: `entity` and, optionally, `since`, `until`, `limit`, `offset`, `max_chars` and `federated` |
+| `get_document` | Reader | Reads a passage with the text around it (the `[doc N, chunk M]` numbers that `recall` gives) or a whole document in parts. A passage lent by another brain is read with `origin`. Arguments: `document` and, optionally, `chunk`, `radius`, `offset`, `max_chars` and `origin` |
+| `whats_new` | Reader | Facts learned and facts that stopped being true since a date, oldest first. Without `since`, from where this token's last call without a date stopped, so an agent catches up at the start of a session without storing anything. Arguments: optionally `since`, `offset`, `limit`, `max_chars` and `federated` |
+| `correct` | Contributor | Proposes invalidating a fact that is no longer true, by its uuid, with the reason and optionally the text that replaces it. It **always waits for a person**, even with a curator token (see [[Proposals]]). Arguments: `fact_uuid`, `reason` and, optionally, `replacement`, `invalid_at`, `source_description` and `confidence` |
 
 - The token decides the brain and the role, so the tools take no brain argument. To use two brains, add two servers with different names.
-- With a **reader** token, `remember` answers with an error the model can read ("this token can only read").
+- With a **reader** token, `remember` and `correct` answer with an error the model can read ("this token can only read").
+- Every answer has a size limit (`max_chars`) and says how to ask for the next page, and what other brains lend comes labelled with its origin.
 - Only **API tokens** are accepted, never a browser session; a request from a web page of another origin is refused.
 - When a tool fails (invalid arguments, a blocked secret…), the error comes back to the model as a tool result, so it can correct itself.
 
