@@ -204,6 +204,7 @@ class ApiToken(Base):
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    news_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # última llamada a `whats_new` sin fecha (MCP)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
     user: Mapped[User] = relationship()
 
