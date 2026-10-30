@@ -397,7 +397,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert {"users", "brains", "proposals", "decision_engines", "alembic_version"} <= set(inspect(e1).get_table_names())
     with e1.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0024"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0025"
     store.init_db()  # idempotente
     # BD heredada (create_all sin alembic_version y sin columnas nuevas): se completa y se marca
     e2 = create_engine(f"sqlite:///{tmp_path}/legacy.db")
@@ -408,7 +408,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert "ingest_error" in {c["name"] for c in inspect(e2).get_columns("proposals")}
     with e2.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0024"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0025"
 
 
 def test_ontology_api_and_graphiti_conversion(client):
