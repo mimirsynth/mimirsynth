@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from . import appsettings, docindex, docstore, index, jobs
+from . import appsettings, docindex, docstore, index, jobs, secretguard
 from .config import settings
 from .deps import BrainCtx, audit, contributor_of_brain, reader
 from .docextract import ExtractError, chunk, extract
@@ -59,6 +59,16 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
             src = db.get(DocSource, d.source_id)
             path = docstore.original_path(d.storage_ref, src.kind, src.config or {}, d.external_id)
             text, title = extract(path, docstore.ext_of(d.filename) or path.suffix)
+            try:  # antes de trocear: lo que se enmascara no llega ni al texto normalizado, ni a los trozos, ni a los vectores (#116)
+                text, found = secretguard.guard(db.get(Brain, d.brain_id), text)
+            except secretguard.Blocked as e:
+                d.meta = {**(d.meta or {}), "secrets": [{"rule": r, "action": "blocked"} for r in e.rules]}
+                docindex.delete_document(d.id)  # una versión anterior indexada no puede seguir en el índice
+                if d.text_ref:
+                    docstore.resolve(d.text_ref).unlink(missing_ok=True)
+                    d.text_ref = ""
+                raise ExtractError(f"contiene secretos ({', '.join(e.labels)}); el brain bloquea los documentos con secretos") from None
+            d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "secrets"}, **({"secrets": secretguard.summary(found)} if found else {})}
             tdir = docstore.doc_dir(d.brain_id, d.source_id, d.id)
             tdir.mkdir(parents=True, exist_ok=True)
             tpath = tdir / f"{d.sha256}.norm.txt"
@@ -130,7 +140,8 @@ def _upload_source(db, brain: Brain, user_id: int | None) -> DocSource:
 def _out(d: Document, source_name: str = "") -> dict:
     return {"id": d.id, "source_id": d.source_id, "source": source_name, "title": d.title, "filename": d.filename, "mime": d.mime, "size": d.size,
             "sha256": d.sha256, "status": d.status, "error": d.error, "chunks": d.chunks, "progress": _PROGRESS.get(d.id),
-            "created_at": d.first_seen_at, "updated_at": d.source_updated_at or d.last_seen_at, "url": d.url, "external_id": d.external_id}
+            "created_at": d.first_seen_at, "updated_at": d.source_updated_at or d.last_seen_at, "url": d.url, "external_id": d.external_id,
+            "secrets": secretguard.describe((d.meta or {}).get("secrets"))}
 
 
 def _doc(ctx: BrainCtx, doc_id: int) -> Document:

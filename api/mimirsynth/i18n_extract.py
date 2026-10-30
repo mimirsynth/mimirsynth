@@ -74,6 +74,8 @@ def collect() -> set[str]:
                         keys.add(t)
                 elif fn == "tr" and n.args and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, str):
                     keys.add(n.args[0].value)  # i18n.tr("texto con {{valores}}", lang, …)
+                elif fn == "Rule" and len(n.args) >= 2 and isinstance(n.args[1], ast.Constant):
+                    keys.add(n.args[1].value)  # secretscan.Rule("id", "etiqueta", …): tipo de secreto que ven personas y agentes
                 elif fn == "register" and len(n.args) >= 2 and getattr(n.func, "attr", "") == "register":
                     t = _template(n.args[1])  # jobs.register("kind", "Etiqueta")
                     if t:

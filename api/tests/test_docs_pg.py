@@ -135,3 +135,23 @@ def test_mentions_phrase_search_and_isolation(client):
     assert [h["document_id"] for h in r] == [a["id"]]                               # frase exacta, sin el documento que las tiene separadas ni el de otro brain
     assert r[0]["chunks"] == 1 and "«" in r[0]["snippet"] and r[0]["title"] == "Red"
     assert docindex.mentions(ba, ["xx"]) == [] and docindex.mentions(ba, []) == []
+
+
+def test_secrets_are_masked_before_indexing_and_block_removes_the_document(client):
+    token = "ghp_" + "A1b2C3d4E5f6G7h8J9k0" * 2   # con forma de token de GitHub, montado para no dejarlo literal en el código
+    client.post("/api/brains", json={"slug": "sec", "name": "Sec", "graph_name": "g-sec"})
+    d = up(client, "sec", "despliegue.md", f"# Despliegue\n\nEl runner usa el token {token} para publicar la imagen en el registro.\n")
+    info = client.get(f"/api/brains/sec/docs/{d['id']}", params={"chunks": 10}).json()
+    assert info["status"] == "active" and [(s["rule"], s["action"], s["count"]) for s in info["secrets"]] == [("github_token", "masked", 1)]
+    assert all(token not in c["text"] for c in info["chunk_list"]) and "[secreto eliminado: token de GitHub]" in info["chunk_list"][0]["text"]
+    assert token not in client.get(f"/api/brains/sec/docs/{d['id']}/text").text            # ni el texto normalizado
+    assert client.get("/api/brains/sec/docs/search", params={"q": "runner publicar imagen registro"}).json()["results"]
+    client.patch("/api/brains/sec", json={"secret_mode": "block"})
+    assert client.post(f"/api/brains/sec/docs/{d['id']}/reindex").status_code == 200
+    info = client.get(f"/api/brains/sec/docs/{d['id']}", params={"chunks": 10}).json()
+    assert info["status"] == "error" and "token de GitHub" in info["error"] and token not in info["error"]
+    assert info["chunk_list"] == [] and info["secrets"] == [{"rule": "github_token", "action": "blocked", "label": "token de GitHub"}]
+    assert client.get("/api/brains/sec/docs/search", params={"q": "runner publicar imagen registro"}).json()["results"] == []
+    scan = client.get("/api/brains/sec/secrets/scan").json()
+    assert scan["documents"] == 0                                                          # solo analiza documentos indexados
+    client.post("/api/brains/sec/delete", json={"confirm": "sec"})

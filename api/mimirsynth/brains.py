@@ -2,11 +2,11 @@
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import userlib
+from . import secretguard, secretscan, userlib
 from .db import client
 from .deps import BrainCtx, admin_of_brain, audit, current_user, owner_of_brain, require_admin
 from .models import Audit, Brain, Membership, User
@@ -19,7 +19,10 @@ GRAPH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$")
 
 
 def _brain_out(b: Brain, role: str) -> dict:
-    return {"slug": b.slug, "name": b.name, "description": b.description, "graph_name": b.graph_name, "role": role}
+    out = {"slug": b.slug, "name": b.name, "description": b.description, "graph_name": b.graph_name, "role": role}
+    if rank(role) >= rank("admin"):  # la política de secretos solo la ve y la cambia quien administra el brain
+        out.update(secret_mode=b.secret_mode, secret_allow=b.secret_allow)
+    return out
 
 
 @router.get("/brains")
@@ -54,6 +57,8 @@ class BrainPatch(BaseModel):
     description: str | None = None
     slug: str | None = None
     graph_name: str | None = None
+    secret_mode: str | None = None
+    secret_allow: str | None = Field(None, max_length=10000)
 
 
 def _count(g) -> tuple[int, int]:
@@ -103,6 +108,16 @@ def update_brain(body: BrainPatch, ctx: BrainCtx = Depends(admin_of_brain)):
         if db.scalar(select(Brain).where(Brain.slug == body.slug)):
             raise HTTPException(409, "ya existe un brain con ese slug")
         changes["slug"] = [b.slug, body.slug]
+    if body.secret_mode is not None and body.secret_mode != b.secret_mode:
+        if body.secret_mode not in secretguard.MODES:
+            raise HTTPException(400, "modo de secretos inválido (mask, block o warn)")
+        changes["secret_mode"] = [b.secret_mode, body.secret_mode]
+    if body.secret_allow is not None and body.secret_allow != b.secret_allow:
+        try:
+            secretscan.parse_allow(body.secret_allow)
+        except ValueError as e:
+            raise HTTPException(400, f"excepción de secretos no válida: {e}") from None
+        changes["secret_allow"] = [b.secret_allow, body.secret_allow]
     moved = None
     if body.graph_name is not None and body.graph_name != b.graph_name:
         if not ctx.user.is_admin:
@@ -121,6 +136,16 @@ def update_brain(body: BrainPatch, ctx: BrainCtx = Depends(admin_of_brain)):
     out = _brain_out(b, ctx.role)
     if moved:
         out["old_graph_kept"] = old_graph
+    return out
+
+
+@router.get("/brains/{slug}/secrets/scan")
+def scan_secrets(ctx: BrainCtx = Depends(admin_of_brain)):
+    """Detector de secretos en solo lectura sobre lo que el brain ya guarda (propuestas y documentos), con las excepciones actuales.
+    Para medir aciertos y falsos positivos antes de cambiar la política. No devuelve valores ni cambia nada."""
+    out = secretguard.audit_existing(ctx.db, ctx.brain)
+    audit(ctx.db, ctx.user, "secrets.scan", ctx.brain, proposals=out["proposals"], documents=out["documents"],
+          rules={r["rule"]: r["count"] for r in out["rules"]})
     return out
 
 
