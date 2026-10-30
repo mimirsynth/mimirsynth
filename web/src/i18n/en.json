@@ -1169,5 +1169,14 @@
  "posible": "possible",
  "seguro": "certain",
  "Propuestas analizadas: {{p}}. Documentos analizados: {{d}}.": "Proposals scanned: {{p}}. Documents scanned: {{d}}.",
- "El original que se descarga no se modifica: conserva el valor tal cual.": "The downloadable original is not modified: it keeps the value as it is."
+ "El original que se descarga no se modifica: conserva el valor tal cual.": "The downloadable original is not modified: it keeps the value as it is.",
+ "Buscar duplicados": "Find duplicates",
+ "Duplicado": "Duplicate",
+ "Los documentos nuevos se comprueban al indexarse. Esto revisa los que ya estaban indexados y saca del índice los que repiten el texto de otro, sin borrar nada del origen.": "New documents are checked when they are indexed. This reviews the ones already indexed and takes out of the index those that repeat the text of another, without deleting anything at the source.",
+ "No hay duplicados entre los documentos indexados.": "No duplicates among the indexed documents.",
+ "Tiene el mismo texto que otro documento del brain, así que no se trocea ni se calculan sus embeddings: el recall usa el original. Si el original desaparece, este pasa a indexarse.": "It has the same text as another document in the brain, so it is not chunked and no embeddings are computed: recall uses the original. If the original goes away, this one gets indexed.",
+ "Ver el original": "View the original",
+ "duplicado": "duplicate",
+ "{{n}} duplicados sacados del índice.": "{{n}} duplicates taken out of the index.",
+ "La búsqueda de duplicados no ha terminado; mira el detalle en Trabajos.": "The duplicate search did not finish; see the details in Jobs."
 }

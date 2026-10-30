@@ -317,6 +317,7 @@ class Document(Base):
     mime: Mapped[str] = mapped_column(String(120), default="")
     size: Mapped[int] = mapped_column(BigInteger, default=0)
     sha256: Mapped[str] = mapped_column(String(64), default="")
+    norm_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)  # huella del texto extraído (duplicados, #117)
     storage_ref: Mapped[str] = mapped_column(Text, default="")  # ruta del original relativa al almacén
     text_ref: Mapped[str] = mapped_column(Text, default="")  # ruta del texto normalizado (sobre el que apuntan char_start/char_end)
     source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

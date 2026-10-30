@@ -115,15 +115,18 @@ def delete_source(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
     s = _src(ctx, sid)
     if s.kind == "upload":
         raise HTTPException(409, "la fuente de subidas no se elimina")
-    n = 0
+    gone = []
     for d in ctx.db.scalars(select(Document).where(Document.source_id == s.id)).all():
         docindex.delete_document(d.id)
         docstore.remove_document(d.brain_id, d.source_id, d.id)
+        gone.append(d.id)
         ctx.db.delete(d)
-        n += 1
     ctx.db.delete(s)
     ctx.db.commit()
+    n = len(gone)
     audit(ctx.db, ctx.user, "docsource.delete", ctx.brain, id=sid, documents=n)
+    for doc_id in gone:  # duplicados en otras fuentes cuyo original estaba en esta
+        docs.promote_duplicates(doc_id)
     return {"ok": True, "documents_removed": n}  # los originales de la carpeta no se tocan
 
 
@@ -326,14 +329,18 @@ def _scan(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
             to_index.append(nd.id)
         if i % 50 == 0:
             db.commit()
+    gone: list[int] = []
     for rel, d in existing.items():  # desaparecidos de la carpeta
         if rel not in seen:
             ctx.check()
             docindex.delete_document(d.id)
             docstore.remove_document(d.brain_id, d.source_id, d.id)
+            gone.append(d.id)
             db.delete(d)
             removed += 1
     db.commit()
+    for doc_id in gone:  # si alguno era el original de duplicados, el más antiguo pasa a indexarse
+        docs.promote_duplicates(doc_id)
     ctx.note(f"nuevos {added}, cambiados {changed}, sin cambios {unchanged}, eliminados {removed}" + (f", errores de lectura {errors}" if errors else ""))
     done, errors = _index_all(db, ctx, to_index, errors)
     return {"added": added, "changed": changed, "unchanged": unchanged, "removed": removed, "indexed": done, "errors": errors}
@@ -425,14 +432,18 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         to_index.append(d.id)
         if i % 25 == 0:
             db.commit()
+    gone: list[int] = []
     for ext_id, d in existing.items():
         if ext_id not in seen:
             ctx.check()
             docindex.delete_document(d.id)
             docstore.remove_document(d.brain_id, d.source_id, d.id)
+            gone.append(d.id)
             db.delete(d)
             removed += 1
     db.commit()
+    for doc_id in gone:  # si alguno era el original de duplicados, el más antiguo pasa a indexarse
+        docs.promote_duplicates(doc_id)
     ctx.note(f"nuevas {added}, cambiadas {changed}, sin cambios {unchanged}, eliminadas {removed}")
     done, errors = _index_all(db, ctx, to_index, errors)
     return {"added": added, "changed": changed, "unchanged": unchanged, "removed": removed, "indexed": done, "errors": errors}
