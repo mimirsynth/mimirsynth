@@ -1,6 +1,6 @@
 {
  "title": "Infrastructure and IT operations",
- "version": 3,
+ "version": 2,
  "description": "Servers, virtual machines and containers, services, networks, storage, workflows, incidents, changes and runbooks, with where each one runs and what depends on what. Aligned with the configuration-item model of ITIL/CMDB.",
  "standards": [
   "ITIL / CMDB configuration items and relationships",
@@ -132,8 +132,7 @@
   },
   {
    "name": "LocatedAt",
-   "description": "A host or device is installed at a location.",
-   "functional": true
+   "description": "A host or device is installed at a location."
   },
   {
    "name": "DecidedBy",

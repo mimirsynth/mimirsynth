@@ -2,11 +2,13 @@
 
 Graphiti invalida un hecho cuando la extracción ve que otro lo contradice, pero no siempre: dos episodios redactados de forma distinta
 pueden dejar vigentes a la vez «X está en A» y «X está en B». Aquí se buscan, sin LLM, los hechos vigentes con el mismo sujeto y la
-misma relación (tras normalizar formato y alias) y destinos distintos, en las relaciones que la ontología marca como **funcionales**
-(un solo valor a la vez: «está en», «informa a»). Por defecto ninguna lo es: muchas relaciones parecen de un solo valor y no lo son.
+misma relación (tras normalizar formato y alias) y destinos **distintos del mismo tipo de entidad**, en las relaciones que la
+ontología marca como **funcionales** (un solo valor a la vez). Por defecto ninguna lo es, tampoco en los paquetes: medido en un grafo
+real, «ubicado en» mezclaba hosts, URLs, VLANs y servicios, y una marca puesta de antemano daba sobre todo falsos positivos.
 
-Se propone quedarse con el hecho de fecha más reciente (`valid_at`, o `created_at` si no la tiene) y, al resolver, invalidar los
-demás con esa fecha. La resolución la decide un curador y se puede deshacer como cualquier invalidación.
+Se propone quedarse con el hecho de fecha de validez (`valid_at`) más reciente. Si alguna fecha es solo la de aprendizaje
+(`created_at`: cuándo se supo, no cuándo fue cierto), la propuesta no se da por clara y decide el curador. Al resolver se invalidan
+los demás con esa fecha; se puede deshacer como cualquier invalidación.
 
 Para medir antes de marcar relaciones como funcionales, el modo «todas las relaciones» cuenta los candidatos de cada relación sin
 cambiar nada; también desde la línea de comandos:  python -m mimirsynth.conflicts <grafo> [--brain-id N]
@@ -32,7 +34,8 @@ MAX_GROUPS = 200    # grupos que se devuelven (los recuentos sí son completos)
 
 QUERY = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
          "RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact, r.valid_at AS valid_at, r.created_at AS created_at, "
-         "a.uuid AS source_uuid, a.name AS source, b.uuid AS target_uuid, b.name AS target LIMIT $n")
+         "a.uuid AS source_uuid, a.name AS source, b.uuid AS target_uuid, b.name AS target, labels(b) AS target_labels "
+         "ORDER BY coalesce(r.valid_at, r.created_at) DESC, r.uuid LIMIT $n")   # si se trunca, siempre los mismos: los más recientes
 
 
 def _norm(s) -> str:
@@ -43,39 +46,48 @@ def _when(f: dict) -> str:
     return str(f.get("valid_at") or f.get("created_at") or "")
 
 
+def _type(f: dict) -> str:
+    """Tipo de entidad del destino (la etiqueta que no es `Entity`); sin tipo, cuenta como su propio grupo."""
+    return ",".join(sorted(x for x in f.get("target_labels") or [] if x != "Entity")) or "Entity"
+
+
 def functional_relations(onto: dict | None) -> set[str]:
     """Relaciones marcadas como funcionales en la ontología del brain, normalizadas como las del grafo (HostedOn → HOSTED_ON)."""
     return {canon_rel(t["name"]) for t in (onto or {}).get("edge_types", []) if t.get("functional")}
 
 
 def find(facts: list[dict], amap: dict | None = None, only: set[str] | None = None) -> tuple[list[dict], list[dict]]:
-    """Agrupa los hechos vigentes por (sujeto, relación) y devuelve los grupos con dos destinos distintos o más, y el recuento por
-    relación. Con `only`, solo esas relaciones. Dos destinos con el mismo nombre salvo mayúsculas y espacios son el mismo destino
-    (dos nodos de la misma cosa no son una contradicción, son un duplicado del vocabulario)."""
+    """Agrupa los hechos vigentes por (sujeto, relación, tipo del destino) y devuelve los grupos con dos destinos distintos o más, y
+    el recuento por relación. Con `only`, solo esas relaciones.
+    - Solo se comparan destinos del mismo tipo de entidad: «X ubicado en Host A» y «X ubicado en VLAN B» no se contradicen.
+    - Dos destinos con el mismo nombre salvo mayúsculas y espacios son el mismo destino (eso es un duplicado del vocabulario).
+    - La propuesta solo es clara si el ganador es estrictamente más reciente y todas las fechas son de validez (`valid_at`)."""
     by_key: dict[tuple, list[dict]] = defaultdict(list)
     sources: dict[str, set] = defaultdict(set)
     for f in facts:
         rel = resolve(f.get("name"), amap)
         if only is not None and rel not in only:
             continue
-        by_key[(f["source_uuid"], rel)].append(f)
+        by_key[(f["source_uuid"], rel, _type(f))].append(f)
         sources[rel].add(f["source_uuid"])
-    groups, per_rel = [], defaultdict(int)
-    for (src, rel), fs in by_key.items():
+    groups, hit = [], defaultdict(set)
+    for (src, rel, ttype), fs in by_key.items():
         if len({_norm(f["target"]) for f in fs}) < 2:
             continue
         fs = sorted(fs, key=_when, reverse=True)
         keep = fs[0]
         losers = [f for f in fs if _norm(f["target"]) != _norm(keep["target"])]
-        per_rel[rel] += 1
-        groups.append({"source": keep["source"], "source_uuid": src, "relation": rel,
+        dated = all(f.get("valid_at") for f in [keep, *losers])
+        hit[rel].add(src)
+        groups.append({"source": keep["source"], "source_uuid": src, "relation": rel, "target_type": ttype,
                        "facts": [{k: f.get(k) for k in ("uuid", "fact", "target", "target_uuid", "valid_at", "created_at")} for f in fs],
-                       "suggestion": {"keep": keep["uuid"], "invalidate": [f["uuid"] for f in losers],
-                                      "clear": all(_when(keep) > _when(f) for f in losers)}})   # «clear»: el ganador es estrictamente más reciente
+                       "suggestion": {"keep": keep["uuid"], "invalidate": [f["uuid"] for f in losers], "dated_by": "valid_at" if dated else "created_at",
+                                      "clear": dated and all(_when(keep) > _when(f) for f in losers)}})
     groups.sort(key=lambda g: (-len(g["facts"]), g["relation"], _norm(g["source"])))
-    stats = sorted(({"relation": r, "sources": len(s), "groups": per_rel.get(r, 0),
-                     "ratio": round(per_rel.get(r, 0) / len(s), 3) if s else 0} for r, s in sources.items()),
-                   key=lambda x: (-x["groups"], x["relation"]))
+    # De menor a mayor proporción: las relaciones de un solo valor de verdad son las de pocos casos, no las de muchos.
+    stats = sorted(({"relation": r, "sources": len(s), "groups": len(hit.get(r, ())),
+                     "ratio": round(len(hit.get(r, ())) / len(s), 3) if s else 0} for r, s in sources.items()),
+                   key=lambda x: (x["groups"] == 0, x["ratio"], x["relation"]))
     return groups, stats
 
 
@@ -113,7 +125,8 @@ def resolve_conflict(body: ResolveIn, ctx: BrainCtx = Depends(curator)):
     if body.keep in body.invalidate:
         raise HTTPException(400, "el hecho que se conserva no puede invalidarse a la vez")
     q = ("MATCH (a:Entity)-[r:RELATES_TO {uuid:$u}]->(b:Entity) RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact, r.valid_at AS valid_at, "
-         "r.created_at AS created_at, r.invalid_at AS invalid_at, r.expired_at AS expired_at, a.uuid AS source_uuid, b.name AS target")
+         "r.created_at AS created_at, r.invalid_at AS invalid_at, r.expired_at AS expired_at, a.uuid AS source_uuid, b.name AS target, "
+         "labels(b) AS target_labels")
     amap = alias_map(ctx.db, ctx.brain.id)
     got = {}
     for u in [body.keep, *body.invalidate]:
@@ -122,18 +135,21 @@ def resolve_conflict(body: ResolveIn, ctx: BrainCtx = Depends(curator)):
             raise HTTPException(404, "hecho no encontrado")
         got[u] = r[0]
     keep = got[body.keep]
+    if keep["invalid_at"] or keep["expired_at"]:
+        raise HTTPException(409, "el hecho que se conserva ya no está vigente")   # si no, no quedaría ninguno vigente
     for u in body.invalidate:
         f = got[u]
         if f["invalid_at"] or f["expired_at"]:
             raise HTTPException(409, "uno de los hechos ya está invalidado")
-        if f["source_uuid"] != keep["source_uuid"] or resolve(f["name"], amap) != resolve(keep["name"], amap):
-            raise HTTPException(400, "los hechos no tienen el mismo sujeto y la misma relación")
+        if f["source_uuid"] != keep["source_uuid"] or resolve(f["name"], amap) != resolve(keep["name"], amap) or _type(f) != _type(keep):
+            raise HTTPException(400, "los hechos no tienen el mismo sujeto, la misma relación y el mismo tipo de destino")
     now = datetime.now(timezone.utc).isoformat()
+    items = [{"u": u, "at": _when(keep) if keep.get("valid_at") and _when(keep) > _when(got[u]) else now} for u in body.invalidate]
+    ctx.graph.query("UNWIND $items AS it MATCH ()-[r:RELATES_TO {uuid: it.u}]->() SET r.invalid_at = it.at, r.expired_at = $n",
+                    {"items": items, "n": now})   # todas en una consulta: no queda una resolución a medias
     ops = []
     for u in body.invalidate:
         f = got[u]
-        at = _when(keep) if _when(keep) > _when(f) else now
-        ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() SET r.invalid_at = $at, r.expired_at = $n", {"u": u, "at": at, "n": now})
         op = _record(ctx, "fact.invalidate", f"Invalidado por contradicción con «{(keep['fact'] or '')[:60]}»: «{(f['fact'] or '')[:60]}»",
                      uuid=u, before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]})
         ops.append(op.id)

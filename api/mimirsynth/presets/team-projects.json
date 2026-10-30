@@ -1,6 +1,6 @@
 {
  "title": "Team and projects",
- "version": 2,
+ "version": 1,
  "description": "Who is on which team, who owns which project and task, what depends on what, what was decided in which meeting, and what the risks are. For product, engineering or client work.",
  "standards": [
   "schema.org (Person, Organization, Project, Event)",
@@ -97,8 +97,7 @@
   },
   {
    "name": "ReportsTo",
-   "description": "A person reports to another person.",
-   "functional": true
+   "description": "A person reports to another person."
   },
   {
    "name": "Mitigates",

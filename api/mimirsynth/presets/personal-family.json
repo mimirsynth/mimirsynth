@@ -1,6 +1,6 @@
 {
  "title": "Personal and family",
- "version": 2,
+ "version": 1,
  "description": "Family members and relationships, pets, homes and places, trips, appointments, belongings, subscriptions and documents of daily life. Never store passwords, card numbers or other secrets here.",
  "standards": [
   "schema.org (Person, Place, Event, Trip, Product)",
@@ -74,8 +74,7 @@
   },
   {
    "name": "LivesAt",
-   "description": "A person, household or pet lives at a place.",
-   "functional": true
+   "description": "A person, household or pet lives at a place."
   },
   {
    "name": "MemberOf",
