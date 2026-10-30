@@ -16,6 +16,8 @@ const MAX_HALOS = 8;  // los orígenes mayores llevan halo propio; el resto se j
 const OTHER = "__otros__";
 const EFFECTS_KEY = "ms-graph-effects";  // por dispositivo, no en la cuenta: la GPU es del equipo, no de la persona
 const readEffects = (): EffectsMode => { try { const v = localStorage.getItem(EFFECTS_KEY); return v === "full" || v === "reduced" ? v : "auto"; } catch { return "auto"; } };
+/** Radio por grado con escala de raíz: de 5 a 12, para que los nodos con muchas conexiones no tapen a sus vecinos. */
+const nodeSize = (degree: number) => 5 + 7 * Math.sqrt(Math.min(degree, 40) / 40);
 const hasWebGL = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
 
 export default function GraphPage({ graph }: { graph: string }) {
@@ -116,12 +118,13 @@ export default function GraphPage({ graph }: { graph: string }) {
   const backed = useCallback((x: GNode | GLink) => robustness && srcOf(x).length >= 2, [robustness, srcOf]);
   const nodeVisible = useCallback((n: GNode) => !hiddenLabels.has(n.labels[0] ?? t("(sin tipo)")) && (n.degree ?? 0) >= minDeg && (!robust || backed(n)),
     [hiddenLabels, minDeg, robust, backed]); // eslint-disable-line react-hooks/exhaustive-deps
-  const linkVisible = useCallback((l: GLink) => !hiddenRels.has(l.name) && (!robust || backed(l)), [hiddenRels, robust, backed]);
+  // «Solo confirmados» filtra nodos: las relaciones entre los que quedan se siguen viendo (un hecho casi nunca tiene dos orígenes propios)
+  const linkVisible = useCallback((l: GLink) => !hiddenRels.has(l.name), [hiddenRels]);
 
   // datos -> lienzo (2D o 3D); cambiar la visibilidad no recoloca
   const cnodes = useMemo<CanvasNode[]>(() => {
     const shown = new Set(halos.map((h) => h.key));
-    return nodes.map((n) => ({ id: n.uuid, color: color(n.labels[0]), size: 5 + Math.min(n.degree ?? 1, 40) / 3, caption: n.name, visible: nodeVisible(n),
+    return nodes.map((n) => ({ id: n.uuid, color: color(n.labels[0]), size: nodeSize(n.degree ?? 1), caption: n.name, visible: nodeVisible(n),
       groups: [...new Set(srcOf(n).map(haloOf))].filter((k) => shown.has(k)), ring: backed(n),
       tooltip: `${n.name}\n${n.labels[0] ?? t("(sin tipo)")} · ${t("Conexiones: {{count}}", { count: n.degree ?? 0 })}${robustness ? ` · ${t("Orígenes: {{count}}", { count: srcOf(n).length })}` : ""}` }));
   }, [nodes, nodeVisible, halos, srcOf, haloOf, backed, robustness]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -167,6 +170,7 @@ export default function GraphPage({ graph }: { graph: string }) {
         <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
         <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const png = gc.current?.toPng(); if (png) { const a = document.createElement("a"); a.href = png; a.download = "grafo.png"; a.click(); } }} />
         <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => gc.current?.fit(400)} />
+        <IconButton icon="unpin" label={t("Restablecer posiciones")} onClick={() => gc.current?.resetPositions()} />
         <Check size="xs" label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
         <Check size="xs" label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
         <Check size="xs" label={t("Halos por origen")} checked={halosOn && force} disabled={!force} title={force ? undefined : t("Los halos solo se dibujan en la disposición de fuerza.")} onChange={(e) => setHalosOn(e.currentTarget.checked)} />
@@ -228,7 +232,7 @@ export default function GraphPage({ graph }: { graph: string }) {
                 {selLink.invalid_at && <Text size="xs" c="dimmed">{t("Dejó de ser cierto")} {fmt(selLink.invalid_at)}</Text>}
                 <Sources keys={srcOf(selLink)} name={(k) => originName.get(k) ?? k} />
               </Stack>
-            ) : <Text size="sm" c="dimmed">{t("Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.")}</Text>}
+            ) : <Text size="sm" c="dimmed">{t("Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Un nodo arrastrado se queda donde lo sueltas; doble clic lo suelta. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.")}</Text>}
           </FillArea>
         </Panel>} />
       <Text size="xs" c="dimmed">{t("{{nodes}} nodos · {{links}} hechos", { nodes: nodes.length, links: links.length })}{base.data?.truncated ? t(" · recortado por el tope de nodos") : ""}</Text>

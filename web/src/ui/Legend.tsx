@@ -17,8 +17,8 @@ export function LegendSection({ children }: { children: ReactNode }) {
 /** `dot`: color del punto (un tipo de entidad); sin él, una línea (una relación). */
 export function LegendItem({ label, count, dot, off, onClick }: { label: string; count: number; dot?: string; off?: boolean; onClick: () => void }) {
   return (
-    <button type="button" className="ms-legend-item" data-off={off ? "" : undefined} onClick={onClick}>
-      {dot ? <span className="ms-legend-dot" style={{ background: dot }} /> : <span className="ms-legend-line" />}{label} <span className="ms-legend-n">{count}</span>
+    <button type="button" className="ms-legend-item" data-off={off ? "" : undefined} title={label} onClick={onClick}>
+      {dot ? <span className="ms-legend-dot" style={{ background: dot }} /> : <span className="ms-legend-line" />}<span className="ms-legend-label">{label}</span> <span className="ms-legend-n">{count}</span>
     </button>
   );
 }
