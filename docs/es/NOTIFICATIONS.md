@@ -21,6 +21,7 @@ La campana (barra lateral → Notificaciones) lista los avisos que puedes ver y 
 | `docsource.error` | aviso | Una fuente de documentos no se pudo sincronizar |
 | `security.lockout` | aviso | Una cuenta se ha bloqueado por demasiados intentos fallidos |
 | `reindex.orphan` | aviso | Un cambio de modelo de embeddings (relleno en sombra) lleva fallido o parado más horas de las configuradas, con sus vectores sombra ocupando memoria |
+| `refquery.regressed` | aviso | Tras un cambio de modelo de embeddings, las consultas de referencia de un brain encuentran menos esperados, o muestran más falsos positivos, que en la ejecución anterior |
 | `update.available` | información | Hay una versión más reciente (opcional, ver más abajo) |
 
 Los mensajes llevan metadatos (qué ha fallado, dónde, cuántas veces, un error recortado), **nunca el texto de las memorias**.

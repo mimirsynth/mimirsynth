@@ -84,6 +84,15 @@ A query combines, without calling an LLM:
 3. **Document passages**, with a budget and a maximum time.
 4. Reciprocal rank fusion (RRF) with a recency weight, and a block with the evolution of the facts of the queried entities.
 
+### Reference queries
+
+Each brain can keep **reference queries** (Ask → Reference queries; curators and above): a question with the texts its recall **must** bring and the ones it **must not** (known false positives), and whether the documents section should appear. A text counts as found if it appears, ignoring case and spacing, in any result; prefixed with `fact:`, `chunk:` or `doc:` it must be in that type of result.
+
+- **Run** measures them with the current settings: expected items found, false positives and queries with the documents section the wrong way round (also by type), median latency and the difference with the previous run on the current settings. It runs as a job, with progress.
+- **Simulate** repeats the measurement with other passage similarity thresholds (for instance `0.68 0.70 0.72`) **without changing the setting**.
+- They are created by hand, **imported and exported** as JSON, or saved from Ask by marking each result as «Expected» or «Extra».
+- **After an embedding model change** they run on their own in every brain that has them; if they get worse than the previous run, the `refquery.regressed` event is raised.
+
 ## Vocabulary
 
 The ontology is defined per brain (standard packages in `api/mimirsynth/presets/`, see [ONTOLOGY.md](ONTOLOGY.md)). The interface lets you normalise aliases, merge duplicates, retype entities and edit relation types; every change is reversible and audited.

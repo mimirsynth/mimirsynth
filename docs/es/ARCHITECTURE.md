@@ -83,6 +83,15 @@ Una consulta combina, sin llamar a un LLM:
 3. **Pasajes de documentos**, con presupuesto y tiempo máximo.
 4. Fusión por rango recíproco (RRF) con peso por recencia, y un bloque con la evolución de los hechos de las entidades consultadas.
 
+### Consultas de referencia
+
+Cada brain puede guardar **consultas de referencia** (Preguntar → Consultas de referencia; curadores o superior): una pregunta con los textos que su recall **debe** traer y los que **no** (falsos positivos conocidos), y si la sección de documentos debe salir o no. Un texto cuenta como encontrado si aparece, sin contar mayúsculas ni espacios, en algún resultado; con `fact:`, `chunk:` o `doc:` delante se exige ese tipo.
+
+- **Ejecutar** las mide con los ajustes en vigor: esperados encontrados, falsos positivos y consultas con la sección de documentos al revés (también por tipo), mediana de latencia y diferencia con la ejecución anterior con los ajustes en vigor. Corre como trabajo, con progreso.
+- **Simular** repite la medida con otros umbrales de similitud de los pasajes (por ejemplo `0,68 0,70 0,72`) **sin cambiar el ajuste**.
+- Se crean a mano, se **importan y exportan** en JSON, o se guardan desde Preguntar marcando cada resultado como «Debe salir» o «Sobra».
+- **Tras un cambio de modelo de embeddings** se ejecutan solas en cada brain que tenga consultas; si empeoran respecto a la anterior, se avisa con el evento `refquery.regressed`.
+
 ## Vocabulario
 
 La ontología se define por brain (paquetes estándar en `api/mimirsynth/presets/`, ver [ONTOLOGY.md](ONTOLOGY.md)). La interfaz permite normalizar alias, fusionar duplicados, retipar entidades y editar los tipos de relación; cada cambio es reversible y queda auditado.

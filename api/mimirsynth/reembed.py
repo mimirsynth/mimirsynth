@@ -682,4 +682,11 @@ def _switch_job(ctx: "jobs.JobCtx", p: dict) -> dict:
     from .deps import audit
     with _factory()() as db:
         audit(db, None, "embedding.switched", None, name=name, model=model, dim=dim, previous=before["model"], pause_seconds=round(paused, 1))
+    try:  # medir con las consultas de referencia de cada brain y avisar si empeora (#115)
+        from .refqueries import run_after_switch
+        runs = run_after_switch()
+        if runs:
+            ctx.note(f"lanzadas {len(runs)} ejecuciones de consultas de referencia para comparar con el modelo anterior")
+    except Exception as ex:  # noqa: BLE001  (el cambio ya está hecho: medir es un extra)
+        ctx.note(f"no se pudieron lanzar las consultas de referencia: {str(ex)[:150]}")
     return {"engine": name, "model": model, "dim": dim, "previous": before, "graphs": len(graphs), "pause_seconds": round(paused, 1), "switched": True}

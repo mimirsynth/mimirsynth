@@ -463,3 +463,36 @@ class NotifyRead(Base):
     __tablename__ = "notify_reads"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     last_id: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class RefQuery(Base):
+    """Consulta de referencia (#115): una pregunta del brain con lo que su recall debe traer y lo que no, para medir la calidad del
+    recall antes y después de cambiar el umbral, el modelo de embeddings o el decisor."""
+    __tablename__ = "ref_queries"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    query: Mapped[str] = mapped_column(Text)
+    expect: Mapped[list] = mapped_column(JSON, default=list)  # [{text, kind}] que deben aparecer; kind: any | fact | chunk | doc
+    avoid: Mapped[list] = mapped_column(JSON, default=list)   # [{text, kind}] que no deben aparecer (falsos positivos conocidos)
+    docs: Mapped[bool | None] = mapped_column(Boolean, nullable=True)  # la sección de documentos debe salir (True), no salir (False) o da igual
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class RefRun(Base):
+    """Una ejecución de las consultas de referencia de un brain, con sus parámetros (vacíos = los ajustes en vigor) y el resultado."""
+    __tablename__ = "ref_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="queued")  # queued | running | done | error
+    reason: Mapped[str] = mapped_column(String(32), default="manual")  # manual | embedding.switched
+    params: Mapped[dict] = mapped_column(JSON, default=dict)  # min_sim, docs, facts, chunks: lo que se simula
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    results: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
