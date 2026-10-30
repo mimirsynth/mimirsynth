@@ -88,14 +88,18 @@ def _cut(text: str, n: int) -> str:
 
 def pick_passages(hits: list[dict], query: str, n: int, min_sim: float) -> list[dict]:
     """Se queda con pasajes realmente relevantes: similitud ≥ umbral, o algo menos si además coinciden ≥2 términos de la consulta.
-    Mejor no devolver nada que meter ruido en cada prompt."""
+    Mejor no devolver nada que meter ruido en cada prompt. Un pasaje con el mismo texto que otro ya elegido (el mismo contenido en dos
+    documentos, o en el brain y en un origen prestado) se salta: con un presupuesto de 2, un duplicado se comería la mitad."""
     terms = [t for t in index._tsquery(query).split(" | ") if t]
-    out = []
+    out, seen = [], set()
     for h in hits:
+        key = " ".join(h["text"].lower().split())
+        if key in seen:
+            continue
         sim = h.get("similarity", 0.0)
         overlap = sum(1 for t in terms if re.search(rf"\b{re.escape(t)}", h["text"].lower()))
         if sim >= min_sim or (sim >= min_sim - 0.08 and overlap >= 2):
-            out.append({**h, "text": _cut(h["text"], DOC_CHARS)})
+            out.append({**h, "text": _cut(h["text"], DOC_CHARS)}); seen.add(key)
         if len(out) >= n:
             break
     return out

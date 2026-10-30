@@ -60,6 +60,7 @@ It is idempotent and resumable, runs in the background with visible progress, an
 - **Recall integration, without making it expensive:** the agent context gains a "Documents" section, but only when it adds value.
   - **Hard budget:** at most 2 passages of ~1,000 characters (about 600 tokens in total), always cited.
   - **Only if relevant:** below a score threshold nothing is added, so a query unrelated to documents spends no tokens.
+  - **No repeats:** a passage whose text matches one already chosen (the same content in two documents, or in a source that lends its documents) is skipped, so the budget goes to different passages.
   - **No slowdown:** the document search runs in parallel with the facts and episodes search, with its own maximum time; if it overruns, the section is omitted rather than delaying the answer.
   - **Can be disabled** per request, and the agent can later ask for the full document or the extended context of a passage (`GET /docs/{id}/context?chunk=…`, `GET /docs/{id}/file`).
 - **Promote to memory:** from a passage, a button creates a **quarantined proposal** (the same queue as always) so that, if it deserves to be a fact, it goes through the normal ingestion path.
