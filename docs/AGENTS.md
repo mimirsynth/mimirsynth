@@ -46,6 +46,12 @@ POST $URL/api/brains/my-brain/mcp        Authorization: Bearer $TOKEN
 |---|---|---|
 | `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars`, `federated` |
 | `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` |
+| `facts_about` | reader | Everything known about an entity: current facts and those that stopped being true, newest first, with dates, the episode each one was learned from and the **uuid of each fact** in brackets (what a correction needs). The entity is found by name (case and spacing do not matter), by a name merged into it or by its uuid; if several entities share the name, it returns the candidates instead of choosing one. Arguments: `entity`, and optionally `status` (`all`, `current`, `invalidated`), `limit` (20, up to 100), `offset`, `max_chars`, `federated` |
+| `timeline` | reader | How what is known about an entity changed: when each fact was learned and, if it applies, when it stopped being true, newest first. Arguments: `entity`, and optionally `since`, `until` (`YYYY-MM-DD`), `limit` (30, up to 200), `offset`, `max_chars`, `federated` |
+| `get_document` | reader | Reads a document: with `chunk`, that passage and the text around it (the numbers in `[doc 12, chunk 3]` from `recall`); without it, the full text in parts of `max_chars` (8000 by default) with `offset` to continue. A passage lent by another brain is read with `origin` (that brain's identifier, as shown by `recall`). Arguments: `document`, and optionally `chunk`, `radius`, `offset`, `max_chars`, `origin` |
+| `whats_new` | reader | Facts learned and facts that stopped being true since a date. Without `since`, since the last time **this token** called it without a date (the first time, the last 7 days), so an agent can catch up when a session starts without storing anything. Arguments: optionally `since` (ISO 8601), `limit` (30 per section, up to 100), `max_chars`, `federated` |
+
+All the answers have a size limit (`max_chars`) and say how to ask for the next page (`offset`). What other brains lend comes labelled with its origin, as in `recall`.
 
 The token decides the brain and the role, so the tools take no brain argument. Only API tokens are accepted (never the browser session). Example with Claude Code:
 
