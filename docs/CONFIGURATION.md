@@ -5,7 +5,7 @@
 Configuration has two levels:
 
 1. **Environment (`.env`):** only what is needed to start and connect. Read at startup.
-2. **Interface (Administration → Settings and the other sections):** everything else. Applied without a restart; every change is recorded in the audit log. If an equivalent environment variable exists, it acts as the default, and "Restore" in the interface goes back to it.
+2. **Interface (Administration):** everything else. Applied without a restart; every change is recorded in the audit log. If an equivalent environment variable exists, it acts as the default, and "Restore" in the interface goes back to it.
 
 ## Environment variables
 Commented template: `env.example` in the [latest release](https://github.com/MimirSynth/mimirsynth/releases/latest) (or [`.env.example`](../.env.example) in the repository).
@@ -26,7 +26,7 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 ## AI providers
 Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.
 - **LLM model:** extracts entities and facts when proposals are ingested. For "reasoning" models that return empty JSON, use a proxy that disables *thinking*.
-- **Embeddings:** model and dimension **cannot be changed** once the index exists (vectors depend on the model). It must be the same one Graphiti uses on that FalkorDB.
+- **Embeddings:** vectors depend on the model, so changing the model or its dimension once the index exists means recomputing them: use **Reindex** (see «Changing the embedding model» below), never just edit the engine. It must be the same one Graphiti uses on that FalkorDB.
 
 The extraction LLM and the embeddings model are **independent**: they can come from different providers (local embeddings and an API LLM, for example), and only the embeddings model is tied to the index.
 
@@ -72,7 +72,7 @@ The single-process gate assumes the service runs as one process (as the image do
 **Administration → General → Default language** sets the interface and email language for people who have not chosen one. Each person picks theirs under My account → Profile. English and Spanish are included.
 
 ## Document memory
-- **Folders:** Administration → Folders registers the roots under `/sources` that brain administrators can use as sources. Under Knowledge you add sources of type folder, wiki (Outline) or uploads.
+- **Folders:** Administration → Folders registers the roots under `/sources` that brain administrators can use as sources. Under Knowledge you add folder and wiki (Outline, Confluence, Notion) sources; uploads go to each brain's «Uploads» source. See [DOCUMENTS.md](DOCUMENTS.md).
 - **Limits:** maximum file size, upload part size and extracted text size (Administration → Limits).
 - **Recall:** minimum similarity, passages per query and maximum time of the document search (Administration → Recall). Similarity depends on the embedding model: recalibrate it if you change it.
 

@@ -57,7 +57,7 @@ claude mcp add --transport http mimirsynth "$URL/api/brains/mi-brain/mcp" --head
 `GET /api/brains/{slug}/docs/search?q=…` busca por significado. `GET /api/brains/{slug}/docs/{id}/context?chunk={n}` devuelve más contexto de un pasaje y `/docs/{id}/file` el original.
 
 ## Claude Code
-La carpeta [`integrations/claude-code`](../../integrations/claude-code/README.es.md) incluye un *hook* que inyecta el recall en cada prompt y un script para enviar aprendizajes como propuestas.
+Conéctalo por el servidor MCP (arriba): así tiene `recall` y `remember` como herramientas. La carpeta [`integrations/claude-code`](../../integrations/claude-code/README.es.md) añade el complemento: un *hook* que inyecta el recall en cada prompt sin que el agente tenga que pedirlo y un script para enviar aprendizajes como propuestas.
 
 ## Idioma
 Los mensajes de error, las descripciones e instrucciones de las herramientas del MCP y los encabezados del contexto del recall llegan en el idioma de quien llama: el de la cabecera `Accept-Language` si pide uno disponible (`es`, `en`); si no, el que la persona dueña del token eligió en «Mi cuenta»; si no, el de la instancia. La memoria guardada (hechos, episodios, documentos) se devuelve tal como se escribió.

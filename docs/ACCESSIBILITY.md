@@ -1,4 +1,4 @@
-**English** · Spanish: the interface is translated, this page is not
+**English** · [Español](es/ACCESSIBILITY.md)
 
 # Accessibility
 

@@ -1,3 +1,5 @@
+**English** · [Español](es/FEDERATION.md)
+
 # Federation between brains
 
 A brain can lend read access to another brain. The receiving brain then sees, in its own recalls, what the lending brain knows, merged with its own and marked with where it came from. Nothing is copied: the data stays in the lending brain.
@@ -25,10 +27,10 @@ Never shared: embeddings, entity summaries, tokens, members, proposals, the onto
 
 ## How a query uses it
 
-`recall` (REST and MCP) queries the target brain and every source that lent to it, then merges the lists with weighted Reciprocal Rank Fusion (what the target already knows weighs a bit more than what it is lent). A fact the target already has is not repeated from a source. Lent items carry their origin: `· de «slug»` in the injected context and an `origin` field in the JSON result, plus a `federated` list with the state of each source (`ok`, `error`, `off`). A source that fails never breaks the query.
+`recall` (REST and MCP) queries the target brain and every source that lent to it, then merges the lists with weighted Reciprocal Rank Fusion (what the target already knows weighs a bit more than what it is lent). A fact the target already has is not repeated from a source. Lent items carry their origin: `· from «slug»` in the injected context (in the caller's language: `· de «slug»` in Spanish) and an `origin` field in the JSON result, plus a `federated` list with the state of each source (`ok`, `error`, `off`). A source that fails never breaks the query.
 
 Pass `federated: false` to `recall` to get only the brain's own memory. The Query screen shows the origin of each lent item.
 
 ## Managing grants
 
-Administration → Brains → Federation shows who this brain lends to (with scope, expiry, last use and a Revoke button) and who lends to it. The REST API is under `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).
+Administration → Brain access → Federation shows who this brain lends to (with scope, expiry, last use and a Revoke button) and who lends to it. The REST API is under `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).

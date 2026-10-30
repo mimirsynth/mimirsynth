@@ -1,3 +1,5 @@
+[English](../NOTIFICATIONS.md) · **Español**
+
 # Notificaciones
 
 MimirSynth avisa a los administradores cuando algo necesita atención: un modelo que deja de responder, una ingesta que falla tras sus reintentos, una fuente de documentos que no se puede sincronizar, una versión nueva. Los avisos aparecen siempre en la **campana** de la interfaz y, opcionalmente, se envían también por **canales**.

@@ -75,12 +75,12 @@ Hace, por este orden:
 3. **Actualiza**: fija `MIMIRSYNTH_VERSION` en `.env` y recrea solo la aplicación (las migraciones se aplican al arrancar). Adopta el `docker-compose.yml` de la versión solo si el tuyo es el original, sin modificar, de la versión que tenías; si no, conserva el tuyo y te avisa (`--update-compose` lo fuerza, `--keep-compose` no lo toca nunca).
 4. **Comprueba** que responde con la versión nueva y está sana, y muestra la revisión de la base de datos. Si no se verifica, te dice cómo volver atrás.
 
-Para volver atrás: `./update.sh --rollback` restaura la imagen y los ficheros anteriores; añade `--with-db` para restaurar también la base de datos (lo escrito desde la copia se pierde). Un FalkorDB externo no forma parte de la copia: guárdalo tú. Sin el script, a mano es `docker compose pull` y `docker compose --profile bundled up -d`, tras una copia de seguridad.
+Para volver atrás: `./update.sh --rollback` devuelve el `docker-compose.yml` y el `.env` anteriores (y con ellos la imagen anterior), y guarda los fallidos como `*.rolledback`; añade `--with-db` para restaurar también la base de datos (lo escrito desde la copia se pierde). La vuelta atrás no restaura el volumen de documentos ni FalkorDB (están en la copia, para restaurarlos a mano si hace falta), y un FalkorDB externo no forma parte de la copia: guárdalo tú. Sin el script, a mano es `docker compose pull` y `docker compose --profile bundled up -d`, tras una copia de seguridad.
 
 ## Copias de seguridad
 Hay tres cosas que guardar, y deben ser coherentes entre sí:
 - **PostgreSQL** (usuarios, brains, propuestas, índices): `docker compose exec -T postgres pg_dump -U mimirsynth mimirsynth > mimirsynth.sql`
-- **El volumen `docstore`** (originales de los documentos subidos).
+- **El volumen `docstore`** (originales de los documentos subidos, instantáneas de las páginas de wiki y el texto extraído de cada documento).
 - **FalkorDB** (el conocimiento): el volumen `graphdata`, o un volcado con `redis-cli --rdb`.
 Guarda también tu `.env`.
 

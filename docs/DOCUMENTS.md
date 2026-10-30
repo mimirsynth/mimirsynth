@@ -2,94 +2,165 @@
 
 # Document memory (design)
 
-Status: **reference design** of the document memory, mostly implemented (uploads, directories and Outline wikis). The Spanish version has additional notes on decisions taken during design and discarded alternatives.
+Status: **implemented** (uploads, folders and wikis; phases D1 to D5, see «Phases»). This page started as the design of the document memory and still records the decisions taken and the alternatives discarded; where the implementation ended up differing from the first design, the text describes what the code does today and says so.
 
 ## What it is and what it is not
 
-MimirSynth has **episodic and semantic** memory (the temporal graph) and a text index of the episodes. What was missing is memory of **what documents say**: manuals, wiki pages, notes, policies, READMEs. It is the *knowledge* of the CoALA model, queried by retrieval (RAG), not distilled into facts.
+MimirSynth has **episodic and semantic** memory (the temporal graph) and a text index of the episodes. The document memory adds memory of **what documents say**: manuals, wiki pages, notes, policies, READMEs. It is the *knowledge* of the CoALA model, queried by retrieval (RAG), not distilled into facts.
 
 Principles:
 
-1. **The document is the source of truth.** It is indexed and cited; it is not turned into graph facts. This avoids noise, duplicates and the cost of using an LLM on text that is already curated.
+1. **The document is the source of truth.** It is indexed and cited; it is not turned into graph facts. This avoids noise, duplicates and the cost of running an LLM over text that is already curated.
 2. **Always with provenance.** Every returned passage carries source, title, link or path, section and last sync date. No citation, no answer.
 3. **Per brain.** Documents belong to a brain just like facts: same roles, same isolation, same audit log.
 4. **Content is data, not instructions.** A document may contain text that looks like an order to the agent; recall marks it as a quote from a source and never as an instruction.
+5. **Environment-agnostic.** No specific names, addresses or systems in the code: sources are configured.
 
 ## Sources
 
-A source is a connector that can **list** documents (with a stable identifier, a change marker and a hash) and **fetch their content**.
+A source is a connector that can **list** documents (with a stable identifier and a change marker) and **fetch their content**. There are three kinds:
 
-| Type | What it is |
-|---|---|
-| **Wiki through its API** | Any wiki with a read API. The first implementation is Outline; the connector is an adapter with a small interface, so more can be added |
-| **Directory of files** | A folder mounted **read-only** with `.md`, `.txt`, `.rst`, `.html`, `.pdf` and similar, in subfolders. Originals are **referenced**, not copied |
-| **Upload from the UI** | Files dragged into the browser, of any size (chunked upload) |
+| Kind | What it is | Configuration |
+|---|---|---|
+| **Wiki through its API** | Any wiki with a read API. Outline, Confluence and Notion are implemented (see «Wikis»); the connector is an adapter with a small interface, so others can be added without touching the rest | Depends on the adapter (usually a URL and a token, with the secrets encrypted with `secretbox`) plus the collections to index |
+| **Folder of files** | A folder mounted **read-only** with `.md`, `.markdown`, `.txt`, `.rst`, `.log`, `.html`, `.htm` and `.pdf` files, in subfolders. Originals are **referenced where they are**, not copied | An authorised root and a subfolder inside it (see «Folders and job queue») |
+| **Upload from the UI** | Files dragged into the browser, of any size (chunked upload) | None; each brain has one «Uploads» source and the original goes to the file store |
+
+Possible later, without changing the design: a Git repository, crawling a URL, object storage.
+
+## Data model
+
+Control plane (PostgreSQL, Alembic migrations):
+
+- `doc_sources`: `id`, `brain_id`, `kind` (`wiki` | `directory` | `upload`), `name` (unique per brain), `config` (JSON; secrets encrypted), `enabled` (a source can be paused), `sync_interval` (minutes, empty = manual only), `status`, `last_sync_at`, `last_error`, `created_by`.
+- `documents`: `id`, `brain_id`, `source_id`, `external_id` (the relative path in a folder, the page id in a wiki), `title`, `filename`, `url`, `mime`, `size`, `sha256`, `norm_hash` (fingerprint of the extracted text, used to detect duplicates), `storage_ref` (where the original is, see «File store»), `text_ref` (the normalised text the chunks point into), `source_updated_at`, `status` (`pending` | `indexing` | `active` | `duplicate` | `error`), `error`, `chunks`, `meta` (collection, detected secrets, the original of a duplicate…), `first_seen_at`, `last_seen_at`. Unique on `(source_id, external_id)`.
+- Background work goes to the general `jobs` table (see «Folders and job queue»). *The `doc_jobs` table of the first design was never created.*
+
+Index (like `episode_chunks`: pgvector tables created by the index module, with the same embedding dimension):
+
+- `doc_chunks`: `document_id`, `brain_id`, `chunk_idx`, `heading_path` (the path of headings, e.g. «Installation › Requirements»), `char_start` and `char_end` (the chunk's position in the normalised text), `page` (when the source has pages, as a PDF does), `text`, `content_hash`, `embedding`, `tsv` (full text). GIN and HNSW indexes.
+
+**The database does not hold the files.** It keeps the reference to the original, the chunked text and its vectors, and every chunk points by position into the full document. Whoever receives a passage can ask for the surrounding context or the whole file.
 
 ## File store
 
-Originals live on a **stack volume** mounted by the application (`MIMIRSYNTH_DOC_STORE`, `/data/documents` by default), not in PostgreSQL. The database only holds the reference to the original, the chunked text and its vectors.
+Originals live on a **stack volume** mounted by the application (`MIMIRSYNTH_DOC_STORE`, `/data/documents` by default), not in PostgreSQL. That way there is no practical size limit and the database stays small.
 
 ```
 <store>/<brain>/<source>/<document>/
-    <sha256>.<ext>      the original file, immutable
-    <sha256>.txt        the normalised text that char_start/char_end point into
+    <sha256>.<ext>        the original file (uploads) or the page snapshot (wikis), immutable
+    <sha256>.norm.txt     the normalised text that char_start/char_end point into
 ```
 
-- Paths are **generated by the server**, never from a user-supplied name.
-- **Chunked upload:** the browser sends the file in parts (64 MB by default, adjustable) written to disk as a stream.
-- **Directory:** nothing is copied; the reference points into the read-only mounted root, and only the normalised text is written.
-- **Wiki:** a Markdown snapshot of each page is stored, so it can be re-chunked without fetching again and cited even if the wiki is down.
+- **Paths are generated by the server** from ids, never from a user-supplied name: the original name is only kept as metadata.
+- **Chunked upload:** the browser sends the file in parts (at most 64 MB per request, adjustable downwards, because proxies in front of the application often limit the body size) that the server writes to disk as a stream, without loading them into memory. The maximum file size is set under Administration → Limits (default `MIMIRSYNTH_DOC_MAX_MB`, 2048 MB). Uploads left half-way are removed after 24 hours. Uploading a file identical (same `sha256`) to one already in the brain returns the existing document instead of storing it twice.
+- **Folder:** nothing is copied. The original is read from its path inside the read-only mounted root; only the normalised text is written to the store. If the file disappears, the next scan removes the document from the index.
+- **Wiki:** a snapshot of each page (Markdown, or HTML for wikis that deliver HTML) is stored, so it can be re-chunked without fetching it again and cited even if the wiki is down.
 - **Content change:** the new version is written and indexed first; only then is the old one removed, so a document is never left without an original.
-- **Rebuildable:** the index (`doc_chunks`) can be regenerated entirely from the store. **The volume is the source to back up.**
+- **Integrity:** the `sha256` is computed on upload and whenever a folder file changes. *The first design planned a maintenance job to find orphan files and rows whose file is missing; it does not exist yet.* A document whose original has disappeared answers 404 when downloaded.
+- **Rebuildable:** the index (`doc_chunks`) can be regenerated entirely from the store, as the episode index can from the graph. **The volume is the source of truth and goes into backups together with PostgreSQL.**
+- **`docker compose`:** a named volume for the store and a single read-only bind for the folders to index (see «Folders and job queue»).
 
 ## Ingestion pipeline
 
 1. **Discover:** the connector lists the source's documents.
-2. **Compare:** by `source_updated_at` and `content_hash`, decide what is new, changed, equal or gone. Equal documents are not touched.
-3. **Extract:** Markdown, text, HTML, RST and PDF to normalised text keeping the heading structure.
-4. **Chunk:** by headings and paragraphs (~900 characters with overlap), recording the heading path and each chunk's position.
-   - **Duplicates:** if the extracted text (ignoring case and spacing, the same rule recall uses for passages) is already indexed in another document of the brain, the document is marked `duplicate`, points to the oldest one and is neither chunked nor embedded. It is listed in Knowledge with its own status filter and a link to the original. If the original is deleted, leaves its source, its text changes or it cannot be indexed, the oldest duplicate gets indexed in its place. Deduplication is per brain; across brains federation already labels the origin. When two copies are indexed at the same time, or an older one is reindexed, the oldest always wins. **Find duplicates** (brain administrators) checks documents indexed before this existed, from their normalised text and without extracting them again, as a job with progress.
-5. **Embed:** in batches, with the configured embedding engine, respecting its rate limit.
-6. **Replace:** a changed document's chunks are replaced in a single transaction, so a query never sees a half-indexed document.
-7. **Retire:** a document no longer in the source becomes `deleted` and leaves the search; the record is kept for history.
+2. **Compare:** decide what is new, changed, equal or gone. A folder compares size and modification date and only computes the `sha256` of what changed; a wiki compares each page's modification date and title. Equal documents are not touched.
+3. **Extract:** Markdown, text, HTML, RST and PDF to normalised text keeping the heading structure (stored next to the original). PDF needs `pypdf`, the optional `pdf` extra, which the container image includes; a scanned PDF without a text layer is not indexed. A document whose text exceeds the configured maximum (100 MB by default, under Administration → Limits) is not indexed.
+4. **Secrets:** before chunking, the secret detector masks anything shaped like a credential, or leaves the document unindexed if the brain blocks them (see «Security»).
+5. **Chunk:** by headings and paragraphs (~900 characters with a 120-character overlap, like the episodes), recording the heading path and each chunk's position in the text.
+   - **Duplicates:** if the extracted text (ignoring case and spacing, the same rule recall uses to skip repeated passages) is already indexed in another document of the brain, the document is marked `duplicate`, points to the oldest one and is neither chunked nor embedded. It is listed in Knowledge with its own status filter and a link to the original. If the original is deleted, leaves its source, its text changes or it cannot be indexed, the oldest duplicate gets indexed in its place. Deduplication is per brain; across brains, federation already labels the origin. When two copies are indexed at the same time, or an older one is reindexed, the oldest always wins. **Find duplicates** (brain administrators) checks documents indexed before this existed, from their normalised text and without extracting them again, as a job with progress; nothing is deleted at the source.
+6. **Embed:** in batches, with the configured embedding engine, respecting its rate limit.
+7. **Replace:** a changed document's chunks are replaced in a single transaction, so a query never sees a half-indexed document.
+8. **Retire:** a document that is no longer in the source is removed from the index and from the database, together with its stored text; the scan's job records how many were removed. *The first design kept the record as `deleted` for history; the implementation removes it.*
 
-It is idempotent and resumable, runs in the background with visible progress, and changing the embedding model requires an explicit "reindex everything".
+It is idempotent and resumable: if it fails half-way, the next run carries on. It runs in the background with visible progress (see «Folders and job queue»). Changing the embedding model requires an explicit reindex (Administration → Embeddings).
 
 ## Retrieval
 
 - **Own search:** `GET /api/brains/{slug}/docs/search?q=…`, hybrid (full text + vectors, RRF fusion) like episode recall. It returns passages with their citation.
-- **Recall integration, without making it expensive:** the agent context gains a "Documents" section, but only when it adds value.
-  - **Hard budget:** at most 2 passages of ~1,000 characters (about 600 tokens in total), always cited.
-  - **Only if relevant:** below a score threshold nothing is added, so a query unrelated to documents spends no tokens.
+- **Recall integration, without making it expensive:** the agent context gains a «Documents» section, but only when it adds value.
+  - **Hard budget:** at most 2 passages (adjustable under Administration → Recall) of ~1,000 characters (about 600 tokens in total), always cited.
+  - **Only if relevant:** below a similarity threshold (0.66 by default, calibrated for `nomic-embed-text`; it depends on the embedding model) nothing is added, unless the passage comes close and also matches at least two terms of the query. A query unrelated to documents spends no tokens.
   - **No repeats:** a passage whose text matches one already chosen (the same content in two documents, or in a source that lends its documents) is skipped, so the budget goes to different passages.
-  - **No slowdown:** the document search runs in parallel with the facts and episodes search, with its own maximum time; if it overruns, the section is omitted rather than delaying the answer.
-  - **Can be disabled** per request, and the agent can later ask for the full document or the extended context of a passage (`GET /docs/{id}/context?chunk=…`, `GET /docs/{id}/file`).
-- **Promote to memory:** from a passage, a button creates a **quarantined proposal** (the same queue as always) so that, if it deserves to be a fact, it goes through the normal ingestion path.
+  - **No slowdown:** the document search runs in parallel with the facts and episodes search, with its own maximum time (0.6 s by default); if it overruns, the section is omitted rather than delaying the answer.
+  - **Can be disabled** per request (`docs: 0` in `recall`), and the agent can ask later for the full document or the extended context of a passage, only when it needs it (`GET /docs/{id}/context?chunk=…`, `GET /docs/{id}/file`).
+  - Facts, episode fragments and documents are shown separately: they are different kinds of evidence.
+- **Kept apart from the graph** except for two optional bridges, both implemented in phase D5 (see «Bridges with the graph»):
+  - **Entity links:** which graph entities each document mentions (by name match, no LLM), to navigate from an entity to its documents and back.
+  - **Promote to memory:** from a passage, a button creates a **quarantined proposal** (the usual queue) so that, if it deserves to be a fact, it goes through the normal ingestion path.
 
 ## Permissions and audit
 
 | Action | Minimum role |
 |---|---|
-| Search and read documents | reader |
-| Upload files | contributor |
-| Manage sources of type folder; reindex; delete documents | brain administrator |
-| Connect wikis | instance administrator |
+| Search and read documents, download the original, see the jobs | reader |
+| Upload files; promote a passage to memory | contributor |
+| Delete an uploaded document | whoever uploaded it, or a brain administrator |
+| Cancel or retry a job | curator |
+| Add, edit, pause, scan or remove sources; reindex a document; find duplicates | brain administrator |
+| Register folder roots; connect a wiki or change its connection and collections | instance administrator (not with an API token) |
 
-Everything is audited. Removing a source asks for confirmation and deletes its documents and chunks.
+Only uploaded documents can be deleted one by one: a folder or wiki document would come back on the next scan, so it is removed at its origin or by removing the source. Everything is audited (which source, who, how many documents). Removing a source asks for confirmation and deletes its documents and chunks from the index; the files in the folder and the pages in the wiki are untouched.
+
+**Federation** ([FEDERATION.md](FEDERATION.md)) treats documents as a resource granted separately from the graph («graph only», «documents only», «both»).
 
 ## Security
 
-- **Directory:** the instance administrator registers the roots under Administration → Folders, always under the read-only bind `/sources`; a brain administrator only picks a root and a subpath inside it. Never an arbitrary path, and symbolic links outside the root are not followed.
-- **Wiki:** only instance administrators set the URL and token. Private networks are allowed (normal for self-hosting).
-- **Uploads:** size limit, type checked by content and not by extension, HTML reduced to text. The original is only returned to someone with read permission on the brain, with `Content-Disposition: attachment`; nothing is executed or served as a page.
-- **Secrets:** encrypted with the same `secretbox` as the engine keys; never returned by the API.
-- **Credentials inside a document:** before chunking, the secret detector masks anything shaped like a credential in the indexed text, or leaves the document unindexed if the brain blocks them. The original is not modified. See «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Folder:** the instance administrator registers the roots under Administration → Folders, always under the read-only bind `/sources`; a brain administrator only picks a root and a subfolder inside it. Never an arbitrary path, and symbolic links that leave the folder are not followed.
+- **Wiki:** only instance administrators set the URL and the credentials, since the server makes requests to the address it is given. Private networks are allowed (normal for self-hosting). *The switch to forbid them that the first design mentioned does not exist.*
+- **Uploads:** size limit; only the supported extensions are accepted, and a text file whose content turns out to be binary is rejected at extraction; HTML is reduced to text. The original is only returned to someone with read permission on the brain, with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`; nothing is executed or served as a page.
+- **Secrets:** encrypted with the same `secretbox` as the engine keys; never returned by the API (it only says which ones are set).
+- **Credentials inside a document:** before chunking, the secret detector masks anything shaped like a credential in the indexed text, or leaves the document unindexed (in `error`) if the brain blocks them. The original is not modified. See «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Directories and wikis
+## Interface
 
-A folder document cannot be deleted on its own (it would reappear): the source is removed, and the files in the folder are untouched. Automatic rescan with a per-source interval (minimum 5 min) or manual.
+A **Knowledge** tab, built only with the component kit:
 
-A `wiki` source reads a wiki's pages through its API, read-only, and treats them like any other document. Synchronisation is incremental (by modification date and title). If the wiki fails halfway (expired key, outage, rate limit), the scan stops and nothing is deleted. A scheduled scan that returns zero pages while documents exist fails; only a manual one empties the index.
+- Search bar with results (highlighted passage, citation and link).
+- Table of **sources**: kind, status, last scan, number of documents, «Scan», edit, pause, remove.
+- Table of **documents**: title, source, updated, chunks, status (duplicates included, with a link to the original) and the error if any; filters by text, source, status and folder.
+- **Upload** area (drag and drop) with progress per file.
+- Document detail with its chunks and heading path, the full text, the original, the entities it mentions and the relations between them, and «Promote to memory».
+
+## Phases
+
+1. **D1 — Upload and search (done, 2026-10-23).** Schema, upload from the UI, extraction, chunking, embeddings, hybrid search and the minimal tab. The smallest slice that already works end to end, without connectors.
+2. **D2 — Recall (done, 2026-10-23).** The «Documents» section in the agents' context and in the hook.
+3. **D3 — Folder (done, 2026-10-23).** Folder sources with rescans, and the general job queue (see «Folders and job queue»).
+4. **D4 — Wiki (done, 2026-10-23).** The adapter interface (`wikis.py`) and the Outline implementation, with incremental sync by modification date (see «Wikis»). Confluence and Notion came later, in 0.7.0.
+5. **D5 — Bridges with the graph (done, 2026-10-23).** Mentioned entities, documents that mention an entity and «promote to memory» (see «Bridges with the graph»).
+
+## Decisions
+
+Taken on 2026-10-23:
+
+1. **Originals:** on a stack volume, never in PostgreSQL. The database keeps the reference, the chunked text and the vectors.
+2. **Formats of the first version:** Markdown, text, HTML and RST; PDF as an optional extra. *Today PDF is read whenever `pypdf` is installed, as it is in the container image.*
+3. **Documents in recall by default:** yes, with a hard budget, a relevance threshold and a maximum time (see «Retrieval»).
+4. **Synchronisation:** manual for now, with an optional per-source interval later. *The interval now exists: 5 minutes or more, or empty for manual only.*
+5. **Previous versions of chunks:** not kept; only the current document can be queried.
+
+Studied, not implemented:
+
+6. **Importing the content of an earlier memory service** (for example, another memory service for agents). What such a service holds is usually short agent notes, not documents with a file or URL. It would be treated as one more source of kind «notes» (each note a small document), indexed with embeddings only, without going through LLM extraction, and labelled as an archive with its date so that recall can give it less weight than what is current.
+
+## Folders and job queue
+
+**General queue (`jobs`).** Everything the application does in the background is recorded in a `jobs` table (kind, status, progress, log, result, attempts, who started it) and runs in a pool bounded per kind. Current kinds: `proposal.ingest`, `doc.index`, `doc.scan`, `doc.dedupe`, `retype.scan`, `conflicts.scan`, `refquery.run`, `embedding.reindex` and `embedding.switch`. Statuses: queued, running, done, failed, cancelled. The **Jobs** screen (reader or above) lists, filters and shows the detail; curator or above can cancel and retry. On start, whatever was half-way is marked as interrupted and the idempotent kinds (`doc.index`, `doc.scan`, `embedding.reindex`) are relaunched by themselves. Finished jobs are kept 60 days, and scheduled rescans that ended without incident 7 days (both adjustable under Administration → Ingestion and jobs). Handlers are registered with `@jobs.register(kind, label, limit, resume)` and receive a `JobCtx` (`progress`, `note`, `retrying`, `check` for cancellation). Left out for now: the periodic sync of the episode index (every 10 min, not a user action) and the decider's triage (instant).
+
+**Folder source.** The compose file mounts a single read-only bind (`MIMIRSYNTH_SOURCES_DIR` on the host → `/sources`, with `rslave` propagation: whatever is mounted underneath on the host appears without a restart). The instance administrator registers the roots under Administration → Folders (table `doc_roots`); only paths under `/sources` are valid. Nothing is ever written to them. A source is a root plus a subfolder (which cannot leave the root). Originals **are not copied**: the database keeps the relative path (`external_id`) and the store only the normalised text. Hidden files and folders, symbolic links that leave the folder, empty files and anything that is not a supported format or exceeds the maximum size are ignored. A rescan compares size and date, only computes the `sha256` of what changed, indexes what is new or modified and removes what disappeared.
+
+Protection: if the folder is not available, the scan fails without deleting anything; if it appears empty while the source had documents, a scheduled scan fails too (it could be an unmounted volume) and only a manual one, which is an explicit order, empties the index. A folder document cannot be deleted on its own (it would come back): the source is removed, and the files in the folder are untouched. Automatic rescan with a per-source interval (minimum 5 min) or manual.
+
+## Wikis
+
+A `wiki` source reads a wiki's pages through its API, read-only, and treats them like any other document (chunking, index, recall, job queue). The implementations are Outline (`wikis.Outline`, measured against a live instance), Confluence (Cloud and Data Center) and Notion (`wikis.Confluence`, `wikis.Notion`). The last two are written against each API's documented format and covered by tests with simulated responses, **not yet validated against a live instance**: if you use one, check the first scan and report any problem. Docmost has no documented public API to build on yet and is left unwritten.
+
+- **Connection:** the fields each adapter declares (for Outline, the instance URL and an API key). Secrets are stored encrypted (`secretbox`) and never returned by the API. For Outline, a key limited to `documents.list` and `collections.list` is recommended. The collections to index are chosen after the connection is checked, and can be changed later under Knowledge → Sources → Edit with the stored credentials; leaving a secret field blank keeps the stored one.
+- **Only the instance administrator** connects or changes a wiki (never with an API token): the server makes requests to the URL it is given.
+- **Incremental sync:** each page's modification date and title are compared; only what changed is fetched, hashed and reindexed. Deleted, archived or unpublished pages are removed. The «original» is a snapshot of the page (with its title as a heading) kept in the store; the document keeps the page's URL so it can be opened in the wiki. An empty page is not indexed.
+- **Protection:** if the wiki fails half-way (expired key, outage, rate limit), the exception stops the scan and nothing is deleted. If it returns zero pages while the source has documents, a scheduled scan fails; only a manual one empties the index. Retries on rate limits (429) honour `Retry-After`.
+- **Measured against a live Outline instance** (at design time): 170 pages, 527,000 characters (~1,200 chunks), listed in 1.4 s.
 
 ### How to add another wiki
 
@@ -104,12 +175,21 @@ class Confluence(Adapter):
     def documents(self, ids): ...         # yield WikiDoc(id, title, content, updated_at, url, collection, format="markdown"|"html")
 ```
 
-Contract rules: read-only; stateless; `updated_at` is the page's last modification date (it decides whether to reindex); `format` is `markdown` or `html`; a connection or permission error is raised as `WikiError` with a readable message, and cutting the list halfway never deletes anything. Everything else (encryption of `secret` fields, collection selection, incremental sync, snapshot of the original, progress in Jobs, protection against emptying) is common.
+A `WikiDoc.content` may be a function instead of a string: the scan calls it only for pages that are new or changed, so adapters whose content costs one request per page (Notion) do not download everything on every scan.
+
+Contract rules: read-only; stateless; `updated_at` is the page's last modification date (it decides whether to reindex); `format` is `markdown` or `html` (the extractor reads both, so Confluence can return its HTML as is); a connection or permission error is raised as `WikiError` with a readable message, and cutting the list half-way never deletes anything. Everything else (encryption of `secret` fields, collection selection, incremental sync, snapshot of the original, progress in Jobs, protection against emptying) is common. The configuration is stored as `{adapter, settings, secrets (encrypted), collection_ids}`.
 
 **Adapter status**
-- **Outline:** done and tested against a real instance.
-- **Obsidian:** needs no adapter. A vault is a folder of Markdown: use it as a directory source. The extractor understands its conventions (frontmatter, `[[links]]`, `![[embeds]]`, comments).
-- **Confluence** (Cloud and Data Center) and **Notion:** written against each API's documented format and covered by tests with simulated responses, **not yet validated against a live instance**: if you use one, check the first scan and report problems. Confluence uses the REST v1 API (`/rest/api`): Cloud takes email + API token, Data Center a personal access token with no email; collections are spaces and pages come as storage-format HTML. Notion has no spaces, so the collections are the databases shared with the integration plus «Loose pages»; each page's blocks are converted to Markdown, and page content is only fetched when its modification date changed.
-- **Docmost:** not written. It has no documented public API to build on yet; it will be added when one is stable or a test instance is available.
+- **Outline:** done and tested against a live instance.
+- **Obsidian:** needs no adapter. A vault is a folder of Markdown: use it as a folder source. The extractor understands its conventions: it strips the YAML frontmatter (using its `title:`), keeps the text of `[[links]]` and `[[target|alias]]`, and drops `![[embeds]]`, `%%comments%%` and `^block` marks, also with Windows line endings. `.obsidian/` is ignored because it is hidden.
+- **Confluence (Cloud and Data Center) and Notion:** written against each API's documented format and covered by tests with simulated responses; **not yet validated against a live instance**. Confluence uses the REST v1 API (`/rest/api`): Cloud with email + API token, Data Center with a personal access token and no email; collections are spaces and pages come as HTML (`body.storage`). Notion has no spaces: the collections are the databases shared with the integration plus «Loose pages»; each page's blocks are converted to Markdown and its content is only fetched when the modification date changed.
+- **Docmost:** not written; its public API is not documented in a stable way. It will be added when it is, or when a test instance is available.
 
-A `WikiDoc.content` may be a function instead of a string: the scan calls it only for pages that are new or changed, so adapters whose content costs one request per page (Notion) do not re-download everything on every scan.
+## Bridges with the graph
+
+The document is still the source of truth; linking is pointing, and nothing is written to the graph.
+
+- **Mentioned entities** (`GET /docs/{id}/entities`): the names and aliases of the graph's live entities are looked for in the document's text (whole word, case-insensitive; merged entities do not count, and their old name works as an alias of the surviving one). No LLM and no new tables: the entity list is cached for a minute and the matches are computed when the document is opened, so they are always up to date. Names shorter than 4 characters (except 3-letter uppercase acronyms) and numeric names are ignored. In Knowledge, each entity in the detail leads to the Graph centred on it (`/grafo?nodo=<uuid>`).
+- **Relations between them** (same route): the graph already knows how the mentioned entities relate. With a single query (`MATCH (a)-[r:RELATES_TO]->(b)` between the detected entities, no LLM or embeddings) the viewer shows «A —relation→ B» with the fact and the date it holds from. Only current facts by default; `expired=true` adds the ones that are no longer true (`expired_count` says how many there are) and `relations=N` limits how many are returned (`total` counts those that match the filter). The brain's relation aliases are applied to the name. Only the brain's own graph: what other brains lend (see [FEDERATION.md](FEDERATION.md)) does not come in here. If the graph fails, the viewer still shows the entities.
+- **Documents that mention an entity** (`GET /docs/mentions?entity=<uuid>`): a phrase search in the full-text index with the name and aliases; it returns the document, how many passages match and the best highlighted snippet. It appears in an entity's panel on the Graph screen, with a link to the document (`/conocimiento?doc=<id>`).
+- **Promote to memory** (`POST /docs/{id}/promote`): turns a passage (as is, or edited by whoever promotes it) into a proposal with its provenance («Source: title, section, URL»), confidence 0.7 and, as reference date, the page's or file's date. It goes through the normal flow: a contributor leaves it in quarantine, a curator approves it and facts are extracted with Graphiti. The same passage cannot be promoted twice (409 with the existing proposal).

@@ -8,8 +8,10 @@
 |---|---|
 | [INSTALL.md](INSTALL.md) | Install, upgrade and back up |
 | [CONFIGURATION.md](CONFIGURATION.md) | Environment variables and everything configured from the interface |
-| [AGENTS.md](AGENTS.md) | Connect agents: tokens, recall, proposals and documents |
+| [AGENTS.md](AGENTS.md) | Connect agents: tokens, recall, proposals, MCP and documents |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it fits together: brains, roles, quarantine and recall |
-| [DOCUMENTS.md](DOCUMENTS.md) | Document memory design |
+| [DOCUMENTS.md](DOCUMENTS.md) | Document memory: sources, ingestion, recall and wikis |
 | [FEDERATION.md](FEDERATION.md) | Lending read access between brains |
 | [NOTIFICATIONS.md](NOTIFICATIONS.md) | Alerts: the bell and Telegram, ntfy, Gotify, webhook and email channels |
+| [ONTOLOGY.md](ONTOLOGY.md) | Ontology packages, single-valued relations and the type corrector |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Accessibility: what the interface guarantees and how it is checked |

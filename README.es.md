@@ -9,16 +9,30 @@ Memoria para agentes de IA basada en el marco cognitivo CoALA, construida sobre 
 Estado: **en desarrollo activo** (0.x). Funciona de extremo a extremo, pero la API y el esquema pueden cambiar entre versiones.
 
 ## Qué ofrece
-- **Memoria temporal:** hechos con fechas de validez, historial y línea temporal; nada se sobrescribe.
-- **Brains:** dominios de conocimiento aislados, cada uno con su grafo, su ontología, sus miembros y sus tokens.
-- **Cuarentena de propuestas:** lo que escriben los agentes lo revisa un curador (o un decisor automático) antes de entrar al grafo.
-- **Recall híbrido** (hechos, texto de episodios y documentos) pensado para inyectarse en el prompt de un agente.
-- **Memoria documental:** subida de ficheros, carpetas y wikis (Outline) como fuentes, con búsqueda semántica.
-- **Usuarios:** cuentas propias con doble factor, invitaciones y recuperación por correo; OIDC opcional; roles por brain; auditoría.
-- **Interfaz web** para explorar el grafo, curar el vocabulario, revisar propuestas y administrar la instancia.
-- **Integración con Claude Code:** hook de recall y escritura como propuesta ([`integrations/claude-code`](integrations/claude-code/README.es.md)).
+**Una memoria que conserva su historia**
+- **Hechos temporales:** cada hecho tiene fechas de validez; cuando deja de ser cierto se invalida, nunca se sobrescribe, así que puedes preguntar qué se sabía en cualquier momento.
+- **Brains:** dominios de conocimiento aislados, cada uno con su grafo, su ontología, sus miembros y sus tokens. Un brain puede **prestar acceso de lectura** a otro (federación), con caducidad y revocable en cualquier momento.
+- **Paquetes de ontología** (general, infraestructura, proyectos de equipo, personal y familia, conocimiento de software), versionados y actualizables sin perder tus propios cambios.
 
-**Guía de usuario completa en la [wiki](https://github.com/MimirSynth/mimirsynth/wiki/Inicio).** Resumen técnico: [instalación](docs/es/INSTALL.md), [configuración](docs/es/CONFIGURATION.md), [conectar agentes](docs/es/AGENTS.md), [arquitectura](docs/es/ARCHITECTURE.md) y [memoria documental](docs/es/DOCUMENTS.md).
+**Lo que entra se revisa**
+- **Cuarentena de propuestas:** lo que escriben los agentes espera a un curador o a un decisor automático que lo juzga según el ámbito del brain.
+- **Detector de secretos:** las credenciales en propuestas y documentos se tapan, se bloquean o se señalan, según elija cada brain.
+- **Herramientas de mantenimiento:** corrector de tipos, fusión de duplicados, alias de relaciones y **contradicciones** entre hechos vigentes en relaciones de un solo valor.
+
+**Recall para agentes**
+- **Recall híbrido** de hechos, texto de episodios y pasajes de documentos, listo para inyectarse en el prompt de un agente y en el idioma de quien pregunta.
+- **Servidor MCP propio** (`recall` y `remember`), API REST e [integración con Claude Code](integrations/claude-code/README.es.md).
+- **Consultas de referencia** por brain para medir la calidad del recall y detectar empeoramientos, por ejemplo al cambiar el modelo de embeddings, algo que se hace desde la interfaz.
+
+**Documentos**
+- Sube ficheros o conecta carpetas y wikis (Outline, Confluence, Notion) como fuentes; los duplicados se detectan y se indexan una sola vez.
+
+**Interfaz web y administración**
+- Explora el grafo (2D, radial, árbol y 3D, con halos que muestran de dónde vino cada conocimiento), haz preguntas, revisa propuestas y cura el vocabulario. En **castellano e inglés**.
+- Cuentas propias con doble factor y **llaves de acceso** (passkeys), varios proveedores OIDC con roles por grupo, roles por brain y registro de auditoría.
+- **Notificaciones** en la aplicación y por Telegram, ntfy, Gotify, webhook o correo; `update.sh` para hacer copia, actualizar y volver atrás en un paso.
+
+**Guía de usuario completa en la [wiki](https://github.com/MimirSynth/mimirsynth/wiki/Inicio)**, en castellano y en inglés. Documentación técnica: [instalación](docs/es/INSTALL.md), [configuración](docs/es/CONFIGURATION.md), [conectar agentes](docs/es/AGENTS.md), [arquitectura](docs/es/ARCHITECTURE.md), [ontología](docs/es/ONTOLOGY.md), [memoria documental](docs/es/DOCUMENTS.md), [federación](docs/es/FEDERATION.md) y [notificaciones](docs/es/NOTIFICATIONS.md).
 
 ## Inicio rápido
 Necesitas Docker con Compose v2 y un endpoint compatible con OpenAI para embeddings (p. ej. Ollama con `nomic-embed-text`) y otro para el LLM de extracción ([qué modelo](docs/es/CONFIGURATION.md#elegir-el-modelo-de-extracción)). Sin esos dos endpoints la instancia arranca, pero no hay nada útil que ver.
@@ -51,7 +65,7 @@ El agente ya puede leer la memoria (`recall`) y proponer hechos nuevos (`remembe
 En producción, apunta un monitor externo a `/api/health`: los avisos de la propia instancia no pueden informar de la caída de PostgreSQL ([vigilancia](docs/es/INSTALL.md#vigilar-la-instancia)).
 
 ## Configuración
-El entorno solo lleva lo necesario para arrancar y conectar (tabla de abajo). Todo lo demás —límites de documentos, recall, retención de trabajos, proveedores de IA, carpetas— se cambia en **Administración → Ajustes** (y las demás pestañas) y se aplica sin reiniciar; si una de esas variables existe, solo hace de valor por defecto.
+El entorno solo lleva lo necesario para arrancar y conectar (tabla de abajo). Todo lo demás —límites de documentos, recall, retención de trabajos, proveedores de IA, carpetas— se cambia en **Administración** y se aplica sin reiniciar; si una de esas variables existe, solo hace de valor por defecto.
 
 ### Variables de entorno
 | Variable | Por defecto | Descripción |
@@ -70,4 +84,4 @@ Mímir es el guardián del pozo del conocimiento (Mímisbrunnr) en la mitología
 Apache-2.0. Ver [LICENSE](LICENSE) y [NOTICE](NOTICE). Las dependencias tienen sus propias licencias; FalkorDB, por ejemplo, es *source-available* (SSPL): ver [docs/ARCHITECTURE.md](docs/es/ARCHITECTURE.md#dependencias-y-licencias).
 
 ## Contribuir
-Lee [CONTRIBUTING.md](docs/es/CONTRIBUTING.md). Para vulnerabilidades, [SECURITY.md](docs/es/SECURITY.md).
+Lee [CONTRIBUTING.md](docs/es/CONTRIBUTING.md). El proyecto trabaja en inglés, pero puedes abrir *issues* y *discussions* en castellano: alguien del equipo añadirá el título en inglés. Para vulnerabilidades, [SECURITY.md](docs/es/SECURITY.md).

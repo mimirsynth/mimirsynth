@@ -1,3 +1,5 @@
+**English** · [Español](es/NOTIFICATIONS.md)
+
 # Notifications
 
 MimirSynth tells administrators when something needs attention: a model that stops responding, an ingestion that fails after its retries, a document source that cannot be synced, a new version. Alerts always appear in the **bell** of the interface; optionally they are also sent through **channels**.
