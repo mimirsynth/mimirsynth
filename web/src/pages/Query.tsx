@@ -2,9 +2,8 @@ import { useTranslation } from "react-i18next";
 import { T } from "../i18n";
 import { langHeaders } from "../api";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, ClearFilters, ColHead, DataTable, FillArea, Notice, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, NODE_PALETTE, CANVAS } from "../ui";
-import { useEffect, useRef, useState } from "react";
-import "@falkordb/canvas";
+import { Btn, ClearFilters, ColHead, DataTable, FillArea, GraphCanvas, Notice, readEffects, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, NODE_PALETTE, CANVAS, type CanvasLink, type CanvasNode } from "../ui";
+import { useMemo, useState } from "react";
 
 type QNode = { id: string; labels: string[]; properties: Record<string, any> };
 type QEdge = { id: string; relation: string; source: string; target: string; properties: Record<string, any> };
@@ -42,8 +41,8 @@ export default function Query({ graph }: { graph: string }) {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<string>("tabla");
   const [hist, setHist] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("q-hist") || "[]"); } catch { return []; } });
-  const cv = useRef<any>(null);
-  const box = useRef<HTMLDivElement>(null);
+  const [sel, setSel] = useState<string | null>(null);
+  const [effects] = useState(readEffects);  // el que se eligió en Grafo para este dispositivo
 
   const run = async () => {
     setBusy(true); setErr("");
@@ -51,22 +50,23 @@ export default function Query({ graph }: { graph: string }) {
       const r = await fetch(`/api/brains/${graph}/query`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json", ...langHeaders() }, body: JSON.stringify({ query: q }) });
       const j = await r.json();
       if (!r.ok) throw new Error(j.detail ?? r.statusText);
-      setRes(j); setTab(j.nodes.length ? "grafo" : "tabla");
+      setRes(j); setSel(null); setTab(j.nodes.length ? "grafo" : "tabla");
       const h = [q, ...hist.filter((x) => x !== q)].slice(0, 12); setHist(h); try { localStorage.setItem("q-hist", JSON.stringify(h)); } catch { /* sin storage */ }
     } catch (e: any) { setErr(String(e.message ?? e)); setRes(null); } finally { setBusy(false); }
   };
 
-  useEffect(() => {
-    if (tab !== "grafo" || !res || !cv.current) return;
+  // resultado -> lienzo del grafo (el mismo de la pantalla Grafo, en 2D y con disposición de fuerza)
+  const graphData = useMemo(() => {
+    if (!res) return { nodes: [] as CanvasNode[], links: [] as CanvasLink[] };
     const colors = new Map<string, string>(); const col = (l: string) => { if (!colors.has(l)) colors.set(l, PALETTE[colors.size % PALETTE.length]); return colors.get(l)!; };
     const lab = (n: QNode) => n.labels.filter((l) => l !== "Entity")[0] ?? n.labels[0] ?? t("Nodo");
-    cv.current.setData({
-      nodes: res.nodes.map((n) => ({ id: n.id, labels: n.labels, color: col(lab(n)), visible: true, size: 8, caption: "name", data: { name: n.properties.name ?? n.properties.fact ?? n.id, ...n.properties } })),
-      links: res.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, relationship: e.relation, color: e.properties.invalid_at ? CANVAS.linkInvalid : CANVAS.link, visible: true, data: e.properties })),
-    });
-    cv.current.setConfig({ backgroundColor: CANVAS.background, foregroundColor: CANVAS.foreground, captionsKeys: ["name"], nodeStyle: { fontFamily: "sans-serif" }, linkStyle: { fontFamily: "sans-serif" } });
-    const el = box.current; if (el) { const r = el.getBoundingClientRect(); cv.current.setWidth(Math.floor(r.width)); cv.current.setHeight(Math.floor(r.height)); }
-  }, [tab, res]);
+    const name = (n: QNode) => String(n.properties.name ?? n.properties.fact ?? n.id);
+    return {
+      nodes: res.nodes.map((n) => ({ id: n.id, color: col(lab(n)), size: 8, caption: name(n), visible: true, tooltip: `${name(n)}
+${lab(n)}` })),
+      links: res.edges.map((e) => ({ id: e.id, source: e.source, target: e.target, label: e.relation, color: e.properties.invalid_at ? CANVAS.linkInvalid : CANVAS.link, dashed: !!e.properties.invalid_at, visible: true })),
+    };
+  }, [res]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Page>
@@ -91,8 +91,8 @@ export default function Query({ graph }: { graph: string }) {
             <ResultTable key={res.ms + res.total} columns={res.columns} rows={res.rows} />
           </Tabs.Panel>
           <Tabs.Panel value="grafo" className="ms-tabpanel-fill" pt="xs">
-            <div ref={box} className="ms-canvas ms-canvas-fill">
-              <falkordb-canvas ref={cv} />
+            <div className="ms-canvas ms-canvas-fill">
+              <GraphCanvas nodes={graphData.nodes} links={graphData.links} effects={effects} selectedNode={sel} onNodeClick={setSel} onBackgroundClick={() => setSel(null)} />
             </div>
           </Tabs.Panel>
         </Tabs>

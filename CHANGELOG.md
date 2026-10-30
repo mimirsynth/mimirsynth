@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Changed
+- **Query screen: graph drawn on our own canvas** (#95, phase 6). The graph tab of the Query screen uses the same canvas as the Graph screen, with hover tooltip, focus on click and dashed invalidated facts, and follows the **Graphic effects** chosen on the Graph screen for this device. `@falkordb/canvas` and its dependencies are gone, so the main bundle is about 165 kB smaller (1,313 → 1,147 kB before compression).
 
 ## [0.8.0] - 2026-10-30
 ### Added
