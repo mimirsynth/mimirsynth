@@ -119,9 +119,11 @@ def docs_block(passages: list[dict], lang: str = "es") -> str:
     return "\n".join(parts) if len(parts) > 1 else ""
 
 
-def search_documents(brain_id: int, qvec: list[float], query: str, n: int, sources: list[Source] | None = None) -> tuple[list[dict], str]:
+def search_documents(brain_id: int, qvec: list[float], query: str, n: int, sources: list[Source] | None = None,
+                     min_sim: float | None = None) -> tuple[list[dict], str]:
     """Búsqueda documental (se ejecuta en un hilo; el tiempo máximo lo controla `recall`). Estado: ok | error | off.
-    Con `sources`, añade los documentos de los brains que prestan los suyos, fusionados con RRF y marcados con su origen."""
+    Con `sources`, añade los documentos de los brains que prestan los suyos, fusionados con RRF y marcados con su origen. `min_sim`
+    sustituye a la similitud mínima de la instancia (para simular otro umbral sin cambiar el ajuste)."""
     from . import docindex
     if n <= 0 or not index.enabled():
         return [], "off"
@@ -137,7 +139,7 @@ def search_documents(brain_id: int, qvec: list[float], query: str, n: int, sourc
                 log.warning("federación: documentos de %s no disponibles: %s", src.slug, e)
         if len(lists) > 1:
             hits = fuse(lists, lambda h: (h.get("origin"), h["id"]), weights)
-        return pick_passages(hits, query, n, appsettings.get("doc_min_similarity")), "ok"
+        return pick_passages(hits, query, n, appsettings.get("doc_min_similarity") if min_sim is None else min_sim), "ok"
     except Exception:  # noqa: BLE001
         return [], "error"
 
@@ -192,14 +194,15 @@ def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n
 
 
 def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunks: int = 4, max_chars: int = 6000,
-           embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es") -> dict:
+           embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
+           min_sim: float | None = None) -> dict:
     t0 = time.time()
     qvec = (embedder or get_embedder()).embed([query])[0]
     t1 = time.time()
     n_docs = appsettings.get("doc_passages") if n_docs is None else n_docs
     t_docs = time.time()
     sources = sources or []
-    docs_fut = _pool.submit(search_documents, brain_id, qvec, query, n_docs, sources) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
+    docs_fut = _pool.submit(search_documents, brain_id, qvec, query, n_docs, sources, min_sim) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
     from .store import _factory
     with _factory()() as db:
         amap = alias_map(db, brain_id)

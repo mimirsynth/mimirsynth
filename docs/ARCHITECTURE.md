@@ -84,6 +84,16 @@ A query combines, without calling an LLM:
 3. **Document passages**, with a budget and a maximum time.
 4. Reciprocal rank fusion (RRF) with a recency weight, and a block with the evolution of the facts of the queried entities.
 
+### Reference queries
+
+Each brain can keep **reference queries** (Ask → Reference queries; curators and above): a question with the texts its recall **must** bring and the ones it **must not** (known false positives), and whether the documents section should appear. A text counts as found if it appears, ignoring case and spacing, in any result; prefixed with `fact:`, `chunk:` or `doc:` it must be in that type of result.
+
+- **Run** measures them with the current settings: expected items found, false positives and queries with the documents section the wrong way round (also by type), median latency and the difference with the previous run on the current settings. The difference only counts what is in both runs (the same queries and the same texts), so adding, deleting or editing a query does not make it worse; it gets worse if an expected item that appeared no longer does, a new false positive appears or the documents section turns the wrong way round. It runs as a job, with progress, and the last 20 runs of each brain are kept.
+- **Simulate** repeats the measurement with other passage similarity thresholds (for instance `0.68 0.70 0.72`) **without changing the setting**.
+- They are created by hand, **imported and exported** as JSON, or saved from Ask by marking each result as «Expected» or «Extra».
+- **During an embedding model change** they run on their own twice in every brain that has them: when the fill starts, with the previous model, as the baseline, and when the change finishes. If they get worse, the `refquery.regressed` event is raised; if there is no baseline to compare with, the same event says so (as information) instead of staying silent.
+- A query's texts go through the brain's secret detector: saving a graph fact (which did not go through it when ingested) as an expected text does not copy a credential.
+
 ## Vocabulary
 
 The ontology is defined per brain (standard packages in `api/mimirsynth/presets/`, see [ONTOLOGY.md](ONTOLOGY.md)). The interface lets you normalise aliases, merge duplicates, retype entities and edit relation types; every change is reversible and audited.

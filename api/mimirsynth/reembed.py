@@ -456,6 +456,12 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
     m = marker()
     if (m and m.get("engine_id") != eid) or (prev is not None and (prev.params or {}).get("engine_id") != eid):
         discard()  # sombras de un intento hacia otro motor
+    try:  # la base de las consultas de referencia, medida aún con el modelo anterior (#115); al reanudar se repite, sin daño
+        from .refqueries import run_before_switch
+        if run_before_switch():
+            ctx.note("lanzadas las consultas de referencia con el modelo anterior, para compararlas tras el cambio")
+    except Exception as ex:  # noqa: BLE001  (medir es un extra: no frena el cambio)
+        ctx.note(f"no se pudieron lanzar las consultas de referencia: {str(ex)[:150]}")
     ctx.progress(0, 0, "estimando el trabajo")
     est = estimate(e)  # aquí, en el trabajo, y no en la petición que lo lanza
     check_space(est)
@@ -682,4 +688,11 @@ def _switch_job(ctx: "jobs.JobCtx", p: dict) -> dict:
     from .deps import audit
     with _factory()() as db:
         audit(db, None, "embedding.switched", None, name=name, model=model, dim=dim, previous=before["model"], pause_seconds=round(paused, 1))
+    try:  # medir con las consultas de referencia de cada brain y avisar si empeora (#115)
+        from .refqueries import run_after_switch
+        runs = run_after_switch()
+        if runs:
+            ctx.note(f"lanzadas {len(runs)} ejecuciones de consultas de referencia para comparar con el modelo anterior")
+    except Exception as ex:  # noqa: BLE001  (el cambio ya está hecho: medir es un extra)
+        ctx.note(f"no se pudieron lanzar las consultas de referencia: {str(ex)[:150]}")
     return {"engine": name, "model": model, "dim": dim, "previous": before, "graphs": len(graphs), "pause_seconds": round(paused, 1), "switched": True}

@@ -26,6 +26,7 @@ EVENTS = {
     "update.available": ("info", "Hay una versión nueva de MimirSynth"),
     "security.lockout": ("warning", "Una cuenta se ha bloqueado por intentos fallidos"),
     "reindex.orphan": ("warning", "Un cambio de modelo de embeddings lleva tiempo sin terminar y sus vectores sombra ocupan memoria"),
+    "refquery.regressed": ("warning", "Las consultas de referencia de un brain empeoran tras un cambio de modelo de embeddings"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
