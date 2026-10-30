@@ -222,6 +222,12 @@ def revert_op(oid: int, ctx: BrainCtx = Depends(curator_of_brain)):
 class RelIn(BaseModel):
     name: str
     description: str = Field(min_length=3, max_length=1500)
+    functional: bool = False
+
+
+class RelEditIn(BaseModel):
+    description: str = Field(min_length=3, max_length=1500)
+    functional: bool | None = None
 
 
 class MapIn(BaseModel):
@@ -252,21 +258,25 @@ def create_relation(body: RelIn, ctx: BrainCtx = Depends(admin_of_brain)):
     if any(t["name"] == body.name for t in onto["edge_types"]):
         raise HTTPException(409, "ese tipo de relación ya existe en la ontología")
     before = copy.deepcopy(onto)
-    onto["edge_types"].append({"name": body.name, "description": body.description})
+    onto["edge_types"].append({"name": body.name, "description": body.description, **({"functional": True} if body.functional else {})})
     _save(ctx, _validated(ctx, onto))
     return _done(_record(ctx, "relation.create", f"Añadido el tipo de relación {body.name}", onto_before=before))
 
 
 @router.put("/relations/{name}")
-def edit_relation(name: str, body: DescIn, ctx: BrainCtx = Depends(admin_of_brain)):
+def edit_relation(name: str, body: RelEditIn, ctx: BrainCtx = Depends(admin_of_brain)):
     onto = _onto(ctx)
     t = next((t for t in onto["edge_types"] if t["name"] == name), None)
     if not t:
         raise HTTPException(404, "el tipo de relación no está en la ontología")
     before = copy.deepcopy(onto)
     t["description"] = body.description
+    if body.functional is not None:
+        t.pop("functional", None)
+        if body.functional:
+            t["functional"] = True
     _save(ctx, onto)
-    return _done(_record(ctx, "relation.edit", f"Editada la descripción de la relación {name}", onto_before=before))
+    return _done(_record(ctx, "relation.edit", f"Editada la relación {name}", onto_before=before))
 
 
 @router.delete("/relations/{name}")
