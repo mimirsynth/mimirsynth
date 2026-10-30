@@ -48,7 +48,7 @@ export async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path:
   return check(await fetch(url(path, params), { method, credentials: "include", headers: { "Content-Type": "application/json", ...langHeaders() }, body: body === undefined ? undefined : JSON.stringify(body) }));
 }
 
-export type Brain = { slug: string; name: string; description: string; graph_name: string; role: string };
+export type Brain = { slug: string; name: string; description: string; graph_name: string; role: string; secret_mode?: string; secret_allow?: string };
 export type Me = { id: number; name: string; email: string | null; is_admin: boolean; auth_mode: string; avatar?: string; account_url?: string; has_password?: boolean; must_change_password?: boolean; totp_enabled?: boolean; must_setup_2fa?: boolean; locale?: string };
 
 export const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) : "—");

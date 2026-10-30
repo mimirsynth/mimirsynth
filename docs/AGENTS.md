@@ -33,6 +33,8 @@ curl -s -X POST "$URL/api/brains/my-brain/proposals" \
 ```
 A contributor ends up `pending`; a curator, `approved` and ingested right away. A curator can approve or reject from the Proposals tab. When approved, Graphiti extracts entities and facts and adds them to the graph (invalidating those it contradicts).
 
+Do not store passwords or tokens: store **where** they are kept (for example, which password manager). Anything shaped like a credential is masked before it is stored or, if the brain blocks them, the proposal is rejected with a 422 saying which type of secret it is (see «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md)). Over MCP, `remember` does the same.
+
 ## MCP server
 Agents that speak the **Model Context Protocol** can use the same memory without writing HTTP calls. Each brain exposes an MCP endpoint (Streamable HTTP, stateless, tools only) at:
 

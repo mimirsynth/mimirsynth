@@ -56,6 +56,25 @@ What a contributor or an agent adds does not go straight into the graph. It crea
 2. Anything doubtful waits for a **curator**, who approves or rejects. If a curator proposes, it is approved.
 3. Once approved, it is **ingested** with Graphiti (extraction of entities and facts with the brain's LLM) through a queued job, with retries and progress.
 
+### Secrets
+
+Before a proposal is stored (from the interface, the API or `remember` over MCP) or a document is indexed, a **secret detector** looks for credentials in the text:
+
+- **Certain:** unmistakable formats (AWS access keys, GitHub, GitLab, Slack, npm or Hugging Face tokens, Google, Stripe, SendGrid or AI provider API keys, Telegram bot tokens, PEM private keys, JWTs, `Authorization` headers and passwords inside a URL).
+- **Possible:** a random-looking value assigned to a word such as `password`, `secret` or `token`. These are only flagged: entropy alone would mistake checksums, UUIDs and container IDs, which are normal content in technical documentation.
+
+Each brain chooses what to do under Administration → Brain access → Secrets:
+
+| Mode | Certain secrets | Possible secrets |
+|---|---|---|
+| **Mask** (default) | Replaced with `[secret removed: type]` before storing | Flagged |
+| **Block** | The proposal is rejected (422) saying which type it is; the document is not indexed and leaves the index | Flagged |
+| **Only warn** | Flagged, left untouched | Flagged |
+
+The decider does not approve a proposal with something flagged: it waits for a curator, who sees the notice in its detail. The marker is written in the instance language, because it stays in memory. The brain's **exceptions** (one per line) turn a rule off (`rule:jwt`) or accept values matching a regular expression. **Scan what is already stored** runs the detector read-only over the brain's proposals and indexed documents and shows, for each hit, the rule and the text before it, never the value: use it to measure hits and false positives before changing the policy. What is already in the graph is not scanned, and changing the policy does not reprocess what is already stored: to apply it to a document, reindex it.
+
+Neither the audit log, the logs nor the API store or return the detected value: only the rule and its position. In documents the indexed text is masked (chunks, vectors and normalised text); **the downloadable original is not modified**. The detector (`api/mimirsynth/secretscan.py`) does not depend on the rest of the package, so a client can take it along and redact before sending.
+
 ## Reading: hybrid recall
 
 A query combines, without calling an LLM:

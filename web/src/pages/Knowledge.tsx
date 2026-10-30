@@ -5,11 +5,12 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { useEffect, useRef, useState } from "react";
 import { fmt, get, langHeaders, send } from "../api";
 import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, PasswordField, Pill, ProgressBar, SelectField, SidePanel, Tabs, TextArea, TextField, useTableView, type ColSort, type SortDir, type Tone, MutationError, ConfirmDialog, EmptyState, PageHeader, Segments, SearchBar, useServerTableView, useTabParam, ListCard, FilePicker } from "../ui";
+import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { Link, useSearchParams } from "react-router-dom";
 
 type Doc = {
   url?: string; id: number; source: string; title: string; filename: string; size: number; status: string; error: string; chunks: number;
-  progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string;
+  progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string; secrets?: SecretFinding[];
 };
 type Chunk = { chunk_idx: number; heading_path: string; page: number | null; text: string };
 type Hit = { document_id: number; chunk: number; title: string; citation: string; text: string; similarity: number; updated_at: string };
@@ -250,6 +251,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             <Group gap={6}><Pill size="xs" tone={TONE[detail.data.status] ?? "neutral"}>{t(LABEL[detail.data.status] ?? detail.data.status)}</Pill><Pill size="xs">{human(detail.data.size)}</Pill><Pill size="xs">{detail.data.chunks} {t("trozos")}</Pill></Group>
             <Text size="xs" c="dimmed" className="ms-data">{t("{{filename}} · sha256 {{hash}}… · subido {{date}}", { filename: detail.data.filename, hash: detail.data.sha256.slice(0, 12), date: fmt(detail.data.created_at) })}</Text>
             {detail.data.error && <Notice tone="danger">{detail.data.error}</Notice>}
+            <SecretsNotice found={detail.data.secrets} />
             <Group gap={6}>
               <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>{t("Descargar original")}</Btn>
               <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>{t("Ver texto completo")}</Btn>

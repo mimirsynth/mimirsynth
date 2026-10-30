@@ -82,6 +82,7 @@ Everything is audited. Removing a source asks for confirmation and deletes its d
 - **Wiki:** only instance administrators set the URL and token. Private networks are allowed (normal for self-hosting).
 - **Uploads:** size limit, type checked by content and not by extension, HTML reduced to text. The original is only returned to someone with read permission on the brain, with `Content-Disposition: attachment`; nothing is executed or served as a page.
 - **Secrets:** encrypted with the same `secretbox` as the engine keys; never returned by the API.
+- **Credentials inside a document:** before chunking, the secret detector masks anything shaped like a credential in the indexed text, or leaves the document unindexed if the brain blocks them. The original is not modified. See «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Directories and wikis
 

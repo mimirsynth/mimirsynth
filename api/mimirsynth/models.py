@@ -132,6 +132,8 @@ class Brain(Base):
     graph_name: Mapped[str] = mapped_column(String(255))  # grafo en el GraphStore
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    secret_mode: Mapped[str] = mapped_column(String(8), default="mask", server_default="mask")  # mask | block | warn (ver secretguard)
+    secret_allow: Mapped[str] = mapped_column(Text, default="", server_default="")  # excepciones del detector, una por línea
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
@@ -227,6 +229,7 @@ class Proposal(Base):
     decision: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # detalle del triaje del decisor
     ingest_error: Mapped[str] = mapped_column(Text, default="")
     ingest_report: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # tipos usados y relaciones fuera de la ontología
+    secret_findings: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [{rule, start, end, action}] sobre el texto guardado; nunca el valor
     episode_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)

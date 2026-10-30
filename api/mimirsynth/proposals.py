@@ -8,8 +8,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from . import deciders_admin, ingest
+from . import deciders_admin, ingest, secretguard
 from .deps import BrainCtx, audit, brain_access
+from .i18n import language, tr
 from .models import Proposal, User
 from .roles import allows
 
@@ -36,7 +37,8 @@ def _out(p: Proposal, full: bool = False) -> dict:
     d = {"id": p.id, "name": p.name, "source": p.source, "source_description": p.source_description, "confidence": p.confidence,
          "status": p.status, "author": p.author.email or p.author.name, "created_at": p.created_at, "reviewed_at": p.reviewed_at,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
-         "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at}
+         "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
+         "secrets": secretguard.describe(p.secret_findings)}
     d["body"] = p.body if full else p.body[:300]
     return d
 
@@ -48,20 +50,39 @@ def submit(body: ProposalIn, request: Request, bg: BackgroundTasks, ctx: BrainCt
 
 
 def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalIn) -> Proposal:
+    """Alta de una propuesta (también la usa `remember` del MCP). Antes de guardar pasa por el detector de secretos del brain (#116)."""
+    try:
+        name, in_name = secretguard.guard(ctx.brain, body.name)
+        text, in_body = secretguard.guard(ctx.brain, body.body)
+    except secretguard.Blocked:
+        rules = sorted({r for t in (body.name, body.body) for r in _blocked_rules(ctx, t)})
+        audit(ctx.db, ctx.user, "proposal.blocked", ctx.brain, reason="secrets", rules=rules)
+        labels = secretguard.labels(language(request))
+        raise HTTPException(422, tr("La propuesta contiene secretos ({{labels}}). Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).",
+                                    language(request), labels=", ".join(labels[r] for r in rules)))
+    found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
     direct = allows(ctx.role, "curator")
     tok = getattr(request.state, "token", None)
-    p = Proposal(brain_id=ctx.brain.id, author_id=ctx.user.id, token_id=tok.id if tok else None, name=body.name, body=body.body, source=body.source,
+    p = Proposal(brain_id=ctx.brain.id, author_id=ctx.user.id, token_id=tok.id if tok else None, name=name[:255], body=text, source=body.source,
                  source_description=body.source_description, reference_time=body.reference_time, confidence=body.confidence,
-                 status="approved" if direct else "pending")
+                 status="approved" if direct else "pending", secret_findings=found or None)
     if direct:
         p.reviewer_id, p.reviewed_at, p.review_kind = ctx.user.id, datetime.now(timezone.utc), "direct"
     ctx.db.add(p); ctx.db.commit()
-    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, name=p.name)
+    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, name=p.name, **({"secrets": found} if found else {}))
     if direct and ingest.enabled():
         ingest.submit_ingest(p.id, ctx.brain.id, p.name, ctx.user.id)
     elif not direct:
-        bg.add_task(deciders_admin.triage_proposal, p.id)  # sin decisor configurado no hace nada
+        bg.add_task(deciders_admin.triage_proposal, p.id)  # sin decisor configurado no hace nada; con secretos marcados, tampoco
     return p
+
+
+def _blocked_rules(ctx: BrainCtx, text: str) -> list[str]:
+    try:
+        secretguard.guard(ctx.brain, text)
+    except secretguard.Blocked as e:
+        return e.rules
+    return []
 
 
 _AUTHOR = func.coalesce(User.email, User.name)

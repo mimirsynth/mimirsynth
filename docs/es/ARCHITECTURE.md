@@ -55,6 +55,25 @@ Lo que aporta un colaborador o un agente no entra directo al grafo. Crea una **p
 2. Lo dudoso espera a un **curador**, que aprueba o rechaza. Si propone un curador, queda aprobada.
 3. Al aprobarse, se **ingiere** con Graphiti (extracción de entidades y hechos con el LLM del brain) mediante un trabajo en cola, con reintentos y progreso.
 
+### Secretos
+
+Antes de guardar una propuesta (de la interfaz, de la API o de `remember` por MCP) o de indexar un documento, un **detector de secretos** busca credenciales en el texto:
+
+- **Seguros:** formatos inconfundibles (claves de acceso de AWS, tokens de GitHub, GitLab, Slack, npm o Hugging Face, claves de API de Google, Stripe, SendGrid o de proveedores de IA, tokens de bots de Telegram, claves privadas PEM, JWT, cabeceras `Authorization` y contraseñas dentro de una URL).
+- **Posibles:** un valor de aspecto aleatorio asignado a una palabra como `password`, `secret` o `token`. Solo se marcan: la entropía por sí sola confundiría sumas, UUID e identificadores de contenedor, que son contenido normal en documentación técnica.
+
+Cada brain elige qué hacer en Administración → Acceso al brain → Secretos:
+
+| Modo | Secretos seguros | Secretos posibles |
+|---|---|---|
+| **Enmascarar** (por defecto) | Se sustituyen por `[secreto eliminado: tipo]` antes de guardar | Se marcan |
+| **Bloquear** | La propuesta se rechaza (422) diciendo qué tipo es; el documento no se indexa y sale del índice | Se marcan |
+| **Solo avisar** | Se marcan, sin tocarlos | Se marcan |
+
+Una propuesta con algo marcado no la aprueba el decisor: espera a un curador, que ve el aviso en su detalle. El marcador se escribe en el idioma de la instancia, porque queda en la memoria. Las **excepciones** del brain (una por línea) desactivan una regla (`rule:jwt`) o aceptan los valores que encajan con una expresión regular. **Analizar lo ya guardado** pasa el detector en solo lectura por las propuestas y los documentos indexados del brain y enseña, de cada hallazgo, la regla y el texto que lo precede, nunca el valor: sirve para medir aciertos y falsos positivos antes de cambiar la política. Lo que ya está en el grafo no se analiza, y cambiar la política no reprocesa lo ya guardado: para aplicarla a un documento, reindéxalo.
+
+Ni la auditoría, ni los logs, ni la API guardan o devuelven el valor detectado: solo la regla y su posición. En los documentos se enmascara el texto que se indexa (trozos, vectores y texto normalizado); **el original descargable no se modifica**. El detector (`api/mimirsynth/secretscan.py`) no depende del resto del paquete, para que un cliente pueda llevárselo y redactar antes de enviar.
+
 ## Lectura: recall híbrido
 
 Una consulta combina, sin llamar a un LLM:

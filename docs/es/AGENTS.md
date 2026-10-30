@@ -33,6 +33,8 @@ curl -s -X POST "$URL/api/brains/mi-brain/proposals" \
 ```
 Un colaborador queda en estado `pending`; un curador, `approved` e ingerida al momento. Un curador puede aprobar o rechazar desde la pestaña Propuestas. Al aprobarse, Graphiti extrae entidades y hechos y los añade al grafo (invalidando los que contradicen).
 
+No guardes contraseñas ni tokens: guarda **dónde** están (por ejemplo, en qué gestor de contraseñas). Lo que tenga forma de credencial se enmascara antes de guardarse o, si el brain lo bloquea, la propuesta se rechaza con un 422 que dice qué tipo de secreto es (ver «Secretos» en [ARCHITECTURE.md](ARCHITECTURE.md)). Por MCP, `remember` aplica lo mismo.
+
 ## Servidor MCP
 Los agentes que hablan el **Model Context Protocol** pueden usar la misma memoria sin escribir llamadas HTTP. Cada brain expone un endpoint MCP (HTTP «streamable», sin estado, solo herramientas) en:
 

@@ -109,7 +109,7 @@ def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depend
 
 def triage_proposal(pid: int) -> None:
     """Triaje en segundo plano de una propuesta pendiente. Sin decisor configurado no hace nada."""
-    from . import ingest
+    from . import ingest, secretguard
     from .deps import audit as _audit
     from .models import Brain, Proposal
     from .ontology import get_ontology
@@ -117,8 +117,8 @@ def triage_proposal(pid: int) -> None:
     from datetime import datetime, timezone
     with _factory()() as db:
         d, p = default_decider(db), db.get(Proposal, pid)
-        if not d or not p or p.status != "pending":
-            return
+        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings):
+            return  # con un posible secreto marcado decide una persona (#116)
         brain = db.get(Brain, p.brain_id)
         try:
             context = decider.scope(brain.name, brain.description, get_ontology(db, brain.id))  # el decisor no supone ningún dominio

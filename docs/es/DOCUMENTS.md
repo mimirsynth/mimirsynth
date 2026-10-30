@@ -106,6 +106,7 @@ La **federación** ([FEDERATION.md](FEDERATION.md)) trata los documentos como un
 - **Wiki:** solo administradores configuran URL y token. Las redes privadas se permiten (es lo normal en un autoalojado) con un interruptor para prohibirlas en despliegues de empresa.
 - **Subidas:** tope de tamaño, tipo comprobado por contenido y no por extensión, HTML reducido a texto. El original solo se devuelve a quien tiene permiso de lectura en el brain, con `Content-Disposition: attachment`; nada se ejecuta ni se sirve como página.
 - **Secretos:** cifrados con el mismo `secretbox` que las claves de los motores; nunca se devuelven por la API.
+- **Credenciales dentro de un documento:** antes de trocear, el detector de secretos enmascara lo que tiene forma de credencial en el texto que se indexa, o deja el documento sin indexar si el brain las bloquea. El original no se modifica. Ver «Secretos» en [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Interfaz
 
