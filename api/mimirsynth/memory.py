@@ -44,10 +44,12 @@ def federated_kwargs(ctx: BrainCtx, body: "RecallIn") -> dict:
 @router.post("/recall")
 def do_recall(body: RecallIn, request: Request, ctx: BrainCtx = Depends(reader)):
     try:
-        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
-                      lang=language(request), **federated_kwargs(ctx, body))
+        out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
+                     lang=language(request), **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
+    from . import ratings
+    return {**out, "recall_id": ratings.log(ctx, body.query, out)}  # to rate what it returned (#110)
 
 
 @router.get("/index/status")

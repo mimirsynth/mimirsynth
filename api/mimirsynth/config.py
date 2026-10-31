@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     jobs_keep_days: int = 60  # días que se conservan los trabajos terminados
     retention_rejected_days: int = 0  # days a rejected proposal keeps its text (#137); 0: no period, the default
     retention_jobs_days: int = 0  # days a brain's finished jobs are kept (#137); 0: only jobs_keep_days applies
+    retention_ratings_days: int = 0  # days a brain's recall ratings are kept (#110); 0: no period
     notify_cooldown_minutes: int = 60  # no repetir por los canales un aviso del mismo problema abierto antes de este plazo
     notify_quiet_start: str = ""  # HH:MM; con notify_quiet_end define las horas en que solo salen los avisos críticos
     notify_quiet_end: str = ""

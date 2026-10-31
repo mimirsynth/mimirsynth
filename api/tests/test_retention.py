@@ -37,11 +37,11 @@ def test_without_a_period_nothing_is_purged(client):  # noqa: F811
     assert client.post("/api/brains", json={"slug": "rt1", "name": "Rt1"}).status_code == 201
     _seed("rt1")
     r = client.get("/api/brains/rt1/retention").json()
-    assert r["rejected_days"] is None and r["jobs_days"] is None and r["effective"] == {"rejected_days": 0, "jobs_days": 0}
+    assert r["rejected_days"] is None and r["jobs_days"] is None and r["effective"] == {"rejected_days": 0, "jobs_days": 0, "ratings_days": 0}
     assert client.post("/api/brains/rt1/retention/run").status_code == 409
     with _factory()() as db:
         bid = db.query(Brain).filter(Brain.slug == "rt1").one().id
-    assert retention.purge(bid) == {"proposals": 0, "jobs": 0, "rejected_days": 0, "jobs_days": 0}
+    assert retention.purge(bid) == {"proposals": 0, "jobs": 0, "ratings": 0, "rejected_days": 0, "jobs_days": 0, "ratings_days": 0}
 
 
 def test_a_period_purges_what_is_older_and_is_audited(client):  # noqa: F811
@@ -50,7 +50,7 @@ def test_a_period_purges_what_is_older_and_is_audited(client):  # noqa: F811
     assert client.post("/api/brains", json={"slug": "rt2", "name": "Rt2"}).status_code == 201
     ids = _seed("rt2")
     r = client.put("/api/brains/rt2/retention", json={"rejected_days": 30, "jobs_days": 10})
-    assert r.status_code == 200 and r.json()["effective"] == {"rejected_days": 30, "jobs_days": 10}
+    assert r.status_code == 200 and r.json()["effective"] == {"rejected_days": 30, "jobs_days": 10, "ratings_days": 0}
     assert client.put("/api/brains/rt2/retention", json={"rejected_days": -1}).status_code == 422
     assert client.post("/api/brains/rt2/retention/run").status_code == 202
     last = client.get("/api/brains/rt2/retention").json()["last_run"]
@@ -62,14 +62,14 @@ def test_a_period_purges_what_is_older_and_is_audited(client):  # noqa: F811
         assert recent.body.startswith("recent") and not recent.purged_at
         assert pending.body.startswith("pending") and approved.body.startswith("approved")    # only rejected proposals
         assert db.get(Job, ids["job_old"]) is None and db.get(Job, ids["job_recent"]) and db.get(Job, ids["job_running"])
-        a = db.query(Audit).filter(Audit.action == "brain.retention").one()
+        a = db.query(Audit).filter(Audit.action == "brain.retention", Audit.brain_id == old.brain_id).one()
         assert a.detail == {"rejected_days": {"from": None, "to": 30}, "jobs_days": {"from": None, "to": 10}}
     d = client.get(f"/api/brains/rt2/proposals/{ids['old']}").json()
     assert d["purged_at"] and d["body"] == ""
     # the same values again change nothing and are not audited twice
     client.put("/api/brains/rt2/retention", json={"rejected_days": 30, "jobs_days": 10})
     with _factory()() as db:
-        assert db.query(Audit).filter(Audit.action == "brain.retention").count() == 1
+        assert db.query(Audit).filter(Audit.action == "brain.retention", Audit.brain_id == db.get(Proposal, ids["old"]).brain_id).count() == 1
 
 
 def test_the_instance_period_applies_unless_the_brain_sets_its_own(client, monkeypatch):  # noqa: F811

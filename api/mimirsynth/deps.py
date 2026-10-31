@@ -51,7 +51,7 @@ def _scope_of(request: Request, slug: str) -> str | None:
         return "documents"
     if request.method == "POST" and rest in ("/proposals", "/proposals/corrections"):
         return "propose"
-    if request.method in ("GET", "HEAD") or rest in ("/recall", "/query"):
+    if request.method in ("GET", "HEAD") or rest in ("/recall", "/query") or rest.startswith("/recall/"):
         return "recall"
     return None
 

@@ -69,7 +69,7 @@ def test_facts_timeline_and_news(client, graphs):  # noqa: F811
     tok = _tok(client, "mt")
     c = TestClient(app, headers={"Accept-Language": "es"})
     names = [t["name"] for t in rpc(c, "mt", "tools/list", token=tok).json()["result"]["tools"]]
-    assert names == ["recall", "remember", "correct", "facts_about", "timeline", "get_document", "whats_new"]
+    assert names == ["recall", "remember", "correct", "facts_about", "timeline", "get_document", "rate", "whats_new"]
 
     # facts_about: alias de mayúsculas, uuid de cada hecho, procedencia y lo prestado con su origen
     err, txt = call(c, "mt", tok, "facts_about", entity="  NEXTCLOUD ")

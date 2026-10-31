@@ -27,6 +27,16 @@ Fragments come from an **index of the episode text** stored in PostgreSQL. In th
 ## Saving a reference query (curator or higher)
 Curators and above see two tabs, **Ask** and **Reference queries**. After a search, every fact, fragment and passage has two buttons: **Expected** (it must come up for this question) and **Extra** (it should not). **Save as reference query** opens the form already filled in with the question and what you marked (the first 200 characters of each result), so the brain can check later that recall still finds it. See [[Reference queries]].
 
+## Rating the results
+Under each fact, episode chunk and document passage, **Useful**, **Irrelevant** and **Incorrect** (incorrect only for the brain's own facts) say whether the recall brought the right thing. Anyone who can read the brain can rate, with a limit of requests per minute.
+- **Incorrect** on a fact, from a contributor or above, proposes its **correction** (see [[Proposals]]): a curator decides it, and nothing is invalidated from here. From a reader it is only recorded, and curators see it in **Quality**.
+- Every recall, here and over the API and MCP, returns a `recall_id` that can be rated for 48 hours; a recall nobody rated is then forgotten. Of the query only a fingerprint and its length are kept, unless the brain chooses to keep its text (see below).
+
+## Quality (curator or higher)
+The **Quality** tab sums up the last 30 days: how many recalls there were and how many were rated, and per kind of item (facts, episode chunks, document passages) and per similarity range how much was useful, irrelevant or incorrect. The ranges are what tell whether a threshold such as `doc_min_similarity` should go up or down; **Download CSV** takes them out. Ratings mostly arrive when something fails, so read them next to the total of recalls. It also lists the latest facts rated as incorrect, with their correction.
+
+Brain administrators can tick **Keep the text of the queries**: real queries carry people's prompts, so by default only a fingerprint is kept; with it, the text is kept for 30 days, and unticking it deletes it at once. Ratings follow the brain's retention period for **Recall ratings** ([[Brains and members]]).
+
 ## If the result is poor
 | Symptom | Likely cause | What to do |
 |---|---|---|
