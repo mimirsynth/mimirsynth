@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Changed
+- **The author learns what the secret detector did** (feedback on #116). A curator's proposal with a certain secret is masked and approved at once, and nothing said so, so its author thought the detector had not worked. Now the form says which types were masked or flagged, `POST /proposals` returns the same text in `secrets_notice`, the `remember` result over MCP adds it, and the proposals list marks those proposals (**Secret masked** or **Secret to review**). The value is never in any of them.
 
 ## [0.9.0] - 2026-10-30
 ### Added

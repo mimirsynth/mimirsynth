@@ -45,8 +45,10 @@ def _out(p: Proposal, full: bool = False) -> dict:
 
 @router.post("", status_code=201)
 def submit(body: ProposalIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(contributor)):
-    """Colaborador: entra en cuarentena (pending). Curador o superior: aprobada directamente, queda en el registro."""
-    return _out(create(ctx, request, bg, body))
+    """Colaborador: entra en cuarentena (pending). Curador o superior: aprobada directamente, queda en el registro.
+    `secrets_notice` tells the author, in their language, what the secret detector masked or flagged (empty when nothing)."""
+    p = create(ctx, request, bg, body)
+    return {**_out(p), "secrets_notice": secretguard.notice(p.secret_findings, language(request))}
 
 
 def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalIn) -> Proposal:

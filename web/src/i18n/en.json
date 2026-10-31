@@ -1280,5 +1280,9 @@
  "Reactivar el hecho": "Reactivate the fact",
  "Se invalidará al aprobarla, con fecha {{date}}.": "It will be invalidated on approval, as of {{date}}.",
  "Sin sustituto: solo se invalida el hecho.": "No replacement: the fact is only invalidated.",
- "vigente desde {{date}}": "current since {{date}}"
+ "vigente desde {{date}}": "current since {{date}}",
+ "Propuesta #{{id}} añadida y aprobada.": "Proposal #{{id}} added and approved.",
+ "Propuesta #{{id}} enviada: queda pendiente de un curador.": "Proposal #{{id}} sent: it waits for a curator.",
+ "Secreto enmascarado": "Secret masked",
+ "Secreto por revisar": "Secret to review"
 }

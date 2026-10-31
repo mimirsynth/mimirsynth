@@ -116,6 +116,8 @@ La memoria guardada (hechos, episodios, documentos) se devuelve tal como se escr
 
 Un valor que solo *podría* ser un secreto siempre se marca, y una propuesta marcada **siempre espera la revisión de un curador**, aunque la envíe un token de curador. El valor nunca llega a la auditoría, a los logs ni a las respuestas de la API.
 
+La respuesta dice qué ha pasado: el resultado de `remember` añade, por ejemplo, «Secretos enmascarados antes de guardar: token de GitHub», y la respuesta HTTP lleva el mismo texto en `secrets_notice` (vacío si no se encontró nada). El valor nunca va en él.
+
 ## 4. Integra el recall en tu agente
 La integración típica:
 1. **Antes** de que el agente responda, llama a `recall` con el mensaje del usuario (o deja que un agente MCP llame él mismo a la herramienta).

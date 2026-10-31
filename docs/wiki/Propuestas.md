@@ -50,7 +50,9 @@ Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `reme
 | **Solo avisar** | Se marcan, sin tocarlos | Se marcan, sin tocarlos |
 
 - **Una propuesta con algo marcado siempre espera a un curador**, aunque la haya enviado un curador, y el decisor no la aprueba por su cuenta.
-- El detalle de la propuesta muestra **Secretos detectados**: qué se enmascaró y qué se marcó para revisar. El valor no se muestra nunca, ni se guarda en la auditoría ni viaja en las notificaciones.
+- **Con Enmascarar, la propuesta de un curador se guarda ya enmascarada y se aprueba al momento:** no queda nada que revisar, porque el valor nunca llega a la memoria.
+- **El autor se entera al enviarla:** el formulario dice qué tipos de secreto se enmascararon o se marcaron, la respuesta de `POST /proposals` lleva el mismo texto en `secrets_notice` y el resultado de `remember` lo añade, para que un agente sepa que su texto ha cambiado.
+- Después, la lista marca esas propuestas (**Secreto enmascarado** o **Secreto por revisar**, también las aprobadas al momento) y el detalle muestra **Secretos detectados**: qué se enmascaró y qué se marcó para revisar. El valor no se muestra nunca, ni se guarda en la auditoría ni viaja en las notificaciones.
 - Guarda los secretos en un gestor de contraseñas y en la memoria solo **dónde** están.
 
 ## Detalle de una propuesta

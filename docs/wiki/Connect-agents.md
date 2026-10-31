@@ -116,6 +116,8 @@ Stored memory (facts, episodes, documents) is returned as it was written; it is 
 
 A value that only *might* be a secret is always flagged, and a flagged proposal **always waits for a curator's review**, even when a curator token sends it. The value never reaches the audit log, the logs or the API responses.
 
+The answer says what happened: the `remember` result adds, for example, «Secrets masked before saving: GitHub token», and the HTTP response carries the same text in `secrets_notice` (empty when nothing was found). The value is never in it.
+
 ## 4. Integrate recall in your agent
 The typical integration:
 1. **Before** the agent answers, call `recall` with the user's message (or let an MCP agent call the tool itself).

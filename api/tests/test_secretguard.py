@@ -96,6 +96,26 @@ def test_mcp_remember_is_guarded(client, monkeypatch):  # noqa: F811
     assert r["isError"] is True and "secretos" in r["content"][0]["text"] and TOKEN not in r["content"][0]["text"]
 
 
+def test_author_is_told_what_was_masked_or_flagged(client, monkeypatch):  # noqa: F811
+    """Feedback on #138: a curator's proposal is masked and approved at once, so the response must say what was removed."""
+    monkeypatch.setattr(ingest, "enabled", lambda: False)
+    _brain(client, "sg-tell")
+    cur = {"Authorization": "Bearer " + client.post("/api/brains/sg-tell/tokens", json={"name": "k", "role": "curator"}).json()["token"]}
+    p = client.post("/api/brains/sg-tell/proposals", headers={**cur, "Accept-Language": "es"}, json={"name": "Acceso", "body": f"usa {TOKEN} y {TOKEN}"}).json()
+    assert p["status"] == "approved" and p["review_kind"] == "direct"                         # enmascarado: el curador la aprueba al enviarla
+    assert p["secrets_notice"] == "Secretos enmascarados antes de guardar: token de GitHub ×2. Lo guardado no lleva su valor."
+    assert [s["action"] for s in client.get("/api/brains/sg-tell/proposals").json()["items"][0]["secrets"]] == ["masked", "masked"]  # también en la lista
+    en = client.post("/api/brains/sg-tell/proposals", headers={**cur, "Accept-Language": "en"}, json={"name": "Posible", "body": POSSIBLE}).json()
+    assert en["status"] == "pending" and en["secrets_notice"].startswith("Flagged for a curator to review") and "Zq8!" not in en["secrets_notice"]
+    clean = client.post("/api/brains/sg-tell/proposals", headers=cur, json={"name": "Limpia", "body": "texto"}).json()
+    assert clean["secrets_notice"] == ""
+    c = TestClient(app, headers={"Accept-Language": "es"})
+    tok = cur["Authorization"].split()[1]
+    r = rpc(c, "sg-tell", "tools/call", {"name": "remember", "arguments": {"name": "Por MCP", "body": f"token {TOKEN}"}}, token=tok).json()["result"]
+    text = r["content"][0]["text"]
+    assert r["isError"] is False and text.startswith("Memoria guardada y aprobada") and "enmascarados antes de guardar: token de GitHub" in text and TOKEN not in text
+
+
 def test_scan_existing_is_read_only_and_never_returns_values(client):  # noqa: F811
     h = _brain(client, "sg-scan", "warn")
     client.post("/api/brains/sg-scan/proposals", headers=h, json={"name": "Vieja", "body": f"La clave del despliegue es {TOKEN} y nada más"})
