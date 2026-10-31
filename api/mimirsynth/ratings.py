@@ -2,6 +2,8 @@
 
 - **`recall_id`:** every recall over HTTP or MCP is logged (`recall_logs`) with what it returned (kind, id, similarity and the
   start of its text) and gives back a short `recall_id`. It can be rated for RATE_HOURS; after that, a log nobody rated is purged.
+  The log is written after the answer is sent and fails open: the recall never waits for it nor breaks because of it; if it could
+  not be written, that `recall_id` simply cannot be rated.
 - **The query:** only its hash and length, unless the brain chooses to keep its text (`recall_query_text`), and then only for
   QUERY_TEXT_DAYS: real queries carry people's prompts.
 - **Who rates:** anyone who can read the brain, with a request limit. «Incorrect» on a fact of the brain, from a contributor or
@@ -12,6 +14,7 @@
 - **Retention:** ratings and their logs follow the brain's `ratings_days` period (#137).
 """
 import hashlib
+import logging
 import secrets
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
@@ -31,6 +34,8 @@ QUERY_TEXT_DAYS = 30
 RATINGS = ("useful", "irrelevant", "incorrect")
 KINDS = ("fact", "chunk", "doc")
 TEXT = 200  # start of each item's text kept in the log, to find it again when an agent rates it by its text
+MIN_TEXT = 12  # shortest text an item can be rated by
+log_ = logging.getLogger("mimirsynth.ratings")
 LIMIT = (60, 60.0)  # ratings per user and minute
 
 router = APIRouter(prefix="/api/brains/{slug}/recall")
@@ -60,13 +65,25 @@ def items_of(out: dict) -> list[dict]:
     return items
 
 
-def log(ctx: BrainCtx, query: str, out: dict) -> str:
-    """Logs a recall and returns its `recall_id`."""
+def log(ctx: BrainCtx, query: str, out: dict, bg=None) -> str:
+    """Gives the recall its `recall_id` and logs it, after the answer when `bg` (BackgroundTasks) is given. Never raises."""
     rid = secrets.token_urlsafe(9)
-    ctx.db.add(RecallLog(brain_id=ctx.brain.id, rid=rid, user_id=ctx.user.id, query_hash=hashlib.sha256(query.encode()).hexdigest(),
-                         query_len=len(query), query_text=query if ctx.brain.recall_query_text else None, items=items_of(out)))
-    ctx.db.commit()
+    row = dict(brain_id=ctx.brain.id, rid=rid, user_id=ctx.user.id, query_hash=hashlib.sha256(query.encode()).hexdigest(),
+               query_len=len(query), query_text=query if ctx.brain.recall_query_text else None, items=items_of(out))
+    if bg is not None:
+        bg.add_task(_write, row)
+    else:
+        _write(row)
     return rid
+
+
+def _write(row: dict) -> None:
+    try:
+        with _factory()() as db:
+            db.add(RecallLog(**row))
+            db.commit()
+    except Exception:  # noqa: BLE001  (a full table, a lock, a duplicate rid: that recall cannot be rated, nothing else)
+        log_.warning("no se pudo registrar el recall %s para poder valorarlo", row.get("rid"), exc_info=True)
 
 
 def _norm(s: str) -> str:
@@ -74,16 +91,21 @@ def _norm(s: str) -> str:
 
 
 def find_item(entry: RecallLog, kind: str, item_id: str = "", text: str = "") -> dict | None:
-    """The logged item by its id or, for an agent that only saw the context, by the start of its text."""
+    """The logged item by its id or, for an agent that only saw the context, by its text: the logged text must start with what was
+    given (at least MIN_TEXT characters), and if several items do, it answers 409 with them instead of choosing one."""
     for it in entry.items or []:
         if it["kind"] == kind and item_id and it["id"] == item_id:
             return it
-    if text:
-        want = _norm(text)
-        for it in entry.items or []:
-            if it["kind"] == kind and want and (_norm(it["text"]).startswith(want[:TEXT]) or want.startswith(_norm(it["text"]))):
-                return it
-    return None
+    want = _norm(text)[:TEXT]
+    if len(want) < MIN_TEXT:
+        if text:
+            raise HTTPException(400, f"el texto es demasiado corto para saber qué elemento es: da al menos {MIN_TEXT} caracteres")
+        return None
+    hits = [it for it in entry.items or [] if it["kind"] == kind and _norm(it["text"]).startswith(want)]
+    if len(hits) > 1:
+        cands = "; ".join(f"«{h['text'][:80]}»" for h in hits[:5])
+        raise HTTPException(409, f"varios elementos empiezan así: {cands}. Repite con más texto")
+    return hits[0] if hits else None
 
 
 class RateIn(BaseModel):

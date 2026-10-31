@@ -145,7 +145,7 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
             if not out["context"]:
                 return _text(tr("No hay nada relevante en la memoria para esa consulta.", lang))
             from . import ratings
-            rid = ratings.log(ctx, body.query, out)  # the agent can say what was useful with `rate` (#110)
+            rid = ratings.log(ctx, body.query, out, bg)  # the agent can say what was useful with `rate` (#110), logged after answering
             return _text(out["context"] + "\n\n" + tr("(recall_id: {{rid}})", lang, rid=rid))
         if name == "rate":
             from . import ratings

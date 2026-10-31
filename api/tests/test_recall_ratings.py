@@ -69,6 +69,43 @@ def test_rate_each_item_and_incorrect_opens_a_correction_only_from_a_contributor
     assert {("doc", ":3:1", "useful"), ("chunk", ":7", "irrelevant"), ("fact", "f1", "incorrect"), ("fact", "f2", "incorrect")} <= rows
 
 
+def test_a_failure_logging_the_recall_never_breaks_it(client, fake_recall, monkeypatch):  # noqa: F811
+    """Review of #159: the hook recalls on every prompt, so logging fails open: the answer still comes, only it cannot be rated."""
+    from mimirsynth import ratings
+    assert client.post("/api/brains", json={"slug": "rr5", "name": "Rr5"}).status_code == 201
+    monkeypatch.setattr(ratings, "_factory", lambda: (_ for _ in ()).throw(RuntimeError("recall_logs is full")))
+    r = client.post("/api/brains/rr5/recall", json={"query": "q"})
+    assert r.status_code == 200 and r.json()["facts"][0]["uuid"] == "f1"
+    tok = _tok(client, "rr5", "reader")
+    res = rpc(client, "rr5", "tools/call", {"name": "recall", "arguments": {"query": "q"}}, token=tok).json()["result"]
+    assert not res["isError"] and "Nextcloud corre en Notus" in res["content"][0]["text"]
+    monkeypatch.undo()
+    rid = r.json()["recall_id"]
+    assert client.post(f"/api/brains/rr5/recall/{rid}/ratings", json={"kind": "fact", "id": "f1", "rating": "useful"}).status_code == 404
+
+
+def test_rating_by_text_is_strict(client, monkeypatch):  # noqa: F811
+    """Review of #159: two facts with the same start answer 409 with both; an item with empty text never matches; too short is 400."""
+    from mimirsynth import mcp_server, memory
+    same = "Vaultwarden corre en el LXC104 del nodo EPSILON, en la red de servicios, detrás del proxy"
+    out = {"facts": [{"uuid": "a", "fact": same + " A", "score": 0.8, "status": "current"},
+                     {"uuid": "b", "fact": same + " B", "score": 0.7, "status": "current"},
+                     {"uuid": "e", "fact": "", "score": 0.6, "status": "current"},
+                     {"uuid": "u", "fact": "CheckMK vigila los discos de Notus", "score": 0.5, "status": "current"}],
+           "chunks": [], "documents": [], "context": "x"}
+    monkeypatch.setattr(memory, "recall", lambda *a, **k: dict(out))
+    monkeypatch.setattr(mcp_server, "recall", lambda *a, **k: dict(out))
+    assert client.post("/api/brains", json={"slug": "rr6", "name": "Rr6"}).status_code == 201
+    rid = client.post("/api/brains/rr6/recall", json={"query": "q"}).json()["recall_id"]
+    base = f"/api/brains/rr6/recall/{rid}/ratings"
+    r = client.post(base, json={"kind": "fact", "text": same[:80], "rating": "incorrect"})
+    assert r.status_code == 409 and r.json()["detail"].count("Vaultwarden") == 2                 # both candidates, none chosen
+    assert client.post(base, json={"kind": "fact", "text": same + " B", "rating": "useful"}).status_code == 200   # enough text: unique
+    assert client.post(base, json={"kind": "fact", "text": "CheckMK vigila", "rating": "useful"}).status_code == 200
+    assert client.post(base, json={"kind": "fact", "text": "algo que no salió en el recall", "rating": "useful"}).status_code == 404
+    assert client.post(base, json={"kind": "fact", "text": "corto", "rating": "useful"}).status_code == 400   # the empty one never matches
+
+
 def test_a_recall_id_expires_and_ratings_have_a_limit(client, fake_recall, monkeypatch):  # noqa: F811
     from mimirsynth import ratings
     from mimirsynth.models import RecallLog
