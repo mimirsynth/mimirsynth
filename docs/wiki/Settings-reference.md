@@ -26,6 +26,7 @@ Guide: [[Security and two-factor]]
 | Failed attempts before locking | `login_max_attempts` | `5` | 3–20 | After this many consecutive wrong passwords the account is temporarily locked. |
 | Lockout duration | `lockout_minutes` | `15` min | 1–1440 min | How long an account stays locked after too many failed attempts. |
 | Require two-factor | `require_2fa` | `no` | `no` (No) / `yes` (Yes, everyone) | Anyone signing in with a password must enable two-factor (authenticator app) before using the application. It does not affect those signing in through the identity provider, which applies its own rules. |
+| Longest life of API tokens | `token_max_days` | `0` days | 0–3650 days | New tokens must expire within this time at most, also when they are rotated. 0: no limit. Existing ones do not change. |
 | Validity of invitations and recovery links | `invite_days` | `7` days | 1–30 days | After this period the link stops working and another must be generated. |
 
 ## Email (SMTP)

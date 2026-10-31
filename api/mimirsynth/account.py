@@ -117,8 +117,8 @@ def get_avatar(uid: int, _: User = Depends(current_user), db: Session = Depends(
 @router.get("/me/tokens")
 def my_tokens(user: User = Depends(current_user), db: Session = Depends(get_db)):
     q = select(ApiToken, Brain).join(Brain, Brain.id == ApiToken.brain_id).where(ApiToken.user_id == user.id, ApiToken.revoked.is_(False)).order_by(ApiToken.id.desc())
-    return [{"id": t.id, "name": t.name, "role": t.role, "prefix": t.prefix, "brain": b.name, "brain_slug": b.slug, "created_at": t.created_at, "last_used_at": t.last_used_at}
-            for t, b in db.execute(q).all()]
+    from .memory import token_out
+    return [{**token_out(t), "brain": b.name, "brain_slug": b.slug, "mine": True} for t, b in db.execute(q).all()]
 
 
 @router.get("/me/activity")

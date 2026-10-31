@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timezone
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import select
@@ -22,6 +23,39 @@ def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+SCOPES = ("recall", "documents", "propose")  # what an API token may do, on top of its role (#133); a token without a list has all
+
+
+def aware(d):
+    """SQLite gives back dates without their zone; they are always stored in UTC."""
+    return d.replace(tzinfo=timezone.utc) if d is not None and d.tzinfo is None else d
+
+
+def token_allows(tok: ApiToken | None, scope: str) -> bool:
+    """Whether the request's token has this scope; a session (no token) always does."""
+    return tok is None or tok.scopes is None or scope in tok.scopes
+
+
+def token_expired(tok: ApiToken) -> bool:
+    return tok.expires_at is not None and aware(tok.expires_at) <= now()
+
+
+def _scope_of(request: Request, slug: str) -> str | None:
+    """The scope a brain route needs from a token. MCP is decided tool by tool; curating and administering depend only on the role."""
+    rest = request.url.path.split(f"/api/brains/{slug}", 1)[-1]
+    if rest.startswith("/mcp"):
+        return None
+    if rest.startswith("/tokens"):
+        return "tokens"
+    if rest == "/docs" or rest.startswith("/docs/"):
+        return "documents"
+    if request.method == "POST" and rest in ("/proposals", "/proposals/corrections"):
+        return "propose"
+    if request.method in ("GET", "HEAD") or rest in ("/recall", "/query"):
+        return "recall"
+    return None
+
+
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     request.state.token = None
     request.state.locale = ""  # idioma de las respuestas (ver i18n.language)
@@ -32,6 +66,9 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
             raise HTTPException(401, "token inválido")
         if tok.user.status != "active":  # una cuenta deshabilitada o eliminada deja también sin efecto sus tokens
             raise HTTPException(401, "token inválido")
+        if token_expired(tok):  # a readable reason: agents and hooks show it as it comes
+            day = aware(tok.expires_at).strftime("%Y-%m-%d")
+            raise HTTPException(401, f"token caducado el {day}: crea uno nuevo, o rótalo antes de que caduque")
         tok.last_used_at = now(); db.commit()
         request.state.token = tok
         request.state.locale = tok.user.locale or ""
@@ -100,6 +137,12 @@ def brain_access(minimum: str):
                 role = tok.role
         if not brain or role is None:  # no revelar la existencia de brains ajenos
             raise HTTPException(404, "brain no encontrado")
+        if tok is not None:
+            need = _scope_of(request, slug)
+            if need == "tokens":  # otherwise a token that expires could make another one that does not
+                raise HTTPException(403, "los tokens de API se gestionan desde una sesión, no con otro token")
+            if need and not token_allows(tok, need):
+                raise HTTPException(403, f"este token no tiene el alcance «{need}»")
         if not allows(role, minimum):
             raise HTTPException(403, f"requiere rol {minimum} o superior")
         return BrainCtx(brain, user, role, db)

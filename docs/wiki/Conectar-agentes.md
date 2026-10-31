@@ -14,7 +14,18 @@ En [[Mi cuenta]] → **Tokens de API** (o en [[Administrar brains y miembros]]):
    | **Lector** | Consultar: recall, hechos, documentos |
    | **Colaborador** | Además, **proponer** memoria (entra en cuarentena) y subir documentos |
    | **Curador** | Además, aprobar: sus propuestas se ingieren directamente |
-4. Copia el token (`mst_…`): **se muestra una sola vez**.
+4. Elige cuándo **caduca**: a los 30, 90 o 365 días, o nunca (la instancia puede fijar un máximo, y entonces no se ofrece «nunca»).
+5. Elige su **alcance**, que lo limita más que el rol:
+   | Alcance | El agente puede |
+   |---|---|
+   | **Consultar** | Hacer recall y leer la memoria (hechos, entidades, diario, grafo, consulta); por MCP, `recall`, `facts_about`, `timeline` y `whats_new` |
+   | **Documentos** | Recibir pasajes de documentos en el recall, los propios y los que se prestan al brain, y leer documentos (`/docs`; `get_document` por MCP) |
+   | **Proponer** | Enviar propuestas y correcciones (`remember` y `correct` por MCP) |
+
+   Por defecto van marcados los tres. Un token sin **Documentos** no recibe ningún pasaje, ni por HTTP, ni por MCP, ni por federación. La curación depende solo del rol.
+6. Copia el token (`mst_…`): **se muestra una sola vez**.
+
+**Caducidad y rotación.** Un token caducado responde `401` con la fecha en que caducó, y el hook de recall enseña ese mensaje en vez de fallar sin decir nada. Unos días antes, el aviso `token.expiring` lo anuncia (ver [[Notificaciones]]). **Rotar** da un token nuevo con el mismo nombre, rol, alcance y duración, que se muestra una vez; el anterior sigue valiendo el periodo de gracia que elijas (ninguno, 1 hora, o 1, 3 o 7 días), para que dé tiempo a actualizar el agente. Solo el dueño del token puede rotarlo. Los tokens creados antes de que existiera la caducidad no caducan: la lista los marca **sin caducidad** y sugiere rotarlos. La lista también dice cuánto tiempo lleva un token sin usarse, para limpiar los olvidados. Los tokens de API se gestionan desde una sesión, nunca con otro token.
 
 **Recomendación:** da a los agentes el rol de **colaborador**. Así lo que escriban pasa por la revisión de un curador (o del decisor) y un agente que se equivoca no ensucia el grafo. Un token **no puede tener más rol que tu usuario** y **nunca administra la instancia**.
 

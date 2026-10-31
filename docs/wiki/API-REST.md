@@ -38,7 +38,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Trabajos** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{id}` | lector |
 | | `POST /jobs/{id}/cancel` · `…/retry` | curador |
 | **Miembros** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrador |
-| **Tokens** | `GET/POST /tokens` · `DELETE /tokens/{id}` | lector (de tu propio rol hacia abajo) |
+| **Tokens** | `GET/POST /tokens` (`scopes`: `recall`, `documents`, `propose`; `days`: hasta que caduca, vacío para nunca) · `POST /tokens/{id}/rotate` (`grace_hours`, 0–168, por defecto 24; solo su dueño) · `DELETE /tokens/{id}`. Solo desde una sesión, nunca con un token de API | lector (de tu propio rol hacia abajo) |
 | **El propio brain** | `PATCH /api/brains/{slug}` (nombre, descripción, slug, política de secretos) · `GET /api/brains/{slug}/secrets/scan` | administrador |
 | **Exportar** | `POST /exports` (`vectors`, `password` opcional) · `GET /exports` · `GET /exports/{id}/download` (una vez; 410 cuando ya se descargó o caducó). Ver [[Exportar un brain]] | administrador |
 | | `POST /api/brains/{slug}/delete` | propietario |

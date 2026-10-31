@@ -26,6 +26,7 @@ Guía: [[Seguridad y doble factor]]
 | Intentos fallidos antes de bloquear | `login_max_attempts` | `5` | 3–20 | Tras este número de contraseñas incorrectas seguidas la cuenta se bloquea temporalmente. |
 | Duración del bloqueo | `lockout_minutes` | `15` min | 1–1440 min | Tiempo que una cuenta queda bloqueada tras demasiados intentos fallidos. |
 | Exigir doble factor | `require_2fa` | `no` | `no` (No) / `yes` (Sí, a todos) | Quien entre con contraseña deberá activar el doble factor (app de autenticación) antes de usar la aplicación. No afecta a quien entra por el proveedor de identidad, que aplica sus propias reglas. |
+| Caducidad máxima de los tokens de API | `token_max_days` | `0` días | 0–3650 días | Los tokens nuevos tienen que caducar en este plazo como mucho, también al rotarlos. 0: sin límite. Los que ya existen no cambian. |
 | Validez de invitaciones y enlaces de recuperación | `invite_days` | `7` días | 1–30 días | Pasado este plazo el enlace deja de funcionar y hay que generar otro. |
 
 ## Correo (SMTP)

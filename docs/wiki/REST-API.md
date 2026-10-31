@@ -5,7 +5,7 @@
 All of the interface's functionality is available through a JSON REST API under `/api`. With the application running, the **interactive documentation (OpenAPI)** is at `https://your-server/docs`, with all parameters and schemas. This page is the map.
 
 ## Authentication
-- **Agents and scripts:** header `Authorization: Bearer mst_…` with an [API token](Connect-agents). A token is scoped to **one brain** and a role (maximum curator); it cannot use the instance administration routes.
+- **Agents and scripts:** header `Authorization: Bearer mst_…` with an [API token](Connect-agents). A token is scoped to **one brain** and a role (maximum curator); it cannot use the instance administration routes. Its scope can limit it further (`recall`, `documents`, `propose`): a route outside it answers `403`. An expired token answers `401` with the date.
 - **The web interface:** a signed session cookie after signing in.
 - **MCP:** `POST /api/brains/{slug}/mcp` is the brain's [MCP server](Connect-agents) (Streamable HTTP, stateless). It accepts **only API tokens**, never the session cookie, and refuses browser origins other than the instance's.
 
@@ -38,7 +38,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Jobs** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{id}` | reader |
 | | `POST /jobs/{id}/cancel` · `…/retry` | curator |
 | **Members** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrator |
-| **Tokens** | `GET/POST /tokens` · `DELETE /tokens/{id}` | reader (from your own role down) |
+| **Tokens** | `GET/POST /tokens` (`scopes`: `recall`, `documents`, `propose`; `days`: until it expires, empty for never) · `POST /tokens/{id}/rotate` (`grace_hours`, 0–168, default 24; only its owner) · `DELETE /tokens/{id}`. Only from a session, never with an API token | reader (from your own role down) |
 | **The brain itself** | `PATCH /api/brains/{slug}` (name, description, slug, secrets policy) · `GET /api/brains/{slug}/secrets/scan` | administrator |
 | **Export** | `POST /exports` (`vectors`, optional `password`) · `GET /exports` · `GET /exports/{id}/download` (once; 410 once downloaded or expired). See [[Export a brain]] | administrator |
 | | `POST /api/brains/{slug}/delete` | owner |

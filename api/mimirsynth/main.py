@@ -144,7 +144,8 @@ app.include_router(brainimport.router)
 
 @app.get("/api/config")
 def get_config():
-    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links(), "default_language": appsettings.get("default_language")}
+    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links(), "default_language": appsettings.get("default_language"),
+            "token_max_days": int(appsettings.get("token_max_days"))}
 
 
 HEALTH_TIMEOUT = 2.0  # segundos por comprobación: el HEALTHCHECK del contenedor corta a los 3

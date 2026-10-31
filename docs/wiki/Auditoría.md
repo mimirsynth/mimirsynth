@@ -20,7 +20,7 @@ Cada columna se puede ordenar y filtrar.
 | **Proveedores de identidad** | `oidc.create`, `oidc.update`, `oidc.delete`; `identity.link`, `identity.unlink` (una persona vincula o desvincula un proveedor); `oidc.revoke.skipped` (no se retiró el rol de administrador al salir del grupo porque era el último administrador) |
 | **Brains y miembros** | `brain.create`, `brain.update` (incluidas la descripción y la política de secretos), `brain.delete`, `member.set` (`via=oidc-default:<proveedor>` cuando viene del acceso inicial de un proveedor), `member.remove` |
 | **Federación** | `grant.create`, `grant.update`, `grant.revoke` |
-| **Tokens** | `token.create`, `token.revoke` |
+| **Tokens** | `token.create` (con el alcance y los días hasta que caduca), `token.rotate` (con el periodo de gracia), `token.revoke` |
 | **Propuestas** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (el veredicto del decisor), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rechazada por la política de [[Secretos]], con las reglas, nunca el valor) |
 | **Secretos** | `secrets.scan` (recuentos por regla) |
 | **Exportar** | `brain.export` (las opciones, nunca la contraseña), `brain.export.download` |
