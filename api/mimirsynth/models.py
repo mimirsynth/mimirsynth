@@ -206,6 +206,10 @@ class ApiToken(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     news_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # última llamada a `whats_new` sin fecha (MCP)
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # empty: never expires (#133)
+    scopes: Mapped[list | None] = mapped_column(JSON, nullable=True)  # recall | documents | propose; empty: all of them
+    replaced_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the token that took its place when it was rotated
+    expiry_warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user: Mapped[User] = relationship()
 
 

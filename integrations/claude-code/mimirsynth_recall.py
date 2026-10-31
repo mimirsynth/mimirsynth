@@ -5,11 +5,13 @@ Configuración (variables de entorno o ~/.config/mimirsynth/config.json con las 
   MIMIRSYNTH_URL    https://mimirsynth.example.com
   MIMIRSYNTH_TOKEN  token de API del brain (créalo en Administración -> Tokens)
   MIMIRSYNTH_BRAIN  slug del brain
-Falla en abierto: si algo no responde en pocos segundos, no inyecta nada y no bloquea el prompt.
+Falla en abierto: si algo no responde en pocos segundos, no inyecta nada y no bloquea el prompt. Un token caducado o revocado (401) sí
+se avisa, con el motivo que da MimirSynth, para que no deje de recordar sin que nadie lo vea.
 """
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -42,6 +44,14 @@ def main() -> int:
     )
     try:
         ctx = json.load(urllib.request.urlopen(req, timeout=TIMEOUT)).get("context", "").strip()
+    except urllib.error.HTTPError as e:
+        if e.code == 401:  # el token caducó o se revocó: se le dice a la persona, el prompt sigue
+            try:
+                why = json.load(e).get("detail") or "token inválido"
+            except Exception:  # noqa: BLE001
+                why = "token inválido"
+            print(json.dumps({"systemMessage": f"MimirSynth no ha podido recordar: {why}"}, ensure_ascii=False))
+        return 0
     except Exception:  # noqa: BLE001
         return 0
     if ctx:

@@ -11,6 +11,7 @@ The **Security** section of administration: the policy of own accounts. All valu
 | **Failed attempts before locking** | 5 (3–20) | After that many consecutive errors, the account is temporarily locked |
 | **Lockout duration** | 15 min (1–1440) | How long the lock lasts |
 | **Require two-factor** | No | "Yes, everyone" forces anyone signing in with a password to set up a second factor |
+| **Longest life of API tokens** | 0, no limit (0–3650 days) | New tokens, also rotated ones, must expire within this time; existing ones do not change |
 | **Validity of invitations and recovery links** | 7 days (1–30) | After the period the link stops working |
 
 ## Password policy

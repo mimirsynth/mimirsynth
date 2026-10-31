@@ -11,6 +11,7 @@ Sección **Seguridad** de la administración: la política de las cuentas propia
 | **Intentos fallidos antes de bloquear** | 5 (3–20) | Tras ese número de errores seguidos, la cuenta se bloquea temporalmente |
 | **Duración del bloqueo** | 15 min (1–1440) | Cuánto dura el bloqueo |
 | **Exigir doble factor** | No | «Sí, a todos» obliga a configurar un segundo factor a quien entre con contraseña |
+| **Caducidad máxima de los tokens de API** | 0, sin límite (0–3650 días) | Los tokens nuevos, también los rotados, tienen que caducar en este plazo; los que ya existen no cambian |
 | **Validez de invitaciones y enlaces de recuperación** | 7 días (1–30) | Pasado el plazo el enlace deja de funcionar |
 
 ## Política de contraseñas

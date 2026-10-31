@@ -51,7 +51,12 @@ def main() -> int:
     try:
         r = json.load(urllib.request.urlopen(req, timeout=20))
     except urllib.error.HTTPError as e:
-        print(f"MimirSynth respondió {e.code}: {e.read().decode()[:200]}", file=sys.stderr)
+        body = e.read().decode()
+        try:
+            body = json.loads(body).get("detail") or body  # p. ej. «token caducado el …: crea uno nuevo, o rótalo antes de que caduque»
+        except ValueError:
+            pass
+        print(f"MimirSynth respondió {e.code}: {str(body)[:300]}", file=sys.stderr)
         return 1
     except Exception as e:  # noqa: BLE001
         print(f"no se pudo contactar con MimirSynth: {e}", file=sys.stderr)

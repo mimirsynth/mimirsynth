@@ -24,6 +24,7 @@ Los avisos solo llevan metadatos (qué falló, dónde, cuántas veces, un error 
 | `security.lockout` | aviso | Una cuenta se ha bloqueado tras demasiados intentos fallidos |
 | `reindex.orphan` | aviso | Un cambio de modelo de embeddings lleva fallido o parado más horas de las configuradas, con sus vectores sombra ocupando memoria ([[Proveedores de IA]]) |
 | `refquery.regressed` | aviso | Tras un cambio de modelo de embeddings, las consultas de referencia de un brain dejan de encontrar elementos esperados o muestran falsos positivos nuevos. Si no había una ejecución anterior con la que comparar, lo dice, como información |
+| `token.expiring` | información | Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa ([[Conectar agentes]]) |
 | `conflicts.found` | información | Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día ([[Vocabulario]]) |
 | `update.available` | información | Hay una versión más reciente (solo si lo activas, ver abajo) |
 

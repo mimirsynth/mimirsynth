@@ -20,7 +20,7 @@ Each column can be sorted and filtered.
 | **Identity providers** | `oidc.create`, `oidc.update`, `oidc.delete`; `identity.link`, `identity.unlink` (a person links or unlinks a provider); `oidc.revoke.skipped` (the administrator role was not revoked after leaving the group because it was the last administrator) |
 | **Brains and members** | `brain.create`, `brain.update` (including the description and the secrets policy), `brain.delete`, `member.set` (`via=oidc-default:<provider>` when it comes from a provider's initial access), `member.remove` |
 | **Federation** | `grant.create`, `grant.update`, `grant.revoke` |
-| **Tokens** | `token.create`, `token.revoke` |
+| **Tokens** | `token.create` (with the scope and the days until it expires), `token.rotate` (with the grace period), `token.revoke` |
 | **Proposals** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (the decider's verdict), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rejected by the [[Secrets]] policy, with the rules, never the value) |
 | **Secrets** | `secrets.scan` (counts per rule) |
 | **Export** | `brain.export` (the options, never the password), `brain.export.download` |
