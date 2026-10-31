@@ -16,6 +16,14 @@ type Correction = { fact_uuid: string; fact: { fact: string; source: string; tar
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
 
+/** What a proposal does: adds knowledge or invalidates a fact. A correction is the delicate one, so it differs by icon, text and a filled look, not only by colour. */
+function KindPill({ kind }: { kind?: string }) {
+  const { t } = useTranslation();
+  return kind === "correction"
+    ? <Pill size="xs" tone="warn" strong title={t("Invalida un hecho del grafo")}><Group gap={4} wrap="nowrap"><Icon name="undo" size={12} />{t("Corrige")}</Group></Pill>
+    : <Pill size="xs" tone="neutral" title={t("Añade conocimiento al grafo")}><Group gap={4} wrap="nowrap"><Icon name="plus" size={12} />{t("Añade")}</Group></Pill>;
+}
+
 /** Marker in the list for a proposal the secret detector touched: masked (already safe) or flagged (a person must look). Text and icon, not only colour. */
 function SecretsPill({ found }: { found?: SecretFinding[] }) {
   const { t } = useTranslation();
@@ -26,6 +34,7 @@ function SecretsPill({ found }: { found?: SecretFinding[] }) {
 }
 
 type PropList = { total: number; limit: number; offset: number; authors: { id: number; name: string }[]; items: Prop[] };
+type Counts = Record<string, number> & { kinds?: Record<string, number>; corrections_pending?: number };
 const STATUSES = ["pending", "approved", "rejected", "failed", "ingested"];
 const PLURAL: Record<string, string> = { pending: T("Pendientes"), approved: T("Aprobadas"), rejected: T("Rechazadas"), failed: T("Fallidas"), ingested: T("Ingeridas") };
 type View = ReturnType<typeof useProposalsView>;
@@ -33,7 +42,8 @@ const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debou
 
 /** Estado, filtros, orden y página se resuelven en el servidor (#88): con muchas propuestas se llega a todas y los filtros abarcan el conjunto entero.
  *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza y el formulario de alta no se encoge. «Todas» = sin filtro de estado. */
-function ProposalsTable({ data, view, status, onStatus, counts, onOpen }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void; counts: Record<string, number>; onOpen: (id: number) => void }) {
+function ProposalsTable({ data, view, status, onStatus, kind, onKind, counts, onOpen }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
+  kind: string; onKind: (k: string) => void; counts: Counts; onOpen: (id: number) => void }) {
   const { t } = useTranslation();
   const { f, setFilter, sortProps, page, setPage, active, clear } = view;
   const rows = data?.items ?? [];
@@ -41,9 +51,13 @@ function ProposalsTable({ data, view, status, onStatus, counts, onOpen }: { data
   return (<>
     <Segments label={t("Estado")} value={status} onChange={onStatus}
       data={[{ value: "all", label: t("Todas"), count: all }, ...STATUSES.map((k) => ({ value: k, label: t(PLURAL[k]), count: counts[k] ?? 0 }))]} />
+    <Segments label={t("Tipo")} value={kind} onChange={onKind}
+      data={[{ value: "all", label: t("Todas") }, { value: "memory", label: t("Añaden"), count: counts.kinds?.memory ?? 0 }, { value: "correction", label: t("Corrigen"), count: counts.kinds?.correction ?? 0 }]} />
     <ClearFilters active={active} onClear={clear} />
     <FillArea><DataTable fz="sm">
       <DataTable.Thead><DataTable.Tr>
+        <ColHead sort={sortProps("id")}>#</ColHead>
+        <ColHead>{t("Tipo")}</ColHead>
         <ColHead sort={sortProps("name")} filter={{ kind: "text", value: f.q, onChange: (v) => setFilter({ q: v }), placeholder: t("Título…") }}>{t("Título")}</ColHead>
         <ColHead sort={sortProps("author")} filter={{ kind: "select", value: f.author, onChange: (v) => setFilter({ author: v }), allLabel: t("Todos los autores"), options: (data?.authors ?? []).map((a) => ({ value: String(a.id), label: a.name })) }}>{t("Autor")}</ColHead>
         <ColHead sort={sortProps("conf")}>{t("Confianza")}</ColHead>
@@ -53,10 +67,11 @@ function ProposalsTable({ data, view, status, onStatus, counts, onOpen }: { data
       <DataTable.Tbody>
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
+            <DataTable.Td className="ms-data">#{p.id}</DataTable.Td><DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>
             <DataTable.Td><Group gap="xs" wrap="nowrap">{p.name}<SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
           </DataTable.Tr>))}
-        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
+        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={7}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
       </DataTable.Tbody>
     </DataTable></FillArea>
     <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} />
@@ -91,14 +106,17 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [chose, setChose] = useState(false);
   const view = useProposalsView();
   const setStatus = (s: string) => { setChose(true); setStatusRaw(s); view.setPage((p) => ({ ...p, offset: 0 })); };
+  const [kind, setKindRaw] = useState("all");
+  const setKind = (k: string) => { setKindRaw(k); view.setPage((p) => ({ ...p, offset: 0 })); };
   const [open, setOpen] = useState<number | null>(null); const [note, setNote] = useState("");
   const [name, setName] = useState(""); const [body, setBody] = useState(""); const [conf, setConf] = useState<number | string>("");
   const base = `brains/${graph}/proposals`;
   const { sent, sort, page } = view;
-  const list = useQuery({ queryKey: ["proposals", graph, status, sent.q, sent.author, sort?.key, sort?.dir, page.offset, page.limit], placeholderData: keepPreviousData,
-    queryFn: () => get<PropList>(base, { status: status === "all" ? undefined : status, q: sent.q || undefined, author: sent.author || undefined,
+  const list = useQuery({ queryKey: ["proposals", graph, status, kind, sent.q, sent.author, sort?.key, sort?.dir, page.offset, page.limit], placeholderData: keepPreviousData,
+    queryFn: () => get<PropList>(base, { status: status === "all" ? undefined : status, kind: kind === "all" ? undefined : kind, q: sent.q || undefined, author: sent.author || undefined,
       sort: sort?.key, order: sort?.dir, limit: page.limit, offset: page.offset }) });
-  const cnt = useQuery({ queryKey: ["proposals", graph, "counts"], refetchInterval: 15000, queryFn: () => get<Record<string, number>>(`${base}/counts`) });
+  const cnt = useQuery({ queryKey: ["proposals", graph, "counts", kind], refetchInterval: 15000, queryFn: () => get<Counts>(`${base}/counts`, { kind: kind === "all" ? undefined : kind }) });
+  const pendingFixes = cnt.data?.corrections_pending ?? 0;
   // Sin haber elegido nada, la bandeja abre en «Pendientes» si las hay; si no, en «Todas» (un estado vacío no debe esconder el resto).
   useEffect(() => { if (!chose && cnt.data && (cnt.data.pending ?? 0) > 0) setStatusRaw("pending"); }, [cnt.data, chose]);
   const ai = useQuery({ queryKey: ["ai-status"], refetchInterval: 60000, queryFn: () => get<Record<string, { configured: boolean }>>("ai-status") });
@@ -134,10 +152,13 @@ export default function Proposals({ graph, role }: { graph: string; role: string
           {sentProp && <SecretsNotice found={sentProp.secrets} />}
         </Stack></Panel>)}
       <MutationError error={list.error} />
-      <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />
-      <Modal opened={open !== null} onClose={() => setOpen(null)} title={d?.name ?? t("Propuesta")} size="lg" centered>
+      {isCurator && pendingFixes > 0 && !(kind === "correction" && status === "pending") && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
+        {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
+        <Btn kind="link" onClick={() => { setKind("correction"); setStatus("pending"); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
+      <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />
+      <Modal opened={open !== null} onClose={() => setOpen(null)} title={d ? `#${d.id} · ${d.name}` : t("Propuesta")} size="lg" centered>
         {d && <Stack gap="sm">
-          <Group gap="xs"><Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>
+          <Group gap="xs"><KindPill kind={d.kind} /><Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>
             <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {d.confidence ?? t("no indicada")}</Text></Group>
           {d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} /> : <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>}
           <SecretsNotice found={d.secrets} />

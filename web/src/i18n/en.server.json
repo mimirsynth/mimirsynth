@@ -429,6 +429,7 @@
  "supera el máximo de {{doc_max_mb}} MB": "exceeds the maximum of {{doc_max_mb}} MB",
  "textos": "texts",
  "tipo de canal no válido": "invalid channel type",
+ "tipo inválido": "invalid kind",
  "tipo inválido: {{t}}": "invalid type: {{t}}",
  "token de GitHub": "GitHub token",
  "token de GitLab": "GitLab token",

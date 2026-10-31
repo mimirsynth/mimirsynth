@@ -137,3 +137,22 @@ def test_correction_quarantine_apply_replacement_and_reactivate(client, graphs, 
     assert client.post(f"/api/brains/co/proposals/{p.id}/ingest").status_code == 409        # nothing to ingest
     items = client.get("/api/brains/co/proposals").json()["items"]
     assert {i["kind"] for i in items} == {"correction"}
+
+
+@pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_list_filters_and_counts_by_kind(client, graphs):  # noqa: F811
+    """rc.1 feedback on #143: a curator must tell corrections from memories at a glance, filter them and see how many wait."""
+    assert client.post("/api/brains", json={"slug": "cok", "name": "COK", "graph_name": OWN}).status_code == 201
+    h = {"Authorization": "Bearer " + _tok(client, "cok", "contributor")}
+    fix = client.post("/api/brains/cok/proposals/corrections", headers=h, json={"fact_uuid": "f1", "reason": "Ya no corre ahí"})
+    assert fix.status_code == 201 and fix.json()["status"] == "pending"
+    mem = client.post("/api/brains/cok/proposals", headers=h, json={"name": "Nota", "body": "Nextcloud tiene copia diaria"}).json()
+    items = client.get("/api/brains/cok/proposals", params={"kind": "correction"}).json()["items"]
+    assert [(p["id"], p["kind"]) for p in items] == [(fix.json()["id"], "correction")]
+    assert [p["id"] for p in client.get("/api/brains/cok/proposals", params={"kind": "memory"}).json()["items"]] == [mem["id"]]
+    assert [p["id"] for p in client.get("/api/brains/cok/proposals", params={"sort": "id", "order": "asc"}).json()["items"]] == [fix.json()["id"], mem["id"]]
+    assert client.get("/api/brains/cok/proposals", params={"kind": "otra"}).status_code == 400
+    c = client.get("/api/brains/cok/proposals/counts").json()
+    assert c["kinds"] == {"correction": 1, "memory": 1} and c["corrections_pending"] == 1 and c["all"] == 2
+    only = client.get("/api/brains/cok/proposals/counts", params={"kind": "correction"}).json()
+    assert only["all"] == only["pending"] == 1 and only["corrections_pending"] == 1      # the state tabs count only that kind

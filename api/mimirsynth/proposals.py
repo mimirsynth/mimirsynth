@@ -18,6 +18,7 @@ router = APIRouter(prefix="/api/brains/{slug}/proposals")
 contributor = brain_access("contributor")
 curator = brain_access("curator")
 STATUSES = {"pending", "approved", "rejected", "ingested", "failed"}
+KINDS = {"memory", "correction"}  # adds knowledge | invalidates a fact (#109)
 
 
 class ProposalIn(BaseModel):
@@ -88,16 +89,18 @@ def _blocked_rules(ctx: BrainCtx, text: str) -> list[str]:
 
 
 _AUTHOR = func.coalesce(User.email, User.name)
-_SORTS = {"name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id}  # el id sigue el orden de envío
+_SORTS = {"id": Proposal.id, "name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id}  # el id sigue el orden de envío
 
 
 @router.get("")
-def list_proposals(status: str | None = None, q: str = Query("", max_length=200), author: int | None = None, sort: str = "at", order: str = "desc",
+def list_proposals(status: str | None = None, kind: str | None = None, q: str = Query("", max_length=200), author: int | None = None, sort: str = "at", order: str = "desc",
                    limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0), ctx: BrainCtx = Depends(contributor)):
     """Los curadores ven todas; un colaborador solo las suyas. Paginado en el servidor (#88): `total` cuenta lo que pasa los filtros
-    y `authors` lista los autores visibles para el filtro de la columna."""
+    y `authors` lista los autores visibles para el filtro de la columna. `kind` keeps only memories or only corrections."""
     if status and status not in STATUSES:
         raise HTTPException(400, "estado inválido")
+    if kind and kind not in KINDS:
+        raise HTTPException(400, "tipo inválido")
     if sort not in _SORTS:
         raise HTTPException(400, "orden inválido")
     base = select(Proposal).join(User, User.id == Proposal.author_id).where(Proposal.brain_id == ctx.brain.id)
@@ -106,6 +109,8 @@ def list_proposals(status: str | None = None, q: str = Query("", max_length=200)
     authors = ctx.db.execute(base.with_only_columns(User.id, _AUTHOR).distinct().order_by(_AUTHOR)).all()
     if status:
         base = base.where(Proposal.status == status)
+    if kind:
+        base = base.where(Proposal.kind == kind)
     if author:
         base = base.where(Proposal.author_id == author)
     if q.strip():
@@ -117,14 +122,22 @@ def list_proposals(status: str | None = None, q: str = Query("", max_length=200)
 
 
 @router.get("/counts")
-def counts(ctx: BrainCtx = Depends(contributor)):
-    """Número de propuestas por estado (un colaborador solo cuenta las suyas)."""
-    q = select(Proposal.status, func.count()).where(Proposal.brain_id == ctx.brain.id).group_by(Proposal.status)
+def counts(kind: str | None = None, ctx: BrainCtx = Depends(contributor)):
+    """Número de propuestas por estado (un colaborador solo cuenta las suyas), only of one `kind` when given.
+    `kinds` counts each kind across every state, and `corrections_pending` the corrections a person still has to decide."""
+    if kind and kind not in KINDS:
+        raise HTTPException(400, "tipo inválido")
+    q = select(Proposal.status, Proposal.kind, func.count()).where(Proposal.brain_id == ctx.brain.id).group_by(Proposal.status, Proposal.kind)
     if not allows(ctx.role, "curator"):
         q = q.where(Proposal.author_id == ctx.user.id)
-    out = {k: 0 for k in sorted(STATUSES)}
-    out.update({st: n for st, n in ctx.db.execute(q)})
-    out["all"] = sum(out.values())
+    rows = [(st, k or "memory", n) for st, k, n in ctx.db.execute(q)]
+    out: dict = {k: 0 for k in sorted(STATUSES)}
+    for st, k, n in rows:
+        if not kind or k == kind:
+            out[st] += n
+    out["all"] = sum(out[k] for k in STATUSES)
+    out["kinds"] = {k: sum(n for _, kk, n in rows if kk == k) for k in sorted(KINDS)}
+    out["corrections_pending"] = sum(n for st, k, n in rows if st == "pending" and k == "correction")
     return out
 
 

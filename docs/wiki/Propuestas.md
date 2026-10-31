@@ -18,9 +18,11 @@ Enviada ──► (decisor opcional) ──► Pendiente ──► Aprobada ─�
 > El decisor sabe de qué trata el brain por su **descripción**: escribe una al crear o editar el brain (Administración → Brains, ver [[Administrar brains y miembros]]).
 
 ## La lista
-Arriba, el selector **Estado** con un contador por estado: *Todas*, *Pendientes*, *Aprobadas*, *Rechazadas*, *Fallidas*, *Ingeridas*. Se abre en *Pendientes* si hay alguna pendiente y, si no, en *Todas*.
+Arriba, el selector **Estado** con un contador por estado: *Todas*, *Pendientes*, *Aprobadas*, *Rechazadas*, *Fallidas*, *Ingeridas*. Se abre en *Pendientes* si hay alguna pendiente y, si no, en *Todas*. Al lado, el selector **Tipo**: *Todas*, *Añaden* (propuestas que añaden conocimiento) y *Corrigen* ([correcciones](#correcciones), que invalidan un hecho). Los contadores de estado siguen al tipo elegido.
 
-La tabla muestra **Título**, **Autor**, **Confianza**, **Estado** y **Enviada**. Puedes filtrar por título y por autor (**Todos los autores**), ordenar por título, autor, confianza o fecha, y pasar de página con el paginador de abajo. Los filtros y el orden se aplican a **todas las propuestas**, no solo a las filas que ves, así que siempre se llega a las antiguas.
+Cuando hay correcciones esperando, un aviso encima de la lista dice cuántas, porque cada una invalida un hecho y solo la decide una persona. **Ver solo las correcciones pendientes** pone los dos selectores a la vez.
+
+La tabla muestra **#** (el número de la propuesta), **Tipo**, **Título**, **Autor**, **Confianza**, **Estado** y **Enviada**. El tipo es una marca con un icono y una palabra, **Añade** o **Corrige**, y la de una corrección va rellena, así que se distingue sin depender del color; el detalle la repite junto al número. Puedes filtrar por título y por autor (**Todos los autores**), ordenar por título, autor, confianza o fecha, y pasar de página con el paginador de abajo. Los filtros y el orden se aplican a **todas las propuestas**, no solo a las filas que ves, así que siempre se llega a las antiguas.
 
 > Un **lector** no ve propuestas ni puede crearlas. Un **colaborador** ve solo las suyas; un **curador** o superior ve todas.
 
