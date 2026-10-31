@@ -14,6 +14,7 @@ import Federation from "./Federation";
 import Secrets from "./Secrets";
 import BrainExport from "./BrainExport";
 import BrainImport from "./BrainImport";
+import BrainRetention from "./BrainRetention";
 import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
 
@@ -284,6 +285,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
               <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>
               <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>
               {canAdmin && <SettingsGroup title={t("Secretos")} description={t("Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave.")}><SettingsBody><Secrets brain={cur} /></SettingsBody></SettingsGroup>}
+              {cur.role === "owner" && <SettingsGroup title={t("Retención")} description={t("Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.")}><SettingsBody><BrainRetention brain={cur} /></SettingsBody></SettingsGroup>}
               {canAdmin && <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}><SettingsBody><BrainExport brain={cur} /></SettingsBody></SettingsGroup>}
               <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>
             </>}
