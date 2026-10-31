@@ -275,7 +275,7 @@ def edit_relation(name: str, body: RelEditIn, ctx: BrainCtx = Depends(admin_of_b
         t.pop("functional", None)
         if body.functional:
             t["functional"] = True
-    _save(ctx, onto)
+    _save(ctx, _validated(ctx, onto))
     return _done(_record(ctx, "relation.edit", f"Editada la relación {name}", onto_before=before))
 
 

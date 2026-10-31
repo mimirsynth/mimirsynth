@@ -9,11 +9,14 @@ type T = { name: string; description: string; functional?: boolean };
 type Rule = { source: string; target: string; edge_types: string[] };
 type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rule[]; instructions?: string }; configured: boolean; presets: string[]; presets_info?: { name: string; title: string; description: string; version: number; standards: string[]; entity_types: number; edge_types: number }[]; preset_update?: { name: string; installed: number; available: number } | null };
 type Done = { op: number; summary: string };
+/** Catch-all relation names (what the extractor writes when no type fits): they link anything, so they are never single-valued. */
+const GENERIC = new Set(["RELATES_TO", "RELATED_TO", "IS_RELATED_TO", "ASSOCIATED_WITH", "CONNECTED_TO", "LINKED_TO", "MENTIONS"]);
+const isGeneric = (s: string) => GENERIC.has(s.trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[\s-]+/g, "_").toUpperCase());
 type Dlg = { kind: "rel"; item?: T } | { kind: "rel-del"; item: T } | { kind: "rule"; item?: Rule } | { kind: "rule-del"; item: Rule } | { kind: "instr" } | null;
 
 function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: (n: string) => number; canEdit: boolean; onEdit: (t: T) => void; onDelete: (t: T) => void }) {
   const { t } = useTranslation();
-  const v = useTableView(rows, { name: { get: (t: T) => t.name }, desc: { get: (t: T) => t.description }, used: { get: (t: T) => used(t.name) } });
+  const v = useTableView(rows, { name: { get: (t: T) => t.name }, desc: { get: (t: T) => t.description }, used: { get: (t: T) => used(t.name) }, one: { get: (t: T) => (t.functional ? 1 : 0) } });
   return (
     <Stack gap="xs">
       <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
@@ -22,13 +25,15 @@ function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: 
           <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Relación")}</ColHead>
           <ColHead filter={v.text("desc", t("Buscar en la descripción…"))}>{t("Descripción")}</ColHead>
           <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
+          <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
           {canEdit && <DataTable.ActionsHead />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((ty) => (
           <DataTable.Tr key={ty.name}>
-            <DataTable.Td><Group gap={6} wrap="nowrap"><Text fw={500} size="sm">{ty.name}</Text>{ty.functional && <Pill size="xs" tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("un solo valor")}</Pill>}</Group></DataTable.Td>
+            <DataTable.Td><Text fw={500} size="sm">{ty.name}</Text></DataTable.Td>
             <DataTable.Td><Text size="sm" c="dimmed" lineClamp={2}>{ty.description}</Text></DataTable.Td>
             <DataTable.Td>{used(ty.name)}</DataTable.Td>
+            <DataTable.Td>{ty.functional ? <Pill size="xs" tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : <Text size="sm" c="dimmed">—</Text>}</DataTable.Td>
             {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
           </DataTable.Tr>))}</DataTable.Tbody>
       </DataTable>
@@ -85,7 +90,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const upd = q.data?.preset_update;
   const updInfo = info.find((i) => i.name === upd?.name);
   const saveRel = useMutation({
-    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional }, { graph })),
+    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional: functional && !isGeneric(name) }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional: functional && !isGeneric(name) }, { graph })),
     onSuccess: finished });
   const delRel = useMutation({ mutationFn: () => send<Done>("DELETE", `vocab/relations/${(dlg as { item: T }).item.name}`, undefined, { graph }), onSuccess: finished });
   const saveRule = useMutation({ mutationFn: () => send<Done>("PUT", "vocab/map", { source: src, target: tgt, edge_types: edges }, { graph }), onSuccess: finished });
@@ -141,8 +146,9 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
         <Stack>
           <TextField label={t("Nombre")} description={t("PascalCase, sin espacios (p. ej. RunsOn)")} value={name} disabled={dlg?.kind === "rel" && !!dlg.item} onChange={(e) => setName(e.currentTarget.value)} />
           <TextArea label={t("Descripción")} description={t("Cuándo se usa esta relación; guía al ingestor")} minRows={3} autosize value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
-          <Check label={t("Un solo valor a la vez")} checked={functional} onChange={(e) => setFunctional(e.currentTarget.checked)}
-            description={t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes en Contradicciones → Medir en todas las relaciones.")} />
+          <Check label={t("Un solo valor a la vez")} checked={functional && !isGeneric(name)} disabled={isGeneric(name)} onChange={(e) => setFunctional(e.currentTarget.checked)}
+            description={isGeneric(name) ? t("Es una relación genérica: puede unir cualquier cosa, así que no puede ser de un solo valor.")
+              : t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes en Contradicciones → Medir en todas las relaciones.")} />
           <MutationError error={saveRel.error} />
           <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></Group>
         </Stack>

@@ -135,11 +135,12 @@ h1, h2, h3, h4, .mantine-Title-root { font-family: var(--ms-display); font-weigh
 .ms-iconbtn:hover:not([data-disabled]) { background: var(--ms-hover); border-color: var(--ms-accent); color: var(--ms-accent); }
 
 /* Campos, avisos y paneles */
-.ms-field .mantine-InputWrapper-label, .ms-check .mantine-Checkbox-label, .ms-toggle-field .mantine-Switch-label { font-size: 13px; font-weight: 600; color: var(--ms-ink); }
+.ms-field .mantine-InputWrapper-label, .ms-check .mantine-Checkbox-label, .ms-check .mantine-Radio-label, .ms-toggle-field .mantine-Switch-label { font-size: 13px; font-weight: 600; color: var(--ms-ink); }
 .ms-field .mantine-InputWrapper-description { color: var(--ms-muted); font-size: 12px; }
 .ms-field input, .ms-field textarea { font-family: var(--ms-sans); }
 .ms-field input:focus, .ms-field textarea:focus { border-color: var(--ms-accent); }
 .ms-check .mantine-Checkbox-input:checked { background: var(--ms-accent); border-color: var(--ms-accent); }
+.ms-check .mantine-Radio-radio:checked { background: var(--ms-accent); border-color: var(--ms-accent); }
 .ms-toggle-field .mantine-Switch-track { background: var(--ms-line); border-color: var(--ms-line); }
 .ms-toggle-field input:checked + .mantine-Switch-track { background: var(--ms-accent); border-color: var(--ms-accent); }
 .ms-notice { border: 1px solid var(--ms-chip-line); border-radius: var(--ms-radius); background: var(--ms-chip-bg); color: var(--ms-ink); }

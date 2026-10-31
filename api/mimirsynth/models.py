@@ -499,3 +499,18 @@ class RefRun(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ConflictDismissal(Base):
+    """A group of possible contradictions a curator marked as «not a contradiction» (#113 follow-up). It stays hidden while its
+    facts are the same ones; a new fact in the group shows it again."""
+    __tablename__ = "conflict_dismissals"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    source_uuid: Mapped[str] = mapped_column(String(64))
+    source: Mapped[str] = mapped_column(String(255), default="")
+    relation: Mapped[str] = mapped_column(String(128))
+    target_type: Mapped[str] = mapped_column(String(255), default="Entity")
+    facts: Mapped[list] = mapped_column(JSON, default=list)  # uuids of the facts the curator looked at
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

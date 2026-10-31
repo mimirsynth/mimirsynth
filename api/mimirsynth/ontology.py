@@ -68,6 +68,10 @@ def validate_ontology(o: OntologyIn) -> None:
         bad = [e for e in m.edge_types if e not in edges]
         if bad:
             raise HTTPException(400, f"el mapa usa tipos de relación que no existen: {', '.join(bad)}")
+    from .conflicts import generic
+    for t in o.edge_types:
+        if t.functional and generic(t.name):
+            raise HTTPException(400, f"{t.name} es una relación genérica: puede unir cualquier cosa, así que no puede ser de un solo valor")
 
 
 def get_ontology(db: Session, brain_id: int) -> dict | None:

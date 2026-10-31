@@ -123,3 +123,36 @@ def test_scan_resolve_undo_and_notice(client, falkor):  # noqa: F811
     with _factory()() as db:
         n = db.query(Notification).filter(Notification.event == "conflicts.found", Notification.key == "conflicts:cf").one()
         assert n.severity == "info" and "1 posibles contradicciones" in n.title
+
+
+def test_generic_relations_are_never_compared(client):  # noqa: F811
+    """rc.1 feedback: groups named RELATES_TO (the extractor's catch-all) were pure noise."""
+    facts = [_f("1", "antares", "RELATES_TO", "LXC136", "2026-01-01"), _f("2", "antares", "RelatesTo", "Ollama", "2026-02-01"),
+             _f("3", "nas01", "LocatedAt", "Sala A", "2026-01-01"), _f("4", "nas01", "LocatedAt", "Sala B", "2026-02-01")]
+    groups, stats = C.find(facts)
+    assert [g["relation"] for g in groups] == ["LOCATED_AT"] and [s["relation"] for s in stats] == ["LOCATED_AT"]
+    assert C.functional_relations({"edge_types": [{"name": "RelatesTo", "description": "x", "functional": True}]}) == set()
+    client.post("/api/brains", json={"slug": "cf-gen", "name": "CFG"})
+    r = client.post("/api/brains/cf-gen/vocab/relations", json={"name": "RelatesTo", "description": "Cualquier vínculo", "functional": True})
+    assert r.status_code == 400 and "genérica" in r.json()["detail"]
+    assert client.post("/api/brains/cf-gen/vocab/relations", json={"name": "RelatesTo", "description": "Cualquier vínculo"}).status_code == 201
+    assert client.put("/api/brains/cf-gen/vocab/relations/RelatesTo", json={"description": "Cualquier vínculo", "functional": True}).status_code == 400
+
+
+@pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_not_a_contradiction_hides_the_group_until_a_new_fact_joins(client, falkor):  # noqa: F811
+    assert client.post("/api/brains", json={"slug": "cf-dis", "name": "CFD", "graph_name": GRAPH}).status_code == 201
+    client.post("/api/brains/cf-dis/vocab/relations", json={"name": "LocatedAt", "description": "Está en un sitio", "functional": True})
+    g = client.get("/api/brains/cf-dis/conflicts").json()["groups"][0]
+    body = {"source_uuid": g["source_uuid"], "source": g["source"], "relation": g["relation"], "target_type": g["target_type"],
+            "facts": [f["uuid"] for f in g["facts"]]}
+    did = client.post("/api/brains/cf-dis/conflicts/dismiss", json=body).json()["id"]
+    out = client.get("/api/brains/cf-dis/conflicts").json()
+    assert out["total"] == 0 and [(d["id"], d["source"], d["facts"]) for d in out["dismissed"]] == [(did, "nas01", 2)]
+    falkor.query("MATCH (a:Entity {uuid:'s-nas01'}) CREATE (a)-[:RELATES_TO {uuid:'f9', name:'LOCATED_AT', fact:'nas01 en Sala C', "
+                 "valid_at:'2026-08-01T00:00:00Z', created_at:'2026-08-01T00:00:00Z'}]->(:Entity:Place {uuid:'t-c', name:'Sala C'})")
+    out = client.get("/api/brains/cf-dis/conflicts").json()
+    assert out["total"] == 1 and out["dismissed"] == []                                  # a fact nobody saw brings it back
+    assert client.delete(f"/api/brains/cf-dis/conflicts/dismiss/{did}").status_code == 200
+    assert client.delete(f"/api/brains/cf-dis/conflicts/dismiss/{did}").status_code == 404
+    assert client.post("/api/brains/cf-dis/conflicts/dismiss", json={**body, "facts": ["f1"]}).status_code == 422   # at least two facts
