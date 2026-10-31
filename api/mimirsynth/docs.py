@@ -507,4 +507,8 @@ def upload_complete(uid: str, ctx: BrainCtx = Depends(contributor_of_brain)):
 
 def _mime(ext: str) -> str:
     return {".md": "text/markdown", ".markdown": "text/markdown", ".txt": "text/plain", ".rst": "text/x-rst", ".log": "text/plain",
-            ".html": "text/html", ".htm": "text/html", ".pdf": "application/pdf"}.get(ext, "application/octet-stream")
+            ".html": "text/html", ".htm": "text/html", ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".odt": "application/vnd.oasis.opendocument.text"}.get(ext, "application/octet-stream")

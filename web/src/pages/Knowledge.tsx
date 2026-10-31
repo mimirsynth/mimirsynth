@@ -157,8 +157,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                   onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
                   onDrop={(e) => { e.preventDefault(); setOver(false); if (enabled) void start(e.dataTransfer.files); }}>
                   <Group justify="center" gap="md">
-                    <Text size="sm">{t("Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf) o")}</Text>
-                    <FilePicker label={t("Elegir ficheros")} accept=".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf" multiple disabled={!enabled} onFiles={(fl) => void start(fl)} />
+                    <Text size="sm">{t("Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) o")}</Text>
+                    <FilePicker label={t("Elegir ficheros")} accept=".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf,.docx,.pptx,.xlsx,.odt" multiple disabled={!enabled} onFiles={(fl) => void start(fl)} />
                   </Group>
                 </div>)}
               {ups.length > 0 && (

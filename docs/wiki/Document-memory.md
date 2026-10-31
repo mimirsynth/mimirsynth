@@ -12,7 +12,7 @@ Besides the "distilled" memory (episodes → facts), MimirSynth stores **documen
 
 ## How a document is indexed
 1. The **original is stored** in the store volume (or, for a folder, referenced without copying).
-2. The **text is extracted** (Markdown, plain text, HTML, PDF).
+2. The **text is extracted** (Markdown, plain text, HTML, PDF, and Office: Word, PowerPoint, Excel and OpenDocument text).
 3. The **secret detector** looks for credentials in the text and, depending on the brain's policy, masks them or leaves the document unindexed (see below).
 4. If the same text (ignoring case and spacing) is **already indexed** in another document of the brain, the document is marked **duplicate** and stops here (see below).
 5. It is **chunked by headings and sections**, keeping the heading path ("Installation › Requirements").

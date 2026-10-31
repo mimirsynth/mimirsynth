@@ -84,7 +84,6 @@
  "Aprobada automáticamente": "Approved automatically",
  "Aprobadas": "Approved",
  "Aprobar": "Approve",
- "Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf) o": "Drag files here (.md, .txt, .rst, .html, .pdf) or",
  "Auditoría": "Audit",
  "Automático": "Automatic",
  "Automático (reducido)": "Automatic (reduced)",
@@ -1446,5 +1445,6 @@
  "Este paquete no trae la copia exacta del grafo.": "This package does not bring the graph's exact copy.",
  "Restauración rápida (usar la copia exacta)": "Fast restore (use the exact copy)",
  "Solo para paquetes que hayas exportado tú. La copia exacta entra en FalkorDB tal cual, sin validarla como la copia JSON; después se compara con ella y, si no coincide, se descarta. Cifrar un paquete no lo hace de confianza: cualquiera con la contraseña puede hacer uno.": "Only for packages you exported yourself. The exact copy goes into FalkorDB as it is, without being validated like the JSON copy; it is then compared with it and dropped if they do not match. Encrypting a package does not make it trusted: anyone with the password can make one.",
- "la copia exacta no coincidía con la copia JSON y se descartó": "the exact copy did not match the JSON copy and was dropped"
+ "la copia exacta no coincidía con la copia JSON y se descartó": "the exact copy did not match the JSON copy and was dropped",
+ "Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) o": "Drag files here (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) or"
 }

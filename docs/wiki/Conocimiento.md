@@ -17,7 +17,7 @@ La barra de búsqueda de arriba acepta una frase en lenguaje natural o palabras 
 Sin búsqueda, ves la **tabla de documentos**.
 
 ### Subir ficheros
-Arrastra ficheros a la zona de subida o pulsa **Elegir ficheros**. Formatos: **Markdown, texto (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`) y PDF**. Se necesita al menos rol **colaborador**.
+Arrastra ficheros a la zona de subida o pulsa **Elegir ficheros**. Formatos: **Markdown, texto (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`), PDF y Office (`.docx`, `.pptx`, `.xlsx`, `.odt`)**: los títulos de Word y OpenDocument se convierten en encabezados, cada diapositiva empieza por su título, cada hoja por su nombre y cada fila de una tabla va en una línea. Se necesita al menos rol **colaborador**.
 - Las subidas se envían **por partes** y puedes subir varios a la vez; verás el estado de cada una y un botón **Limpiar lista**.
 - El tamaño máximo de un fichero y de cada parte lo fija el administrador ([[Carpetas y límites]]).
 - Si subes un fichero **idéntico** a otro ya subido, no se guarda de nuevo.

@@ -35,7 +35,7 @@ Marca la relación como de un solo valor en la [[Ontología]] y resuelve el caso
 Es normal al principio. Define una [[Ontología]], unifica con [[Relaciones y alias]] y [[Fusionar duplicados]].
 
 ## Documentos
-**¿Qué formatos admite?** Markdown, texto, HTML y PDF con texto. Ver [[Conocimiento]].
+**¿Qué formatos admite?** Markdown, texto, HTML, PDF con texto y documentos de Office (`.docx`, `.pptx`, `.xlsx`, `.odt`). Ver [[Conocimiento]].
 
 **¿Se pueden indexar mis wikis?** Sí, en solo lectura: Outline, Confluence (Cloud y Data Center) y Notion. Los adaptadores de Confluence y Notion aún no se han validado contra una instancia real; Docmost todavía no está soportado. Un almacén de Obsidian se indexa como carpeta. Ver [[Memoria documental]].
 

@@ -30,7 +30,7 @@ Three settings that bound the size of what is uploaded or indexed:
 | **Maximum text extracted per document** | 100 MB | 1–2048 | A document whose text exceeds this size is not indexed |
 
 ## Supported formats
-Text and Markdown (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`) and PDF (`.pdf`). A **scanned** PDF (image only, no text) contains no text to index.
+Text and Markdown (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`), PDF (`.pdf`) and Office (`.docx`, `.pptx`, `.xlsx` and `.odt`; not the old binary formats `.doc`, `.ppt` or `.xls`). A **scanned** PDF (image only, no text) contains no text to index.
 - **Markdown and Obsidian:** a vault is just a folder of Markdown, so it is connected as a folder source. The YAML frontmatter is removed (its `title:` is used), wiki-style links (between double square brackets) keep their text, and embeds, `%%comments%%` and `^block` marks are dropped, also in files saved with Windows line endings. Hidden folders such as `.obsidian/` are ignored.
 - **Repeated files:** a document whose text matches one already indexed in the brain (ignoring case and spacing), for example the same note in two folders, is marked **duplicate** and not indexed twice ([[Knowledge]]).
 - **Secrets:** the brain's secret policy also applies to documents: with **Mask**, credentials are removed from the indexed text; with **Block**, a document that contains a certain one is not indexed. The original file is never modified ([[Connect agents]] explains the policies).
