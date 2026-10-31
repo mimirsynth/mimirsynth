@@ -472,8 +472,9 @@ async def periodic() -> None:
                 n = await asyncio.to_thread(jobs.prune)
                 if n:
                     log.info("trabajos antiguos retirados: %d", n)
-                from . import brainexport
+                from . import brainexport, brainimport
                 await asyncio.to_thread(brainexport.purge)
+                await asyncio.to_thread(brainimport.purge)
             for sid, brain_id in await asyncio.to_thread(due_sources):
                 jobs.submit("doc.scan", brain_id, {"source_id": sid, "manual": False}, "Escaneo programado de carpeta", None, dedupe_key=f"doc.scan:{sid}")
         except Exception:  # noqa: BLE001

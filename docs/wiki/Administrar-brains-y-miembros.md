@@ -38,5 +38,8 @@ Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o
 ## Exportar
 Una copia de este brain en un paquete (grafo, curación, propuestas, documentos y consultas de referencia; nunca miembros, tokens ni secretos), cifrada si se quiere, para guardarla aparte o llevarla a otra instancia. Se prepara como un trabajo y se descarga una vez. Solo los administradores del brain ven esta tarjeta. Ver [[Exportar un brain]].
 
+## Importar un brain
+El administrador de la instancia puede crear un brain nuevo a partir de un paquete exportado, completo o solo su estructura (ontología y alias). El paquete se comprueba entero antes de escribir nada, y un fallo elimina lo que se haya creado. Ver [[Importar un brain]].
+
 ## Tokens de API del brain
 Tokens para plugins y MCP, acotados a este brain. El rol del token **nunca supera el tuyo** y no puede ser administrador. Se muestran **una sola vez** al crearlos. Puedes ver el prefijo, el propietario y el último uso, y **revocarlos**. Uso en [[Conectar agentes]]. Tus propios tokens de todos los brains están también en [[Mi cuenta]].

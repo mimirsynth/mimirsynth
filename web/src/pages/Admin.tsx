@@ -13,6 +13,7 @@ import TokensPanel from "./TokensPanel";
 import Federation from "./Federation";
 import Secrets from "./Secrets";
 import BrainExport from "./BrainExport";
+import BrainImport from "./BrainImport";
 import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
 
@@ -286,6 +287,8 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
               {canAdmin && <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}><SettingsBody><BrainExport brain={cur} /></SettingsBody></SettingsGroup>}
               <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>
             </>}
+            {me.is_admin && <SettingsGroup title={t("Importar un brain")} description={t("Un brain nuevo a partir de un paquete exportado.")}>
+              <SettingsBody><BrainImport onOpen={(s) => { qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(s); }} /></SettingsBody></SettingsGroup>}
           </>}
           {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
           {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}

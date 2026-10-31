@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     doc_store: str = "/data/documents"  # volumen con los originales de la memoria documental (la BD solo guarda referencias y trozos)
     doc_roots_base: str = "/sources"  # las raíces de fuentes de documentos solo pueden estar bajo esta carpeta (un único bind de solo lectura en el contenedor)
     export_ttl_hours: int = 24  # hours an exported brain package waits to be downloaded (#130); it is deleted once downloaded
+    import_max_mb: int = 20480  # largest brain package that can be uploaded to import it (#136)
     doc_max_mb: int = 2048  # tamaño máximo de un fichero subido
     doc_part_mb: int = 64  # tamaño máximo de cada parte de una subida
     doc_text_max_mb: int = 100  # texto extraído máximo por documento
