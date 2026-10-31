@@ -84,6 +84,8 @@ Guide: [[Recall and ingestion]]
 | Model change wait | `reindex_switch_wait` | `60` s | 1–3600 s | Seconds the embedding model change waits for in-progress vector writes (ingestions, indexing) to finish. If they do not, the change is postponed and retried; writes are never cut off. |
 | Alert about a stalled model change | `reindex_orphan_hours` | `24` h | 0–8760 h | Hours an embedding fill can stay failed or stalled, with its shadow vectors taking up memory, before alerting (event “reindex.orphan”). |
 | Keep finished jobs | `jobs_keep_days` | `60` days | 1–3650 days | After this period finished, failed and cancelled jobs are deleted. |
+| Retention: text of rejected proposals | `retention_rejected_days` | `0` days | 0–3650 days | After this period since it was rejected, a proposal loses its text (its status, authors and dates remain). Each brain can set its own. 0: no period. |
+| Retention: finished jobs of each brain | `retention_jobs_days` | `0` days | 0–3650 days | After this period a brain's finished, failed and cancelled jobs are deleted, sooner than with the general period above. Each brain can set its own. 0: no period. |
 | Keep scheduled rescans | `jobs_keep_scheduled_days` | `7` days | 1–365 days | Automatic rescans with no issues are noise (one every few minutes): they are deleted sooner. |
 
 ## Notifications

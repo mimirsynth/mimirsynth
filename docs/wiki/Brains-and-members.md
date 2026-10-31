@@ -35,6 +35,13 @@ Lend this brain's memory, read-only, to another brain, or see which brains lend 
 ## Secrets
 What to do when a proposal or a document carries a password, a token or a key: **mask** it (the default), **block** it or **only warn**, plus a list of exceptions and **Scan what is already stored**. Only brain administrators see this card. See [[Secrets]].
 
+## Retention
+How long what is no longer useful is kept, only for the brain's **owner** (or the instance administrator):
+- **Text of rejected proposals:** after this many days since it was rejected, a proposal loses its text (title, body, source, review note, the decider's reasoning and the correction's detail). Its status, authors and dates remain, and [[Proposals]] shows «(text purged)».
+- **Finished jobs:** the brain's done, failed and cancelled jobs are deleted after this many days, sooner than with the instance's general period.
+
+An empty field uses the instance's period ([[Settings reference]]: `retention_rejected_days`, `retention_jobs_days`) and **0 keeps forever**. By default there is no period, so nothing is purged until someone sets one. A daily job applies them and leaves a summary (the card shows the last one); **Purge now** runs it at once. Every change is audited (`brain.retention`). The audit log and the episodes are never purged from here.
+
 ## Export
 A copy of this brain in a package (graph, curation, proposals, documents and reference queries; never members, tokens or secrets), optionally encrypted, to keep apart or to take to another instance. Prepared as a job and downloaded once. Only brain administrators see this card. See [[Export a brain]].
 
