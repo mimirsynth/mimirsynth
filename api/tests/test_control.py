@@ -617,11 +617,14 @@ def test_delete_brain_with_confirmation(client, monkeypatch):
 def test_bootstrap_only_on_first_run(monkeypatch):
     from mimirsynth import main as mm
     from mimirsynth.config import settings
-    from mimirsynth.models import Brain, BrainOntology
+    from mimirsynth.models import Base, Brain
     from mimirsynth.store import _factory
     with _factory()() as db:
-        # a bulk delete does not cascade in SQLite, which reuses ids: a later brain would inherit an orphaned ontology
-        db.query(BrainOntology).delete(); db.query(Brain).delete(); db.commit()
+        # a bulk delete does not cascade in SQLite, which reuses ids: a later brain would inherit orphaned rows (ontology, proposals…)
+        for t in reversed(Base.metadata.sorted_tables):
+            if "brain_id" in t.c and t.name != "audit_log":
+                db.execute(t.delete())
+        db.query(Brain).delete(); db.commit()
     monkeypatch.setattr(settings, "bootstrap_graphs", "uno:Uno,dos:Dos")
     mm._bootstrap()
     with _factory()() as db:

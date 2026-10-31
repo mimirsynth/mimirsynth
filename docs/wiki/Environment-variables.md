@@ -63,6 +63,7 @@ Used **only if no engine is configured in the interface** ([[AI providers]]).
 | `MIMIRSYNTH_DOC_STORE` | `/data/documents` | Volume with the uploaded originals. **Include it in backups**. Fixed by the official compose |
 | `MIMIRSYNTH_DOC_ROOTS_BASE` | `/sources` | Folder roots can only be under this path. Fixed by the official compose |
 | `MIMIRSYNTH_EXPORT_TTL_HOURS` | `24` | Hours an exported brain package waits to be downloaded before it is deleted. See [[Export a brain]] |
+| `MIMIRSYNTH_IMPORT_MAX_MB` | `20480` | Largest brain package that can be uploaded to import it. See [[Import a brain]] |
 
 ## Defaults of settings (optional)
 These variables exist, but are **managed from the interface**; set one only if you want a different starting value (and add it to the compose file): `MIMIRSYNTH_DOC_MAX_MB` (forwarded by the compose), `…_DOC_PART_MB`, `…_DOC_TEXT_MAX_MB`, `…_DOC_MIN_SIMILARITY`, `…_DOC_PASSAGES`, `…_DOC_SEARCH_TIMEOUT`, `…_INDEX_SYNC_MINUTES`, `…_INGEST_RETRIES`, `…_REINDEX_BATCH`, `…_REINDEX_PAUSE`, `…_REINDEX_SWITCH_WAIT`, `…_REINDEX_ORPHAN_HOURS`, `…_JOBS_KEEP_DAYS`, `…_JOBS_KEEP_SCHEDULED_DAYS`, `…_NOTIFY_*` (repeat interval, quiet hours, health checks, version check, private networks, retention), `…_PASSWORD_MIN_LENGTH`, `…_LOGIN_MAX_ATTEMPTS`, `…_LOCKOUT_MINUTES`, `…_INVITE_DAYS`, `…_REQUIRE_2FA` and the SMTP ones (`…_SMTP_*`). Full table in [[Settings reference]].

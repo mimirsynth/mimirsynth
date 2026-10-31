@@ -42,6 +42,11 @@ jobs:
           MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
           MIMIRSYNTH_TEST_FALKOR: localhost
         run: cd api && .venv/bin/pytest -q tests/test_reembed_pg.py
+      - name: Importar un brain (PostgreSQL + pgvector y FalkorDB reales)
+        env:
+          MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
+          MIMIRSYNTH_TEST_FALKOR: localhost
+        run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
   web:
     runs-on: ubuntu-latest
     steps:

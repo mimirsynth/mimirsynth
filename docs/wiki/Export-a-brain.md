@@ -4,7 +4,7 @@
 
 A copy of **one brain** in a single package, without touching the others. Use it to keep a brain apart, or to take it to another instance. The backup in [[Upgrade and backups]] covers the whole instance; this covers one brain.
 
-Importing a package is a separate step that is not available yet.
+To bring a package into an instance, see [[Import a brain]].
 
 ## How
 **Administration → Brain access → Export.** It needs **brain administrator** (an API token can never export), and it is recorded in the [[Audit log]].
@@ -35,7 +35,7 @@ A `.tar.gz` file (`<slug>-<date>.mimirsynth.tar.gz`) with a versioned **`manifes
 
 > **Exporting while ingesting:** the dump is taken in one go, but the JSON copy of the graph is read in pages. If something is ingested meanwhile, the JSON can miss the newest facts or have an edge whose node is not in it. For an exact copy, export when nothing is being ingested (see [[Jobs]]), or rely on the dump.
 
-> **Restoring the dump:** the `DUMP` payload carries the graph's name. Restore it under that same name (`manifest.json` → `graph.name`) in an instance that does not have that graph, and then copy it to another name if needed. Restoring it under a different name while the original graph is loaded gives wrong counts and can hang FalkorDB.
+> **Restoring the dump:** the `DUMP` payload carries the graph's name. Restore it under that same name (`manifest.json` → `graph.name`) in an instance that does not have that graph, and then copy it to another name if needed. Restoring it under a different name while the original graph is loaded gives wrong counts and can hang FalkorDB. [[Import a brain]] does it this way.
 
 ## Secrets
 Everything goes through the [[Secrets]] detector before it is packaged, **whatever the brain's policy**. A package leaves the instance, so the detector is applied here even when the brain is set to only warn.

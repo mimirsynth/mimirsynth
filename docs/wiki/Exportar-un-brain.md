@@ -4,7 +4,7 @@
 
 Una copia de **un solo brain** en un paquete, sin tocar los demás. Sirve para guardarlo aparte o para llevarlo a otra instancia. La copia de [[Actualización y copias de seguridad]] es de la instancia entera; esta es de un brain.
 
-Importar un paquete es un paso aparte que todavía no está disponible.
+Para llevar un paquete a una instancia, ver [[Importar un brain]].
 
 ## Cómo
 **Administración → Acceso al brain → Exportar.** Hace falta ser **administrador del brain** (un token de API nunca puede exportar), y queda en la [[Auditoría]].
@@ -35,7 +35,7 @@ Un fichero `.tar.gz` (`<slug>-<fecha>.mimirsynth.tar.gz`) con un **`manifest.jso
 
 > **Exportar mientras se ingiere:** el volcado se toma de una vez, pero la copia JSON del grafo se lee por páginas. Si se ingiere algo mientras tanto, el JSON puede quedarse sin los hechos más recientes o tener una arista cuyo nodo no está. Para una copia exacta, exporta cuando no se esté ingiriendo nada (ver [[Trabajos]]), o quédate con el volcado.
 
-> **Restaurar el volcado:** el `DUMP` lleva dentro el nombre del grafo. Restáuralo con ese mismo nombre (`manifest.json` → `graph.name`) en una instancia que no tenga ese grafo, y cópialo después a otro nombre si hace falta. Restaurarlo con otro nombre mientras el grafo original está cargado da conteos erróneos y puede dejar colgado FalkorDB.
+> **Restaurar el volcado:** el `DUMP` lleva dentro el nombre del grafo. Restáuralo con ese mismo nombre (`manifest.json` → `graph.name`) en una instancia que no tenga ese grafo, y cópialo después a otro nombre si hace falta. Restaurarlo con otro nombre mientras el grafo original está cargado da conteos erróneos y puede dejar colgado FalkorDB. [[Importar un brain]] lo hace así.
 
 ## Secretos
 Todo pasa por el detector de [[Secretos]] antes de empaquetarse, **sea cual sea la política del brain**. Un paquete sale de la instancia, así que el detector se aplica aunque el brain esté en «solo avisar».

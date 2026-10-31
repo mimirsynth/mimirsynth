@@ -38,5 +38,8 @@ What to do when a proposal or a document carries a password, a token or a key: *
 ## Export
 A copy of this brain in a package (graph, curation, proposals, documents and reference queries; never members, tokens or secrets), optionally encrypted, to keep apart or to take to another instance. Prepared as a job and downloaded once. Only brain administrators see this card. See [[Export a brain]].
 
+## Import a brain
+The instance administrator can create a new brain from an exported package, in full or only its structure (ontology and aliases). The package is checked in full before anything is written, and a failure removes whatever was created. See [[Import a brain]].
+
 ## The brain's API tokens
 Tokens for plugins and MCP, scoped to this brain. The token's role **never exceeds yours** and it cannot be administrator. They are shown **only once** when created. You can see the prefix, the owner and the last use, and **revoke** them. Usage in [[Connect agents]]. Your own tokens across all brains are also in [[My account]].

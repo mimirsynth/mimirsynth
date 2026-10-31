@@ -77,7 +77,7 @@ def _seed(slug: str) -> dict:
         db.add(BrainOntology(brain_id=b.id, data={"entity_types": [{"name": "Host", "description": "A machine"}]}))
         db.add(VocabAlias(brain_id=b.id, alias="RUNS_ON", canonical="HOSTED_ON"))
         db.add(RefQuery(brain_id=b.id, query="Where does the wiki run?", expect=[{"text": "Polaris", "kind": "fact"}]))
-        db.add(ApiToken(user_id=u.id, brain_id=b.id, name="agent", role="contributor", prefix="ms_x", token_hash="h" * 64))
+        db.add(ApiToken(user_id=u.id, brain_id=b.id, name="agent", role="contributor", prefix="ms_x", token_hash=(slug + "h" * 64)[:64]))  # one per brain: the import tests seed several
         db.add(Proposal(brain_id=b.id, author_id=u.id, name="clean", body="The wiki runs on Polaris"))
         db.add(Proposal(brain_id=b.id, author_id=u.id, name="leaky", body=f"deploy with {TOKEN} please"))  # «warn» left it as it was
         up = DocSource(brain_id=b.id, kind="upload", name="uploads")
@@ -159,7 +159,9 @@ def test_export_contents_secrets_and_download_once(client, falkor):  # noqa: F81
     assert client.get("/api/brains/exp/exports").json()["items"][0]["state"] == "downloaded"
     assert not brainexport._dir(jid).exists()
     with _factory()() as db:
-        acts = [a.action for a in db.query(Audit).filter(Audit.action.like("brain.export%"))]
+        from mimirsynth.models import Brain
+        bid = db.query(Brain).filter(Brain.slug == "exp").one().id  # other tests export too
+        acts = [a.action for a in db.query(Audit).filter(Audit.action.like("brain.export%"), Audit.brain_id == bid)]
     assert acts == ["brain.export", "brain.export.download"]
     # the dump restores the same graph, under its own name (the payload carries it)
     dump = files["graph/graph.dump"]
