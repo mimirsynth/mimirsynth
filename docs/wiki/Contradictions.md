@@ -28,28 +28,39 @@ A short note at the top says what the tab is for and what each action does. The 
 | *target* **the newest** | One fact has a strictly newer **validity date** (when it became true). It is preselected |
 | **same date: your call** | The newest facts share the same date. Nothing is preselected |
 | **learning date only: your call** | Some fact only has the date it was **learned**, which does not say which one is more current. Nothing is preselected |
+| **probably several values** | The relation looks like it holds several values at a time (see below). Nothing is preselected |
 
-An open group asks **Which fact is still true?** and lists each fact as a choice, with its target, its date («true since» or «learned on») and its sentence, cut to two lines with **Show all**. A long group scrolls inside its own area. Then:
-- **Resolve: invalidate the other N** keeps the chosen fact. The button is off until a fact is chosen.
+An open group lists each fact with its target, its date («true since» or «learned on») and its sentence, cut to two lines with **Show all**. A long group scrolls inside its own area. **How to resolve** has two modes:
+- **Keep only one** asks **Which fact is still true?**, one choice per fact. **Resolve: invalidate the other N** keeps the chosen fact; the button is off until a fact is chosen. This is the mode for a really single-valued relation.
+- **Invalidate the ones that are no longer true** asks **Which facts are no longer true?**, with a tick per fact. **Invalidate selected (N)** invalidates only the ticked ones and leaves the rest current; it is off until one is ticked, and while every fact is ticked, because one always has to stay current. This is the mode for a group where only some facts are stale.
+
+Invalidating more than one fact asks for confirmation first, with the list of targets. Then:
 - **Not a contradiction** hides the group, for a false positive. It stays hidden while its facts are the same ones: if a new fact joins the group, it shows again. Hidden groups are listed under **Marked as not a contradiction**, where **Show again** brings one back.
 
 When resolving:
-- The other facts are **invalidated**, not deleted. Their end date is the validity date of the fact you kept when that one is newer (so the timeline shows when it changed), or the current time otherwise.
+- The facts are **invalidated**, not deleted. With **Keep only one**, their end date is the validity date of the fact you kept when that one is newer (so the timeline shows when it changed), or the current time otherwise; with **Invalidate the ones that are no longer true**, the current time.
+- At least one fact of the group always stays current: the server refuses a resolution that would leave none.
 - Each invalidated fact is recorded in the vocabulary history (**Recent changes** in [[Entity types]]), where a brain administrator can **undo** it as long as no later vocabulary change was made. Undo the latest first. The resolution is also recorded in the [[Audit log]].
 - [[Facts]] shows the invalidated ones as no longer current, like any other invalidation.
+
+## Relations that probably hold several values
+A relation such as `MONITORS` can have many targets by nature: a monitoring server watches dozens of services, and each one is true. If it was marked single-valued by mistake, every subject with several targets shows up as a contradiction. A relation is flagged as **probably several values** when some subject has **3 or more** current targets of the same type, or when at least **a quarter** of its subjects (with two cases at least) have several. Then:
+- Its groups get no preselected fact, and the group opens in **Invalidate the ones that are no longer true**.
+- An open group says **Probably not a contradiction**: how many current targets the subject has (or which share of subjects has several) and that, if the relation holds several values, «A single value at a time» should be unticked in [[Ontology]]. **Edit the relation** opens that relation's edit dialog in the Ontology tab, and a brain administrator can **Unmark now** right there; the group then stops showing.
+- The measurement table shows the same flag next to the relation's name.
 
 ## Measure before marking
 **Measure across all relations** looks at every relation, marked or not, **without changing anything**. The **Candidates by relation** table lists, for each relation with at least one case:
 
 | Column | What it shows |
 |---|---|
-| **Relation** | The normalised relation name |
+| **Relation** | The normalised relation name, with **probably several values** when it looks like one (see above) |
 | **Subjects** | How many subjects use it |
 | **With several targets** | How many of them have more than one current target of the same type |
 | **Share** | The proportion between the two, from lowest to highest |
 | **Single value** | Whether it is already marked |
 
-Good candidates have a **low share and some cases**: most subjects have one target and a few have two, which is what a missed contradiction looks like. A relation with a high share probably allows several values: do not mark it. A brain administrator can **Mark** a relation from this table when it is in the ontology. While measuring, the cases of every relation are listed, but only those of relations already marked can be resolved. **Back to the single-valued relations** returns to the normal view.
+Good candidates have a **low share and some cases**: most subjects have one target and a few have two, which is what a missed contradiction looks like. A relation with a high share, or flagged as **probably several values**, probably allows several values: do not mark it. A brain administrator can **Mark** a relation from this table when it is in the ontology, and **Unmark** a marked one that is flagged. While measuring, the cases of every relation are listed, but only those of relations already marked can be resolved. **Back to the single-valued relations** returns to the normal view.
 
 The same measurement is available from the command line, read-only, which helps before anything is marked:
 

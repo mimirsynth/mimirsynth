@@ -217,6 +217,7 @@
  "acceso inicial: no hay ningún brain «{{slug}}»": "initial access: there is no brain “{{slug}}”",
  "acceso inicial: «{{item}}» no tiene el formato brain:rol": "initial access: “{{item}}” is not in the brain:role format",
  "ajuste desconocido": "unknown setting",
+ "al menos un hecho del grupo tiene que seguir vigente": "at least one fact of the group has to stay current",
  "alcance inválido (usa {{v}})": "invalid scope (use {{v}})",
  "alias no encontrado": "alias not found",
  "alias y canónico no pueden estar vacíos": "alias and canonical cannot be empty",

@@ -25,7 +25,7 @@ def test_find_groups_only_distinct_targets_of_the_same_type():
     assert [(g["source"], g["relation"], g["target_type"]) for g in groups] == [("nas01", "LOCATED_AT", "Place")]   # HostedOn no es funcional
     g = groups[0]
     assert g["suggestion"] == {"keep": "2", "invalidate": ["1"], "clear": True, "dated_by": "valid_at"} and [f["uuid"] for f in g["facts"]] == ["2", "1"]
-    assert stats == [{"relation": "LOCATED_AT", "sources": 2, "groups": 1, "ratio": 0.5}]
+    assert stats == [{"relation": "LOCATED_AT", "sources": 2, "groups": 1, "ratio": 0.5, "max_targets": 2, "likely_multi": False}]
     every, stats = C.find(facts)                                                                 # medición: todas las relaciones
     assert {(g["source"], g["relation"]) for g in every} == {("nas01", "LOCATED_AT"), ("vw", "HOSTED_ON")}
     vw = next(g for g in every if g["source"] == "vw")
@@ -156,3 +156,50 @@ def test_not_a_contradiction_hides_the_group_until_a_new_fact_joins(client, falk
     assert client.delete(f"/api/brains/cf-dis/conflicts/dismiss/{did}").status_code == 200
     assert client.delete(f"/api/brains/cf-dis/conflicts/dismiss/{did}").status_code == 404
     assert client.post("/api/brains/cf-dis/conflicts/dismiss", json={**body, "facts": ["f1"]}).status_code == 422   # at least two facts
+
+
+MONITORED = ["efivars", "Bifrost", "UDM Pro", "Music Assistant", "romm", "MusicSeerr", "Vaultwarden", "Jellyfin"]
+
+
+def test_a_relation_with_many_targets_is_flagged_and_not_preselected():
+    """rc.2 feedback on #150: «CheckMK MONITORS» had 8 current targets and «the newest» was preselected, one click from invalidating 7."""
+    facts = [_f(str(i), "CheckMK", "MONITORS", t, f"2026-0{i}-01", kind="Object") for i, t in enumerate(MONITORED, 1)]
+    facts += [_f("p1", "nas01", "LocatedAt", "Sala A", "2026-01-01"), _f("p2", "nas01", "LocatedAt", "Sala B", "2026-06-01")]
+    groups, stats = C.find(facts)
+    big = next(g for g in groups if g["relation"] == "MONITORS")
+    assert big["targets"] == 8 and big["likely_multi"] is True and big["suggestion"]["clear"] is False
+    pair = next(g for g in groups if g["relation"] == "LOCATED_AT")
+    assert pair["likely_multi"] is False and pair["suggestion"]["clear"] is True                  # a pair keeps its suggestion
+    by = {s["relation"]: s for s in stats}
+    assert by["MONITORS"]["likely_multi"] and by["MONITORS"]["max_targets"] == 8 and not by["LOCATED_AT"]["likely_multi"]
+    # many subjects with two targets each also flags the relation, even with no big group
+    owners = [_f(f"o{i}{j}", f"host{i}", "OWNED_BY", f"team{j}", f"2026-0{j + 1}-01", kind="Team") for i in range(3) for j in range(2)]
+    owners += [_f("o9", "host9", "OWNED_BY", "team0", "2026-01-01", kind="Team")]
+    groups, stats = C.find(owners)
+    assert {s["relation"]: s["likely_multi"] for s in stats} == {"OWNED_BY": True} and not any(g["suggestion"]["clear"] for g in groups)
+
+
+@pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_invalidate_only_the_ticked_facts(client, falkor):  # noqa: F811
+    """A group of 8 with one stale fact: ticking only that one leaves the other 7 current and records one invalidation."""
+    for i, t in enumerate(MONITORED, 1):
+        falkor.query("MERGE (a:Entity {uuid:'s-checkmk', name:'CheckMK'}) MERGE (b:Entity:Object {uuid:$tu, name:$t}) "
+                     "CREATE (a)-[:RELATES_TO {uuid:$u, name:'MONITORS', fact:$fact, valid_at:$w, created_at:$w}]->(b)",
+                     {"tu": f"t-m{i}", "t": t, "u": f"m{i}", "fact": f"CheckMK monitors {t}", "w": f"2026-0{i}-01T00:00:00Z"})
+    assert client.post("/api/brains", json={"slug": "cf-sel", "name": "CFS", "graph_name": GRAPH}).status_code == 201
+    client.post("/api/brains/cf-sel/vocab/relations", json={"name": "Monitors", "description": "Vigila algo", "functional": True})
+    g = client.get("/api/brains/cf-sel/conflicts").json()["groups"][0]
+    assert g["relation"] == "MONITORS" and len(g["facts"]) == 8 and g["likely_multi"] and g["suggestion"]["clear"] is False
+    every = [f["uuid"] for f in g["facts"]]
+    r = client.post("/api/brains/cf-sel/conflicts/resolve", json={"invalidate": every})
+    assert r.status_code == 400 and "vigente" in r.json()["detail"]                              # one fact always stays current
+    assert client.post("/api/brains/cf-sel/conflicts/resolve", json={"invalidate": ["m2", "f1"]}).status_code == 400   # another group
+    r = client.post("/api/brains/cf-sel/conflicts/resolve", json={"invalidate": ["m2"]}).json()
+    assert r["ok"] and len(r["ops"]) == 1
+    live = {row[0] for row in falkor.query("MATCH (:Entity {uuid:'s-checkmk'})-[r:RELATES_TO]->() WHERE r.invalid_at IS NULL RETURN r.uuid").result_set}
+    assert live == {f"m{i}" for i in (1, 3, 4, 5, 6, 7, 8)}
+    ops = [o for o in client.get("/api/brains/cf-sel/vocab/types").json()["ops"] if o["id"] in r["ops"]]
+    assert [o["summary"] for o in ops] == ["Invalidado al revisar contradicciones: «CheckMK monitors Bifrost»"]
+    assert client.get("/api/brains/cf-sel/conflicts").json()["groups"][0]["targets"] == 7
+    rest = [u for u in every if u != "m2"]
+    assert client.post("/api/brains/cf-sel/conflicts/resolve", json={"invalidate": rest}).status_code == 400   # still one must stay
