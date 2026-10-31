@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     doc_text_max_mb: int = 100  # texto extraído máximo por documento
     doc_min_similarity: float = 0.66  # coseno mínimo para que un pasaje entre en el recall (calibrado con nomic-embed-text; depende del modelo de embeddings)
     doc_passages: int = 2  # pasajes documentales máximos en el recall
+    recall_stale_weight: float = 0.6  # weight in the recall of a fact past its relation's shelf life (#114)
     doc_search_timeout: float = 0.6  # segundos máximos de la búsqueda documental dentro del recall
     index_sync_minutes: int = 10  # 0 = sin sincronización periódica del índice de texto
 

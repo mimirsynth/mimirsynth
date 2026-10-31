@@ -50,6 +50,16 @@ Tick **A single value at a time** on a relation type only if a subject **cannot 
 
 **No relation is marked by default, not even in the packages**, because many relations look single-valued and are not. Measure first with **Measure across all relations** in [[Contradictions]] and mark only the relations with a low share of subjects with several targets.
 
+## Shelf life and facts to review
+Some data goes stale without anyone contradicting it: an IP, a version, who runs a service. A relation type can have a **shelf life** in days (in the relation's edit dialog, **Shelf life (days)**); none has one by default, not even in the packages, so nothing changes until a brain sets one.
+
+A current fact of that relation whose last date (its last confirmation or, failing that, its validity date) is older than its shelf life is **to review**:
+- In the recall it weighs less (`recall_stale_weight`, 0.6 by default) and is marked «not confirmed since …», also in the context the agent reads.
+- It is listed in Vocabulary → **To review**, for curators: **Confirm** renews its date (stored in PostgreSQL; the graph is not touched) and **Invalidate** works as from Facts. Confirmations are audited (`fact.confirm`).
+- Once a day, the `facts.stale` notification counts them per brain, without any text.
+
+A fact without a validity date (imported from another system, for example) never goes stale by date: there is nothing to measure from. Lent facts are not marked here: the shelf life is the lending brain's. A generic relation such as `RELATES_TO` cannot have a shelf life.
+
 ## Writing good descriptions
 The LLM decides by looking at the descriptions. Good ones:
 - Say **when yes** and **when no**, with real examples.

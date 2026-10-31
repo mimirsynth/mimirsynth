@@ -223,11 +223,13 @@ class RelIn(BaseModel):
     name: str
     description: str = Field(min_length=3, max_length=1500)
     functional: bool = False
+    shelf_life_days: int | None = Field(None, ge=1, le=3650)
 
 
 class RelEditIn(BaseModel):
     description: str = Field(min_length=3, max_length=1500)
     functional: bool | None = None
+    shelf_life_days: int | None = Field(None, ge=0, le=3650, description="days; 0 removes it; empty leaves it as it is")
 
 
 class MapIn(BaseModel):
@@ -258,7 +260,8 @@ def create_relation(body: RelIn, ctx: BrainCtx = Depends(admin_of_brain)):
     if any(t["name"] == body.name for t in onto["edge_types"]):
         raise HTTPException(409, "ese tipo de relación ya existe en la ontología")
     before = copy.deepcopy(onto)
-    onto["edge_types"].append({"name": body.name, "description": body.description, **({"functional": True} if body.functional else {})})
+    onto["edge_types"].append({"name": body.name, "description": body.description, **({"functional": True} if body.functional else {}),
+                               **({"shelf_life_days": body.shelf_life_days} if body.shelf_life_days else {})})
     _save(ctx, _validated(ctx, onto))
     return _done(_record(ctx, "relation.create", f"Añadido el tipo de relación {body.name}", onto_before=before))
 
@@ -275,6 +278,10 @@ def edit_relation(name: str, body: RelEditIn, ctx: BrainCtx = Depends(admin_of_b
         t.pop("functional", None)
         if body.functional:
             t["functional"] = True
+    if body.shelf_life_days is not None:
+        t.pop("shelf_life_days", None)
+        if body.shelf_life_days:
+            t["shelf_life_days"] = body.shelf_life_days
     _save(ctx, _validated(ctx, onto))
     return _done(_record(ctx, "relation.edit", f"Editada la relación {name}", onto_before=before))
 

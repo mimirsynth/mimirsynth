@@ -4,9 +4,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { get, send } from "../api";
-import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog } from "../ui";
+import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog } from "../ui";
 
-type T = { name: string; description: string; functional?: boolean };
+type T = { name: string; description: string; functional?: boolean; shelf_life_days?: number };
 type Rule = { source: string; target: string; edge_types: string[] };
 type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rule[]; instructions?: string }; configured: boolean; presets: string[]; presets_info?: { name: string; title: string; description: string; version: number; standards: string[]; entity_types: number; edge_types: number }[]; preset_update?: { name: string; installed: number; available: number } | null };
 type Done = { op: number; summary: string };
@@ -29,6 +29,7 @@ function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: 
           <ColHead filter={v.text("desc", t("Buscar en la descripción…"))}>{t("Descripción")}</ColHead>
           <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
           <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
+          <ColHead>{t("Vida útil")}</ColHead>
           {canEdit && <DataTable.ActionsHead />}
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((ty) => (
@@ -37,6 +38,7 @@ function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: 
             <DataTable.Td><Text size="sm" c="dimmed" lineClamp={2}>{ty.description}</Text></DataTable.Td>
             <DataTable.Td>{used(ty.name)}</DataTable.Td>
             <DataTable.Td>{ty.functional ? <Pill size="xs" tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : <Text size="sm" c="dimmed">—</Text>}</DataTable.Td>
+            <DataTable.Td>{ty.shelf_life_days ? t("{{n}} días", { n: ty.shelf_life_days }) : <Text size="sm" c="dimmed">—</Text>}</DataTable.Td>
             {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
           </DataTable.Tr>))}</DataTable.Tbody>
       </DataTable>
@@ -79,6 +81,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [functional, setFunctional] = useState(false);
+  const [shelf, setShelf] = useState<number | string>("");
   const [src, setSrc] = useState<string | null>(null);
   const [tgt, setTgt] = useState<string | null>(null);
   const [edges, setEdges] = useState<string[]>([]);
@@ -93,7 +96,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const upd = q.data?.preset_update;
   const updInfo = info.find((i) => i.name === upd?.name);
   const saveRel = useMutation({
-    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional: functional && !isGeneric(name) }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional: functional && !isGeneric(name) }, { graph })),
+    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional: functional && !isGeneric(name), shelf_life_days: isGeneric(name) || shelf === "" ? 0 : Number(shelf) }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional: functional && !isGeneric(name), shelf_life_days: isGeneric(name) || shelf === "" ? null : Number(shelf) }, { graph })),
     onSuccess: finished });
   const delRel = useMutation({ mutationFn: () => send<Done>("DELETE", `vocab/relations/${(dlg as { item: T }).item.name}`, undefined, { graph }), onSuccess: finished });
   const saveRule = useMutation({ mutationFn: () => send<Done>("PUT", "vocab/map", { source: src, target: tgt, edge_types: edges }, { graph }), onSuccess: finished });
@@ -102,7 +105,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
 
   const reset = () => { saveRel.reset(); delRel.reset(); saveRule.reset(); delRule.reset(); saveInstr.reset(); };
-  const openRel = (item?: T) => { reset(); setName(item?.name ?? ""); setDesc(item?.description ?? ""); setFunctional(!!item?.functional); setDlg({ kind: "rel", item }); };
+  const openRel = (item?: T) => { reset(); setName(item?.name ?? ""); setDesc(item?.description ?? ""); setFunctional(!!item?.functional); setShelf(item?.shelf_life_days ?? ""); setDlg({ kind: "rel", item }); };
   const openRule = (item?: Rule) => { reset(); setSrc(item?.source ?? null); setTgt(item?.target ?? null); setEdges(item?.edge_types ?? []); setDlg({ kind: "rule", item }); };
   const openInstr = () => { reset(); setDesc(o?.instructions ?? ""); setDlg({ kind: "instr" }); };
   const entityNames = ["Entity", ...(o?.entity_types.map((t) => t.name) ?? [])];
@@ -161,6 +164,8 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
           <Check label={t("Un solo valor a la vez")} checked={functional && !isGeneric(name)} disabled={isGeneric(name)} onChange={(e) => setFunctional(e.currentTarget.checked)}
             description={isGeneric(name) ? t("Es una relación genérica: puede unir cualquier cosa, así que no puede ser de un solo valor.")
               : t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes en Contradicciones → Medir en todas las relaciones.")} />
+          <NumberField label={t("Vida útil (días)")} min={1} max={3650} value={shelf} onChange={setShelf} disabled={isGeneric(name)} placeholder={t("Sin vida útil")}
+            description={isGeneric(name) ? t("Es una relación genérica: no puede tener vida útil.") : t("Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en A revisar. Vacío: nunca.")} />
           <MutationError error={saveRel.error} />
           <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></Group>
         </Stack>

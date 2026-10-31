@@ -41,6 +41,7 @@ class TypeDef(BaseModel):
 
 class EdgeTypeDef(TypeDef):
     functional: bool = False  # un solo valor a la vez («está en», «informa a»): dos destinos vigentes son una posible contradicción (#113)
+    shelf_life_days: int | None = Field(None, ge=1, le=3650)  # past this, a current fact asks to be reviewed (#114); empty: never
 
 
 class MapDef(BaseModel):
@@ -72,6 +73,8 @@ def validate_ontology(o: OntologyIn) -> None:
     for t in o.edge_types:
         if t.functional and generic(t.name):
             raise HTTPException(400, f"{t.name} es una relación genérica: puede unir cualquier cosa, así que no puede ser de un solo valor")
+        if t.shelf_life_days and generic(t.name):
+            raise HTTPException(400, f"{t.name} es una relación genérica: puede unir cualquier cosa, así que no puede tener vida útil")
 
 
 def get_ontology(db: Session, brain_id: int) -> dict | None:

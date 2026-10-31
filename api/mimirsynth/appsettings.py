@@ -58,6 +58,7 @@ REGISTRY: list[Def] = [
     Def("doc_max_mb", "docs", "Tamaño máximo de un fichero", "Los ficheros más grandes se rechazan al subirlos o al escanear carpetas.", "int", "MB", 1, 20480),
     Def("doc_part_mb", "docs", "Tamaño de cada parte de una subida", "Las subidas se envían por partes de este tamaño (máximo 64).", "int", "MB", 1, 64),
     Def("doc_text_max_mb", "docs", "Texto máximo extraído por documento", "Un documento cuyo texto supere este tamaño no se indexa.", "int", "MB", 1, 2048),
+    Def("recall_stale_weight", "recall", "Peso de un hecho a revisar", "Un hecho vigente que ha superado la vida útil de su relación pesa esto en el recall (y sale marcado «sin confirmar desde …»). 1: igual que los demás.", "float", "", 0, 1),
     Def("doc_min_similarity", "recall", "Similitud mínima de un pasaje", "Coseno mínimo para que un pasaje documental entre en el recall. Depende del modelo de embeddings; con nomic-embed-text, 0,66.", "float", "", 0, 1),
     Def("doc_passages", "recall", "Pasajes documentales por recall", "Máximo de pasajes de documentos que acompañan a los hechos en cada recall.", "int", "", 0, 10),
     Def("doc_search_timeout", "recall", "Tiempo máximo de la búsqueda documental", "Si tarda más, el recall responde sin documentos.", "float", "s", 0.1, 10),

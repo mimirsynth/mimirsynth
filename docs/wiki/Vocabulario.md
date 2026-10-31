@@ -22,6 +22,7 @@ El **vocabulario** es el conjunto de tipos de relación y de entidad que existen
 | [[Ontología]] | Definir qué tipos y relaciones puede extraer el ingestor, y qué relaciones son de un solo valor | Lectura: todos · Cambios: administrador |
 | **Alias** | Lista de los alias activos, con opción de quitarlos | Lectura: todos · Quitar: administrador |
 | [[Fusionar duplicados]] | Unir entidades que son la misma cosa | Lectura: todos · Fusionar: administrador |
+| **A revisar** | Hechos vigentes que han superado la vida útil de su relación: confirma los que siguen siendo ciertos e invalida los demás (ver «Vida útil» en [[Ontología]]) | Curador |
 | [[Contradicciones]] | Resolver hechos vigentes que se contradicen en relaciones de un solo valor, y **Medir en todas las relaciones** para saber cuáles lo son | Curador y superiores |
 
 ## Un buen orden de trabajo

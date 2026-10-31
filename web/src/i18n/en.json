@@ -1504,5 +1504,22 @@
  "{{n}} estimadas": "{{n}} estimated",
  "Índice de documentos": "Document index",
  "Índice de episodios": "Episode index",
- "Últimos 30 días, contados donde MimirSynth llama a cada motor. «Ahora» son las peticiones del último minuto en este proceso; los 429 dicen que el proveedor limita el ritmo, y suelen explicar una ingesta lenta. El coste es una estimación con el precio por millón de tokens de cada modelo.": "Last 30 days, counted where MimirSynth calls each engine. «Now» is the requests of the last minute in this process; 429s mean the provider is limiting the pace, and they usually explain a slow ingestion. The cost is an estimate with each model's price per million tokens."
+ "Últimos 30 días, contados donde MimirSynth llama a cada motor. «Ahora» son las peticiones del último minuto en este proceso; los 429 dicen que el proveedor limita el ritmo, y suelen explicar una ingesta lenta. El coste es una estimación con el precio por millón de tokens de cada modelo.": "Last 30 days, counted where MimirSynth calls each engine. «Now» is the requests of the last minute in this process; 429s mean the provider is limiting the pace, and they usually explain a slow ingestion. The cost is an estimate with each model's price per million tokens.",
+ "A revisar": "To review",
+ "Con vida útil: {{v}}": "With a shelf life: {{v}}",
+ "Confirmar": "Confirm",
+ "Es una relación genérica: no puede tener vida útil.": "It is a generic relation: it cannot have a shelf life.",
+ "Hecho": "Fact",
+ "Hechos vigentes que llevan más tiempo sin confirmar que la vida útil de su relación (una IP, una versión, quién lleva un servicio). En el recall pesan menos y salen marcados. Confirma los que siguen siendo ciertos: se renueva su fecha sin tocar el grafo. Invalida los que ya no lo son. La vida útil se pone en Ontología, al editar cada relación.": "Current facts that have gone unconfirmed for longer than their relation's shelf life (an IP, a version, who runs a service). In the recall they weigh less and are marked. Confirm the ones that are still true: their date is renewed without touching the graph. Invalidate the ones that are not. The shelf life is set in Ontology, when editing each relation.",
+ "Ninguna relación tiene vida útil. Ponla en Ontología, al editar la relación, para las que se quedan viejas sin que nadie las contradiga.": "No relation has a shelf life. Set it in Ontology, when editing the relation, for those that go stale without anyone contradicting them.",
+ "No hay hechos a revisar: todos se han confirmado dentro de su vida útil.": "No facts to review: all of them were confirmed within their shelf life.",
+ "Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en A revisar. Vacío: nunca.": "For data that goes stale without anyone contradicting it (an IP, a version): past this time without a confirmation, a current fact weighs less in the recall and appears in To review. Empty: never.",
+ "Pasado de su vida útil": "Past its shelf life",
+ "Se muestran {{n}} de {{total}}.": "Showing {{n}} of {{total}}.",
+ "Sin confirmar desde": "Not confirmed since",
+ "Sin vida útil": "No shelf life",
+ "Vida útil": "Shelf life",
+ "Vida útil (días)": "Shelf life (days)",
+ "confirmado": "confirmed",
+ "{{r}} ({{n}} días)": "{{r}} ({{n}} days)"
 }

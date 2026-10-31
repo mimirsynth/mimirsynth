@@ -29,6 +29,7 @@ EVENTS = {
     "refquery.regressed": ("warning", "Las consultas de referencia de un brain empeoran tras un cambio de modelo de embeddings"),
     "conflicts.found": ("info", "Hay hechos vigentes que se contradicen en una relación de un solo valor"),
     "token.expiring": ("info", "Un token de API caduca en pocos días"),
+    "facts.stale": ("info", "Hay hechos vigentes que han superado la vida útil de su relación y piden revisión"),
     "ai.budget": ("warning", "Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
@@ -275,8 +276,9 @@ async def worker(version: str = "0.0.0") -> None:
                 from . import conflicts, memory
                 await asyncio.to_thread(conflicts.check_all)
                 await asyncio.to_thread(memory.check_expiring)
-                from . import retention
+                from . import retention, shelflife
                 await asyncio.to_thread(retention.run_all)
+                await asyncio.to_thread(shelflife.check_all)
         except Exception:  # noqa: BLE001
             log.exception("fallo en el ciclo de notificaciones")
         await asyncio.sleep(10)

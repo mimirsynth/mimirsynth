@@ -67,6 +67,7 @@ Guía: [[Recuerdo e ingesta]]
 
 | Ajuste | Clave | Por defecto | Rango o valores | Descripción |
 |---|---|---|---|---|
+| Peso de un hecho a revisar | `recall_stale_weight` | `0,6` | 0–1 | Un hecho vigente que ha superado la vida útil de su relación pesa esto en el recall (y sale marcado «sin confirmar desde …»). 1: igual que los demás. |
 | Similitud mínima de un pasaje | `doc_min_similarity` | `0.66` | 0–1 | Coseno mínimo para que un pasaje documental entre en el recall. Depende del modelo de embeddings; con nomic-embed-text, 0,66. |
 | Pasajes documentales por recall | `doc_passages` | `2` | 0–10 | Máximo de pasajes de documentos que acompañan a los hechos en cada recall. |
 | Tiempo máximo de la búsqueda documental | `doc_search_timeout` | `0.6` s | 0.1–10 s | Si tarda más, el recall responde sin documentos. |

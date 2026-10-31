@@ -31,6 +31,16 @@ A relation type can be marked as **single-valued** (`"functional": true`; in Voc
 - **Measure before marking:** «Measure across all relations» counts, without changing anything, what share of subjects has more than one current target in each relation, from lowest to highest. The candidates are those with a low share and some cases, not those with a high share. Also from the command line, read-only: `python -m mimirsynth.conflicts <graph> [--brain-id N]`.
 - Relations are compared after normalising format and aliases, and **only targets of the same entity type are compared**: «X located at a host» and «X located at a VLAN» do not contradict each other. Two targets with the same name except for case and spacing count as the same (that is a vocabulary duplicate, not a contradiction).
 
+## Shelf life and facts to review
+Some data goes stale without anyone contradicting it: an IP, a version, who runs a service. A relation type can have a **shelf life** in days (in the relation's edit dialog, **Shelf life (days)**); none has one by default, not even in the packages, so nothing changes until a brain sets one.
+
+A current fact of that relation whose last date (its last confirmation or, failing that, its validity date) is older than its shelf life is **to review**:
+- In the recall it weighs less (`recall_stale_weight`, 0.6 by default) and is marked «not confirmed since …», also in the context the agent reads.
+- It is listed in Vocabulary → **To review**, for curators: **Confirm** renews its date (stored in PostgreSQL; the graph is not touched) and **Invalidate** works as from Facts. Confirmations are audited (`fact.confirm`).
+- Once a day, the `facts.stale` notification counts them per brain, without any text.
+
+A fact without a validity date (imported from another system, for example) never goes stale by date: there is nothing to measure from. Lent facts are not marked here: the shelf life is the lending brain's. A generic relation such as `RELATES_TO` cannot have a shelf life.
+
 ## Type corrector
 The type corrector (Vocabulary → Type corrector) does not assume any domain: each package says, in its `retype` block, what to review and what to set aside before asking the decider.
 
