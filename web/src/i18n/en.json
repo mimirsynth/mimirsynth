@@ -1305,5 +1305,14 @@
  "no está en la ontología": "not in the ontology",
  "{{n}} hechos con relaciones genéricas (RELATES_TO y parecidas) no se comparan: pueden unir cualquier cosa.": "{{n}} facts with generic relations (RELATES_TO and similar) are not compared: they can link anything.",
  "«Tipo del destino» es el tipo de entidad de los destinos: solo se comparan destinos del mismo tipo. «Decide tú» sale cuando las fechas no dicen cuál es el actual: o son iguales, o solo dicen cuándo se aprendió cada hecho.": "«Target type» is the entity type of the targets: only targets of the same type are compared. «Your call» shows when the dates do not say which one is current: either they are equal, or they only say when each fact was learned.",
- "¿Qué hecho sigue siendo cierto?": "Which fact is still true?"
+ "¿Qué hecho sigue siendo cierto?": "Which fact is still true?",
+ "Añade": "Adds",
+ "Añade conocimiento al grafo": "Adds knowledge to the graph",
+ "Añaden": "Add",
+ "Cada una invalida un hecho del grafo y solo la decide una persona.": "Each one invalidates a fact in the graph and only a person decides it.",
+ "Correcciones pendientes: {{n}}": "Pending corrections: {{n}}",
+ "Corrige": "Corrects",
+ "Corrigen": "Correct",
+ "Invalida un hecho del grafo": "Invalidates a fact in the graph",
+ "Ver solo las correcciones pendientes": "Show only the pending corrections"
 }

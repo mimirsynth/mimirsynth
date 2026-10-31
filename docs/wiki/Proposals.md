@@ -18,9 +18,11 @@ Submitted ──► (optional decider) ──► Pending ──► Approved ─�
 > The decider knows what the brain is about from its **description**: write one when creating or editing the brain (Administration → Brains, see [[Brains and members]]).
 
 ## The list
-At the top, the **State** selector with a counter per state: *All*, *Pending*, *Approved*, *Rejected*, *Failed*, *Ingested*. It opens on *Pending* when there are pending proposals, and on *All* otherwise.
+At the top, the **State** selector with a counter per state: *All*, *Pending*, *Approved*, *Rejected*, *Failed*, *Ingested*. It opens on *Pending* when there are pending proposals, and on *All* otherwise. Next to it, the **Kind** selector: *All*, *Add* (proposals that add knowledge) and *Correct* ([corrections](#corrections), which invalidate a fact). The state counters follow the chosen kind.
 
-The table shows **Title**, **Author**, **Confidence**, **State** and **Submitted**. You can filter by title and by author (**All authors**), sort by title, author, confidence or date, and move through the pages with the pager below. Filters and sort order apply to **every proposal**, not only to the rows on screen, so old proposals are always reachable.
+When corrections are waiting, a notice above the list says how many, because each one invalidates a fact and only a person decides it. **Show only the pending corrections** sets both selectors at once.
+
+The table shows **#** (the proposal number), **Kind**, **Title**, **Author**, **Confidence**, **State** and **Submitted**. The kind is a marker with an icon and a word, **Adds** or **Corrects**, and a correction's marker is filled, so it stands out without relying on colour; the detail repeats it next to the number. You can filter by title and by author (**All authors**), sort by title, author, confidence or date, and move through the pages with the pager below. Filters and sort order apply to **every proposal**, not only to the rows on screen, so old proposals are always reachable.
 
 > A **reader** neither sees proposals nor can create them. A **contributor** sees only their own; a **curator** or higher sees all.
 

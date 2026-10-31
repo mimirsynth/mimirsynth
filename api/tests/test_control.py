@@ -308,15 +308,18 @@ def test_decider_logic_and_triage(client, monkeypatch):
     assert client.patch(f"/api/decision-engines/{d['id']}", json={"name": "tev1", "base_url": "http://o/v1", "model": "tev1", "threshold": 0.3}).status_code == 422
 
 
+STATES = ("pending", "approved", "rejected", "ingested", "failed")
+
+
 def test_proposal_counts(client):
     client.post("/api/brains", json={"slug": "cnt", "name": "Cnt"})
     client.post("/api/brains/cnt/proposals", json={"name": "a", "body": "x"})
     c = client.get("/api/brains/cnt/proposals/counts").json()
     assert c["approved"] + c["ingested"] + c["failed"] == 1 and c["all"] == 1 and c["pending"] == 0
-    assert c["all"] == sum(n for k, n in c.items() if k != "all")  # #79: «all» es la suma de los estados, no un estado más
+    assert c["all"] == sum(c[k] for k in STATES)  # #79: «all» es la suma de los estados, no un estado más
     client.post("/api/brains/cnt/proposals", json={"name": "b", "body": "y"})
     c = client.get("/api/brains/cnt/proposals/counts").json()
-    assert c["all"] == 2 == sum(n for k, n in c.items() if k != "all")
+    assert c["all"] == 2 == sum(c[k] for k in STATES) and c["kinds"] == {"correction": 0, "memory": 2} and c["corrections_pending"] == 0
 
 
 def test_proposals_paginated_filtered_and_sorted(client):
