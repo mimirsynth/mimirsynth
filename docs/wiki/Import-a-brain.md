@@ -13,8 +13,9 @@ Creates a **new brain** from a package made with [[Export a brain]], from this i
 4. Choose what to import:
    - **Full:** the graph, the ontology and the vocabulary with their history, the type corrections, the reference queries, the proposals and the documents.
    - **Structure only:** the ontology and the aliases, as a template for a new brain. No graph, proposals or documents.
-5. For an encrypted package, type its **password**.
-6. Click **Import**. It runs as a job ([[Jobs]]) and the card shows its progress. When it is done, **Open** switches to the new brain.
+5. For a full import, **Fast restore (use the exact copy)** is off by default. Tick it only for a package you exported yourself (see [The graph](#the-graph)).
+6. For an encrypted package, type its **password**.
+7. Click **Import**. It runs as a job ([[Jobs]]) and the card shows its progress. When it is done, **Open** switches to the new brain.
 
 Only one import runs at a time. An uploaded package that nobody imports is deleted after 24 hours.
 
@@ -28,10 +29,13 @@ The package comes from outside, so it is read in full and checked before anythin
 
 A package that fails any check is rejected with the reason, and nothing is written.
 
+**The importer trusts nothing in the package except what it validated.** The checksums in the manifest come from the package itself, so they only catch a damaged file, not a tampered one; and encrypting a package does not make it trusted, because anyone with the password can make one. That is why the graph comes in through its JSON copy, which goes through every check above, and not through the exact copy, unless you ask for it.
+
 ## The graph
-- **The exact copy** (the dump) is restored when the package brings it and FalkorDB's graph module here has the same version as where it was exported. It is the fastest way and keeps everything, indices included.
-- Otherwise the **JSON copy** goes in, in batches, and Graphiti's indices are created. The card says why: the package has no exact copy (it was left out because of a secret), another FalkorDB version, or its original graph exists in this instance (the dump carries its graph's name and can only be restored under it).
-- With a slug other than the original, the `group_id` of every node and relation is rewritten, as when a brain's graph is renamed in [[Brains and members]].
+- By default the **JSON copy** goes in, in batches, and Graphiti's indices are created. It is the copy that was validated.
+- **Fast restore** uses the **exact copy** (the dump) instead. It is faster on a large graph and keeps everything, indices included, but an exact copy is a FalkorDB payload that goes in as it is: it cannot be validated like the JSON copy. So it is only for packages you exported yourself, and even then what it restored is compared with the JSON copy: the labels and relation types with their counts, the property names and the uuids. If anything differs, the restored graph is dropped and the JSON copy goes in, and the card says so with the differences.
+- Fast restore also falls back to the JSON copy when the package has no exact copy (it was left out because of a secret), when FalkorDB here is another version, or when the original graph exists in this instance (the exact copy carries its graph's name and can only be restored under it). The card says which.
+- The `group_id` of every node and relation is set to the new brain's graph, as when a brain's graph is renamed in [[Brains and members]].
 
 Agents that wrote to the original graph with Graphiti's `group_id` have to be pointed to the new one.
 
@@ -58,7 +62,7 @@ A failure at any point removes everything the import created: the brain, its gra
 ## API
 All instance administrator routes, under `/api/brain-imports`:
 - `POST /uploads` (`{"filename", "size"}`) starts an upload; `PUT /uploads/{id}/parts/{n}` sends each part; `POST /uploads/{id}/complete` joins them and returns the manifest's summary (`null` for an encrypted package); `DELETE /uploads/{id}` discards it.
-- `POST /api/brain-imports` (`{"upload_id", "slug", "name", "mode": "full" | "structure", "password"}`) starts the import and returns the job.
+- `POST /api/brain-imports` (`{"upload_id", "slug", "name", "mode": "full" | "structure", "password", "dump": false}`) starts the import and returns the job; `dump: true` is fast restore.
 - `GET /api/brain-imports` lists the last ones with their state, the graph's method and the counts.
 
 See [[REST API]].

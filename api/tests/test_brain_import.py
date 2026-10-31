@@ -27,7 +27,7 @@ def fake_embedder(monkeypatch):
 def graphs():
     """The graphs the tests import into, removed before and after."""
     from mimirsynth.db import client as fc
-    names = [f"imp{i}" for i in range(1, 10)]
+    names = [f"imp{i}" for i in range(1, 12)]
 
     def clean():
         for g in names:
@@ -97,8 +97,8 @@ def _left(slug: str, graph: str | None = None) -> list[str]:
 
 @needs_falkor
 def test_import_through_json_with_another_name(client, falkor, graphs, fake_embedder):  # noqa: F811
-    """The original graph is still here, so its dump cannot be restored under its own name: the JSON copy goes in, with
-    `group_id` rewritten and Graphiti's vectors computed again (the package did not bring them)."""
+    """By default the validated JSON copy goes in, with `group_id` rewritten and Graphiti's vectors computed again (the package did
+    not bring them)."""
     from mimirsynth import brainimport, docstore
     from mimirsynth.models import (
         ApiToken,
@@ -121,7 +121,7 @@ def test_import_through_json_with_another_name(client, falkor, graphs, fake_embe
     assert man["embedding"]["same"] is True
     item = _import(client, up["upload_id"], "imp1")
     assert item["state"] == "done", item
-    assert item["graph"]["method"] == "json" and item["graph"]["fallback_reason"] == "name_taken"
+    assert item["graph"]["method"] == "json" and item["graph"]["fallback_reason"] == "not_requested" and not item["dump"]
     assert (item["graph"]["nodes"], item["graph"]["edges"]) == (3, 1) and item["vectors"]["graph_computed"] == 3   # two entities, one fact
     from mimirsynth.db import client as fc
     g = fc().select_graph("imp1")
@@ -157,19 +157,48 @@ def test_import_through_json_with_another_name(client, falkor, graphs, fake_embe
 
 @needs_falkor
 def test_import_restores_the_dump_and_rewrites_group_id(client, falkor, graphs, fake_embedder):  # noqa: F811
-    """Same FalkorDB and the original graph gone (another instance): the dump goes in exactly, then to its new name."""
+    """Fast restore requested, same FalkorDB and the original graph gone (another instance): the dump goes in exactly, then to
+    its new name."""
     from mimirsynth.db import client as fc
     assert client.post("/api/brains", json={"slug": "src2", "name": "Source", "graph_name": GRAPH}).status_code == 201
     data = _export(client, "src2")
     falkor.delete()
     up = _upload(client, data)
-    item = _import(client, up["upload_id"], "imp2")
+    item = _import(client, up["upload_id"], "imp2", dump=True)
     assert item["state"] == "done", item
     assert item["graph"]["method"] == "dump" and item["vectors"] == {"reused": True, "graph_computed": 1}   # only Polaris had none
     assert GRAPH not in fc().list_graphs()                                                         # restored under its name, then moved
     g = fc().select_graph("imp2")
     assert {r[0] for r in g.query("MATCH (n) RETURN DISTINCT n.group_id").result_set} == {"imp2"}
     assert g.query("MATCH (n:Entity {uuid:'a'}) RETURN n.name_embedding").result_set[0][0] == pytest.approx([0.1, 0.2])  # the dump's own
+
+
+@needs_falkor
+def test_a_dump_that_does_not_match_the_json_copy_never_goes_in(client, falkor, graphs, fake_embedder):  # noqa: F811
+    """Review of #154: the JSON files are validated but an RDB payload is not, so a package can carry clean JSON and a different
+    dump. By default the dump is not used at all; with fast restore, what it restored is compared with the JSON copy and dropped."""
+    from mimirsynth.db import client as fc
+    from mimirsynth.models import Audit
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "src9", "name": "Source", "graph_name": GRAPH}).status_code == 201
+    files = _files(_export(client, "src9"))
+    falkor.query("CREATE (:Evil {uuid:'x1', group_id:'otro'}), (:Evil {uuid:'x2', payload:'?'})")      # in the dump only
+    files["graph/graph.dump"] = fc().connection.dump(GRAPH)
+    falkor.delete()                                                  # another instance: the dump's own name is free
+    data = _repack(files)
+
+    def evil(slug):
+        return fc().select_graph(slug).query("MATCH (n:Evil) RETURN count(n)").result_set[0][0]
+    item = _import(client, _upload(client, data)["upload_id"], "imp10")                            # the default
+    assert item["state"] == "done" and item["graph"]["method"] == "json" and item["graph"]["fallback_reason"] == "not_requested"
+    assert evil("imp10") == 0 and item["graph"]["nodes"] == 3
+    item = _import(client, _upload(client, data)["upload_id"], "imp11", dump=True)                  # fast restore
+    assert item["state"] == "done" and item["dump"] is True
+    assert item["graph"]["method"] == "json" and item["graph"]["fallback_reason"] == "dump_mismatch"
+    assert any("Evil" in d for d in item["graph"]["dump_mismatch"]) and any("payload" in d for d in item["graph"]["dump_mismatch"])
+    assert evil("imp11") == 0 and item["graph"]["nodes"] == 3 and GRAPH not in fc().list_graphs()    # nothing of the dump is left
+    with _factory()() as db:
+        assert db.query(Audit).filter(Audit.action == "brain.import").order_by(Audit.id.desc()).first().detail["dump"] is True
 
 
 @needs_falkor

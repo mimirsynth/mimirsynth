@@ -9,8 +9,10 @@ The package comes from outside, so nothing is written until all of it has been c
   vectors, when they are reused, have the dimension of the embedding model in use.
 
 Then, in one job with progress:
-- graph: the dump (`RESTORE`) when FalkorDB's graph module has the exporter's version and the dump came; otherwise the JSON copy,
-  in batches, with Graphiti's indices. Under a name other than the original, `group_id` is rewritten, as renaming a brain does;
+- graph: the JSON copy, in batches, with Graphiti's indices. Only on request («fast restore», for packages one exported oneself) the
+  dump (`RESTORE`), when FalkorDB's graph module has the exporter's version: nothing validates an RDB payload as the JSON is
+  validated, so what it restored is compared with the JSON copy (labels and relation types with their counts, property names and
+  uuids) and, if anything differs, dropped for the JSON copy. `group_id` is always rewritten to the new brain's graph;
 - vectors: reused when the embedding model and its dimension are the exporter's; otherwise computed again in the same job (graph,
   episode index and documents);
 - PostgreSQL: brain, ontology, vocabulary, type corrections, reference queries, proposals and documents, with new ids.
@@ -21,6 +23,7 @@ start does it (see `purge`).
 """
 import asyncio
 import hashlib
+from collections import Counter
 import json
 import logging
 import re
@@ -340,8 +343,44 @@ def _vectors_ok(vec, dim: int) -> bool:
                                          for k, v in vec.items())
 
 
-def _check(stage: Path, man: dict, mode: str, dim: int | None) -> None:
-    """Reads the whole package once before anything is written. `dim`: the dimension of reused vectors, or None if they are not."""
+def _comparable(key: str) -> bool:
+    """Property names compared between the dump and the JSON copy: not the vectors, which the JSON only carries on request."""
+    return not (key.endswith("_embedding") or "_embedding_" in key)
+
+
+def _digest(uuids) -> str:
+    return hashlib.sha256("\n".join(sorted(uuids)).encode()).hexdigest()
+
+
+def _shape(g) -> dict:
+    """What a restored graph holds, in the same terms as the shape `_check` takes from the JSON copy."""
+    labels = Counter({r[0]: r[1] for r in g.query("MATCH (n) UNWIND labels(n) AS l RETURN l, count(*)").result_set})
+    types = Counter({r[0]: r[1] for r in g.query("MATCH ()-[r]->() RETURN type(r), count(*)").result_set})
+    props = {r[0] for r in g.query("MATCH (n) UNWIND keys(n) AS k RETURN DISTINCT k").result_set}
+    props |= {r[0] for r in g.query("MATCH ()-[r]->() UNWIND keys(r) AS k RETURN DISTINCT k").result_set}
+    uuids = [f"n:{r[0] or ''}" for r in g.query("MATCH (n) RETURN n.uuid").result_set]
+    uuids += [f"e:{r[0] or ''}" for r in g.query("MATCH ()-[r]->() RETURN r.uuid").result_set]
+    return {"labels": labels, "types": types, "props": {k for k in props if _comparable(k)}, "uuids": _digest(uuids)}
+
+
+def _differences(want: dict, got: dict) -> list[str]:
+    out = []
+    for what in ("labels", "types"):
+        for k in sorted(set(want[what]) | set(got[what])):
+            if want[what][k] != got[what][k]:
+                out.append(f"{k}: {got[what][k]} en el volcado, {want[what][k]} en la copia JSON")
+    if extra := sorted(got["props"] - want["props"]):
+        out.append("propiedades que solo están en el volcado: " + ", ".join(extra[:10]))
+    if missing := sorted(want["props"] - got["props"]):
+        out.append("propiedades que faltan en el volcado: " + ", ".join(missing[:10]))
+    if not out and want["uuids"] != got["uuids"]:
+        out.append("los uuid de los nodos o las aristas no coinciden")
+    return out
+
+
+def _check(stage: Path, man: dict, mode: str, dim: int | None) -> dict | None:
+    """Reads the whole package once before anything is written. `dim`: the dimension of reused vectors, or None if they are not.
+    Returns the graph's shape (labels and relation types with their counts, property names, uuids), to check a restored dump."""
     _json(stage / "brain.json", dict)
     _json(stage / "ontology.json", (dict, type(None)))
     vocab = _json(stage / "vocabulary.json", dict)
@@ -350,8 +389,9 @@ def _check(stage: Path, man: dict, mode: str, dim: int | None) -> None:
         if v is not None and not (isinstance(v, list) and all(isinstance(x, dict) for x in v)):
             raise Invalid("el vocabulario o las consultas de referencia no tienen la forma esperada")
     if mode == "structure":
-        return
+        return None
     nodes, edges = set(), set()
+    shape: dict = {"labels": Counter(), "types": Counter(), "props": set(), "uuids": []}
     for n in _lines(stage / "graph" / "nodes.jsonl"):
         labels, props = n.get("labels"), n.get("props")
         if not _int(n.get("id")) or n["id"] in nodes:
@@ -363,6 +403,9 @@ def _check(stage: Path, man: dict, mode: str, dim: int | None) -> None:
         if dim and "vectors" in n and not _vectors_ok(n["vectors"], dim):
             raise Invalid("los vectores de un nodo no tienen la dimensión del modelo")
         nodes.add(n["id"])
+        shape["labels"].update(labels)
+        shape["props"] |= {k for k in props if _comparable(k)}
+        shape["uuids"].append(f"n:{props.get('uuid') or ''}")
     for e in _lines(stage / "graph" / "edges.jsonl"):
         if not _int(e.get("id")) or e["id"] in edges:
             raise Invalid("una arista del grafo no tiene un id válido o está repetida")
@@ -376,6 +419,9 @@ def _check(stage: Path, man: dict, mode: str, dim: int | None) -> None:
         if dim and "vectors" in e and not _vectors_ok(e["vectors"], dim):
             raise Invalid("los vectores de una arista no tienen la dimensión del modelo")
         edges.add(e["id"])
+        shape["types"][e["type"]] += 1
+        shape["props"] |= {k for k in props if _comparable(k)}
+        shape["uuids"].append(f"e:{props.get('uuid') or ''}")
     if len(nodes) != man["graph"]["nodes"] or len(edges) != man["graph"]["edges"]:
         raise Invalid(f"el grafo no tiene los elementos que dice el manifiesto ({len(nodes)} nodos y {len(edges)} aristas, "
                       f"frente a {man['graph']['nodes']} y {man['graph']['edges']})")
@@ -397,6 +443,7 @@ def _check(stage: Path, man: dict, mode: str, dim: int | None) -> None:
             if not m or int(m.group(1)) != d["id"] or (k == "text") != (m.group(2) == "text.txt") or not (stage / p).is_file():
                 raise Invalid(f"el documento {d['id']} apunta a un fichero que no es suyo o no está en el paquete")
         docs.add(d["id"])
+    shape["uuids"] = _digest(shape["uuids"])
     for c in _lines(stage / "vectors" / "doc_chunks.jsonl"):
         if c.get("document_id") not in docs or not _int(c.get("chunk_idx")) or not isinstance(c.get("text"), str):
             raise Invalid("un trozo de documento no tiene la forma esperada o su documento no está en el paquete")
@@ -407,6 +454,7 @@ def _check(stage: Path, man: dict, mode: str, dim: int | None) -> None:
             raise Invalid("un trozo de episodio no tiene la forma esperada")
         if dim and not (isinstance(c.get("embedding"), list) and len(c["embedding"]) == dim):
             raise Invalid("los vectores de los episodios no tienen la dimensión del modelo")
+    return shape
 
 
 def _same_model(man: dict, emb: dict) -> bool:
@@ -529,14 +577,17 @@ def _curation(db: Session, stage: Path, bid: int, full: bool) -> dict:
     return out
 
 
-def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, made: dict, work: Path) -> dict:
-    """The dump when it can be restored here; the JSON copy otherwise. Returns how it went in and why."""
+def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, made: dict, work: Path, use_dump: bool, shape: dict) -> dict:
+    """The JSON copy, which was validated; the dump only on request, when it can be restored here and holds what the JSON copy
+    holds. Returns how the graph went in and why."""
     g, c = man["graph"], client()
     orig = g.get("name") if isinstance(g.get("name"), str) else ""
     dump = stage / "graph" / "graph.dump"
     here = _falkor_version().get("graph_module")
-    reason = None
-    if not dump.exists():
+    reason, mismatch = None, None
+    if not use_dump:
+        reason = "not_requested"
+    elif not dump.exists():
         reason = g.get("dump_omitted") or "no_dump"
     elif not here or here != (man.get("falkordb") or {}).get("graph_module"):
         reason = "falkordb_version"
@@ -553,10 +604,15 @@ def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, mad
                 _drop_graph(orig)
                 made["restored"] = None
                 _mark(work, made)
-                dst = c.select_graph(slug)
-                dst.query("MATCH (n) WHERE n.group_id IS NOT NULL SET n.group_id = $g", {"g": slug})
-                dst.query("MATCH ()-[r]->() WHERE r.group_id IS NOT NULL SET r.group_id = $g", {"g": slug})
-            return {"method": "dump", "fallback_reason": None}
+            dst = c.select_graph(slug)
+            dst.query("MATCH (n) WHERE n.group_id IS NOT NULL SET n.group_id = $g", {"g": slug})  # the payload's own is not trusted
+            dst.query("MATCH ()-[r]->() WHERE r.group_id IS NOT NULL SET r.group_id = $g", {"g": slug})
+            mismatch = _differences(shape, _shape(dst))
+            if not mismatch:
+                return {"method": "dump", "fallback_reason": None}
+            job.note("el volcado no coincide con la copia JSON (" + "; ".join(mismatch[:5]) + "): se descarta y se usa la copia JSON")
+            _drop_graph(slug)
+            reason = "dump_mismatch"
         except Exception as e:  # noqa: BLE001  (another build of the module, a corrupt payload…: the JSON copy still works)
             job.note(f"no se pudo restaurar el volcado ({e.__class__.__name__}); se usa la copia JSON")
             _drop_graph(slug)
@@ -566,7 +622,7 @@ def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, mad
     made["graph"] = slug
     _mark(work, made)
     _graph_json(job, stage, slug, reuse)
-    return {"method": "json", "fallback_reason": reason}
+    return {"method": "json", "fallback_reason": reason, **({"dump_mismatch": mismatch[:20]} if mismatch else {})}
 
 
 def _graph_json(job: jobs.JobCtx, stage: Path, slug: str, reuse: bool) -> None:
@@ -796,7 +852,7 @@ def _import(job: jobs.JobCtx, work: Path, p: dict, password: str | None) -> dict
     tar.unlink()
     emb, full = resolve_embedding(), p["mode"] == "full"
     reuse = _same_model(man, emb)
-    _check(stage, man, p["mode"], emb["dim"] if reuse else None)
+    shape = _check(stage, man, p["mode"], emb["dim"] if reuse else None)
     slug, user_id = p["slug"], p["user_id"]
     with _factory()() as db:
         if err := _target_error(db, slug):
@@ -823,7 +879,7 @@ def _import(job: jobs.JobCtx, work: Path, p: dict, password: str | None) -> dict
                 audit(db, db.get(User, user_id), "brain.import.done", db.get(Brain, bid), mode=p["mode"], **counts["curation"])
                 return result
             job.progress(3, total, "grafo")
-            graph = _graph(job, stage, man, slug, reuse, made, work)
+            graph = _graph(job, stage, man, slug, reuse, made, work, bool(p.get("dump")), shape)
             job.progress(4, total, "vectores del grafo")
             computed = _embed_graph(job, slug, everything=graph["method"] == "dump" and not reuse) if man["graph"]["nodes"] else 0
             graph.update(zip(("nodes", "edges"), _count(client().select_graph(slug)) if man["graph"]["nodes"] else (0, 0)))
@@ -885,6 +941,7 @@ class ImportIn(BaseModel):
     description: str | None = Field(None, max_length=10000)
     mode: str = "full"
     password: str | None = Field(None, max_length=1024)
+    dump: bool = Field(False, description="fast restore with the package's dump, only for packages one exported oneself; checked against the JSON copy")
 
 
 @router.post("", status_code=202)
@@ -908,9 +965,9 @@ def start(body: ImportIn, user: User = Depends(require_admin), db: Session = Dep
     if encrypted:
         key = secrets.token_urlsafe(16)
         _PASSWORDS[key] = body.password
-    audit(db, user, "brain.import", None, slug=body.slug, mode=body.mode, encrypted=encrypted, size=m["size"], file=m["filename"])
+    audit(db, user, "brain.import", None, slug=body.slug, mode=body.mode, dump=body.dump, encrypted=encrypted, size=m["size"], file=m["filename"])
     jid = jobs.submit(KIND, None, {"upload_id": body.upload_id, "slug": body.slug, "name": body.name.strip(), "description": body.description,
-                                   "mode": body.mode, "encrypted": encrypted, "key": key, "user_id": user.id},
+                                   "mode": body.mode, "encrypted": encrypted, "key": key, "user_id": user.id, "dump": body.dump},
                       f"Importación de {body.slug}", user.id)
     return {"id": jid}
 
@@ -924,7 +981,7 @@ def list_imports(user: User = Depends(require_admin), db: Session = Depends(get_
         p, r = j.params or {}, j.result or {}
         out.append({"id": j.id, "state": j.status, "done": j.progress_done, "total": j.progress_total, "message": j.message, "error": j.error,
                     "user": names.get(j.created_by, ""), "created_at": j.created_at, "finished_at": j.finished_at, "slug": p.get("slug"),
-                    "mode": p.get("mode"), "encrypted": bool(p.get("encrypted")), "upload_id": p.get("upload_id"),
+                    "mode": p.get("mode"), "encrypted": bool(p.get("encrypted")), "dump": bool(p.get("dump")), "upload_id": p.get("upload_id"),
                     "retry_password": j.status == "failed" and (_base() / str(p.get("upload_id"))).joinpath("package").is_file(),
                     **{k: r.get(k) for k in ("brain", "source", "graph", "counts", "vectors", "ref_run", "ref_before")}})
     return {"items": out}

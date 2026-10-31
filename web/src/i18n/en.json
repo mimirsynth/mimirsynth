@@ -1391,14 +1391,12 @@
  "Crea un brain nuevo a partir de un paquete exportado, de esta instancia o de otra. Antes de escribir nada se comprueba el paquete entero, y si algo falla a mitad se elimina lo que se haya creado. Quedas como propietario; los miembros, los tokens, los motores de IA y los canales de aviso se configuran aquí.": "Creates a new brain from an exported package, from this instance or another one. The whole package is checked before anything is written, and if something fails halfway, whatever was created is removed. You become the owner; members, tokens, AI engines and notification channels are set up here.",
  "El del brain nuevo; su grafo se llamará igual.": "The new brain's; its graph gets the same name.",
  "El grafo entró por su copia JSON: {{why}}.": "The graph came in through its JSON copy: {{why}}.",
- "El grafo entró por su copia exacta.": "The graph came in through its exact copy.",
  "Elegir paquete": "Choose package",
  "Fuentes de documentos desactivadas hasta que revises su configuración y sus credenciales: {{n}}.": "Document sources disabled until you check their settings and credentials: {{n}}.",
  "Importado": "Imported",
  "Importar un brain": "Import a brain",
  "Mismo modelo de embeddings: se reutilizan los vectores que trae.": "Same embedding model: the vectors it brings are reused.",
  "No se ha importado ningún brain todavía.": "No brain has been imported yet.",
- "Otra versión de FalkorDB: el grafo entra por su copia JSON.": "Another FalkorDB version: the graph comes in through its JSON copy.",
  "Otro modelo de embeddings ({{model}}): los vectores se calculan de nuevo al importar.": "Another embedding model ({{model}}): the vectors are computed again on import.",
  "Paquete cifrado: su contenido se comprueba al importarlo, con su contraseña.": "Encrypted package: its contents are checked when it is imported, with its password.",
  "Probar otra contraseña": "Try another password",
@@ -1441,5 +1439,12 @@
  "todo": "all",
  "{{n}} días": "{{n}} days",
  "{{n}} hora": "{{n}} hour",
- "Token rotado": "Token rotated"
+ "Token rotado": "Token rotated",
+ "El grafo entró por su copia JSON.": "The graph came in through its JSON copy.",
+ "El grafo entró por su copia exacta, y coincide con la copia JSON.": "The graph came in through its exact copy, and it matches the JSON copy.",
+ "Esta instancia tiene otra versión de FalkorDB: la copia exacta no se puede usar.": "This instance has another FalkorDB version: the exact copy cannot be used.",
+ "Este paquete no trae la copia exacta del grafo.": "This package does not bring the graph's exact copy.",
+ "Restauración rápida (usar la copia exacta)": "Fast restore (use the exact copy)",
+ "Solo para paquetes que hayas exportado tú. La copia exacta entra en FalkorDB tal cual, sin validarla como la copia JSON; después se compara con ella y, si no coincide, se descarta. Cifrar un paquete no lo hace de confianza: cualquiera con la contraseña puede hacer uno.": "Only for packages you exported yourself. The exact copy goes into FalkorDB as it is, without being validated like the JSON copy; it is then compared with it and dropped if they do not match. Encrypting a package does not make it trusted: anyone with the password can make one.",
+ "la copia exacta no coincidía con la copia JSON y se descartó": "the exact copy did not match the JSON copy and was dropped"
 }

@@ -4,7 +4,7 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { fmt, get, langHeaders, send } from "../api";
-import { Btn, EmptyState, FilePicker, ListCard, MutationError, Notice, PasswordField, Pill, ProgressBar, Segments, TextField } from "../ui";
+import { Btn, Check, EmptyState, FilePicker, ListCard, MutationError, Notice, PasswordField, Pill, ProgressBar, Segments, TextField } from "../ui";
 
 type Manifest = {
   slug: string; created_at: string; mimirsynth: string; counts: { proposals?: number; documents?: number }; options: { vectors?: boolean };
@@ -14,8 +14,8 @@ type Upload = { upload_id: string; encrypted: boolean; manifest: Manifest | null
 type State = "queued" | "running" | "done" | "failed" | "cancelled";
 type Item = {
   id: number; state: State; done: number; total: number; message: string; error: string; user: string; created_at: string; slug: string; mode: string;
-  encrypted: boolean; upload_id: string; retry_password: boolean; brain?: string;
-  graph?: { method: "dump" | "json"; fallback_reason: string | null; nodes: number; edges: number };
+  encrypted: boolean; dump: boolean; upload_id: string; retry_password: boolean; brain?: string;
+  graph?: { method: "dump" | "json"; fallback_reason: string | null; nodes: number; edges: number; dump_mismatch?: string[] };
   counts?: { proposals?: number; documents?: { documents: number; sources_disabled: number } };
   vectors?: { reused: boolean; graph_computed: number };
 };
@@ -27,6 +27,7 @@ const STATES: Record<State, { label: string; tone: "neutral" | "success" | "dang
 const WHY_JSON: Record<string, string> = {
   no_dump: T("el paquete no trae la copia exacta"), secrets: T("la copia exacta se quedó fuera por un secreto"),
   falkordb_version: T("otra versión de FalkorDB"), name_taken: T("su grafo original existe en esta instancia"), restore_failed: T("la copia exacta no se pudo restaurar"),
+  dump_mismatch: T("la copia exacta no coincidía con la copia JSON y se descartó"),
 };
 const PART = 32 * 1024 * 1024; // como en los documentos: por debajo del límite habitual de los proxies
 
@@ -50,7 +51,6 @@ function Contents({ m }: { m: Manifest }) {
       <Text size="xs">{t("Nodos: {{n}} · aristas: {{e}} · propuestas: {{p}} · documentos: {{d}}", { n: m.graph.nodes, e: m.graph.edges, p: m.counts.proposals ?? 0, d: m.counts.documents ?? 0 })}</Text>
       <Text size="xs" c="dimmed">{m.embedding.same ? t("Mismo modelo de embeddings: se reutilizan los vectores que trae.")
         : t("Otro modelo de embeddings ({{model}}): los vectores se calculan de nuevo al importar.", { model: m.embedding.model })}</Text>
-      {m.graph.dump && !m.graph.same_falkordb && <Text size="xs" c="dimmed">{t("Otra versión de FalkorDB: el grafo entra por su copia JSON.")}</Text>}
     </Stack>
   );
 }
@@ -63,7 +63,8 @@ function Result({ it }: { it: Item }) {
   return (
     <Stack gap={2}>
       <Text size="xs">{t("Nodos: {{n}} · aristas: {{e}} · propuestas: {{p}} · documentos: {{d}}", { n: it.graph.nodes, e: it.graph.edges, p: it.counts?.proposals ?? 0, d: it.counts?.documents?.documents ?? 0 })}</Text>
-      <Text size="xs" c="dimmed">{it.graph.method === "dump" ? t("El grafo entró por su copia exacta.")
+      <Text size="xs" c="dimmed">{it.graph.method === "dump" ? t("El grafo entró por su copia exacta, y coincide con la copia JSON.")
+        : !it.dump ? t("El grafo entró por su copia JSON.")
         : t("El grafo entró por su copia JSON: {{why}}.", { why: t(WHY_JSON[it.graph.fallback_reason ?? ""] ?? WHY_JSON.no_dump) })}
         {" "}{!it.vectors?.reused ? t("Vectores calculados de nuevo.") : it.vectors.graph_computed ? t("Vectores reutilizados; calculados los que faltaban ({{n}}).", { n: it.vectors.graph_computed }) : t("Vectores reutilizados.")}</Text>
       {disabled > 0 && <Text size="xs" c="dimmed">{t("Fuentes de documentos desactivadas hasta que revises su configuración y sus credenciales: {{n}}.", { n: disabled })}</Text>}
@@ -80,14 +81,14 @@ export default function BrainImport({ onOpen }: { onOpen: (slug: string) => void
     refetchInterval: (q) => (q.state.data?.items.some((i) => i.state === "queued" || i.state === "running") ? 1500 : false) });
   const [sent, setSent] = useState<{ done: number; size: number } | null>(null);
   const [up, setUp] = useState<Upload | null>(null);
-  const [slug, setSlug] = useState(""); const [name, setName] = useState(""); const [mode, setMode] = useState("full"); const [pw, setPw] = useState("");
+  const [slug, setSlug] = useState(""); const [name, setName] = useState(""); const [mode, setMode] = useState("full"); const [pw, setPw] = useState(""); const [dump, setDump] = useState(false);
   const pick = useMutation({
     mutationFn: (f: File) => { setSent({ done: 0, size: f.size }); return upload(f, (done) => setSent({ done, size: f.size })); },
-    onSuccess: (u) => { setUp(u); setSlug(u.manifest?.slug ?? ""); setName(u.manifest?.slug ?? ""); setMode("full"); setPw(""); },
+    onSuccess: (u) => { setUp(u); setSlug(u.manifest?.slug ?? ""); setName(u.manifest?.slug ?? ""); setMode("full"); setPw(""); setDump(false); },
     onSettled: () => setSent(null),
   });
   const reset = () => { setUp(null); setPw(""); start.reset(); };
-  const start = useMutation({ mutationFn: () => send<{ id: number }>("POST", "brain-imports", { upload_id: up!.upload_id, slug, name, mode, password: up!.encrypted ? pw : undefined }),
+  const start = useMutation({ mutationFn: () => send<{ id: number }>("POST", "brain-imports", { upload_id: up!.upload_id, slug, name, mode, dump: mode === "full" && dump, password: up!.encrypted ? pw : undefined }),
     onSuccess: () => { reset(); qc.invalidateQueries({ queryKey: key }); } });
   const discard = useMutation({ mutationFn: () => send("DELETE", `brain-imports/uploads/${up!.upload_id}`), onSettled: reset });
   const busy = list.data?.items.some((i) => i.state === "queued" || i.state === "running");
@@ -111,6 +112,11 @@ export default function BrainImport({ onOpen }: { onOpen: (slug: string) => void
           <Segments label={t("Qué importar")} value={mode} onChange={setMode}
             data={[{ value: "full", label: t("Completo") }, { value: "structure", label: t("Solo la estructura") }]} />
           {mode === "structure" && <Text size="xs" c="dimmed">{t("Solo la ontología y los alias, como plantilla: sin grafo, propuestas ni documentos.")}</Text>}
+          {mode === "full" && <Check checked={dump} onChange={(e) => setDump(e.currentTarget.checked)}
+            disabled={!!up.manifest && (!up.manifest.graph.dump || !up.manifest.graph.same_falkordb)} label={t("Restauración rápida (usar la copia exacta)")}
+            description={up.manifest && !up.manifest.graph.dump ? t("Este paquete no trae la copia exacta del grafo.")
+              : up.manifest && !up.manifest.graph.same_falkordb ? t("Esta instancia tiene otra versión de FalkorDB: la copia exacta no se puede usar.")
+              : t("Solo para paquetes que hayas exportado tú. La copia exacta entra en FalkorDB tal cual, sin validarla como la copia JSON; después se compara con ella y, si no coincide, se descarta. Cifrar un paquete no lo hace de confianza: cualquiera con la contraseña puede hacer uno.")} />}
           {up.encrypted && <PasswordField label={t("Contraseña del paquete")} value={pw} onChange={(e) => setPw(e.currentTarget.value)} autoComplete="off" />}
           <MutationError error={start.error ?? discard.error} />
           <Group gap="xs">

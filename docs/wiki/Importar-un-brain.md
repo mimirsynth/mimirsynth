@@ -13,8 +13,9 @@ Crea un **brain nuevo** a partir de un paquete hecho con [[Exportar un brain]], 
 4. Elige qué importar:
    - **Completo:** el grafo, la ontología y el vocabulario con su historial, las correcciones de tipos, las consultas de referencia, las propuestas y los documentos.
    - **Solo la estructura:** la ontología y los alias, como plantilla de un brain nuevo. Sin grafo, propuestas ni documentos.
-5. Si el paquete está cifrado, escribe su **contraseña**.
-6. Pulsa **Importar**. Se hace como un trabajo ([[Trabajos]]) y la tarjeta enseña su progreso. Al terminar, **Abrir** cambia al brain nuevo.
+5. En una importación completa, **Restauración rápida (usar la copia exacta)** está desmarcada. Márcala solo con un paquete que hayas exportado tú (ver [El grafo](#el-grafo)).
+6. Si el paquete está cifrado, escribe su **contraseña**.
+7. Pulsa **Importar**. Se hace como un trabajo ([[Trabajos]]) y la tarjeta enseña su progreso. Al terminar, **Abrir** cambia al brain nuevo.
 
 Solo se hace una importación a la vez. Un paquete subido que nadie importa se borra a las 24 horas.
 
@@ -28,10 +29,13 @@ El paquete viene de fuera, así que se lee entero y se comprueba antes de crear 
 
 Un paquete que no pasa alguna comprobación se rechaza con el motivo, sin escribir nada.
 
+**La importación no se fía de nada del paquete salvo de lo que ha validado.** Las huellas del manifiesto vienen del propio paquete, así que solo detectan un fichero dañado, no uno manipulado; y cifrar un paquete no lo hace de confianza, porque cualquiera con la contraseña puede hacer uno. Por eso el grafo entra por su copia JSON, que pasa todas las comprobaciones de arriba, y no por la copia exacta, salvo que lo pidas.
+
 ## El grafo
-- **La copia exacta** (el volcado) se restaura cuando el paquete la trae y el módulo de grafos de FalkorDB de aquí tiene la misma versión que donde se exportó. Es lo más rápido y lo conserva todo, índices incluidos.
-- Si no, entra la **copia JSON**, por lotes, y se crean los índices de Graphiti. La tarjeta dice por qué: el paquete no trae la copia exacta (se quedó fuera por un secreto), otra versión de FalkorDB, o su grafo original existe en esta instancia (el volcado lleva el nombre de su grafo y solo se puede restaurar con él).
-- Con un slug distinto del original se reescribe el `group_id` de cada nodo y relación, como al cambiar el grafo de un brain en [[Administrar brains y miembros]].
+- Por defecto entra la **copia JSON**, por lotes, y se crean los índices de Graphiti. Es la copia que se ha validado.
+- La **restauración rápida** usa en su lugar la **copia exacta** (el volcado). Es más rápida con un grafo grande y lo conserva todo, índices incluidos, pero una copia exacta es un contenido de FalkorDB que entra tal cual: no se puede validar como la copia JSON. Por eso es solo para paquetes que hayas exportado tú, y aun así lo restaurado se compara con la copia JSON: las etiquetas y los tipos de relación con sus recuentos, los nombres de las propiedades y los uuid. Si algo no coincide, el grafo restaurado se descarta y entra la copia JSON, y la tarjeta lo dice con las diferencias.
+- La restauración rápida también vuelve a la copia JSON cuando el paquete no trae la copia exacta (se quedó fuera por un secreto), cuando el FalkorDB de aquí es de otra versión o cuando el grafo original existe en esta instancia (la copia exacta lleva el nombre de su grafo y solo se puede restaurar con él). La tarjeta dice cuál.
+- El `group_id` de cada nodo y relación pasa a ser el del grafo del brain nuevo, como al cambiar el grafo de un brain en [[Administrar brains y miembros]].
 
 Los agentes que escribían en el grafo original con el `group_id` de Graphiti tienen que repuntarse al nuevo.
 
@@ -58,7 +62,7 @@ Un fallo en cualquier punto elimina todo lo que la importación había creado: e
 ## API
 Todas son rutas del administrador de la instancia, bajo `/api/brain-imports`:
 - `POST /uploads` (`{"filename", "size"}`) empieza una subida; `PUT /uploads/{id}/parts/{n}` envía cada parte; `POST /uploads/{id}/complete` las une y devuelve el resumen del manifiesto (`null` si el paquete está cifrado); `DELETE /uploads/{id}` la descarta.
-- `POST /api/brain-imports` (`{"upload_id", "slug", "name", "mode": "full" | "structure", "password"}`) lanza la importación y devuelve el trabajo.
+- `POST /api/brain-imports` (`{"upload_id", "slug", "name", "mode": "full" | "structure", "password", "dump": false}`) lanza la importación y devuelve el trabajo; `dump: true` es la restauración rápida.
 - `GET /api/brain-imports` lista las últimas con su estado, cómo entró el grafo y los recuentos.
 
 Ver [[API REST]].
