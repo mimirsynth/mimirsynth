@@ -28,6 +28,7 @@ EVENTS = {
     "reindex.orphan": ("warning", "Un cambio de modelo de embeddings lleva tiempo sin terminar y sus vectores sombra ocupan memoria"),
     "refquery.regressed": ("warning", "Las consultas de referencia de un brain empeoran tras un cambio de modelo de embeddings"),
     "conflicts.found": ("info", "Hay hechos vigentes que se contradicen en una relación de un solo valor"),
+    "token.expiring": ("info", "Un token de API caduca en pocos días"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
@@ -269,8 +270,9 @@ async def worker(version: str = "0.0.0") -> None:
                 await asyncio.to_thread(reembed.check_orphan)
             if t - last_conflicts >= 86400:
                 last_conflicts = t
-                from . import conflicts
+                from . import conflicts, memory
                 await asyncio.to_thread(conflicts.check_all)
+                await asyncio.to_thread(memory.check_expiring)
         except Exception:  # noqa: BLE001
             log.exception("fallo en el ciclo de notificaciones")
         await asyncio.sleep(10)

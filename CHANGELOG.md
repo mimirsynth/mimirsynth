@@ -5,6 +5,8 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- **API tokens that expire, with a finer scope, and rotation** (#133). A new token chooses when it expires (30, 90 or 365 days, or never) and its **scope** on top of its role: **recall** (recall and reading the memory), **documents** (passages in the recall and reading documents) and **propose** (proposals and corrections). A token without documents gets no passages over HTTP, MCP or federation, and `/docs` answers 403; over MCP the tools it cannot use are not listed. An expired token answers 401 with the date, and the Claude Code recall hook shows that message instead of failing silently. **Rotate** gives a new token with the same name, role, scope and lifetime, and keeps the old one working for a grace period (0 to 7 days, default 1). The `token.expiring` notification announces a token 7 days before it expires, and the instance can cap the life of new tokens (`token_max_days`). Existing tokens keep working as before: every scope and no expiry, marked in the list with the suggestion to rotate them. The list shows each token's scope, expiry and how long it has gone unused. API tokens can no longer manage tokens. Migration `0029`. See «Connect agents» in the wiki.
 
 ## [0.9.0] - 2026-10-31
 ### Added

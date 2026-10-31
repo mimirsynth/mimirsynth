@@ -14,7 +14,18 @@ In [[My account]] → **API tokens** (or in [[Brains and members]]):
    | **Reader** | Query: recall, facts, documents |
    | **Contributor** | Also **propose** memory (it goes into quarantine) and upload documents |
    | **Curator** | Also approve: its proposals are ingested directly |
-4. Copy the token (`mst_…`): **it is shown only once**.
+4. Choose when it **expires**: 30, 90 or 365 days, or never (the instance may set a maximum, and then «never» is not offered).
+5. Choose its **scope**, which limits it further than the role:
+   | Scope | The agent can |
+   |---|---|
+   | **Recall** | Recall and read the memory (facts, entities, journal, graph, query); over MCP, `recall`, `facts_about`, `timeline` and `whats_new` |
+   | **Documents** | Get document passages in the recall, its own and those lent to the brain, and read documents (`/docs`; `get_document` over MCP) |
+   | **Propose** | Send proposals and corrections (`remember` and `correct` over MCP) |
+
+   All three are ticked by default. A token without **Documents** gets no passages at all, over HTTP, MCP or federation. Curating depends only on the role.
+6. Copy the token (`mst_…`): **it is shown only once**.
+
+**Expiry and rotation.** An expired token answers `401` with the date it expired, and the recall hook shows that message instead of failing silently. A few days before, the `token.expiring` notification announces it (see [[Notifications]]). **Rotate** gives a new token with the same name, role, scope and lifetime, shown once; the old one keeps working for the grace period you choose (none, 1 hour, or 1, 3 or 7 days), so there is time to update the agent. Only the token's owner can rotate it. Tokens made before expiry existed never expire: the list marks them **never expires** and suggests rotating them. The list also says how long a token has gone unused, to clean up forgotten ones. API tokens are managed from a session, never with another token.
 
 **Recommendation:** give agents the **contributor** role. That way what they write goes through a curator's (or the decider's) review and an agent that makes a mistake does not pollute the graph. A token **cannot have more role than your user** and **never administers the instance**.
 

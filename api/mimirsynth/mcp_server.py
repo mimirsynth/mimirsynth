@@ -16,9 +16,9 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from . import appsettings, mcp_tools, secretguard
-from .deps import BrainCtx, brain_access
+from .deps import BrainCtx, brain_access, token_allows
 from .i18n import language, tr, translate
-from .memory import RecallIn, federated_kwargs
+from .memory import RecallIn, docs_for, federated_kwargs
 from .proposals import ProposalIn, create
 from .recall import recall
 from .roles import allows
@@ -107,6 +107,14 @@ def _text(text: str, error: bool = False) -> dict:
     return {"content": [{"type": "text", "text": text}], "isError": error}
 
 
+SCOPE = {"recall": "recall", "facts_about": "recall", "timeline": "recall", "whats_new": "recall", "get_document": "documents",
+         "remember": "propose", "correct": "propose"}  # what each tool needs from a token with a limited scope (#133)
+
+
+def _allowed(request: Request, name: str) -> bool:
+    return token_allows(getattr(request.state, "token", None), SCOPE[name])
+
+
 def _tools(lang: str) -> list[dict]:
     """Las herramientas con sus títulos y descripciones en el idioma de quien llama."""
     def walk(x):
@@ -119,9 +127,12 @@ def _tools(lang: str) -> list[dict]:
 def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args: dict, lang: str) -> dict:
     """Resultado de una herramienta. Los fallos propios de la herramienta vuelven como `isError` (que el modelo puede leer y corregir)."""
     try:
+        if not _allowed(request, name):
+            return _text(tr("Este token no tiene el alcance «{{scope}}»: no puede usar «{{name}}».", lang, scope=SCOPE[name], name=name), True)
         if name == "recall":
             body = RecallIn(**args)
-            out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=body.docs, lang=lang, **federated_kwargs(ctx, body))
+            out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body), lang=lang,
+                         **federated_kwargs(ctx, body))
             return _text(out["context"] or tr("No hay nada relevante en la memoria para esa consulta.", lang))
         if name == "remember":
             if not allows(ctx.role, "contributor"):
@@ -171,7 +182,7 @@ def _handle(msg, ctx: BrainCtx, request: Request, bg: BackgroundTasks) -> dict |
     if method == "ping":
         return _ok(rid, {})
     if method == "tools/list":
-        return _ok(rid, {"tools": _tools(lang)})
+        return _ok(rid, {"tools": [t for t in _tools(lang) if _allowed(request, t["name"])]})
     if method == "tools/call":
         name, args = params.get("name"), params.get("arguments") or {}
         if name not in {t["name"] for t in TOOLS} or not isinstance(args, dict):

@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5  # intentos fallidos seguidos antes de bloquear la cuenta
     lockout_minutes: int = 15
     invite_days: int = 7  # validez de un enlace de invitación o recuperación
+    token_max_days: int = 0  # longest life of a new API token, in days (#133); 0: no limit
     oidc_trust_unverified_email: str = "no"
     oidc_auto_provision: str = "no"  # "yes": quien entra por OIDC con email verificado de un dominio permitido se da de alta solo
     oidc_allowed_domains: str = ""  # dominios (coma) permitidos para el alta automática

@@ -50,7 +50,8 @@ Los tokens permiten a **plugins y agentes** acceder a un brain sin usar tu contr
 - Elige el **brain**, un **nombre** (por ejemplo «Claude Code portátil») y un **rol**.
 - Cada token vale para **un solo brain** y **nunca tiene más rol que el tuyo** (máximo *curador*; ninguno administra la instancia).
 - El token (`mst_…`) **se muestra una única vez** al crearlo. Cópialo en ese momento.
-- Verás tus tokens con su prefijo y la fecha de último uso; **Revoca** los que ya no uses.
+- Elige cuándo **caduca** (a los 30, 90 o 365 días, o nunca, salvo que la instancia fije un máximo) y su **alcance**: consultar, documentos y proponer.
+- Verás tus tokens con su prefijo, su alcance, su caducidad y su último uso; **Rotar** da uno nuevo y mantiene el anterior durante un periodo de gracia, y **Revocar** quita los que ya no uses. Ver «Caducidad y rotación» en [[Conectar agentes]].
 Uso en [[Conectar agentes]].
 
 ## Actividad reciente

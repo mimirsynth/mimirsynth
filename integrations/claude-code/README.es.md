@@ -23,7 +23,7 @@ El token decide el brain y el rol, así que las herramientas no llevan argumento
 
 ## 2. Hook de recall (complemento opcional)
 
-Por MCP, el recall solo ocurre cuando el agente decide llamar a la herramienta. `mimirsynth_recall.py` es un hook `UserPromptSubmit` que consulta MimirSynth **antes de cada prompt** e inyecta el contexto relevante (entre etiquetas `<mimirsynth-memory>`), así el agente siempre empieza con él. Es de solo lectura: basta un token de *Lector*, y también sirve el del MCP.
+Por MCP, el recall solo ocurre cuando el agente decide llamar a la herramienta. `mimirsynth_recall.py` es un hook `UserPromptSubmit` que consulta MimirSynth **antes de cada prompt** e inyecta el contexto relevante (entre etiquetas `<mimirsynth-memory>`), así el agente siempre empieza con él. Es de solo lectura: basta un token de *Lector* (con el alcance **Consultar**), y también sirve el del MCP. Falla en abierto: si MimirSynth no responde, no inyecta nada. Si el token **caducó o se revocó**, lo dice, con el mensaje de MimirSynth (por ejemplo «token caducado el …»), para que el agente no deje de recordar sin que nadie se entere.
 
 1. Guarda la configuración en `~/.config/mimirsynth/config.json`:
    ```json

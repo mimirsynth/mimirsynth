@@ -50,7 +50,8 @@ Tokens let **plugins and agents** access a brain without using your password.
 - Choose the **brain**, a **name** (for example "Claude Code laptop") and a **role**.
 - Each token is valid for **a single brain** and **never has more role than you** (maximum *curator*; none administers the instance).
 - The token (`mst_…`) **is shown only once** when created. Copy it at that moment.
-- You will see your tokens with their prefix and last-use date; **Revoke** the ones you no longer use.
+- Choose when it **expires** (30, 90 or 365 days, or never, unless the instance sets a maximum) and its **scope**: recall, documents and propose.
+- You will see your tokens with their prefix, scope, expiry and last use; **Rotate** gives a new one and keeps the old one working for a grace period, and **Revoke** removes the ones you no longer use. See «Expiry and rotation» in [[Connect agents]].
 Usage in [[Connect agents]].
 
 ## Recent activity

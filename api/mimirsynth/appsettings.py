@@ -48,6 +48,7 @@ REGISTRY: list[Def] = [
     Def("login_max_attempts", "security", "Intentos fallidos antes de bloquear", "Tras este número de contraseñas incorrectas seguidas la cuenta se bloquea temporalmente.", "int", "", 3, 20),
     Def("lockout_minutes", "security", "Duración del bloqueo", "Tiempo que una cuenta queda bloqueada tras demasiados intentos fallidos.", "int", "min", 1, 1440),
     Def("require_2fa", "security", "Exigir doble factor", "Quien entre con contraseña deberá activar el doble factor (app de autenticación) antes de usar la aplicación. No afecta a quien entra por el proveedor de identidad, que aplica sus propias reglas.", "choice", choices=(("no", "No"), ("yes", "Sí, a todos"))),
+    Def("token_max_days", "security", "Caducidad máxima de los tokens de API", "Los tokens nuevos tienen que caducar en este plazo como mucho, también al rotarlos. 0: sin límite. Los que ya existen no cambian.", "int", "días", 0, 3650),
     Def("invite_days", "security", "Validez de invitaciones y enlaces de recuperación", "Pasado este plazo el enlace deja de funcionar y hay que generar otro.", "int", "días", 1, 30),
     Def("smtp_host", "mail", "Servidor SMTP", "Necesario para enviar invitaciones y enlaces de recuperación por correo. Sin él, los enlaces se copian desde Administración.", "str"),
     Def("smtp_port", "mail", "Puerto", "Habitual: 587 (STARTTLS), 465 (SSL) o 25.", "int", "", 1, 65535),
