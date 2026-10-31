@@ -4,6 +4,7 @@ import { langHeaders } from "../api";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, ClearFilters, ColHead, DataTable, FillArea, GraphCanvas, Notice, readEffects, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, NODE_PALETTE, CANVAS, type CanvasLink, type CanvasNode } from "../ui";
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 type QNode = { id: string; labels: string[]; properties: Record<string, any> };
 type QEdge = { id: string; relation: string; source: string; target: string; properties: Record<string, any> };
@@ -19,6 +20,9 @@ const EXAMPLES: [string, string][] = [
 const PALETTE = NODE_PALETTE;
 const cell = (v: any) => (v && typeof v === "object" ? (v._type === "node" ? `(${v.properties?.name ?? v.id}:${(v.labels ?? []).join(":")})` : v._type === "edge" ? `[${v.relation}]` : JSON.stringify(v).slice(0, 120)) : String(v ?? ""));
 
+/** The uuid of an entity node in a result cell, to link it to its entity page. */
+const entityUuid = (v: any): string | null => (v && v._type === "node" && (v.labels ?? []).includes("Entity") && v.properties?.uuid ? String(v.properties.uuid) : null);
+
 /** Resultado de una consulta Cypher: columnas arbitrarias, cada una con orden y filtro de texto sobre su valor visible. */
 function ResultTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
   const objs = rows.map((r, i) => ({ i, r }));
@@ -28,7 +32,7 @@ function ResultTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
     <FillArea><Stack gap="xs">
       <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
       <DataTable fz="xs"><DataTable.Thead><DataTable.Tr>{columns.map((c) => <ColHead key={c} sort={v.sortProps(c)} filter={v.text(c)}>{c}</ColHead>)}</DataTable.Tr></DataTable.Thead>
-        <DataTable.Tbody>{v.rows.map((o) => <DataTable.Tr key={o.i}>{o.r.map((x, j) => <DataTable.Td key={j}>{cell(x)}</DataTable.Td>)}</DataTable.Tr>)}</DataTable.Tbody></DataTable>
+        <DataTable.Tbody>{v.rows.map((o) => <DataTable.Tr key={o.i}>{o.r.map((x, j) => <DataTable.Td key={j}>{entityUuid(x) ? <Link to={`/entidad/${entityUuid(x)}`}>{cell(x)}</Link> : cell(x)}</DataTable.Td>)}</DataTable.Tr>)}</DataTable.Tbody></DataTable>
     </Stack></FillArea>
   );
 }
@@ -68,6 +72,8 @@ ${lab(n)}` })),
     };
   }, [res]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const selNode = res?.nodes.find((n) => n.id === sel);
+  const selEntity = selNode && selNode.labels.includes("Entity") && selNode.properties.uuid ? { uuid: String(selNode.properties.uuid), name: String(selNode.properties.name ?? "") } : null;
   return (
     <Page>
       <PageHeader title={t("Consulta")} description={t("Consultas Cypher de solo lectura contra el grafo del brain (Ctrl+Enter para ejecutar). Cualquier escritura se rechaza.")} />
@@ -94,6 +100,7 @@ ${lab(n)}` })),
             <div className="ms-canvas ms-canvas-fill">
               <GraphCanvas nodes={graphData.nodes} links={graphData.links} effects={effects} selectedNode={sel} onNodeClick={setSel} onBackgroundClick={() => setSel(null)} />
             </div>
+            {selEntity && <Group gap="xs" mt="xs"><Text size="xs">{selEntity.name}</Text><Btn size="row" icon="graph" component={Link} to={`/entidad/${selEntity.uuid}`}>{t("Ver página")}</Btn></Group>}
           </Tabs.Panel>
         </Tabs>
       )}

@@ -5,6 +5,7 @@ import { FillArea, FilterBar, Page, Pager, Panel, Pill, SidePanel, PageHeader, L
 import { useDebouncedValue } from "@mantine/hooks";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Episode, fmt, get } from "../api";
 
 const day = (iso: string) => { const d = new Date(iso).toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long", year: "numeric" }); return d.charAt(0).toUpperCase() + d.slice(1); };
@@ -21,7 +22,8 @@ export default function Journal({ graph }: { graph: string }) {
   const [f, setF] = useState({ q: "", source: "", since: "", until: "", order: "desc" });
   const [dq] = useDebouncedValue(f.q, 300);
   const [page, setPage] = useState({ offset: 0, limit: 50 });
-  const [open, setOpen] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  const [open, setOpen] = useState<string | null>(() => params.get("episodio"));  // a link from an entity page opens that episode
   const setFilter = (p: Partial<typeof f>) => { setF((x) => ({ ...x, ...p })); setPage((x) => ({ ...x, offset: 0 })); };
   const sources = useQuery({ queryKey: ["episode-sources", graph], staleTime: 60_000, queryFn: () => get<{ source: string; count: number }[]>("episodes/sources", { graph }) });
   const list = useQuery({ queryKey: ["episodes", graph, dq, f.source, f.since, f.until, f.order, page.offset, page.limit], placeholderData: keepPreviousData,

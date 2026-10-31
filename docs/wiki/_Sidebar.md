@@ -11,6 +11,7 @@
 - [[Overview]]
 - [[Journal]]
 - [[Facts]]
+- [[Entity page]]
 - [[Knowledge]]
 - [[Ask]]
 - [[Reference queries]]
@@ -58,7 +59,7 @@
 
 **Empezar:** [[Conceptos]] · [[Guía rápida]] · [[Instalación]] · [[Actualización y copias de seguridad]] · [[HTTPS y proxy inverso]]
 
-**Usar:** [[Resumen]] · [[Diario]] · [[Hechos]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Vocabulario]] · [[Contradicciones]] · [[Trabajos]] · [[Mi cuenta]]
+**Usar:** [[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Vocabulario]] · [[Contradicciones]] · [[Trabajos]] · [[Mi cuenta]]
 
 **Administrar:** [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Notificaciones]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Roles y permisos]]
 

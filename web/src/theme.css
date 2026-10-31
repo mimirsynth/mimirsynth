@@ -186,6 +186,7 @@ h1, h2, h3, h4, .mantine-Title-root { font-family: var(--ms-display); font-weigh
 .ms-tl-day { margin-bottom: 14px; }
 .ms-tl-date { color: var(--ms-muted); margin-bottom: 8px; letter-spacing: 0.04em; }
 .ms-tl-item { position: relative; margin-bottom: 10px; }
+.ms-tl-list { list-style: none; margin: 0; }  /* an ordered list drawn as a timeline (entity page) */
 .ms-tl-item::before { content: ""; position: absolute; left: -22px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ms-accent); border: 2px solid var(--ms-surface); }
 .ms-tl-item[data-event="invalidated"]::before { background: var(--ms-invalidado); }
 

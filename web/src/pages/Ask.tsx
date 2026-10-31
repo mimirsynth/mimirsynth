@@ -3,11 +3,14 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, NumberField, Pill, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { fmt, get, send } from "../api";
 import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries";
 
-type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; score: number; origin?: string };
+type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score: number; origin?: string };
+/** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
+const entityLink = (uuid: string, origin?: string) => `/entidad/${uuid}${origin ? `?origen=${origin}` : ""}`;
 type Chunk = { id: number; origin?: string; name: string; text: string; valid_at: string | null; score: number; rrf: number };
 type Passage = { document_id: number; chunk_idx: number; title: string; text: string; similarity: number; origin?: string };
 type Res = { query: string; facts: Fact[]; chunks: Chunk[]; documents?: Passage[]; documents_state?: string; context: string; index: boolean; ms: Record<string, number> };
@@ -61,7 +64,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             <Title order={5}>{t("Hechos (")}{r.facts.length})</Title>
             {r.facts.map((f) => (
               <ListCard key={f.uuid} invalid={f.status === "invalidated"} actions={markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}
-                tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Pill size="xs">{f.source}</Pill><Text size="xs" className="ms-data">{f.name}</Text><Pill size="xs">{f.target}</Pill></>}
+                tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
+                  <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
                 meta={<>{t("sim")} {f.score} · {fmt(f.valid_at)}{f.invalid_at ? ` → ${fmt(f.invalid_at)}` : ""}</>}>{f.fact}</ListCard>))}
             <Title order={5} mt="xs">{t("Fragmentos de episodios (")}{r.chunks.length})</Title>
             {r.chunks.map((c) => (
