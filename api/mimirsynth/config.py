@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     jobs_keep_scheduled_days: int = 7  # días que se conservan los reescaneos programados terminados sin incidencias (son ruido: uno cada pocos minutos por fuente)
     doc_store: str = "/data/documents"  # volumen con los originales de la memoria documental (la BD solo guarda referencias y trozos)
     doc_roots_base: str = "/sources"  # las raíces de fuentes de documentos solo pueden estar bajo esta carpeta (un único bind de solo lectura en el contenedor)
+    export_ttl_hours: int = 24  # hours an exported brain package waits to be downloaded (#130); it is deleted once downloaded
     doc_max_mb: int = 2048  # tamaño máximo de un fichero subido
     doc_part_mb: int = 64  # tamaño máximo de cada parte de una subida
     doc_text_max_mb: int = 100  # texto extraído máximo por documento

@@ -22,7 +22,7 @@ This wiki is the complete user guide, in English and [in Spanish](Inicio). If yo
 [[Vocabulary]] · [[Ontology]] · [[Entity types]] · [[Relations and aliases]] · [[Merge duplicates]] · [[Type corrector]] · [[Contradictions]]
 
 ## Administering the instance
-[[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Notifications]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]
+[[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Export a brain]] · [[Notifications]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]
 
 ## For agents and developers
 [[Connect agents]] · [[REST API]] · [[Claude Code integration]] · [[Writing good memory]] · [[Document memory]] · [[Environment variables]]

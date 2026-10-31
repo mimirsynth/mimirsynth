@@ -86,6 +86,8 @@ Guarda también tu `.env`.
 
 Restaurar es el camino inverso: arranca los servicios, restaura la base de datos (`psql`) y devuelve los volúmenes. El índice de texto se puede reconstruir desde el grafo y el de documentos desde los originales.
 
+Esto copia la instancia entera. Un solo brain se puede exportar a un paquete desde Administración → Acceso al brain → Exportar; ver «Exportar un brain» en la wiki.
+
 ## Vigilar la instancia
 MimirSynth avisa por sí mismo del grafo y de los modelos de IA ([NOTIFICATIONS.md](NOTIFICATIONS.md)), pero **no de su propio PostgreSQL**: los avisos se guardan en esa base de datos, así que mientras está caída no hay dónde guardarlos. Vigílalo desde fuera con cualquier monitor HTTP (Uptime Kuma, Gatus, un `curl` en cron…) apuntado a `GET /api/health`. No pide sesión y responde en menos de 3 segundos:
 

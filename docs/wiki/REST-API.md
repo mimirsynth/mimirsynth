@@ -40,6 +40,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Members** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrator |
 | **Tokens** | `GET/POST /tokens` · `DELETE /tokens/{id}` | reader (from your own role down) |
 | **The brain itself** | `PATCH /api/brains/{slug}` (name, description, slug, secrets policy) · `GET /api/brains/{slug}/secrets/scan` | administrator |
+| **Export** | `POST /exports` (`vectors`, optional `password`) · `GET /exports` · `GET /exports/{id}/download` (once; 410 once downloaded or expired). See [[Export a brain]] | administrator |
 | | `POST /api/brains/{slug}/delete` | owner |
 
 ### What changed since 0.6

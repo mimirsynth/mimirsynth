@@ -62,7 +62,7 @@ def test_entity_page(client, graphs):  # noqa: F811
     assert next(n for n in r["neighbors"] if n["uuid"] == "a")["current"] == 0
 
     # a single-valued relation with two current values is flagged, and shown first
-    client.post("/api/brains/ep/vocab/relations", json={"name": "LocatedAt", "description": "Is in a place", "functional": True})
+    assert client.post("/api/brains/ep/vocab/relations", json={"name": "LocatedAt", "description": "Is in a place", "functional": True}).status_code == 201
     r = client.get("/api/brains/ep/entities/nas").json()
     assert r["groups"][0]["relation"] == "LOCATED_AT" and r["groups"][0]["functional"] and r["groups"][0]["conflict"]
 

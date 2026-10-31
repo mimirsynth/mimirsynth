@@ -62,6 +62,7 @@ Se usan **solo si no hay ningún motor configurado en la interfaz** ([[Proveedor
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del **host** montada en solo lectura en `/sources`. Solo Compose |
 | `MIMIRSYNTH_DOC_STORE` | `/data/documents` | Volumen con los originales subidos. **Entra en las copias de seguridad**. Fija en el compose oficial |
 | `MIMIRSYNTH_DOC_ROOTS_BASE` | `/sources` | Las raíces de carpetas solo pueden estar bajo esta ruta. Fija en el compose oficial |
+| `MIMIRSYNTH_EXPORT_TTL_HOURS` | `24` | Horas que un paquete de exportación de un brain espera a descargarse antes de borrarse. Ver [[Exportar un brain]] |
 
 ## Valores por defecto de ajustes (opcionales)
 Estas variables existen, pero **se gestionan desde la interfaz**; defínelas solo si quieres otro valor de partida (y añádelas al fichero de Compose): `MIMIRSYNTH_DOC_MAX_MB` (el compose la pasa), `…_DOC_PART_MB`, `…_DOC_TEXT_MAX_MB`, `…_DOC_MIN_SIMILARITY`, `…_DOC_PASSAGES`, `…_DOC_SEARCH_TIMEOUT`, `…_INDEX_SYNC_MINUTES`, `…_INGEST_RETRIES`, `…_REINDEX_BATCH`, `…_REINDEX_PAUSE`, `…_REINDEX_SWITCH_WAIT`, `…_REINDEX_ORPHAN_HOURS`, `…_JOBS_KEEP_DAYS`, `…_JOBS_KEEP_SCHEDULED_DAYS`, `…_NOTIFY_*` (aviso repetido, horas de silencio, comprobaciones de estado, aviso de versiones, redes privadas, conservación), `…_PASSWORD_MIN_LENGTH`, `…_LOGIN_MAX_ATTEMPTS`, `…_LOCKOUT_MINUTES`, `…_INVITE_DAYS`, `…_REQUIRE_2FA` y las de SMTP (`…_SMTP_*`). Tabla completa en [[Referencia de ajustes]].

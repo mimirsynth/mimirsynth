@@ -86,6 +86,8 @@ Also save your `.env`.
 
 Restoring is the reverse path: start the services, restore the database (`psql`) and put the volumes back. The episode text index can be rebuilt from the graph and the document index from the originals.
 
+This copies the whole instance. A single brain can be exported to a package from Administration → Brain access → Export; see «Export a brain» in the wiki.
+
 ## Monitoring the instance
 MimirSynth alerts about the graph and the AI models itself ([NOTIFICATIONS.md](NOTIFICATIONS.md)), but **not about its own PostgreSQL**: alerts are stored in that database, so while it is down there is nowhere to keep them. Watch it from outside with any HTTP monitor (Uptime Kuma, Gatus, a `curl` in cron…) pointed at `GET /api/health`. It needs no sign-in and answers in under 3 seconds:
 
