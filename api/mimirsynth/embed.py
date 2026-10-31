@@ -83,7 +83,8 @@ class OpenAICompatEmbedder:
             return []
         out: list[list[float]] = []
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
-        with httpx.Client(timeout=self.timeout) as c:
+        from .usage import hooks
+        with httpx.Client(timeout=self.timeout, event_hooks=hooks("embedding", self.model)) as c:  # counted per brain (#132)
             for i in range(0, len(texts), 16):  # lotes
                 r = c.post(f"{self.base_url}/embeddings", json={"model": self.model, "input": texts[i : i + 16]}, headers=headers)
                 r.raise_for_status()

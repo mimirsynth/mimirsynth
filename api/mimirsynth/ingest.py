@@ -51,10 +51,18 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
     eng = _engine()
     if not eng:
         raise RuntimeError("no hay motor LLM configurado")
-    llm = OpenAIGenericClient(config=LLMConfig(api_key=eng["api_key"] or "none", model=eng["model"], small_model=eng["small_model"], base_url=eng["base_url"]))
+    import httpx
+    from openai import AsyncOpenAI
+
+    from .usage import async_hooks
+    llm = OpenAIGenericClient(config=LLMConfig(api_key=eng["api_key"] or "none", model=eng["model"], small_model=eng["small_model"], base_url=eng["base_url"]),
+                              client=AsyncOpenAI(api_key=eng["api_key"] or "none", base_url=eng["base_url"],
+                                                 http_client=httpx.AsyncClient(event_hooks=async_hooks("llm", eng["model"]))))  # counted (#132)
     from .embed import resolve_embedding
     ee = resolve_embedding()
-    emb = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key=ee["api_key"] or "none", embedding_model=ee["model"], base_url=ee["base_url"], embedding_dim=ee["dim"]))
+    emb = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key=ee["api_key"] or "none", embedding_model=ee["model"], base_url=ee["base_url"], embedding_dim=ee["dim"]),
+                         client=AsyncOpenAI(api_key=ee["api_key"] or "none", base_url=ee["base_url"],
+                                            http_client=httpx.AsyncClient(event_hooks=async_hooks("embedding", ee["model"]))))
     g = Graphiti(graph_driver=FalkorDriver(host=settings.falkor_host, port=settings.falkor_port, database=graph_name),
                  llm_client=llm, embedder=emb, cross_encoder=NoRerank())
     started = datetime.now(timezone.utc) - timedelta(seconds=5)
@@ -85,12 +93,17 @@ def ingest_proposal(pid: int, job=None) -> str:
         if not p or p.status not in ("approved", "failed"):
             return ""
         brain = db.get(Brain, p.brain_id)
+        from . import usage
+        if usage.paused(brain.id):  # the brain spent its AI budget: the proposal waits, approved, until it is raised or the month changes
+            p.ingest_error = usage.PAUSED
+            db.commit()
+            return ""
         try:
             onto = ontology_mod.get_ontology(db, brain.id)
             for attempt in range(1, appsettings.get("ingest_retries") + 1):
                 rep: dict = {}
                 try:
-                    with gate.writing():  # un cambio de modelo de embeddings espera a que termine (y la ingesta, a que termine él)
+                    with gate.writing(), usage.scope(brain.id, "extraction"):  # un cambio de modelo de embeddings espera (y la ingesta, a él)
                         uuid = asyncio.run(add_episode(brain.graph_name, p.name, p.body, p.source, p.source_description, p.reference_time, ontology=onto, report=rep))
                     break
                 except Exception as e:  # noqa: BLE001

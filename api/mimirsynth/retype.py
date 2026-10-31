@@ -174,8 +174,10 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
 
 @jobs.register("retype.scan", "Corrector de tipos", limit=1)
 def _job_scan(ctx, p: dict) -> dict:
+    from .usage import scope
     try:
-        scan(ctx.brain_id, p["graph"], p["limit"], ctx)
+        with scope(ctx.brain_id, "retype"):
+            scan(ctx.brain_id, p["graph"], p["limit"], ctx)
     finally:
         if ctx.brain_id in _PROGRESS:
             _PROGRESS[ctx.brain_id]["running"] = False

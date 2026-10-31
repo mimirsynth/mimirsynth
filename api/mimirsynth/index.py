@@ -103,7 +103,8 @@ def sync_brain(brain_id: int, graph_name: str, embedder: EmbeddingProvider | Non
     """Sincroniza el índice con los episodios del grafo: solo reindexa los nuevos o modificados."""
     if not enabled():
         return {"enabled": False}
-    with gate.writing():  # los vectores, siempre del motor por defecto vigente (ver reembed)
+    from .usage import scope
+    with gate.writing(), scope(brain_id, "index"):  # los vectores, siempre del motor por defecto vigente (ver reembed)
         return _sync_brain(brain_id, graph_name, embedder or get_embedder())
 
 

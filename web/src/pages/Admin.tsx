@@ -15,6 +15,7 @@ import Secrets from "./Secrets";
 import BrainExport from "./BrainExport";
 import BrainImport from "./BrainImport";
 import BrainRetention from "./BrainRetention";
+import { BrainAiUsage, InstanceAiUsage } from "./AiUsage";
 import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
 
@@ -222,7 +223,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
     { heading: t("Brain") }, { value: "brains", label: t("Acceso al brain") },
     ...(me.is_admin ? [
       { heading: t("Cuentas") }, { value: "users", label: t("Usuarios") }, { value: "security", label: t("Seguridad") }, { value: "identity", label: t("Identidad") }, { value: "mail", label: t("Correo (SMTP)") },
-      { heading: t("Modelos de IA") }, { value: "llm", label: t("Modelo LLM") }, { value: "embedding", label: t("Embeddings") }, { value: "decision", label: t("Decisor") },
+      { heading: t("Modelos de IA") }, { value: "llm", label: t("Modelo LLM") }, { value: "embedding", label: t("Embeddings") }, { value: "decision", label: t("Decisor") }, { value: "usage", label: t("Consumo") },
       { heading: t("Documentos") }, { value: "folders", label: t("Carpetas") }, { value: "docs", label: t("Límites") },
       { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "notifications", label: t("Notificaciones") }, { value: "audit", label: t("Auditoría") },
     ] : []),
@@ -285,6 +286,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
               <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>
               <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>
               {canAdmin && <SettingsGroup title={t("Secretos")} description={t("Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave.")}><SettingsBody><Secrets brain={cur} /></SettingsBody></SettingsGroup>}
+              {canAdmin && <SettingsGroup title={t("Consumo de IA")} description={t("Lo que este brain ha gastado en motores de IA en los últimos 30 días, y su presupuesto mensual.")}><SettingsBody><BrainAiUsage brain={cur} /></SettingsBody></SettingsGroup>}
               {cur.role === "owner" && <SettingsGroup title={t("Retención")} description={t("Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.")}><SettingsBody><BrainRetention brain={cur} /></SettingsBody></SettingsGroup>}
               {canAdmin && <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}><SettingsBody><BrainExport brain={cur} /></SettingsBody></SettingsGroup>}
               <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>
@@ -295,6 +297,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
           {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
           {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}
           {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Los vectores guardados dependen del modelo: para pasar a un motor con otro modelo usa «Reindexar», que los calcula todos en sombra antes de cambiar.")} />}
+          {section === "usage" && <SettingsGroup title={t("Consumo")} description={t("Llamadas, tokens, ritmo y errores de cada motor de IA, con el coste estimado, por brain.")}><SettingsBody><InstanceAiUsage /></SettingsBody></SettingsGroup>}
           {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
           {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
           {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}

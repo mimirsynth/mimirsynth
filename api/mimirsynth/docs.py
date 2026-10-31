@@ -90,7 +90,8 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
                 raise _Duplicate
             vecs: list[list[float]] = []
             _PROGRESS[doc_id] = {"done": 0, "total": len(chunks)}
-            with gate.writing():  # vectores y trozos del mismo motor aunque se esté cambiando de modelo (ver reembed)
+            from .usage import scope
+            with gate.writing(), scope(d.brain_id, "documents"):  # vectores y trozos del mismo motor aunque se esté cambiando de modelo
                 for i in range(0, len(chunks), EMBED_BATCH):
                     if job:
                         job.check()
@@ -305,7 +306,9 @@ def search(q: str = Query(min_length=2, max_length=500), k: int = Query(8, ge=1,
     if not index.enabled():
         return {"enabled": False, "results": []}
     try:
-        qvec = get_embedder().embed([q])[0]
+        from .usage import scope
+        with scope(ctx.brain.id, "recall"):
+            qvec = get_embedder().embed([q])[0]
     except Exception as e:  # noqa: BLE001
         raise HTTPException(503, f"el motor de embeddings no responde: {str(e)[:120]}")
     out = []

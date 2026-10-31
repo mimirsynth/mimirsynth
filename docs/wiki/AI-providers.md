@@ -65,3 +65,6 @@ Technical details: [docs/CONFIGURATION.md](https://github.com/MimirSynth/mimirsy
 - It works well with small models (it answers few options).
 - Start with a **high threshold (0.9)** so it only approves the obvious; lower it if you see too much going to review.
 - It never rejects on its own: anything doubtful or off-topic goes to a curator.
+
+## Consumption
+**Consumption**, in this same section, shows what each engine and each brain spends: calls, tokens, requests per minute and 429/5xx errors, with an estimated cost from a price per million tokens per model. See [[AI consumption]].

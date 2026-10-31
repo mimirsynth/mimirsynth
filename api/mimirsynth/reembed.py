@@ -446,6 +446,12 @@ def discard() -> None:
 
 @jobs.register(KIND, "Cambio de modelo de embeddings (relleno en sombra)", limit=1, resume=True)
 def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
+    from .usage import scope
+    with scope(0, "reindex"):
+        return _fill(ctx, p)
+
+
+def _fill(ctx: "jobs.JobCtx", p: dict) -> dict:
     eid = p["engine_id"]
     with _factory()() as db:
         e = db.get(EmbeddingEngine, eid)

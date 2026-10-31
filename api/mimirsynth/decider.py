@@ -16,6 +16,8 @@ def decide(base_url: str, model: str, api_key: str, state: str, question: str, o
                          {"role": "user", "content": f"<state>\n{state}\n</state>\n\nQuestion: {question}\n\nOptions:\n{opts}\n\nAnswer:"}]}
     r = httpx.post(f"{base_url.rstrip('/')}/chat/completions", json=body, timeout=timeout,
                    headers={"Authorization": f"Bearer {api_key}"} if api_key else {})
+    from .usage import observe
+    observe("decision", model, r)  # counted per brain (#132)
     r.raise_for_status()
     ch = r.json()["choices"][0]
     top = ((ch.get("logprobs") or {}).get("content") or [{}])[0].get("top_logprobs") or []

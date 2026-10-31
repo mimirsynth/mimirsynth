@@ -31,7 +31,8 @@ def _get(ctx: BrainCtx, uuid: str) -> dict:
 
 
 def _set_embedding(ctx: BrainCtx, uuid: str, text: str) -> None:
-    with gate.writing():
+    from .usage import scope
+    with gate.writing(), scope(ctx.brain.id, "facts"):
         v = get_embedder().embed([text])[0]
         ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() SET r.fact_embedding = vecf32($v)", {"u": uuid, "v": v})
 
@@ -55,7 +56,9 @@ def edit_fact(uuid: str, body: EditIn, ctx: BrainCtx = Depends(curator_of_brain)
         raise HTTPException(400, "no hay cambios")
     with gate.writing():
         if "fact" in changes:  # primero el embedding: si el motor falla, no se toca nada
-            vec = get_embedder().embed([changes["fact"]])[0]
+            from .usage import scope
+            with scope(ctx.brain.id, "facts"):
+                vec = get_embedder().embed([changes["fact"]])[0]
         sets = ", ".join(f"r.{k} = ${k}" for k in changes) + (", r.fact_embedding = vecf32($v)" if "fact" in changes else "")
         ctx.graph.query(f"MATCH ()-[r:RELATES_TO {{uuid:$u}}]->() SET {sets}", {"u": uuid, **changes, **({"v": vec} if "fact" in changes else {})})
     op = _record(ctx, "fact.edit", f"Editado el hecho {_label(cur)}" + (f" (relación → {changes['name']})" if "name" in changes else ""),

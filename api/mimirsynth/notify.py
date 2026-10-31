@@ -29,6 +29,7 @@ EVENTS = {
     "refquery.regressed": ("warning", "Las consultas de referencia de un brain empeoran tras un cambio de modelo de embeddings"),
     "conflicts.found": ("info", "Hay hechos vigentes que se contradicen en una relación de un solo valor"),
     "token.expiring": ("info", "Un token de API caduca en pocos días"),
+    "ai.budget": ("warning", "Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
@@ -266,8 +267,9 @@ async def worker(version: str = "0.0.0") -> None:
                 await asyncio.to_thread(prune)
             if t - last_reindex >= 600:
                 last_reindex = t
-                from . import reembed
+                from . import reembed, usage
                 await asyncio.to_thread(reembed.check_orphan)
+                await asyncio.to_thread(usage.resume)  # proposals that waited for a budget that no longer stops them
             if t - last_conflicts >= 86400:
                 last_conflicts = t
                 from . import conflicts, memory

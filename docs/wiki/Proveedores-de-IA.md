@@ -65,3 +65,6 @@ Detalles técnicos: [docs/es/CONFIGURATION.md](https://github.com/MimirSynth/mim
 - Funciona bien con modelos pequeños (responde pocas opciones).
 - Empieza con un **umbral alto (0,9)** para que apruebe solo lo evidente; bájalo si ves que deriva demasiado a revisión.
 - Nunca rechaza por su cuenta: lo dudoso o lo que no encaja va a un curador.
+
+## Consumo
+**Consumo**, en esta misma sección, enseña lo que gasta cada motor y cada brain: llamadas, tokens, peticiones por minuto y errores 429/5xx, con un coste estimado a partir de un precio por millón de tokens de cada modelo. Ver [[Consumo de IA]].
