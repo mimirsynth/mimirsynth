@@ -1521,5 +1521,6 @@
  "Vida útil": "Shelf life",
  "Vida útil (días)": "Shelf life (days)",
  "confirmado": "confirmed",
- "{{r}} ({{n}} días)": "{{r}} ({{n}} days)"
+ "{{r}} ({{n}} días)": "{{r}} ({{n}} days)",
+ "Este brain tiene tantos hechos de esas relaciones que solo se han revisado los más antiguos: la lista y el aviso diario se quedan cortos. Quita la vida útil a las relaciones que no la necesiten.": "This brain has so many facts of those relations that only the oldest were checked: the list and the daily notice fall short. Remove the shelf life from the relations that do not need it."
 }

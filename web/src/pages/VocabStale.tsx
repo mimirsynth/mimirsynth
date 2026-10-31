@@ -7,7 +7,7 @@ import { Btn, DataTable, EmptyState, MutationError, Notice } from "../ui";
 
 type Item = { uuid: string; relation: string; fact: string; source: string; source_uuid: string; target: string; valid_at: string;
   shelf_life_days: number; stale_since: string; confirmed_at: string | null; days_over: number };
-type Stale = { relations: Record<string, number>; total: number; items: Item[] };
+type Stale = { relations: Record<string, number>; total: number; items: Item[]; truncated: boolean };
 
 /** Hechos vigentes que han superado la vida útil de su relación: confirmarlos renueva su fecha (sin tocar el grafo); invalidarlos, como desde Hechos. */
 export default function VocabStale({ graph }: { graph: string }) {
@@ -24,6 +24,7 @@ export default function VocabStale({ graph }: { graph: string }) {
     <Stack gap="sm">
       <Notice tone="info">{t("Hechos vigentes que llevan más tiempo sin confirmar que la vida útil de su relación (una IP, una versión, quién lleva un servicio). En el recall pesan menos y salen marcados. Confirma los que siguen siendo ciertos: se renueva su fecha sin tocar el grafo. Invalida los que ya no lo son. La vida útil se pone en Ontología, al editar cada relación.")}</Notice>
       {rels.length > 0 && <Text size="xs" c="dimmed">{t("Con vida útil: {{v}}", { v: rels.map(([r, n]) => t("{{r}} ({{n}} días)", { r, n })).join(", ") })}</Text>}
+      {d?.truncated && <Notice tone="warn">{t("Este brain tiene tantos hechos de esas relaciones que solo se han revisado los más antiguos: la lista y el aviso diario se quedan cortos. Quita la vida útil a las relaciones que no la necesiten.")}</Notice>}
       <MutationError error={confirm.error ?? invalidate.error} />
       {d && d.items.length ? <DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr>

@@ -45,6 +45,8 @@ def _onto(ctx: BrainCtx) -> dict:
 
 
 def _save(ctx: BrainCtx, data: dict) -> None:
+    from .shelflife import forget
+    forget(ctx.brain.id)  # the recall reads the shelf lives again (#114)
     row = ctx.db.get(BrainOntology, ctx.brain.id)
     if row:
         row.data = data

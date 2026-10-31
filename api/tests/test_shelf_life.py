@@ -55,7 +55,7 @@ def test_a_fact_past_its_shelf_life_is_to_review(client, graph):  # noqa: F811
     # without a shelf life nothing changes
     out = R.recall(_bid("sl1"), GRAPH, "ip de web", 5, 0, 4000, embedder=Emb(), n_docs=0)
     assert not any(f.get("stale_since") for f in out["facts"]) and "sin confirmar" not in out["context"]
-    assert client.get("/api/brains/sl1/review/stale").json() == {"relations": {}, "total": 0, "items": []}
+    assert client.get("/api/brains/sl1/review/stale").json() == {"relations": {}, "total": 0, "items": [], "truncated": False}
     # a shelf life of 90 days on HasIp (the graph writes HAS_IP: the same relation)
     r = client.post("/api/brains/sl1/vocab/relations", json={"name": "HasIp", "description": "La IP de un host", "shelf_life_days": 90})
     assert r.status_code == 201, r.text
@@ -103,6 +103,38 @@ def test_the_daily_check_counts_without_text(client, graph):  # noqa: F811
     shelflife.check_all()
     with _factory()() as db:
         assert db.query(Notification).filter(Notification.key == "stale:sl2").one().resolved_at is not None
+
+
+@needs_falkor
+def test_the_queue_says_when_it_shows_only_part(client, graph, monkeypatch):  # noqa: F811
+    """Review of #158: past MAX_SCAN facts of the relations with a shelf life, the oldest are read and `truncated` says so."""
+    from mimirsynth import shelflife
+    assert client.post("/api/brains", json={"slug": "sl4", "name": "Sl4", "graph_name": GRAPH}).status_code == 201
+    client.post("/api/brains/sl4/vocab/relations", json={"name": "HasIp", "description": "La IP de un host", "shelf_life_days": 5})
+    full = client.get("/api/brains/sl4/review/stale").json()
+    assert full["truncated"] is False and {i["uuid"] for i in full["items"]} == {"old", "fresh"}     # OWNED_BY is not even read
+    monkeypatch.setattr(shelflife, "MAX_SCAN", 1)
+    part = client.get("/api/brains/sl4/review/stale").json()
+    assert part["truncated"] is True and [i["uuid"] for i in part["items"]] == ["old"]                 # the oldest
+    r = client.post("/api/brains/sl4/review/stale/owner/confirm")
+    assert r.status_code == 409 and "vida útil" in r.json()["detail"]                                 # OWNED_BY has none here
+
+
+@needs_falkor
+def test_the_recall_reuses_the_shelf_lives_until_the_ontology_changes(client, graph, monkeypatch):  # noqa: F811
+    from mimirsynth import shelflife
+    assert client.post("/api/brains", json={"slug": "sl5", "name": "Sl5", "graph_name": GRAPH}).status_code == 201
+    bid = _bid("sl5")
+    reads = []
+    real = shelflife.get_ontology
+    monkeypatch.setattr(shelflife, "get_ontology", lambda db, b: reads.append(b) or real(db, b))
+    facts = [{"uuid": "old", "name": "HAS_IP", "status": "current", "valid_at": _ago(200), "score": 0.9}]
+    for _ in range(3):
+        shelflife.mark(bid, [dict(f) for f in facts])
+    assert reads == [bid]                                                       # one read for three recalls
+    client.post("/api/brains/sl5/vocab/relations", json={"name": "HasIp", "description": "La IP de un host", "shelf_life_days": 90})
+    out = shelflife.mark(bid, [dict(f) for f in facts])
+    assert out[0].get("stale_since")                                            # saving the ontology cleared the cache
 
 
 def test_shelf_life_in_the_ontology(client):  # noqa: F811

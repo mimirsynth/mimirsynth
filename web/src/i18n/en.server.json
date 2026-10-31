@@ -385,6 +385,7 @@
  "la parte supera el tamaño máximo": "the part exceeds the maximum size",
  "la propuesta está {{status}}": "the proposal is {{status}}",
  "la propuesta ya está {{status}}": "the proposal is already {{status}}",
+ "la relación de ese hecho no tiene vida útil: confirmarlo no cambiaría nada": "that fact's relation has no shelf life: confirming it would change nothing",
  "la ruta debe estar dentro de {{base}} (es la carpeta montada en el contenedor)": "the path must be inside {{base}} (the folder mounted in the container)",
  "la subida no está completa": "the upload is not complete",
  "la verificación ha caducado; inténtalo de nuevo": "the verification has expired; try again",

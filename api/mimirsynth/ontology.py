@@ -116,6 +116,8 @@ def write_ontology(body: OntologyIn, ctx: BrainCtx = Depends(admin_of_brain)):
     row = ctx.db.get(BrainOntology, ctx.brain.id)
     if body.preset is None and row and row.data.get("preset"):
         data["preset"] = row.data["preset"]  # editar a mano no borra de dónde viene la ontología
+    from .shelflife import forget
+    forget(ctx.brain.id)  # the recall reads the shelf lives again (#114)
     if row:
         row.data = data
     else:
