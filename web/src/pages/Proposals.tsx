@@ -1,7 +1,7 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, Pill, Segments, TextArea, TextField, useServerTableView, MutationError, EmptyState, PageHeader, Steps, Step, Tone, rowOpen } from "../ui";
+import { Btn, ClearFilters, Icon, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, Pill, Segments, TextArea, TextField, useServerTableView, MutationError, EmptyState, PageHeader, Steps, Step, Tone, rowOpen } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -9,12 +9,21 @@ import { fmt, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   created_at: string; reviewed_at: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; secrets?: SecretFinding[];
-  kind?: string; correction?: Correction | null };
+  kind?: string; correction?: Correction | null; secrets_notice?: string };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
 type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
   invalid_at: string; applied_at?: string; reverted_at?: string };
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
+
+/** Marker in the list for a proposal the secret detector touched: masked (already safe) or flagged (a person must look). Text and icon, not only colour. */
+function SecretsPill({ found }: { found?: SecretFinding[] }) {
+  const { t } = useTranslation();
+  if (!found?.length) return null;
+  const flagged = found.some((f) => f.action === "flagged");
+  return <Pill size="xs" tone={flagged ? "warn" : "neutral"} title={[...new Set(found.map((f) => t(f.label)))].join(", ")}>
+    <Group gap={4} wrap="nowrap"><Icon name="lock" size={12} />{flagged ? t("Secreto por revisar") : t("Secreto enmascarado")}</Group></Pill>;
+}
 
 type PropList = { total: number; limit: number; offset: number; authors: { id: number; name: string }[]; items: Prop[] };
 const STATUSES = ["pending", "approved", "rejected", "failed", "ingested"];
@@ -44,7 +53,7 @@ function ProposalsTable({ data, view, status, onStatus, counts, onOpen }: { data
       <DataTable.Tbody>
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
-            <DataTable.Td>{p.name}</DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
+            <DataTable.Td><Group gap="xs" wrap="nowrap">{p.name}<SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
           </DataTable.Tr>))}
         {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
@@ -95,8 +104,10 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const ai = useQuery({ queryKey: ["ai-status"], refetchInterval: 60000, queryFn: () => get<Record<string, { configured: boolean }>>("ai-status") });
   const detail = useQuery({ queryKey: ["proposal", graph, open], enabled: open !== null, queryFn: () => get<Prop>(`${base}/${open}`) });
   const refresh = () => { qc.invalidateQueries({ queryKey: ["proposals", graph] }); qc.invalidateQueries({ queryKey: ["proposal", graph] }); };
+  const [sentProp, setSentProp] = useState<Prop | null>(null);  // the last one sent, so its author sees what happened to it
   const submit = useMutation({ mutationFn: () => send<Prop>("POST", base, { name, body, confidence: conf === "" ? undefined : Number(conf) }),
-    onSuccess: () => { setName(""); setBody(""); setConf(""); refresh(); } });
+    onMutate: () => setSentProp(null),
+    onSuccess: (p) => { setName(""); setBody(""); setConf(""); setSentProp(p); refresh(); } });
   const review = useMutation({ mutationFn: (a: { id: number; verb: "approve" | "reject" }) => send("POST", `${base}/${a.id}/${a.verb}`, { note }),
     onSuccess: () => { setOpen(null); setNote(""); refresh(); } });
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
@@ -117,6 +128,10 @@ export default function Proposals({ graph, role }: { graph: string; role: string
             <Btn kind="primary" disabled={!name || !body} loading={submit.isPending} onClick={() => submit.mutate()} icon="plus">{isCurator ? t("Añadir") : t("Proponer")}</Btn>
           </Group>
           <MutationError error={submit.error} />
+          {sentProp && <Notice tone="success">{sentProp.status === "pending"
+            ? t("Propuesta #{{id}} enviada: queda pendiente de un curador.", { id: sentProp.id })
+            : t("Propuesta #{{id}} añadida y aprobada.", { id: sentProp.id })}</Notice>}
+          {sentProp && <SecretsNotice found={sentProp.secrets} />}
         </Stack></Panel>)}
       <MutationError error={list.error} />
       <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />

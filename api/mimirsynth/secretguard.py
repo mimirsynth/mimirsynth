@@ -117,6 +117,26 @@ def summary(findings: list[dict]) -> list[dict]:
     return [{"rule": r, "action": a, "count": n} for (r, a), n in sorted(out.items())]
 
 
+def notice(findings: list[dict] | None, lang: str) -> str:
+    """What the author is told when submitting: the kinds that were masked or flagged, never the value. Empty when nothing was found."""
+    names = labels(lang)
+
+    def kinds(action: str) -> str:
+        n: dict[str, int] = {}
+        for f in findings or []:
+            if f.get("action") == action:
+                label = names.get(f["rule"], f["rule"])
+                n[label] = n.get(label, 0) + 1
+        return ", ".join(f"{k} ×{v}" if v > 1 else k for k, v in n.items())
+
+    out = []
+    if masked := kinds("masked"):
+        out.append(tr("Secretos enmascarados antes de guardar: {{v}}. Lo guardado no lleva su valor.", lang, v=masked))
+    if flagged := kinds("flagged"):
+        out.append(tr("Marcados para que los revise un curador (no se han tocado): {{v}}.", lang, v=flagged))
+    return " ".join(out)
+
+
 def describe(findings: list[dict] | None) -> list[dict]:
     """Los hallazgos con su etiqueta, para la API (en español, como el resto de textos del servidor que la interfaz traduce)."""
     return [{**f, "label": BY_ID[f["rule"]].label if f["rule"] in BY_ID else f["rule"]} for f in findings or []]

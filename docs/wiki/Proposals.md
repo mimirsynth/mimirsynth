@@ -50,7 +50,9 @@ Before a proposal is stored (from the interface, the API or the `remember` tool 
 | **Only warn** | Flagged, left untouched | Flagged, left untouched |
 
 - **A flagged proposal always waits for a curator**, even when a curator sent it, and the decider does not approve it on its own.
-- The proposal's detail shows **Secrets detected**: what was masked and what was flagged for review. The value itself is never shown, stored in the audit log or sent in notifications.
+- **With Mask, a curator's proposal is stored already masked and approved at once:** nothing is left for anyone to review, because the value never reached the memory.
+- **The author is told when submitting:** the form says which types of secret were masked or flagged, the `POST /proposals` response carries the same text in `secrets_notice`, and the `remember` result adds it, so an agent knows its text was altered.
+- Afterwards, the list marks those proposals (**Secret masked** or **Secret to review**, also the ones approved at once) and the detail shows **Secrets detected**: what was masked and what was flagged for review. The value itself is never shown, stored in the audit log or sent in notifications.
 - Keep secrets in a password manager and store in memory only **where** they are.
 
 ## A proposal's detail

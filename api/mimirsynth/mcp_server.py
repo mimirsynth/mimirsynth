@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
-from . import appsettings, mcp_tools
+from . import appsettings, mcp_tools, secretguard
 from .deps import BrainCtx, brain_access
 from .i18n import language, tr, translate
 from .memory import RecallIn, federated_kwargs
@@ -38,7 +38,7 @@ TOOLS = [
          "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo del contexto devuelto (por defecto 6000)."},
          "federated": {"type": "boolean", "description": "Incluir lo que otros brains prestan a este (por defecto sí); false = solo la memoria propia."}},
          "required": ["query"]}, "annotations": {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}},
-    {"name": "remember", "title": "Proponer una memoria", "description": "Propone guardar un conocimiento que persista (una decisión, una configuración, un arreglo, un patrón). Según tu rol queda en cuarentena hasta que un curador la apruebe, o se aprueba al instante. No guardes datos efímeros ni secretos.",
+    {"name": "remember", "title": "Proponer una memoria", "description": "Propone guardar un conocimiento que persista (una decisión, una configuración, un arreglo, un patrón). Según tu rol queda en cuarentena hasta que un curador la apruebe, o se aprueba al instante. No guardes datos efímeros ni secretos: si el texto lleva alguno, se enmascara o se marca y el resultado lo dice.",
      "inputSchema": {"type": "object", "properties": {
          "name": {"type": "string", "maxLength": 255, "description": "Título corto y descriptivo."},
          "body": {"type": "string", "maxLength": 50000, "description": "El contenido: qué se sabe, con el contexto necesario para entenderlo sin la conversación."},
@@ -127,9 +127,9 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
             if not allows(ctx.role, "contributor"):
                 return _text(tr("Este token solo puede leer (rol de lector): no puede proponer memorias.", lang), True)
             p = create(ctx, request, bg, ProposalIn(**args))
-            if p.status == "approved":
-                return _text(tr("Memoria guardada y aprobada; se ingiere en el grafo (propuesta #{{id}}).", lang, id=p.id))
-            return _text(tr("Memoria propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
+            done = (tr("Memoria guardada y aprobada; se ingiere en el grafo (propuesta #{{id}}).", lang, id=p.id) if p.status == "approved"
+                    else tr("Memoria propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
+            return _text(" ".join(x for x in (done, secretguard.notice(p.secret_findings, lang)) if x))  # the agent learns its text was altered
         if name == "correct":
             if not allows(ctx.role, "contributor"):
                 return _text(tr("Este token solo puede leer (rol de lector): no puede proponer correcciones.", lang), True)
