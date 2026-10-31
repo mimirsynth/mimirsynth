@@ -20,7 +20,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Índice de texto** | `GET /index/status` · `POST /index/sync` | lector · curador |
 | **Resumen** | `GET /overview` · `GET /overview/activity` | lector |
 | **Episodios** | `GET /episodes` · `GET /episodes/sources` · `GET /episodes/{uuid}` | lector |
-| **Hechos** | `GET /facts` · `GET /facts/relations` · `GET /timeline` | lector |
+| **Hechos** | `GET /facts` · `GET /facts/relations` · `GET /timeline` · `GET /entities?q=` · `GET /entities/{uuid}` | lector |
 | | `PATCH /facts/{uuid}` · `POST …/invalidate` · `POST …/reactivate` · `DELETE …` | curador |
 | **Grafo y consulta** | `GET /graph` (`group_by` opcional) · `POST /query` (Cypher de solo lectura) | lector |
 | **Propuestas** | `GET /proposals` (paginado) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` · `POST /proposals/corrections` | colaborador |
@@ -46,6 +46,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 ### Qué ha cambiado desde la 0.6
 - **`POST /mcp`**: el servidor MCP, con las herramientas `recall`, `facts_about`, `timeline`, `get_document` y `whats_new` (lector) y `remember` y `correct` (colaborador).
 - **`POST /recall`** admite `federated` (por defecto `true`): busca también en lo que otros brains prestan a este, marca lo prestado con `origin` y añade una lista `federated` con el estado de cada origen. **`/grants`** gestiona lo que este brain presta (`scope`: `graph`, `docs` o `both`; caducidad opcional en `days`); el brain que recibe puede renunciar con `DELETE`.
+- **`GET /entities/{uuid}`** es la [[Página de entidad]] en una sola llamada: la entidad, sus hechos agrupados por sentido y relación (`current` y `previous`, de lo más antiguo a lo más reciente, con la marca `conflict` en las relaciones de un solo valor y `generic` en las comodín como `RELATES_TO`, que van al final), sus vecinas y los episodios que la mencionan; los documentos que la mencionan salen de `GET /docs/mentions?entity=`. `as_of` (una fecha) da lo vigente ese día; `origin` lee una entidad que presta otro brain. `GET /entities?q=` busca entidades por nombre o por nombre fusionado.
 - **`GET /proposals`** está paginado: admite `status`, `kind` (`memory` o `correction`), `q` (título), `author` (id de usuario), `sort` (`id`, `name`, `author`, `conf`, `at`), `order` (`asc`/`desc`), `limit` (por defecto 50, máximo 500) y `offset`, y devuelve `{total, limit, offset, authors, items}` en lugar de una lista sin más. Un colaborador solo ve las suyas.
 - **`GET /proposals/counts`** cuenta por estado (solo de un `kind` si se indica), y además `kinds` (cada tipo en todos los estados) y `corrections_pending`.
 - **`POST /proposals`** devuelve la propuesta y `secrets_notice`: qué tipos de secreto se enmascararon o se marcaron, en el idioma de quien llama y nunca con el valor (vacío si no se encontró nada).

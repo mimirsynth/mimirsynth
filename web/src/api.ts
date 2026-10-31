@@ -21,7 +21,7 @@ export type Overview = {
   by_label: { label: string; count: number }[]; last_episode: { name: string; created_at: string } | null; first_episode_at: string | null;
 };
 
-const SCOPED = new Set(["overview", "episodes", "facts", "timeline", "graph", "vocabulary", "vocab", "docs", "query", "index", "jobs"]);
+const SCOPED = new Set(["overview", "episodes", "facts", "timeline", "graph", "vocabulary", "vocab", "docs", "query", "index", "jobs", "entities"]);
 
 function url(path: string, params: Record<string, string | number | boolean | undefined>) {
   const { graph, ...rest } = params; // `graph` = slug del brain activo

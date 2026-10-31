@@ -16,7 +16,7 @@ Esta wiki es la guía de usuario completa, en castellano y [en inglés](Home). S
 | Saber qué puede hacer cada persona | [[Roles y permisos]] |
 
 ## Usar la aplicación (una página por pantalla)
-[[Resumen]] · [[Diario]] · [[Hechos]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Vocabulario]] · [[Trabajos]] · [[Mi cuenta]]
+[[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Vocabulario]] · [[Trabajos]] · [[Mi cuenta]]
 
 ## Cuidar el conocimiento
 [[Vocabulario]] · [[Ontología]] · [[Tipos de entidad]] · [[Relaciones y alias]] · [[Fusionar duplicados]] · [[Corrector de tipos]] · [[Contradicciones]]

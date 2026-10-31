@@ -5,6 +5,7 @@ import { Btn, FilterBar, Segments, Modal, Notice, Pager, Pill, Tabs, TextArea, T
 import { useDebouncedValue } from "@mantine/hooks";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Fact, fmt, get, send, TimelineEvent } from "../api";
 import { FillArea, Page } from "../ui";
 
@@ -49,7 +50,8 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
   const filtered = !!(f.q || f.rel || f.since || f.until || (view === "lista" && f.status !== "all"));
   const card = (f: Fact) => (
         <ListCard key={f.uuid} invalid={f.status === "invalidated"}
-          tags={<><Pill size="xs">{f.source}</Pill><Text size="xs" className="ms-data">{f.name}</Text><Pill size="xs">{f.target}</Pill></>}
+          tags={<><Link to={`/entidad/${f.source_uuid}`} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link><Text size="xs" className="ms-data">{f.name}</Text>
+            <Link to={`/entidad/${f.target_uuid}`} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
           meta={<>{t("vigente desde")} {fmt(f.valid_at)}{f.invalid_at && <span className="ms-invalid-date"> {t("· invalidado")} {fmt(f.invalid_at)}</span>}<span> {t("· registrado el")} {fmt(f.created_at)}</span></>}
           actions={canEdit && <>
             <Btn size="row" icon="edit" onClick={() => open(f)}>{t("Editar")}</Btn>

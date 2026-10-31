@@ -16,7 +16,7 @@ This wiki is the complete user guide, in English and [in Spanish](Inicio). If yo
 | Know what each person can do | [[Roles and permissions]] |
 
 ## Using the application (one page per screen)
-[[Overview]] · [[Journal]] · [[Facts]] · [[Knowledge]] · [[Ask]] · [[Reference queries]] · [[Graph]] · [[Cypher query]] · [[Proposals]] · [[Vocabulary]] · [[Jobs]] · [[My account]]
+[[Overview]] · [[Journal]] · [[Facts]] · [[Entity page]] · [[Knowledge]] · [[Ask]] · [[Reference queries]] · [[Graph]] · [[Cypher query]] · [[Proposals]] · [[Vocabulary]] · [[Jobs]] · [[My account]]
 
 ## Curating the knowledge
 [[Vocabulary]] · [[Ontology]] · [[Entity types]] · [[Relations and aliases]] · [[Merge duplicates]] · [[Type corrector]] · [[Contradictions]]
