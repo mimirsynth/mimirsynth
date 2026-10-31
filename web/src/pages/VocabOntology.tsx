@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { get, send } from "../api";
 import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog } from "../ui";
 
@@ -11,7 +12,9 @@ type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rul
 type Done = { op: number; summary: string };
 /** Catch-all relation names (what the extractor writes when no type fits): they link anything, so they are never single-valued. */
 const GENERIC = new Set(["RELATES_TO", "RELATED_TO", "IS_RELATED_TO", "ASSOCIATED_WITH", "CONNECTED_TO", "LINKED_TO", "MENTIONS"]);
-const isGeneric = (s: string) => GENERIC.has(s.trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[\s-]+/g, "_").toUpperCase());
+/** The graph's spelling of a relation (HostedOn → HOSTED_ON). */
+const canon = (s: string) => s.trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[\s-]+/g, "_").toUpperCase();
+const isGeneric = (s: string) => GENERIC.has(canon(s));
 type Dlg = { kind: "rel"; item?: T } | { kind: "rel-del"; item: T } | { kind: "rule"; item?: Rule } | { kind: "rule-del"; item: Rule } | { kind: "instr" } | null;
 
 function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: (n: string) => number; canEdit: boolean; onEdit: (t: T) => void; onDelete: (t: T) => void }) {
@@ -105,6 +108,15 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const entityNames = ["Entity", ...(o?.entity_types.map((t) => t.name) ?? [])];
   const usedBy = (rel: string) => (o?.edge_type_map ?? []).filter((m) => m.edge_types.includes(rel)).length;
   const toggle = (e: string, on: boolean) => setEdges((cur) => (on ? [...cur, e] : cur.filter((x) => x !== e)));
+  // `?rel=NAME` opens that relation's edit dialog (the Contradictions tab links here to unmark a relation).
+  const [params, setParams] = useSearchParams();
+  const wanted = params.get("rel");
+  useEffect(() => {
+    if (!wanted || !o) return;
+    const item = o.edge_types.find((e) => canon(e.name) === canon(wanted));
+    if (item && canEdit) openRel(item);
+    setParams((p) => { p.delete("rel"); return p; }, { replace: true });
+  }, [wanted, o]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <FillArea>

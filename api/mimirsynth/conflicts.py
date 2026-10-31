@@ -16,6 +16,10 @@ cambiar nada; también desde la línea de comandos:  python -m mimirsynth.confli
 Generic relations (`RELATES_TO` and the like, what the extractor writes when no type fits) are never compared: they hold every kind of
 link, so a single-value mark on them only produces noise. A group a curator marks as «not a contradiction» stays hidden while its facts
 are the same ones (rc.1 feedback on #141).
+
+A relation that looks like it holds several values (a subject with three or more current targets, or a quarter of its subjects with
+several) gets no preselected suggestion and is flagged, so the curator unmarks it instead of invalidating true facts. Resolving can
+also invalidate just the facts the curator picks, as long as one fact of the group stays current (rc.2 feedback on #150).
 """
 import json
 import sys
@@ -37,6 +41,8 @@ curator = brain_access("curator")
 MAX_FACTS = 50000   # hechos vigentes que se leen por análisis
 MAX_GROUPS = 200    # grupos que se devuelven (los recuentos sí son completos)
 GENERIC = {"RELATES_TO", "RELATED_TO", "IS_RELATED_TO", "ASSOCIATED_WITH", "CONNECTED_TO", "LINKED_TO", "MENTIONS"}
+MANY_TARGETS = 3    # a subject with this many current targets in one relation: it probably holds several values
+MULTI_RATIO = 0.25  # or this share of its subjects (with two groups at least) has several targets
 
 
 def generic(relation: str | None) -> bool:
@@ -72,7 +78,9 @@ def find(facts: list[dict], amap: dict | None = None, only: set[str] | None = No
     el recuento por relación. Con `only`, solo esas relaciones.
     - Solo se comparan destinos del mismo tipo de entidad: «X ubicado en Host A» y «X ubicado en VLAN B» no se contradicen.
     - Dos destinos con el mismo nombre salvo mayúsculas y espacios son el mismo destino (eso es un duplicado del vocabulario).
-    - La propuesta solo es clara si el ganador es estrictamente más reciente y todas las fechas son de validez (`valid_at`)."""
+    - La propuesta solo es clara si el ganador es estrictamente más reciente y todas las fechas son de validez (`valid_at`).
+    - A relation that probably holds several values (`likely_multi`) never gets a clear suggestion: «the newest» only makes sense for
+      a pair in a single-valued relation."""
     by_key: dict[tuple, list[dict]] = defaultdict(list)
     sources: dict[str, set] = defaultdict(set)
     for f in facts:
@@ -81,25 +89,32 @@ def find(facts: list[dict], amap: dict | None = None, only: set[str] | None = No
             continue
         by_key[(f["source_uuid"], rel, _type(f))].append(f)
         sources[rel].add(f["source_uuid"])
-    groups, hit = [], defaultdict(set)
+    groups, hit, most = [], defaultdict(set), defaultdict(int)
     for (src, rel, ttype), fs in by_key.items():
-        if len({_norm(f["target"]) for f in fs}) < 2:
+        targets = len({_norm(f["target"]) for f in fs})
+        if targets < 2:
             continue
-        fs = sorted(fs, key=_when, reverse=True)
+        hit[rel].add(src)
+        most[rel] = max(most[rel], targets)
+        groups.append((src, rel, ttype, targets, sorted(fs, key=_when, reverse=True)))
+    stats = {r: {"relation": r, "sources": len(s), "groups": len(hit.get(r, ())), "ratio": round(len(hit.get(r, ())) / len(s), 3) if s else 0,
+                 "max_targets": most.get(r, 0)} for r, s in sources.items()}
+    for x in stats.values():
+        x["likely_multi"] = x["max_targets"] >= MANY_TARGETS or (x["groups"] >= 2 and x["ratio"] >= MULTI_RATIO)
+    out = []
+    for src, rel, ttype, targets, fs in groups:
         keep = fs[0]
         losers = [f for f in fs if _norm(f["target"]) != _norm(keep["target"])]
         dated = all(f.get("valid_at") for f in [keep, *losers])
-        hit[rel].add(src)
-        groups.append({"source": keep["source"], "source_uuid": src, "relation": rel, "target_type": ttype,
-                       "facts": [{k: f.get(k) for k in ("uuid", "fact", "target", "target_uuid", "valid_at", "created_at")} for f in fs],
-                       "suggestion": {"keep": keep["uuid"], "invalidate": [f["uuid"] for f in losers], "dated_by": "valid_at" if dated else "created_at",
-                                      "clear": dated and all(_when(keep) > _when(f) for f in losers)}})
-    groups.sort(key=lambda g: (-len(g["facts"]), g["relation"], _norm(g["source"])))
+        multi = stats[rel]["likely_multi"]
+        out.append({"source": keep["source"], "source_uuid": src, "relation": rel, "target_type": ttype, "targets": targets,
+                    "likely_multi": multi, "relation_ratio": stats[rel]["ratio"],
+                    "facts": [{k: f.get(k) for k in ("uuid", "fact", "target", "target_uuid", "valid_at", "created_at")} for f in fs],
+                    "suggestion": {"keep": keep["uuid"], "invalidate": [f["uuid"] for f in losers], "dated_by": "valid_at" if dated else "created_at",
+                                   "clear": dated and not multi and all(_when(keep) > _when(f) for f in losers)}})
+    out.sort(key=lambda g: (-len(g["facts"]), g["relation"], _norm(g["source"])))
     # De menor a mayor proporción: las relaciones de un solo valor de verdad son las de pocos casos, no las de muchos.
-    stats = sorted(({"relation": r, "sources": len(s), "groups": len(hit.get(r, ())),
-                     "ratio": round(len(hit.get(r, ())) / len(s), 3) if s else 0} for r, s in sources.items()),
-                   key=lambda x: (x["groups"] == 0, x["ratio"], x["relation"]))
-    return groups, stats
+    return out, sorted(stats.values(), key=lambda x: (x["groups"] == 0, x["ratio"], x["relation"]))
 
 
 def _hidden(g: dict, dismissed: list[dict]) -> dict | None:
@@ -179,47 +194,56 @@ def undismiss(did: int, ctx: BrainCtx = Depends(curator)):
 
 
 class ResolveIn(BaseModel):
-    keep: str = Field(min_length=1, max_length=64)
-    invalidate: list[str] = Field(min_length=1, max_length=50)
+    keep: str | None = Field(None, min_length=1, max_length=64)
+    invalidate: list[str] = Field(min_length=1, max_length=500)
 
 
 @router.post("/resolve")
 def resolve_conflict(body: ResolveIn, ctx: BrainCtx = Depends(curator)):
-    """Deja vigente `keep` e invalida los demás, con la fecha de `keep` si es posterior (así la línea temporal dice cuándo cambió) o
-    con la de ahora si no. Cada invalidación queda en el historial del vocabulario y se puede deshacer."""
+    """Invalida `invalidate`. Con `keep` («quedarse con uno»), con la fecha de `keep` si es posterior (así la línea temporal dice
+    cuándo cambió) o con la de ahora si no; sin `keep` (the curator ticked the facts that are no longer true), con la de ahora. Al menos
+    un hecho del grupo sigue vigente siempre. Cada invalidación queda en el historial del vocabulario y se puede deshacer."""
     from .entity_types import _record
-    if body.keep in body.invalidate:
+    drop = list(dict.fromkeys(body.invalidate))
+    if body.keep in drop:
         raise HTTPException(400, "el hecho que se conserva no puede invalidarse a la vez")
     q = ("MATCH (a:Entity)-[r:RELATES_TO {uuid:$u}]->(b:Entity) RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact, r.valid_at AS valid_at, "
          "r.created_at AS created_at, r.invalid_at AS invalid_at, r.expired_at AS expired_at, a.uuid AS source_uuid, b.name AS target, "
          "labels(b) AS target_labels")
     amap = alias_map(ctx.db, ctx.brain.id)
     got = {}
-    for u in [body.keep, *body.invalidate]:
+    for u in [*([body.keep] if body.keep else []), *drop]:
         r = rows(ctx.graph.query(q, {"u": u}))
         if not r:
             raise HTTPException(404, "hecho no encontrado")
         got[u] = r[0]
-    keep = got[body.keep]
-    if keep["invalid_at"] or keep["expired_at"]:
+    ref = got[body.keep or drop[0]]
+    if body.keep and (ref["invalid_at"] or ref["expired_at"]):
         raise HTTPException(409, "el hecho que se conserva ya no está vigente")   # si no, no quedaría ninguno vigente
-    for u in body.invalidate:
+    rel = resolve(ref["name"], amap)
+    for u in drop:
         f = got[u]
         if f["invalid_at"] or f["expired_at"]:
             raise HTTPException(409, "uno de los hechos ya está invalidado")
-        if f["source_uuid"] != keep["source_uuid"] or resolve(f["name"], amap) != resolve(keep["name"], amap) or _type(f) != _type(keep):
+        if f["source_uuid"] != ref["source_uuid"] or resolve(f["name"], amap) != rel or _type(f) != _type(ref):
             raise HTTPException(400, "los hechos no tienen el mismo sujeto, la misma relación y el mismo tipo de destino")
+    current = rows(ctx.graph.query("MATCH (a:Entity {uuid:$s})-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
+                                   "RETURN r.uuid AS uuid, r.name AS name, labels(b) AS target_labels", {"s": ref["source_uuid"]}))
+    if not any(f["uuid"] not in drop and resolve(f["name"], amap) == rel and _type(f) == _type(ref) for f in current):
+        raise HTTPException(400, "al menos un hecho del grupo tiene que seguir vigente")
     now = datetime.now(timezone.utc).isoformat()
-    items = [{"u": u, "at": _when(keep) if keep.get("valid_at") and _when(keep) > _when(got[u]) else now} for u in body.invalidate]
+    keep = got[body.keep] if body.keep else None
+    items = [{"u": u, "at": _when(keep) if keep and keep.get("valid_at") and _when(keep) > _when(got[u]) else now} for u in drop]
     ctx.graph.query("UNWIND $items AS it MATCH ()-[r:RELATES_TO {uuid: it.u}]->() SET r.invalid_at = it.at, r.expired_at = $n",
                     {"items": items, "n": now})   # todas en una consulta: no queda una resolución a medias
     ops = []
-    for u in body.invalidate:
+    for u in drop:
         f = got[u]
-        op = _record(ctx, "fact.invalidate", f"Invalidado por contradicción con «{(keep['fact'] or '')[:60]}»: «{(f['fact'] or '')[:60]}»",
+        why = f"Invalidado por contradicción con «{(keep['fact'] or '')[:60]}»" if keep else "Invalidado al revisar contradicciones"
+        op = _record(ctx, "fact.invalidate", f"{why}: «{(f['fact'] or '')[:60]}»",
                      uuid=u, before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]})
         ops.append(op.id)
-    audit(ctx.db, ctx.user, "conflict.resolve", ctx.brain, keep=body.keep, invalidated=body.invalidate)
+    audit(ctx.db, ctx.user, "conflict.resolve", ctx.brain, keep=body.keep, invalidated=drop)
     return {"ok": True, "ops": ops}
 
 
