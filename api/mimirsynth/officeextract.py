@@ -8,16 +8,17 @@ They come from outside, so before reading anything:
 - the zip may not declare more than MAX_MEMBERS entries nor more than MAX_UNZIPPED bytes uncompressed (a zip bomb), and an XML part
   is read only up to MAX_PART bytes;
 - an XML part with a DOCTYPE or an entity declaration is rejected: nothing an Office file needs, and the way to an entity expansion.
+  Expat itself looks for them, before the tree is built, so the check holds whatever the part's encoding (UTF-16 included).
 """
 import re
 import zipfile
+from xml.parsers import expat
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 MAX_MEMBERS = 5000
 MAX_UNZIPPED = 512 << 20
 MAX_PART = 128 << 20
-_DTD = re.compile(rb"<!(DOCTYPE|ENTITY)", re.I)
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -46,6 +47,29 @@ def _open(path: Path) -> zipfile.ZipFile:
     return z
 
 
+class _Dtd(Exception):
+    pass
+
+
+def _no_dtd(raw: bytes, name: str) -> None:
+    """A first pass with expat that stops at a DOCTYPE or an entity declaration. Expat decodes the part itself, so a declaration is
+    seen in UTF-8, UTF-16 or any other encoding; a regex on the bytes would not see it in UTF-16."""
+    def refuse(*_):
+        raise _Dtd()
+    p = expat.ParserCreate()
+    p.StartDoctypeDeclHandler = refuse
+    p.EntityDeclHandler = refuse
+    p.UnparsedEntityDeclHandler = refuse
+    p.ExternalEntityRefHandler = refuse
+    p.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    try:
+        p.Parse(raw, True)
+    except _Dtd:
+        raise OfficeError("el documento lleva declaraciones DOCTYPE o de entidades, que no se admiten") from None
+    except expat.ExpatError as e:
+        raise OfficeError(f"{name} no es XML válido") from e
+
+
 def _xml(z: zipfile.ZipFile, name: str, required: bool = True):
     try:
         info = z.getinfo(name)
@@ -59,8 +83,7 @@ def _xml(z: zipfile.ZipFile, name: str, required: bool = True):
         raw = f.read(MAX_PART + 1)
     if len(raw) > MAX_PART:
         raise OfficeError(f"{name} es demasiado grande")
-    if _DTD.search(raw[:4096]) or _DTD.search(raw):
-        raise OfficeError("el documento lleva declaraciones DOCTYPE o de entidades, que no se admiten")
+    _no_dtd(raw, name)
     try:
         return ET.fromstring(raw)
     except ET.ParseError as e:

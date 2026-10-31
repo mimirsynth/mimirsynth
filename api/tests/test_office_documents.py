@@ -104,6 +104,29 @@ def test_a_crafted_or_broken_file_is_rejected(tmp_path, monkeypatch):
         extract(f, ".docx")
 
 
+def test_a_declaration_in_utf16_is_rejected_too(tmp_path):
+    """Review of #160: a regex on the bytes did not see `<!DOCTYPE` in a UTF-16 part, and expat expanded the entity."""
+    from mimirsynth.docextract import ExtractError, extract
+    evil = (f'<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE d [<!ENTITY x "INYECTADO">]><w:document {W}><w:body>'
+            '<w:p><w:r><w:t>Hola &x;</w:t></w:r></w:p></w:body></w:document>')
+    f = tmp_path / "evil.docx"
+    f.write_bytes(_zip_bytes({"word/document.xml": evil.encode("utf-16")}))
+    with pytest.raises(ExtractError, match="DOCTYPE"):
+        extract(f, ".docx")
+    plain = (f'<?xml version="1.0" encoding="UTF-16"?><w:document {W}><w:body><w:p><w:r><w:t>Hola en UTF-16</w:t></w:r></w:p>'
+             '</w:body></w:document>')
+    f.write_bytes(_zip_bytes({"word/document.xml": plain.encode("utf-16")}))
+    assert extract(f, ".docx")[0].strip() == "Hola en UTF-16"                     # a normal UTF-16 part still works
+
+
+def _zip_bytes(files: dict[str, bytes]) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in files.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
 def test_upload_and_index_a_word_document(client, fake_index):  # noqa: F811
     assert client.post("/api/brains", json={"slug": "of1", "name": "Of1", "graph_name": "g-of1"}).status_code == 201
     uid, r = _upload(client, "of1", "inventario.docx", docx("Inventario de servidores"))
