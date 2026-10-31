@@ -17,7 +17,7 @@ The search bar at the top accepts a natural-language sentence or keywords. Resul
 With no search you see the **table of documents**.
 
 ### Uploading files
-Drag files into the upload area or press **Choose files**. Formats: **Markdown, text (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`) and PDF**. You need at least the **contributor** role.
+Drag files into the upload area or press **Choose files**. Formats: **Markdown, text (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`), PDF and Office (`.docx`, `.pptx`, `.xlsx`, `.odt`)**: Word and OpenDocument headings become headings, each slide starts with its title, each sheet with its name, and each table row goes on one line. You need at least the **contributor** role.
 - Uploads are sent **in parts** and you can upload several at once; you see the state of each one and a **Clear list** button.
 - The maximum size of a file and of each part is set by the administrator ([[Folders and limits]]).
 - If you upload a file **identical** to one already uploaded, it is not stored again.

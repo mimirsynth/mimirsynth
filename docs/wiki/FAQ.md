@@ -35,7 +35,7 @@ Mark the relation as single-valued in the [[Ontology]] and resolve the case in [
 It is normal at the start. Define an [[Ontology]], unify with [[Relations and aliases]] and [[Merge duplicates]].
 
 ## Documents
-**What formats are supported?** Markdown, text, HTML and PDF with text. See [[Knowledge]].
+**What formats are supported?** Markdown, text, HTML, PDF with text, and Office documents (`.docx`, `.pptx`, `.xlsx`, `.odt`). See [[Knowledge]].
 
 **Can my wikis be indexed?** Yes, read-only: Outline, Confluence (Cloud and Data Center) and Notion. The Confluence and Notion adapters have not yet been validated against a live instance; Docmost is not supported yet. An Obsidian vault is indexed as a folder. See [[Document memory]].
 

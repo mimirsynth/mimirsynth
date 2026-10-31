@@ -30,7 +30,7 @@ Tres ajustes que acotan el tamaño de lo que se sube o se indexa:
 | **Texto máximo extraído por documento** | 100 MB | 1–2048 | Un documento cuyo texto supere este tamaño no se indexa |
 
 ## Formatos admitidos
-Texto y Markdown (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`) y PDF (`.pdf`). Un PDF **escaneado** (solo imagen, sin texto) no contiene texto que indexar.
+Texto y Markdown (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`), PDF (`.pdf`) y Office (`.docx`, `.pptx`, `.xlsx` y `.odt`; no los formatos binarios antiguos `.doc`, `.ppt` ni `.xls`). Un PDF **escaneado** (solo imagen, sin texto) no contiene texto que indexar.
 - **Markdown y Obsidian:** una bóveda no es más que una carpeta de Markdown, así que se conecta como fuente de carpeta. Se quita el frontmatter YAML (se usa su `title:`), los enlaces de estilo wiki (entre dobles corchetes) conservan su texto y se descartan los incrustados, los `%%comentarios%%` y las marcas `^bloque`, también en ficheros guardados con finales de línea de Windows. Las carpetas ocultas como `.obsidian/` se ignoran.
 - **Ficheros repetidos:** un documento cuyo texto coincide con otro ya indexado en el brain (sin distinguir mayúsculas ni espacios), por ejemplo la misma nota en dos carpetas, queda marcado como **duplicado** y no se indexa dos veces ([[Conocimiento]]).
 - **Secretos:** la política de secretos del brain se aplica también a los documentos: con **Enmascarar**, las credenciales se quitan del texto indexado; con **Bloquear**, un documento que contenga una segura no se indexa. El fichero original nunca se modifica ([[Conectar agentes]] explica las políticas).

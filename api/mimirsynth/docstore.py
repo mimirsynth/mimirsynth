@@ -12,7 +12,8 @@ from .config import settings
 TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".log"}
 HTML_EXT = {".html", ".htm"}
 PDF_EXT = {".pdf"}
-ALLOWED_EXT = TEXT_EXT | HTML_EXT | PDF_EXT
+OFFICE_EXT = {".docx", ".pptx", ".xlsx", ".odt"}  # read with the standard library (officeextract, #124)
+ALLOWED_EXT = TEXT_EXT | HTML_EXT | PDF_EXT | OFFICE_EXT
 UPLOAD_TTL = 24 * 3600
 
 

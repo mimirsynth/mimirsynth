@@ -12,7 +12,7 @@ Además de la memoria «destilada» (episodios → hechos), MimirSynth guarda **
 
 ## Cómo se indexa un documento
 1. Se **guarda el original** en el volumen del almacén (o, en una carpeta, se referencia sin copiar).
-2. Se **extrae el texto** (Markdown, texto plano, HTML, PDF).
+2. Se **extrae el texto** (Markdown, texto plano, HTML, PDF, y Office: Word, PowerPoint, Excel y texto de OpenDocument).
 3. El **detector de secretos** busca credenciales en el texto y, según la política del brain, las enmascara o deja el documento sin indexar (ver abajo).
 4. Si el mismo texto (sin contar mayúsculas ni espacios) **ya está indexado** en otro documento del brain, el documento queda como **duplicado** y se para aquí (ver abajo).
 5. Se **trocea por títulos y secciones**, conservando la ruta de títulos («Instalación › Requisitos»).

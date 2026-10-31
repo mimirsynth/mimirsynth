@@ -6,7 +6,7 @@ from pathlib import Path
 
 from . import appsettings
 from .config import settings
-from .docstore import HTML_EXT, PDF_EXT, TEXT_EXT
+from .docstore import HTML_EXT, OFFICE_EXT, PDF_EXT, TEXT_EXT
 
 PAGE_BREAK = "\f"
 CHUNK_SIZE = 900
@@ -121,6 +121,21 @@ def extract(path: Path, ext: str) -> tuple[str, str]:
         if not text.replace(PAGE_BREAK, "").strip():
             raise ExtractError("el PDF no tiene texto extraíble (¿escaneado?)")
         return text, title.strip()
+    if ext in OFFICE_EXT:  # a zip: its size says little about its text, which is what is capped
+        from .officeextract import OfficeError, extract as office
+        try:
+            text, title = office(path, ext)
+        except OfficeError as e:
+            raise ExtractError(str(e)) from e
+        if len(text.encode("utf-8")) > cap:
+            raise ExtractError(f"el texto del documento supera el máximo ({appsettings.get('doc_text_max_mb')} MB)")
+        if not text.strip():
+            raise ExtractError("el documento no tiene texto")
+        text = _normalize(text)
+        if not title:
+            m = re.search(r"^#\s+(.+)$", text, re.M)
+            title = m.group(1).strip() if m else ""
+        return text, title
     if path.stat().st_size > cap:
         raise ExtractError(f"el fichero supera el máximo de texto ({appsettings.get('doc_text_max_mb')} MB)")
     raw = path.read_bytes()
