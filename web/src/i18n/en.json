@@ -1446,5 +1446,20 @@
  "Restauración rápida (usar la copia exacta)": "Fast restore (use the exact copy)",
  "Solo para paquetes que hayas exportado tú. La copia exacta entra en FalkorDB tal cual, sin validarla como la copia JSON; después se compara con ella y, si no coincide, se descarta. Cifrar un paquete no lo hace de confianza: cualquiera con la contraseña puede hacer uno.": "Only for packages you exported yourself. The exact copy goes into FalkorDB as it is, without being validated like the JSON copy; it is then compared with it and dropped if they do not match. Encrypting a package does not make it trusted: anyone with the password can make one.",
  "la copia exacta no coincidía con la copia JSON y se descartó": "the exact copy did not match the JSON copy and was dropped",
- "Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) o": "Drag files here (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) or"
+ "Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) o": "Drag files here (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) or",
+ "(texto purgado)": "(text purged)",
+ "Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.": "How long what is no longer useful is kept: the text of rejected proposals and finished jobs.",
+ "El de la instancia: {{v}}": "The instance's: {{v}}",
+ "El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.": "The text of this rejected proposal was purged on {{d}} by the brain's retention period. Its status, authors and dates remain.",
+ "En vigor: propuestas rechazadas, {{p}}; trabajos terminados, {{j}}.": "In force: rejected proposals, {{p}}; finished jobs, {{j}}.",
+ "La última purga falló: {{e}}": "The last purge failed: {{e}}",
+ "Purga en marcha…": "Purge running…",
+ "Purgar ahora": "Purge now",
+ "Retención": "Retention",
+ "Texto de las propuestas rechazadas": "Text of rejected proposals",
+ "Trabajos terminados": "Finished jobs",
+ "Una tarea diaria purga lo que supera estos plazos y deja un resumen. Las propuestas rechazadas pierden su texto, pero conservan su estado, sus autores y sus fechas; los trabajos terminados se borran. Vacío usa el plazo de la instancia; 0 conserva para siempre. La auditoría no se purga.": "A daily job purges what is older than these periods and leaves a summary. Rejected proposals lose their text but keep their status, authors and dates; finished jobs are deleted. Empty uses the instance's period; 0 keeps forever. The audit log is never purged.",
+ "días": "days",
+ "sin plazo": "no period",
+ "Última purga, {{d}}: {{p}} propuestas y {{j}} trabajos.": "Last purge, {{d}}: {{p}} proposals and {{j}} jobs."
 }

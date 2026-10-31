@@ -40,6 +40,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Members** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrator |
 | **Tokens** | `GET/POST /tokens` (`scopes`: `recall`, `documents`, `propose`; `days`: until it expires, empty for never) · `POST /tokens/{id}/rotate` (`grace_hours`, 0–168, default 24; only its owner) · `DELETE /tokens/{id}`. Only from a session, never with an API token | reader (from your own role down) |
 | **The brain itself** | `PATCH /api/brains/{slug}` (name, description, slug, secrets policy) · `GET /api/brains/{slug}/secrets/scan` | administrator |
+| **Retention** | `GET/PUT /retention` (`rejected_days`, `jobs_days`: days, empty for the instance's, 0 for forever) · `POST /retention/run` (purge now) | owner |
 | **Export** | `POST /exports` (`vectors`, optional `password`) · `GET /exports` · `GET /exports/{id}/download` (once; 410 once downloaded or expired). See [[Export a brain]] | administrator |
 | | `POST /api/brains/{slug}/delete` | owner |
 

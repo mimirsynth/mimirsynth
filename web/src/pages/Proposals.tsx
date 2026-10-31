@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { fmt, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
-  created_at: string; reviewed_at: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; secrets?: SecretFinding[];
+  created_at: string; reviewed_at: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
   kind?: string; correction?: Correction | null; secrets_notice?: string };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
 type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
@@ -68,7 +68,7 @@ function ProposalsTable({ data, view, status, onStatus, kind, onKind, counts, on
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
             <DataTable.Td className="ms-data">#{p.id}</DataTable.Td><DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>
-            <DataTable.Td><Group gap="xs" wrap="nowrap">{p.name}<SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
+            <DataTable.Td><Group gap="xs" wrap="nowrap">{p.purged_at ? <Text span size="sm" c="dimmed">{t("(texto purgado)")}</Text> : p.name}<SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
           </DataTable.Tr>))}
         {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={7}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
@@ -156,11 +156,12 @@ export default function Proposals({ graph, role }: { graph: string; role: string
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setStatus("pending"); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
       <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />
-      <Modal opened={open !== null} onClose={() => setOpen(null)} title={d ? `#${d.id} · ${d.name}` : t("Propuesta")} size="lg" centered>
+      <Modal opened={open !== null} onClose={() => setOpen(null)} title={d ? `#${d.id} · ${d.purged_at ? t("(texto purgado)") : d.name}` : t("Propuesta")} size="lg" centered>
         {d && <Stack gap="sm">
           <Group gap="xs"><KindPill kind={d.kind} /><Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>
             <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {d.confidence ?? t("no indicada")}</Text></Group>
-          {d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} /> : <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>}
+          {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
+            : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} /> : <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>}
           <SecretsNotice found={d.secrets} />
           <Steps>
             <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text></Step>
