@@ -374,6 +374,7 @@
  "no autenticado": "not authenticated",
  "no debe contener tu email ni tu nombre": "it must not contain your email or your name",
  "no disponible": "not available",
+ "no encontrado": "not found",
  "no hay cambios": "there are no changes",
  "no hay un cambio aplicado con ese id": "there is no applied change with that id",
  "no hay un decisor configurado (Administración → Proveedores IA)": "there is no decider configured (Administration → AI providers)",
@@ -459,6 +460,7 @@
  "ya se está indexando": "it is already being indexed",
  "ya tienes una identidad vinculada con ese proveedor": "you already have an identity linked with that provider",
  "{{alias}} ya es alias de {{amap}}": "{{alias}} is already an alias of {{amap}}",
+ "{{name}} es una relación genérica: puede unir cualquier cosa, así que no puede ser de un solo valor": "{{name}} is a generic relation: it can link anything, so it cannot be single-valued",
  "{{n}} fuente(s) de brains usan esta raíz: quítalas antes": "{{n}} brain source(s) use this root: remove them first",
  "«Entity» es la etiqueta base de Graphiti": "“Entity” is Graphiti's base label"
 }

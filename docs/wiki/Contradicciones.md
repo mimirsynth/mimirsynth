@@ -9,9 +9,10 @@ Cuando un episodio nuevo contradice un hecho, la ingesta suele invalidar el anti
 
 ## Relaciones de un solo valor
 Solo se buscan contradicciones en los tipos de relación marcados como **de un solo valor**: un sujeto no puede tener dos destinos vigentes, como dónde está instalado un equipo o a quién informa una persona.
-- Las marca un administrador del brain en [[Ontología]]: edita el tipo de relación y marca **Un solo valor a la vez**. Las relaciones marcadas llevan la etiqueta **un solo valor** en la tabla de tipos de relación.
+- Las marca un administrador del brain en [[Ontología]] (edita el tipo de relación y marca **Un solo valor a la vez**; la tabla de tipos de relación tiene una columna **Un solo valor**) o directamente desde la medición de abajo, con **Marcar**.
 - **Ninguna relación es de un solo valor por defecto, tampoco en los paquetes estándar.** Muchas lo parecen y no lo son: «ubicado en» puede apuntar a la vez a un edificio, a una red y a un armario. Cada brain marca las suyas **después de medir** (ver abajo).
-- Si no hay ninguna marcada, la pestaña lo avisa y no busca nada.
+- Si no hay ninguna marcada, la pestaña lo avisa y no busca nada, con atajos a **Medir ahora** y a la pestaña Ontología.
+- Las **relaciones genéricas** como `RELATES_TO` (lo que escribe el extractor cuando ningún tipo encaja) no se comparan nunca ni se pueden marcar: unen cualquier cosa, así que solo darían ruido. La pestaña dice cuántos hechos se dejaron fuera por eso.
 
 ## Qué cuenta como contradicción
 Hechos vigentes con el **mismo sujeto**, la **misma relación** y **destinos distintos del mismo tipo de entidad**:
@@ -20,15 +21,19 @@ Hechos vigentes con el **mismo sujeto**, la **misma relación** y **destinos dis
 - Dos destinos con el mismo nombre salvo mayúsculas y espacios cuentan como el mismo. Eso es una entidad duplicada, no una contradicción: ver [[Fusionar duplicados]].
 
 ## Revisar un caso
-Cada tarjeta muestra el sujeto y la relación, el tipo de los destinos y cada hecho vigente con su fecha. Una etiqueta indica si hay propuesta:
+Una nota arriba explica para qué sirve la pestaña y qué hace cada acción. Los casos son una tabla compacta con una fila por grupo: **Sujeto**, **Relación**, **Tipo del destino** (el tipo de entidad de los destinos; solo se comparan destinos del mismo tipo), **Hechos** y **Propuesta**. **Revisar** abre un grupo. La columna **Propuesta** dice si la hay:
 
 | Etiqueta | Significado |
 |---|---|
-| **el más reciente es claro** | Un hecho tiene una **fecha de validez** (cuándo empezó a ser cierto) estrictamente más reciente. Viene preseleccionado |
+| *destino* **el más reciente** | Un hecho tiene una **fecha de validez** (cuándo empezó a ser cierto) estrictamente más reciente. Viene preseleccionado |
 | **misma fecha: decide tú** | Los hechos más recientes comparten fecha. No se preselecciona nada |
 | **solo fecha de aprendizaje: decide tú** | Algún hecho solo tiene la fecha en que se **aprendió**, que no dice cuál es más actual. No se preselecciona nada |
 
-Para resolverlo, escoge en **Elige cuál se queda** el hecho que sigue siendo cierto y pulsa **Dejar este e invalidar el resto**.
+Un grupo abierto pregunta **¿Qué hecho sigue siendo cierto?** y muestra cada hecho como una opción, con su destino, su fecha («cierto desde» o «aprendido el») y su frase, recortada a dos líneas con **Ver entero**. Un grupo largo se desplaza dentro de su propia zona. Después:
+- **Resolver: invalidar los otros N** conserva el hecho elegido. El botón no se activa hasta elegir uno.
+- **No es una contradicción** oculta el grupo, para un falso positivo. Sigue oculto mientras sus hechos sean los mismos: si llega un hecho nuevo al grupo, vuelve a salir. Los grupos ocultos se listan en **Marcados como no contradicción**, donde **Volver a mostrar** recupera uno.
+
+Al resolver:
 - Los demás hechos se **invalidan**, no se borran. Su fecha de fin es la fecha de validez del que se queda si es posterior (así la línea temporal dice cuándo cambió) o, si no, la hora actual.
 - Cada hecho invalidado queda en el historial del vocabulario (**Cambios recientes** en [[Tipos de entidad]]), desde donde un administrador del brain puede **deshacerlo** mientras no se haya hecho otro cambio de vocabulario después. Se deshace primero el más reciente. La resolución queda también en la [[Auditoría]].
 - [[Hechos]] muestra los invalidados como no vigentes, igual que cualquier otra invalidación.
@@ -44,7 +49,7 @@ Para resolverlo, escoge en **Elige cuál se queda** el hecho que sigue siendo ci
 | **Proporción** | La proporción entre ambos, de menor a mayor |
 | **Un solo valor** | Si ya está marcada |
 
-Las buenas candidatas tienen **proporción baja y algún caso**: la mayoría de sujetos tienen un destino y unos pocos dos, que es como se ve una contradicción que se escapó. Una relación con proporción alta probablemente admite varios valores: no la marques. Mientras mides se listan los casos de todas las relaciones, pero solo se pueden resolver los de relaciones ya marcadas. **Volver a las relaciones de un solo valor** regresa a la vista normal.
+Las buenas candidatas tienen **proporción baja y algún caso**: la mayoría de sujetos tienen un destino y unos pocos dos, que es como se ve una contradicción que se escapó. Una relación con proporción alta probablemente admite varios valores: no la marques. Un administrador del brain puede **Marcar** una relación desde esta tabla si está en la ontología. Mientras mides se listan los casos de todas las relaciones, pero solo se pueden resolver los de relaciones ya marcadas. **Volver a las relaciones de un solo valor** regresa a la vista normal.
 
 La misma medición está disponible desde la línea de comandos, en solo lectura, lo que ayuda antes de marcar nada:
 

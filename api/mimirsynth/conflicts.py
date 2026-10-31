@@ -12,6 +12,10 @@ los demás con esa fecha; se puede deshacer como cualquier invalidación.
 
 Para medir antes de marcar relaciones como funcionales, el modo «todas las relaciones» cuenta los candidatos de cada relación sin
 cambiar nada; también desde la línea de comandos:  python -m mimirsynth.conflicts <grafo> [--brain-id N]
+
+Generic relations (`RELATES_TO` and the like, what the extractor writes when no type fits) are never compared: they hold every kind of
+link, so a single-value mark on them only produces noise. A group a curator marks as «not a contradiction» stays hidden while its facts
+are the same ones (rc.1 feedback on #141).
 """
 import json
 import sys
@@ -25,12 +29,19 @@ from sqlalchemy import select
 from . import jobs, notify
 from .db import rows
 from .deps import BrainCtx, audit, brain_access
+from .models import ConflictDismissal
 from .vocab import alias_map, canon_rel, resolve
 
 router = APIRouter(prefix="/api/brains/{slug}/conflicts")
 curator = brain_access("curator")
 MAX_FACTS = 50000   # hechos vigentes que se leen por análisis
 MAX_GROUPS = 200    # grupos que se devuelven (los recuentos sí son completos)
+GENERIC = {"RELATES_TO", "RELATED_TO", "IS_RELATED_TO", "ASSOCIATED_WITH", "CONNECTED_TO", "LINKED_TO", "MENTIONS"}
+
+
+def generic(relation: str | None) -> bool:
+    """A relation name that says nothing about what links two entities, so it can never be single-valued."""
+    return canon_rel(relation) in GENERIC
 
 QUERY = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
          "RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact, r.valid_at AS valid_at, r.created_at AS created_at, "
@@ -53,7 +64,7 @@ def _type(f: dict) -> str:
 
 def functional_relations(onto: dict | None) -> set[str]:
     """Relaciones marcadas como funcionales en la ontología del brain, normalizadas como las del grafo (HostedOn → HOSTED_ON)."""
-    return {canon_rel(t["name"]) for t in (onto or {}).get("edge_types", []) if t.get("functional")}
+    return {canon_rel(t["name"]) for t in (onto or {}).get("edge_types", []) if t.get("functional") and not generic(t["name"])}
 
 
 def find(facts: list[dict], amap: dict | None = None, only: set[str] | None = None) -> tuple[list[dict], list[dict]]:
@@ -66,7 +77,7 @@ def find(facts: list[dict], amap: dict | None = None, only: set[str] | None = No
     sources: dict[str, set] = defaultdict(set)
     for f in facts:
         rel = resolve(f.get("name"), amap)
-        if only is not None and rel not in only:
+        if rel in GENERIC or (only is not None and rel not in only):
             continue
         by_key[(f["source_uuid"], rel, _type(f))].append(f)
         sources[rel].add(f["source_uuid"])
@@ -91,13 +102,36 @@ def find(facts: list[dict], amap: dict | None = None, only: set[str] | None = No
     return groups, stats
 
 
-def scan(graph, amap: dict | None, functional: set[str], all_relations: bool = False) -> dict:
+def _hidden(g: dict, dismissed: list[dict]) -> dict | None:
+    """The dismissal that covers a group: same subject, relation and target type, and no fact the curator did not see."""
+    uuids = {f["uuid"] for f in g["facts"]}
+    return next((d for d in dismissed if (d["source_uuid"], d["relation"], d["target_type"]) == (g["source_uuid"], g["relation"], g["target_type"])
+                 and uuids <= set(d["facts"])), None)
+
+
+def scan(graph, amap: dict | None, functional: set[str], all_relations: bool = False, dismissed: list[dict] | None = None) -> dict:
     facts = rows(graph.query(QUERY, {"n": MAX_FACTS}))
     groups, stats = find(facts, amap, None if all_relations else functional)
     for s in stats:
         s["functional"] = s["relation"] in functional
-    return {"scanned": len(facts), "truncated": len(facts) >= MAX_FACTS, "functional": sorted(functional), "total": len(groups),
-            "groups": groups[:MAX_GROUPS], **({"by_relation": stats} if all_relations else {})}
+    shown, seen = [], set()
+    for g in groups:
+        d = _hidden(g, dismissed or [])
+        if d:
+            seen.add(d["id"])
+        else:
+            shown.append(g)
+    return {"scanned": len(facts), "truncated": len(facts) >= MAX_FACTS, "functional": sorted(functional), "total": len(shown),
+            "groups": shown[:MAX_GROUPS], "generic_facts": sum(1 for f in facts if resolve(f.get("name"), amap) in GENERIC),
+            "dismissed": [{k: d[k] for k in ("id", "source", "relation", "target_type", "created_at")} | {"facts": len(d["facts"])}
+                          for d in dismissed or [] if d["id"] in seen],
+            **({"by_relation": stats} if all_relations else {})}
+
+
+def _dismissals(db, brain_id: int) -> list[dict]:
+    return [{"id": d.id, "source_uuid": d.source_uuid, "source": d.source, "relation": d.relation, "target_type": d.target_type,
+             "facts": d.facts or [], "created_at": d.created_at}
+            for d in db.scalars(select(ConflictDismissal).where(ConflictDismissal.brain_id == brain_id).order_by(ConflictDismissal.id.desc()))]
 
 
 def _brain_functional(db, brain_id: int) -> set[str]:
@@ -109,7 +143,39 @@ def _brain_functional(db, brain_id: int) -> set[str]:
 def list_conflicts(all: bool = False, ctx: BrainCtx = Depends(curator)):
     """Posibles contradicciones en las relaciones funcionales del brain. Con `all`, en todas las relaciones y con el recuento por
     relación: sirve para medir antes de marcar una relación como funcional. Solo lee."""
-    return scan(ctx.graph, alias_map(ctx.db, ctx.brain.id), _brain_functional(ctx.db, ctx.brain.id), all)
+    return scan(ctx.graph, alias_map(ctx.db, ctx.brain.id), _brain_functional(ctx.db, ctx.brain.id), all, _dismissals(ctx.db, ctx.brain.id))
+
+
+class DismissIn(BaseModel):
+    source_uuid: str = Field(min_length=1, max_length=64)
+    source: str = Field("", max_length=255)
+    relation: str = Field(min_length=1, max_length=128)
+    target_type: str = Field("Entity", max_length=255)
+    facts: list[str] = Field(min_length=2, max_length=500)
+
+
+@router.post("/dismiss", status_code=201)
+def dismiss(body: DismissIn, ctx: BrainCtx = Depends(curator)):
+    """«Not a contradiction»: the group stops showing until a fact the curator did not see joins it. Undone with DELETE."""
+    d = ConflictDismissal(brain_id=ctx.brain.id, source_uuid=body.source_uuid, source=body.source, relation=canon_rel(body.relation),
+                          target_type=body.target_type, facts=sorted(set(body.facts)), user_id=ctx.user.id)
+    ctx.db.add(d)
+    ctx.db.commit()
+    audit(ctx.db, ctx.user, "conflict.dismiss", ctx.brain, id=d.id, source=body.source, relation=d.relation, facts=len(d.facts))
+    return {"id": d.id}
+
+
+@router.delete("/dismiss/{did}")
+def undismiss(did: int, ctx: BrainCtx = Depends(curator)):
+    """Shows a dismissed group again."""
+    d = ctx.db.get(ConflictDismissal, did)
+    if not d or d.brain_id != ctx.brain.id:
+        raise HTTPException(404, "no encontrado")
+    source, relation = d.source, d.relation
+    ctx.db.delete(d)
+    ctx.db.commit()
+    audit(ctx.db, ctx.user, "conflict.undismiss", ctx.brain, id=did, source=source, relation=relation)
+    return {"ok": True}
 
 
 class ResolveIn(BaseModel):
@@ -169,10 +235,11 @@ def _job_scan(ctx: "jobs.JobCtx", p: dict) -> dict:
         if not b:
             return {}
         functional, amap, name, slug, gname = _brain_functional(db, b.id), alias_map(db, b.id), b.name, b.slug, b.graph_name
+        dismissed = _dismissals(db, b.id)
     if not functional:
         return {"total": 0, "functional": []}
     ctx.progress(0, 0, "leyendo los hechos vigentes")
-    out = scan(graph(gname), amap, functional)
+    out = scan(graph(gname), amap, functional, dismissed=dismissed)
     key = f"conflicts:{slug}"
     if out["total"]:
         notify.emit("conflicts.found", f"«{name}» tiene {out['total']} posibles contradicciones entre hechos",
@@ -209,6 +276,7 @@ def main(argv: list[str]) -> int:
         top = int(argv[argv.index("--top") + 1])
     out = scan(graph(gname), amap, functional, all_relations=True)
     out["groups"] = out["groups"][:top]
+    out.pop("dismissed")
     print(json.dumps(out, ensure_ascii=False, indent=1, default=str))
     return 0
 

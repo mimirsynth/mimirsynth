@@ -31,7 +31,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Vocabulario** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /ontology` | lector |
 | | alias, tipos, relaciones, mover/fusionar, duplicados, ontología, corrector (`/retype`) | administrador |
 | | `POST /vocab/ops/{id}/revert` | curador |
-| **Contradicciones** | `GET /conflicts` (`?all=true` mide todas las relaciones) · `POST /conflicts/resolve` | curador |
+| **Contradicciones** | `GET /conflicts` (`?all=true` mide todas las relaciones) · `POST /conflicts/resolve` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{id}` | curador |
 | **Consultas de referencia** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{id}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{id}` | curador |
 | **Federación** | `GET /grants` | lector |
 | | `POST /grants` · `PATCH /grants/{id}` · `DELETE /grants/{id}` | administrador |
@@ -52,7 +52,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 - **`GET /docs/{id}/entities`** devuelve, además de las `entities` mencionadas, las `relations` entre ellas (solo las vigentes, salvo `expired=true`), `total` y `expired_count`.
 - **`POST /docs/duplicates`** lanza el trabajo *Buscar documentos duplicados* y devuelve su id; los documentos cuyo texto repite el de otro quedan marcados como `duplicate` y salen del índice.
 - **`GET /secrets/scan`** pasa el detector de secretos en solo lectura por las propuestas y los documentos del brain y devuelve recuentos por regla, nunca valores. La política (`secret_mode`: `mask`, `block`, `warn`; `secret_allow`: excepciones) se cambia con `PATCH /api/brains/{slug}`.
-- **`/conflicts`**: posibles contradicciones en relaciones de un solo valor; `/resolve` conserva un hecho (`keep`) e invalida los demás (`invalidate`), y se puede deshacer desde el historial del vocabulario.
+- **`/conflicts`**: posibles contradicciones en relaciones de un solo valor; `/resolve` conserva un hecho (`keep`) e invalida los demás (`invalidate`), y se puede deshacer desde el historial del vocabulario. `/dismiss` marca un grupo como no contradicción (`{source_uuid, source, relation, target_type, facts}`); sigue oculto mientras no se le sume otro hecho, y el `GET` lo lista en `dismissed`.
 - **`/refqueries`**: consultas de referencia y sus ejecuciones; `POST /refqueries/runs` con `sweep` (una lista de umbrales de similitud) simula sin cambiar el ajuste.
 
 ## Rutas de cuenta y de instancia

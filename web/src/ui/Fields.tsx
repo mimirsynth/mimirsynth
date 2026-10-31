@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { T } from "../i18n";
-import { Alert as MAlert, Autocomplete as MAutocomplete, Card as MCard, Checkbox as MCheckbox, CopyButton as MCopyButton, NumberInput as MNumberInput, PasswordInput as MPasswordInput,
+import { Alert as MAlert, Autocomplete as MAutocomplete, Card as MCard, Checkbox as MCheckbox, CopyButton as MCopyButton, NumberInput as MNumberInput, PasswordInput as MPasswordInput, Radio as MRadio,
   Select as MSelect, Switch as MSwitch, Textarea as MTextarea, TextInput as MTextInput,
-  type AlertProps, type AutocompleteProps, type CardProps, type CheckboxProps, type NumberInputProps, type PasswordInputProps, type SelectProps, type SwitchProps, type TextareaProps, type TextInputProps } from "@mantine/core";
+  type AlertProps, type AutocompleteProps, type CardProps, type CheckboxProps, type NumberInputProps, type PasswordInputProps, type RadioProps, type SelectProps, type SwitchProps, type TextareaProps, type TextInputProps } from "@mantine/core";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import { Btn } from "./Btn";
 import { Icon } from "./Icon";
@@ -18,6 +18,9 @@ export function SelectField(p: SelectProps) { return <MSelect {...p} size="sm" c
 export function ComboField(p: AutocompleteProps) { return <MAutocomplete {...p} size="sm" className={cx("ms-field", p.className)} />; }
 export function Check(p: CheckboxProps) { return <MCheckbox {...p} size="sm" className={cx("ms-check", p.className)} />; }
 export function Toggle(p: SwitchProps) { return <MSwitch {...p} size="sm" className={cx("ms-toggle-field", p.className)} />; }
+/** One choice of a `RadioGroup` (pick one among several, such as which fact stays current). */
+export function Radio(p: RadioProps) { return <MRadio {...p} size="sm" className={cx("ms-check", p.className)} />; }
+export const RadioGroup = MRadio.Group;
 
 /** Aviso en línea (información, atención o error), con icono. El color lo decide `tone`. */
 export function Notice({ tone = "info", title, children }: { tone?: "info" | "warn" | "danger" | "success"; title?: string; children?: ReactNode } & Omit<AlertProps, "color" | "title" | "children" | "icon">) {

@@ -23,7 +23,7 @@ Cada columna se puede ordenar y filtrar.
 | **Tokens** | `token.create`, `token.revoke` |
 | **Propuestas** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (el veredicto del decisor), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rechazada por la política de [[Secretos]], con las reglas, nunca el valor) |
 | **Secretos** | `secrets.scan` (recuentos por regla) |
-| **Vocabulario** | `vocab.alias.add`, `vocab.alias.delete`, `vocab.revert`, `vocab.duplicates.ignore`, `vocab.*` (fusiones y cambios de tipos de entidad y de relación), `ontology.update`, `retype.scan`, `retype.apply`, `retype.revert`, `conflict.resolve` (una contradicción resuelta) |
+| **Vocabulario** | `vocab.alias.add`, `vocab.alias.delete`, `vocab.revert`, `vocab.duplicates.ignore`, `vocab.*` (fusiones y cambios de tipos de entidad y de relación), `ontology.update`, `retype.scan`, `retype.apply`, `retype.revert`, `conflict.resolve` (una contradicción resuelta), `conflict.dismiss` y `conflict.undismiss` (marcada como no contradicción, y vuelta a mostrar) |
 | **Consultas de referencia** | `refquery.create`, `refquery.update`, `refquery.delete`, `refquery.import`, `refquery.run` |
 | **Documentos** | `document.upload`, `document.delete`, `document.reindex`, `document.duplicates` (Buscar duplicados), `docsource.create/update/delete/scan`, `docroot.create/delete` |
 | **Proveedores de IA** | `llm.*`, `embedding.*`, `decider.*` (crear, actualizar, borrar, por defecto); en un cambio de modelo de embeddings, además `embedding.reindex`, `embedding.reindex.filled`, `embedding.reindex.discard`, `embedding.switch` (con la confirmación de la copia de seguridad) y `embedding.switched` |

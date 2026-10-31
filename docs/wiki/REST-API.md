@@ -31,7 +31,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Vocabulary** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /ontology` | reader |
 | | aliases, types, relations, move/merge, duplicates, ontology, corrector (`/retype`) | administrator |
 | | `POST /vocab/ops/{id}/revert` | curator |
-| **Contradictions** | `GET /conflicts` (`?all=true` measures every relation) · `POST /conflicts/resolve` | curator |
+| **Contradictions** | `GET /conflicts` (`?all=true` measures every relation) · `POST /conflicts/resolve` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{id}` | curator |
 | **Reference queries** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{id}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{id}` | curator |
 | **Federation** | `GET /grants` | reader |
 | | `POST /grants` · `PATCH /grants/{id}` · `DELETE /grants/{id}` | administrator |
@@ -52,7 +52,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 - **`GET /docs/{id}/entities`** returns, besides the mentioned `entities`, the `relations` between them (current only, unless `expired=true`), `total` and `expired_count`.
 - **`POST /docs/duplicates`** starts the *Find duplicate documents* job and returns its id; documents whose text repeats another's are marked `duplicate` and taken out of the index.
 - **`GET /secrets/scan`** runs the secret detector read-only over the brain's proposals and documents and returns counts per rule, never values. The policy (`secret_mode`: `mask`, `block`, `warn`; `secret_allow`: exceptions) is changed with `PATCH /api/brains/{slug}`.
-- **`/conflicts`**: possible contradictions in single-valued relations; `/resolve` keeps one fact (`keep`) and invalidates the rest (`invalidate`), undoable from the vocabulary history.
+- **`/conflicts`**: possible contradictions in single-valued relations; `/resolve` keeps one fact (`keep`) and invalidates the rest (`invalidate`), undoable from the vocabulary history. `/dismiss` marks a group as not a contradiction (`{source_uuid, source, relation, target_type, facts}`); it stays hidden while no other fact joins it, and the `GET` lists it under `dismissed`.
 - **`/refqueries`**: reference queries and their runs; `POST /refqueries/runs` with `sweep` (a list of similarity thresholds) simulates without changing the setting.
 
 ## Account and instance routes
