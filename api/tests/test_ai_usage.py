@@ -18,8 +18,10 @@ def _bid(slug: str) -> int:
 
 
 def _rows(brain_id: int) -> list:
+    from mimirsynth import usage
     from mimirsynth.models import AiUsage
     from mimirsynth.store import _factory
+    usage.flush()  # calls only add to counters in memory
     with _factory()() as db:
         return [{c.key: getattr(r, c.key) for c in AiUsage.__table__.columns} for r in db.query(AiUsage).filter(AiUsage.brain_id == brain_id)]
 
@@ -132,6 +134,49 @@ def test_prices_budget_warnings_and_pause(client, monkeypatch):  # noqa: F811
     st = client.put("/api/brains/au4/ai-budget", json={"limit": 100.0, "unit": "cost", "pause": False}).json()
     assert st["unit"] == "cost" and st["used"] == pytest.approx(0.6 * 2 + 0.1 * 10 + 0.2 * 2) and st["unpriced"] == ["embedding:m-free"]
     assert client.put("/api/brains/au4/ai-budget", json={"limit": None}).json()["limit"] is None
+
+
+def test_a_resumed_proposal_never_shows_a_flagged_title(client, monkeypatch):  # noqa: F811
+    """Review of #157: a proposal resumed after the budget is raised goes to a job named with its safe title, as everywhere else."""
+    from mimirsynth import ingest, usage
+    from mimirsynth.models import Proposal, User
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "au6", "name": "Au6"}).status_code == 201
+    bid = _bid("au6")
+    client.put("/api/brains/au6/ai-budget", json={"limit": 10, "unit": "tokens", "pause": True})
+    usage.record("llm", "m", 200, 20, 0, brain_id=bid, purpose="extraction")
+    title = "Clave del NAS: password=Sup3rS3cret0Largo"
+    with _factory()() as db:
+        p = Proposal(brain_id=bid, author_id=db.query(User).first().id, name=title, body="b", status="approved", ingest_error=usage.PAUSED,
+                     secret_findings=[{"field": "name", "rule": "password_assignment", "start": title.index("password"), "end": len(title), "action": "flagged"}])
+        db.add(p)
+        db.commit()
+        pid = p.id
+    names = []
+    monkeypatch.setattr(ingest, "submit_ingest", lambda pid, bid, name, uid=None: names.append(name))
+    client.put("/api/brains/au6/ai-budget", json={"limit": 1000, "unit": "tokens", "pause": True})
+    assert usage.resume() >= 1 and names
+    assert all("Sup3rS3cret0Largo" not in n for n in names) and any(n.startswith("Clave del NAS: […]") for n in names)
+    assert pid
+
+
+def test_a_call_only_counts_in_memory_until_the_flush(client, monkeypatch):  # noqa: F811
+    """Review of #157: an engine call does not wait for the database; the counters are written by `flush`, and kept if it fails."""
+    from mimirsynth import usage
+    assert client.post("/api/brains", json={"slug": "au7", "name": "Au7"}).status_code == 201
+    bid = _bid("au7")
+    usage.flush()
+    from mimirsynth.models import AiUsage
+    from mimirsynth.store import _factory
+    for _ in range(3):
+        usage.record("embedding", "m-mem", 200, 10, 0, brain_id=bid, purpose="recall")
+    with _factory()() as db:
+        assert not db.query(AiUsage).filter(AiUsage.brain_id == bid).count()             # nothing written yet
+    monkeypatch.setattr(usage, "_factory", lambda: (_ for _ in ()).throw(RuntimeError("db down")))
+    assert usage.flush() == 0                                                          # it fails, and keeps the counts
+    monkeypatch.undo()
+    [r] = _rows(bid)
+    assert (r["calls"], r["prompt_tokens"]) == (3, 30)
 
 
 def test_who_sees_the_consumption(client):  # noqa: F811

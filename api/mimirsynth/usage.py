@@ -6,8 +6,10 @@ cost and an optional monthly budget.
   per token) and the call is counted as estimated. A 429 and a 5xx are counted apart: they explain why an ingestion is slow or fails.
 - **On behalf of whom:** `scope(brain_id, purpose)` around the work; a context variable, so it follows threads that copy the
   context and `asyncio.run`. A call outside any scope counts for brain 0 (engine tests, a model change).
-- **What is kept:** counters per day, brain, engine kind, model and purpose (`ai_usage`), never the calls. The pace (requests per
-  minute) is measured in memory: the live value per engine, and the day's peak in the counters.
+- **What is kept:** counters per day, brain, engine kind, model and purpose (`ai_usage`), never the calls. A call only adds to
+  counters in memory; they are written every FLUSH_EVERY seconds, on shutdown and before anything reads them, so an engine call (a
+  recall's embedding) never waits for the database. The pace (requests per minute) is measured in memory: the live value per engine,
+  and the day's peak in the counters.
 - **Cost:** a price per million input and output tokens per model (`ai_prices`), editable; a local engine is left at zero.
 - **Budget:** optional, per brain and month, in tokens or in cost. At 80 % it warns (`ai.budget`); at 100 % it warns again and, if
   so configured, pauses the brain's ingestion: approved proposals wait, marked, and go on by themselves when the month changes or
@@ -28,6 +30,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from . import secretguard
 from .deps import BrainCtx, admin_of_brain, audit, require_admin
 from .models import AiPrice, AiUsage, Brain, Proposal, User
 from .store import _factory, get_db
@@ -43,6 +46,10 @@ _RECENT: dict[tuple[str, str], deque] = defaultdict(deque)   # (kind, model) -> 
 _MINUTE: dict[tuple, int] = {}                                # (day, brain, kind, model, purpose, minute) -> calls in that minute
 _STATUS: dict[int, tuple[float, dict]] = {}                   # brain -> (when, budget status): checked at most every CHECK_EVERY seconds
 CHECK_EVERY = 30.0
+FLUSH_EVERY = 5.0
+_PENDING: dict[tuple, dict] = {}                              # counters not yet written: (day, brain, kind, model, purpose) -> increments
+_FLUSH_LOCK = threading.Lock()                                # one writer at a time
+_flusher: threading.Thread | None = None
 
 router = APIRouter()
 
@@ -78,47 +85,99 @@ def _tokens(request_body: bytes, payload) -> tuple[int, int, bool]:
     return len(request_body or b"") // CHARS_PER_TOKEN, 0, True
 
 
+COUNTERS = ("calls", "errors_429", "errors_5xx", "errors_other", "prompt_tokens", "completion_tokens", "estimated_calls")
+
+
 def record(kind: str, model: str, status: int, tin: int = 0, tout: int = 0, estimated: bool = False,
            brain_id: int | None = None, purpose: str | None = None) -> None:
-    """Adds one call to the day's counters. Never raises: counting must not break the call it counts."""
+    """Adds one call to the day's counters, in memory (see `flush`). Never raises: counting must not break the call it counts."""
     try:
         b, p = current()
         b, p = (b if brain_id is None else brain_id), (purpose or p)
         now = _now()
         day, minute = now.date(), int(now.timestamp() // 60)
+        inc = {"calls": 1, "errors_429": int(status == 429), "errors_5xx": int(500 <= status < 600),
+               "errors_other": int(status >= 400 and status != 429 and status < 500), "prompt_tokens": tin, "completion_tokens": tout,
+               "estimated_calls": int(estimated)}
+        key = (day, b, kind, model[:255], p[:32])
         with _LOCK:
             q = _RECENT[(kind, model)]
             q.append(now.timestamp())
             while q and q[0] < now.timestamp() - 60:
                 q.popleft()
-            mk = (day, b, kind, model, p, minute)
+            mk = (*key, minute)
             _MINUTE[mk] = _MINUTE.get(mk, 0) + 1
-            peak = _MINUTE[mk]
             for k in [k for k in _MINUTE if k[5] < minute - 2]:
                 del _MINUTE[k]
-        inc = {"calls": 1, "errors_429": int(status == 429), "errors_5xx": int(500 <= status < 600),
-               "errors_other": int(status >= 400 and status != 429 and status < 500), "prompt_tokens": tin, "completion_tokens": tout,
-               "estimated_calls": int(estimated)}
-        key = dict(day=day, brain_id=b, kind=kind, model=model[:255], purpose=p[:32])
-        with _factory()() as db:
-            for _ in range(2):
-                cols = {c: getattr(AiUsage, c) + v for c, v in inc.items()}
-                r = db.execute(update(AiUsage).where(*[getattr(AiUsage, k) == v for k, v in key.items()])
-                               .values(**cols, peak_rpm=func.max(AiUsage.peak_rpm, peak) if db.get_bind().dialect.name == "sqlite"
-                                       else func.greatest(AiUsage.peak_rpm, peak)))
-                if r.rowcount:
-                    db.commit()
-                    break
-                try:
-                    db.add(AiUsage(**key, **inc, peak_rpm=peak))
-                    db.commit()
-                    break
-                except IntegrityError:  # someone else inserted it meanwhile: add to theirs
-                    db.rollback()
-        if b:
+            acc = _PENDING.setdefault(key, {c: 0 for c in COUNTERS} | {"peak_rpm": 0})
+            for c, v in inc.items():
+                acc[c] += v
+            acc["peak_rpm"] = max(acc["peak_rpm"], _MINUTE[mk])
+        _start_flusher()
+        if b and _over_budget_soon(b):
             _check_budget(b)
     except Exception:  # noqa: BLE001
         log.exception("no se pudo contar una llamada a un motor de IA")
+
+
+def _over_budget_soon(brain_id: int) -> bool:
+    """Whether the budget status is due for a check (cached for CHECK_EVERY seconds, so most calls skip it)."""
+    hit = _STATUS.get(brain_id)
+    return not hit or time.monotonic() - hit[0] >= CHECK_EVERY
+
+
+def flush() -> int:
+    """Writes the counters gathered in memory. Called every FLUSH_EVERY seconds, on shutdown and before the counters are read."""
+    with _FLUSH_LOCK:
+        with _LOCK:
+            batch = dict(_PENDING)
+            _PENDING.clear()
+        if not batch:
+            return 0
+        try:
+            with _factory()() as db:
+                greatest = func.max if db.get_bind().dialect.name == "sqlite" else func.greatest
+                for (day, b, kind, model, purpose), inc in batch.items():
+                    key = dict(day=day, brain_id=b, kind=kind, model=model, purpose=purpose)
+                    for _ in range(2):
+                        r = db.execute(update(AiUsage).where(*[getattr(AiUsage, k) == v for k, v in key.items()])
+                                       .values(**{c: getattr(AiUsage, c) + inc[c] for c in COUNTERS},
+                                               peak_rpm=greatest(AiUsage.peak_rpm, inc["peak_rpm"])))
+                        if r.rowcount:
+                            db.commit()
+                            break
+                        try:
+                            db.add(AiUsage(**key, **{c: inc[c] for c in COUNTERS}, peak_rpm=inc["peak_rpm"]))
+                            db.commit()
+                            break
+                        except IntegrityError:  # another process inserted it meanwhile: add to theirs
+                            db.rollback()
+        except Exception:  # noqa: BLE001  (the database is down: keep the counts for the next flush)
+            log.exception("no se pudieron guardar los contadores de consumo de IA")
+            with _LOCK:
+                for k, inc in batch.items():
+                    acc = _PENDING.setdefault(k, {c: 0 for c in COUNTERS} | {"peak_rpm": 0})
+                    for c in COUNTERS:
+                        acc[c] += inc[c]
+                    acc["peak_rpm"] = max(acc["peak_rpm"], inc["peak_rpm"])
+            return 0
+        return len(batch)
+
+
+def _start_flusher() -> None:
+    global _flusher
+    if _flusher and _flusher.is_alive():
+        return
+    with _LOCK:
+        if _flusher and _flusher.is_alive():
+            return
+
+        def loop():
+            while True:
+                time.sleep(FLUSH_EVERY)
+                flush()
+        _flusher = threading.Thread(target=loop, name="ai-usage-flush", daemon=True)
+        _flusher.start()
 
 
 def _on_response(kind: str, model: str, response, body: bytes) -> None:
@@ -141,7 +200,8 @@ def observe(kind: str, model: str, response) -> None:
 
 
 def hooks(kind: str, model: str) -> dict:
-    """Event hooks for an `httpx.Client` that calls an engine."""
+    """Event hooks for an `httpx.Client` that calls an engine. They read the whole body to find `usage`: do not use a hooked client for
+    a streaming call, it would wait for the end of the stream."""
     def on_response(response):
         response.read()
         _on_response(kind, model, response, response.content)
@@ -149,12 +209,12 @@ def hooks(kind: str, model: str) -> dict:
 
 
 def async_hooks(kind: str, model: str) -> dict:
-    """The same for an `httpx.AsyncClient` (Graphiti's OpenAI clients). The database write goes to a thread."""
+    """The same for an `httpx.AsyncClient` (Graphiti's OpenAI clients); the same warning about streaming."""
     import asyncio
 
     async def on_response(response):
         await response.aread()
-        await asyncio.to_thread(_on_response, kind, model, response, response.content)
+        _on_response(kind, model, response, response.content)  # only memory: the budget check is cached
     return {"response": [on_response]}
 
 
@@ -184,6 +244,7 @@ def _month_start(today: date) -> date:
 
 
 def month_used(db: Session, brain_id: int, today: date | None = None) -> dict:
+    flush()
     today = today or _now().date()
     rows = db.scalars(select(AiUsage).where(AiUsage.brain_id == brain_id, AiUsage.day >= _month_start(today))).all()
     table = prices(db)
@@ -243,7 +304,7 @@ def resume() -> int:
                 continue
             p.ingest_error = ""
             db.commit()
-            ingest.submit_ingest(p.id, p.brain_id, p.name)
+            ingest.submit_ingest(p.id, p.brain_id, secretguard.safe_name(p))  # what the detector flagged in the title stays covered
             n += 1
     return n
 
@@ -280,6 +341,7 @@ def _series(rows, since: date, days: int) -> list[dict]:
 
 @router.get("/api/brains/{slug}/ai-usage")
 def brain_usage(days: int = Query(30, ge=1, le=366), ctx: BrainCtx = Depends(admin_of_brain)):
+    flush()
     since = _now().date() - timedelta(days=days - 1)
     rows = ctx.db.scalars(select(AiUsage).where(AiUsage.brain_id == ctx.brain.id, AiUsage.day >= since)).all()
     table = prices(ctx.db)
@@ -307,6 +369,7 @@ def set_budget(body: BudgetIn, ctx: BrainCtx = Depends(admin_of_brain)):
 @router.get("/api/ai-usage")
 def instance_usage(days: int = Query(30, ge=1, le=366), _: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Every brain's consumption and the engines' pace: requests per minute now, the day's peak and the 429/5xx errors."""
+    flush()
     since = _now().date() - timedelta(days=days - 1)
     rows = db.scalars(select(AiUsage).where(AiUsage.day >= since)).all()
     table = prices(db)

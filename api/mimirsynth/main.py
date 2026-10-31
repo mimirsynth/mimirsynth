@@ -82,6 +82,8 @@ async def lifespan(_: FastAPI):
     task.cancel()
     task2.cancel()
     task3.cancel()
+    from . import usage
+    usage.flush()  # the AI counters still in memory
 
 
 try:
