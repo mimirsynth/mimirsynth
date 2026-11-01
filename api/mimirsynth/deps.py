@@ -145,6 +145,7 @@ def brain_access(minimum: str):
                 raise HTTPException(403, f"este token no tiene el alcance «{need}»")
         if not allows(role, minimum):
             raise HTTPException(403, f"requiere rol {minimum} o superior")
+        request.state.brain_id = brain.id  # a write that succeeds drops the «needs your attention» counters of the brain (attention.py)
         return BrainCtx(brain, user, role, db)
 
     return dep

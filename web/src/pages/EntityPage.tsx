@@ -95,8 +95,8 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
       </>}
       {isCurator && <>
         <Text size="sm" fw={700}>{t("Curación")}</Text>
-        <Text size="xs" component={Link} to="/vocabulario?tab=dup">{t("Fusionar con otra entidad (Vocabulario → Duplicados)")}</Text>
-        {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/vocabulario?tab=corrector">{t("Cambiar el tipo (Vocabulario → Corrector de tipos)")}</Text>}
+        <Text size="xs" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Text>
+        {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Cambiar el tipo (Calidad del contenido → Tipos dudosos)")}</Text>}
         <Text size="xs" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Text>
       </>}
     </Stack></FillArea></Panel>} />
@@ -118,7 +118,7 @@ function RelationGroup({ g, graph, canEdit, link }: { g: EGroup; graph: string; 
         </Group>
         {g.previous.length > 0 && <Btn kind="ghost" size="row" onClick={() => setOpen(!open)}>{open ? t("Ocultar anteriores") : t("Ver anteriores ({{count}})", { count: g.previous.length })}</Btn>}
       </Group>
-      {g.conflict && <Notice tone="warn">{t("Tiene varios valores vigentes en una relación de un solo valor: posible contradicción.")} <Link to="/vocabulario?tab=conflicts">{t("Revisar en Contradicciones")}</Link></Notice>}
+      {g.conflict && <Notice tone="warn">{t("Tiene varios valores vigentes en una relación de un solo valor: posible contradicción.")} <Link to="/calidad?tab=conflicts">{t("Revisar en Contradicciones")}</Link></Notice>}
       {g.current.length === 0 && !open && <Text size="xs" c="dimmed">{t("Sin valor vigente.")}</Text>}
       <ol className="ms-tl ms-tl-list" aria-label={t("Evolución de {{relation}}", { relation: g.relation })}>
         {open && g.previous.map((f) => <FactItem key={f.uuid} f={f} graph={graph} canEdit={canEdit} link={link} />)}

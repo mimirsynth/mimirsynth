@@ -2,7 +2,7 @@
 
 # Type corrector
 
-The **Type corrector** tab of [[Vocabulary]] (brain administrators only). It reclassifies **entities left without a type, with a type the ontology does not have, or with a catch-all type** that are really something else.
+The **Doubtful types** tab of [[Content quality]] (brain administrators only), also called the type corrector. It reclassifies **entities left without a type, with a type the ontology does not have, or with a catch-all type** that are really something else.
 
 ## Why it exists
 Graphiti does not change the type of entities that already exist. If an application was classified once as "Organization" (a typical mistake), it stays that way for ever, even if the ontology improves. The corrector has the **decider** review each entity, with the ontology's types as options, and propose the right one. **You approve**, and the change is **reversible**.

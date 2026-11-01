@@ -429,6 +429,24 @@ def _entity_key(name: str) -> str:
     return re.sub(r"[\s_\-]+", " ", s)
 
 
+def duplicates(G, db, brain_id: int) -> tuple[list[dict], list[dict], set[str]]:
+    """The brain's entities, the groups of possible duplicates (same name except version or case, the most connected first) and
+    the keys marked as «not duplicates»."""
+    ents = rows(G.query(
+        "MATCH (n:Entity) OPTIONAL MATCH (n)-[r:RELATES_TO]-() "
+        "RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels, count(r) AS degree"
+    ))
+    groups: dict[str, list] = {}
+    for e in ents:
+        groups.setdefault(_entity_key(e["name"]), []).append(e)
+    ignored = {a.alias for a in db.scalars(select(VocabAlias).where(VocabAlias.brain_id == brain_id, VocabAlias.kind == "dup_ignore"))}
+    dups = sorted(
+        ({"key": k, "members": sorted(v, key=lambda x: -x["degree"])} for k, v in groups.items() if len(v) > 1 and k and k not in ignored),
+        key=lambda g: -sum(m["degree"] for m in g["members"]),
+    )
+    return ents, dups, ignored
+
+
 @router.get("/vocabulary")
 def vocabulary(ctx: BrainCtx = Depends(reader)):
     G = ctx.graph
@@ -447,18 +465,7 @@ def vocabulary(ctx: BrainCtx = Depends(reader)):
         "MATCH (n:Entity) WITH [l IN labels(n) WHERE l <> 'Entity'] AS ls "
         "UNWIND (CASE WHEN size(ls)=0 THEN ['(sin tipo)'] ELSE ls END) AS label RETURN label, count(*) AS count ORDER BY count DESC"
     ))
-    ents = rows(G.query(
-        "MATCH (n:Entity) OPTIONAL MATCH (n)-[r:RELATES_TO]-() "
-        "RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels, count(r) AS degree"
-    ))
-    groups: dict[str, list] = {}
-    for e in ents:
-        groups.setdefault(_entity_key(e["name"]), []).append(e)
-    ignored = {a.alias for a in ctx.db.scalars(select(VocabAlias).where(VocabAlias.brain_id == ctx.brain.id, VocabAlias.kind == "dup_ignore"))}
-    dups = sorted(
-        ({"key": k, "members": sorted(v, key=lambda x: -x["degree"])} for k, v in groups.items() if len(v) > 1 and k and k not in ignored),
-        key=lambda g: -sum(m["degree"] for m in g["members"]),
-    )
+    ents, dups, ignored = duplicates(G, ctx.db, ctx.brain.id)
     return {
         "summary": {
             "relation_types_raw": len(rel_rows),

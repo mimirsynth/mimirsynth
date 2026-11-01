@@ -22,7 +22,9 @@ export default function VocabStale({ graph }: { graph: string }) {
   const rels = Object.entries(d?.relations ?? {});
   return (
     <Stack gap="sm">
-      <Notice tone="info">{t("Hechos vigentes que llevan más tiempo sin confirmar que la vida útil de su relación (una IP, una versión, quién lleva un servicio). En el recall pesan menos y salen marcados. Confirma los que siguen siendo ciertos: se renueva su fecha sin tocar el grafo. Invalida los que ya no lo son. La vida útil se pone en Ontología, al editar cada relación.")}</Notice>
+      <Notice tone="info">{t("Hechos vigentes que llevan más tiempo sin confirmar que la vida útil de su relación (una IP, una versión, quién lleva un servicio). En el recall pesan menos y salen marcados. Confirma los que siguen siendo ciertos: se renueva su fecha sin tocar el grafo. Invalida los que ya no lo son.")}{" "}
+        {t("Cuánto dura cada relación es parte del marco del brain: se pone en Vocabulario → Ontología, al editar la relación.")}{" "}
+        <Btn kind="link" component={Link} to="/vocabulario?tab=onto">{t("Ir a Ontología")}</Btn></Notice>
       {rels.length > 0 && <Text size="xs" c="dimmed">{t("Con vida útil: {{v}}", { v: rels.map(([r, n]) => t("{{r}} ({{n}} días)", { r, n })).join(", ") })}</Text>}
       {d?.truncated && <Notice tone="warn">{t("Este brain tiene tantos hechos de esas relaciones que solo se han revisado los más antiguos: la lista y el aviso diario se quedan cortos. Quita la vida útil a las relaciones que no la necesiten.")}</Notice>}
       <MutationError error={confirm.error ?? invalidate.error} />
@@ -42,7 +44,8 @@ export default function VocabStale({ graph }: { graph: string }) {
               <Btn size="row" kind="danger" loading={invalidate.isPending && invalidate.variables === i.uuid} onClick={() => invalidate.mutate(i.uuid)}>{t("Invalidar")}</Btn>
             </Group></DataTable.Td>
           </DataTable.Tr>))}</DataTable.Tbody>
-      </DataTable> : q.isSuccess && <EmptyState>{rels.length ? t("No hay hechos a revisar: todos se han confirmado dentro de su vida útil.") : t("Ninguna relación tiene vida útil. Ponla en Ontología, al editar la relación, para las que se quedan viejas sin que nadie las contradiga.")}</EmptyState>}
+      </DataTable> : q.isSuccess && <EmptyState>{rels.length ? t("No hay hechos a revisar: todos se han confirmado dentro de su vida útil.") : <>{t("Ninguna relación tiene vida útil. Ponla en Vocabulario → Ontología, al editar la relación, para las que se quedan viejas sin que nadie las contradiga.")}{" "}
+        <Btn kind="link" component={Link} to="/vocabulario?tab=onto">{t("Ir a Ontología")}</Btn></>}</EmptyState>}
       {d && d.total > d.items.length && <Text size="xs" c="dimmed">{t("Se muestran {{n}} de {{total}}.", { n: d.items.length, total: d.total })}</Text>}
     </Stack>
   );

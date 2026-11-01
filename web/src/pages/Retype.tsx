@@ -2,6 +2,7 @@ import { tr } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, Check, ClearFilters, ConfirmDialog, ColHead, DataTable, FillArea, Notice, NumberField, Page, Pill, ProgressBar, Segments, SliderField, useTableView, MutationError } from "../ui";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { get, send } from "../api";
@@ -38,8 +39,8 @@ export default function Retype({ graph, role }: { graph: string; role: string })
   const summary = (ids: number[]) => Object.entries(items.filter((i) => ids.includes(i.id)).reduce<Record<string, number>>((m, i) => ({ ...m, [i.suggested_type]: (m[i.suggested_type] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   return (
     <Page>
-      <Text size="sm" c="dimmed" maw={760}>{t("Graphiti no cambia el tipo de las entidades ya existentes, así que las clasificadas con tipos genéricos (Object, Organization, Location…) se quedan así. El decisor revisa cada una con la ontología del brain como opciones y propone un tipo; tú apruebas, y el cambio es reversible.")}</Text>
-      {d && !d.ontology && <Notice tone="warn">{t("Este brain no tiene ontología. Aplica un paquete en la pestaña Ontología.")}</Notice>}
+      <Text size="sm" c="dimmed" maw={760}>{t("Graphiti no cambia el tipo de las entidades ya existentes, así que las clasificadas con tipos genéricos (Object, Organization, Location…) se quedan así. El decisor revisa cada una con la ontología del brain como opciones y propone un tipo; un administrador aprueba, y el cambio es reversible.")}</Text>
+      {d && !d.ontology && <Notice tone="warn">{t("Este brain no tiene ontología. Aplica un paquete en Vocabulario → Ontología.")}{" "}<Btn kind="link" component={Link} to="/vocabulario?tab=onto">{t("Ir a Ontología")}</Btn></Notice>}
       {d && !d.decider && <Notice tone="warn">{t("No hay decisor configurado (Administración → Proveedores IA → Decisores).")}</Notice>}
       <Group align="flex-end" gap="xs">
         <NumberField size="xs" label={t("Entidades a analizar")} min={1} max={1000} value={limit} onChange={setLimit} w={150} />

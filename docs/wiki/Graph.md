@@ -66,5 +66,5 @@ If your system asks for **reduced motion**, nothing moves on its own whatever th
 ## Tips
 - Start with few seeds and expand what interests you.
 - Very large nodes connected to everything are usually generic entities ("server"): candidates to review in [[Vocabulary]].
-- Two nearly identical nodes (same name with a different version or capitalisation) are **possible duplicates**: merge them under *Vocabulary → Duplicates*.
+- Two nearly identical nodes (same name with a different version or capitalisation) are **possible duplicates**: merge them under *Content quality → Duplicates*.
 - Group by **Contributor** or **Agent / token** to see who taught what, and turn on **Only confirmed by 2 or more origins** to keep what independent sources agree on.

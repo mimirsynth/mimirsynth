@@ -176,8 +176,9 @@ def delete_brain(body: DeleteIn, ctx: BrainCtx = Depends(owner_of_brain)):
         db.execute(text("DELETE FROM doc_chunks WHERE brain_id = :b"), {"b": b.id})
     slug, name, bid = b.slug, b.name, b.id
     db.delete(b); db.commit()
-    from . import docstore
+    from . import attention, docstore
     docstore.remove_brain(bid)  # originales y texto normalizado de la memoria documental
+    attention.forget(bid, gone=True)
     graph_deleted = False
     if body.delete_graph:
         try:

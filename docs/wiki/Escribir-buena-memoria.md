@@ -8,7 +8,7 @@ La calidad de lo que recuerda MimirSynth depende de lo que le cuentas. Un modelo
 1. **Un hecho concreto por idea, con nombres propios exactos.** «El 12 de octubre la base de datos de producción pasó del servidor db01 al servidor db02» es mucho mejor que «migramos la base de datos».
 2. **Pon la fecha.** Si lo que cuentas ocurrió antes, indícalo en el texto (o en `reference_time` si lo envías por API). Así los hechos se ordenan en el tiempo y los antiguos se invalidan bien.
 3. **Usa siempre el mismo nombre para la misma cosa.** «Servidor db02», no «el nuevo», «la máquina de bases de datos» y «db-2» en tres textos distintos: se crearían entidades duplicadas.
-4. **Cuenta el cambio, no solo el estado.** «Ahora X corre en Y (antes corría en Z)» deja claro qué se invalida. Si un valor antiguo sigue vigente junto al nuevo y la relación está marcada como de un solo valor, aparece en Vocabulario → **Contradicciones** para que un curador lo resuelva.
+4. **Cuenta el cambio, no solo el estado.** «Ahora X corre en Y (antes corría en Z)» deja claro qué se invalida. Si un valor antiguo sigue vigente junto al nuevo y la relación está marcada como de un solo valor, aparece en Calidad del contenido → **Contradicciones** para que un curador lo resuelva.
 5. **Escribe afirmaciones autocontenidas.** Cada párrafo debe entenderse sin el contexto de la conversación («eso» y «lo de antes» no sirven).
 6. **Incluye el porqué cuando importa.** Las decisiones valen más con su motivo: «Elegimos PostgreSQL porque…».
 

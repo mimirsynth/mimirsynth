@@ -12,7 +12,7 @@
 | **CoALA** | A cognitive framework for agents (episodic, semantic, procedural memory…) that inspires the design |
 | **Reference query** | A question saved in a brain with what its recall must bring and what it must not; running them measures whether recall gets better or worse. Under Ask → Reference queries |
 | **Injected context** | The block of text recall returns, ready to put in an agent's prompt |
-| **Contradiction** | Two or more current facts with the same subject and a single-valued relation, but different values. A curator decides which one stays under Vocabulary → Contradictions |
+| **Contradiction** | Two or more current facts with the same subject and a single-valued relation, but different values. A curator decides which one stays under Content quality → Contradictions |
 | **Quarantine** | The state of a proposal awaiting review, before entering the graph |
 | **Curator** | A role that approves or rejects proposals and corrects facts |
 | **Decider** | A closed-decision model that triages proposals against the brain's scope and suggests types; it never rejects on its own |

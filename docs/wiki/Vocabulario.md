@@ -2,7 +2,15 @@
 
 # Vocabulario
 
-El **vocabulario** es el conjunto de tipos de relación y de entidad que existen en el grafo. Con el tiempo, el LLM crea cientos de variantes («CorreEn», «EstáEn», «AlojadoEn»…) y entidades duplicadas («Servidor 1», «servidor-1»), y a veces deja vigentes dos hechos que no pueden ser ciertos a la vez. Esta pantalla sirve para **ver ese desorden y arreglarlo** sin tocar el grafo a mano.
+El **vocabulario** es el **marco** del brain: qué tipos de cosas y de relaciones existen, y cómo se normalizan sus nombres. Vale para todo el brain, cambia poco, se aplica a lo que se ingiera a partir de ahora y lo gestionan los administradores. Sin él, el LLM crea cientos de variantes («CorreEn», «EstáEn», «AlojadoEn…») y tipos que no dicen nada.
+
+El trabajo sobre el **contenido** que ya hay en el grafo (entidades duplicadas, hechos que se contradicen, tipos dudosos, hechos a revisar) no está aquí: está en [[Calidad del contenido]], dentro de Curación, y lo hacen los curadores.
+
+## Lo declarado y lo observado
+- **Ontología** es lo **declarado**: lo que se pide al ingestor (qué tipos de entidad y de relación extraer, entre qué tipos, y qué relaciones son de un solo valor o tienen vida útil).
+- **Relaciones** y **Tipos de entidad** son lo **observado**: lo que hay de verdad en el grafo, con cuántos hechos o entidades usa cada uno.
+
+Compararlos dice qué falta declarar (una relación muy usada que la ontología no tiene) y qué sobra (una variante que convendría unificar).
 
 ## Tarjetas de resumen
 | Tarjeta | Qué cuenta |
@@ -10,28 +18,39 @@ El **vocabulario** es el conjunto de tipos de relación y de entidad que existen
 | **Tipos de relación** | Cuántos hay «crudos» y cuántos tras normalizar el formato |
 | **Hechos genéricos** | Hechos en relaciones poco informativas (`RELATES_TO`, `MENTIONED_IN`…) |
 | **Cola larga** | Relaciones usadas por muy pocos hechos (≤ 2), que suelen ser ruido |
-| **Entidades** | Total y por tipo |
-| **Posibles duplicados** | Entidades con el mismo nombre salvo versión o mayúsculas |
+| **Entidades** | Total |
 
 ## Pestañas
+Cada pestaña empieza con una o dos frases que dicen para qué sirve, quién la usa y qué pasa al actuar.
+
 | Pestaña | Para qué | Quién |
 |---|---|---|
-| [[Relaciones y alias]] | Ver todas las relaciones y unificar las parecidas con alias | Lectura: todos · Alias: administrador |
-| [[Tipos de entidad]] | Ver, renombrar, fusionar y definir los tipos de entidad | Lectura: todos · Cambios: administrador |
-| [[Corrector de tipos]] | Reclasificar entidades que quedaron sin tipo o con uno comodín | Administrador |
-| [[Ontología]] | Definir qué tipos y relaciones puede extraer el ingestor, y qué relaciones son de un solo valor | Lectura: todos · Cambios: administrador |
-| **Alias** | Lista de los alias activos, con opción de quitarlos | Lectura: todos · Quitar: administrador |
-| [[Fusionar duplicados]] | Unir entidades que son la misma cosa | Lectura: todos · Fusionar: administrador |
-| **A revisar** | Hechos vigentes que han superado la vida útil de su relación: confirma los que siguen siendo ciertos e invalida los demás (ver «Vida útil» en [[Ontología]]) | Curador |
-| [[Contradicciones]] | Resolver hechos vigentes que se contradicen en relaciones de un solo valor, y **Medir en todas las relaciones** para saber cuáles lo son | Curador y superiores |
+| [[Relaciones y alias]] | Ver las relaciones que hay en el grafo y unificar las variantes con un alias | Lectura: todos · Alias: administrador |
+| [[Tipos de entidad]] | Ver, definir, renombrar y fusionar los tipos de entidad | Lectura: todos · Cambios: administrador |
+| [[Ontología]] | Declarar qué tipos y relaciones extrae el ingestor, qué relaciones son de **un solo valor a la vez** y cuál es su **vida útil** | Lectura: todos · Cambios: administrador |
+| **Alias** | Los alias de relación activos, con opción de quitarlos | Lectura: todos · Quitar: administrador |
+
+## Los alias, entre el marco y el contenido
+Un **alias** hace que un nombre de relación se lea como otro (`HostedOn` como `HOSTED_ON`), al leer y al ingerir, sin cambiar los datos del grafo. Se crean con **Unificar con…** en Relaciones y se quitan en Alias.
+
+Los **nombres de las entidades fusionadas** son otra cosa: al fusionar un duplicado en [[Calidad del contenido]] → Duplicados, su nombre se guarda en la entidad principal (su [[Página de entidad]] lo enseña), y lo que se ingiera después con ese nombre va a ella. La pestaña Alias lo explica y enlaza con Duplicados, donde la fusión se deshace desde **Fusiones recientes**.
+
+## Del marco al contenido
+Dos marcas de cada relación en [[Ontología]] hacen aparecer trabajo para los curadores:
+- **Un solo valor a la vez**: dos destinos vigentes del mismo sujeto salen en [[Calidad del contenido]] → [[Contradicciones]].
+- **Vida útil**: un hecho que pasa ese plazo sin confirmar sale en [[Calidad del contenido]] → **A revisar**.
+
+El diálogo de la relación y la cabecera de Ontología enlazan con esas pestañas, y ellas enlazan de vuelta con Ontología.
 
 ## Un buen orden de trabajo
 1. Aplica un **paquete de ontología** o define tus tipos ([[Ontología]]): evita que el desorden crezca.
-2. Tras unas semanas de uso, revisa **Relaciones**: unifica con alias las variantes.
-3. Revisa **Duplicados** y fusiona.
-4. Ejecuta el **Corrector de tipos** para reclasificar entidades genéricas.
-5. En **Contradicciones**, usa **Medir en todas las relaciones** y marca como de un solo valor en la ontología solo las relaciones que de verdad admitan un único valor a la vez; después, resuelve los casos que encuentre.
-6. Vuelve a mirar las tarjetas: deberían bajar la cola larga y los duplicados.
+2. Tras unas semanas de uso, revisa **Relaciones**: unifica con alias las variantes, y declara en la ontología las relaciones que se usan y no están.
+3. Marca como de un solo valor, o con vida útil, solo las relaciones que lo necesiten; mide antes en [[Contradicciones]] → **Medir en todas las relaciones**.
+4. Lo que salga de ahí (duplicados, contradicciones, tipos dudosos, hechos a revisar) se trabaja en [[Calidad del contenido]].
+5. Vuelve a mirar las tarjetas: deberían bajar la cola larga y los hechos genéricos.
 
 ## Reversibilidad
-Los **alias** no modifican el grafo (se aplican al leer) y se quitan cuando quieras. Las operaciones que sí cambian datos (renombrar o fusionar tipos, fusionar entidades, invalidar hechos al resolver una contradicción) muestran una **vista previa** o una confirmación, guardan lo necesario para revertirlas y se pueden **deshacer** desde su historial mientras no hagas otro cambio de vocabulario después. Cada corrección de tipo se deshace por separado desde **Aplicados** en el [[Corrector de tipos]]. Los cambios quedan en la [[Auditoría]].
+Los **alias** no modifican el grafo (se aplican al leer) y se quitan cuando quieras. Renombrar o fusionar tipos sí cambia datos: muestra una **vista previa**, guarda lo necesario para revertirlo y se **deshace** desde su historial mientras no hagas otro cambio de vocabulario después. Los cambios quedan en la [[Auditoría]].
+
+## Enlaces antiguos
+Las direcciones de las pestañas que se movieron a Calidad del contenido (`/vocabulario?tab=dup`, `conflicts`, `stale` y `corrector`, y `/tipos`) siguen funcionando: llevan a la misma herramienta en su sitio nuevo.

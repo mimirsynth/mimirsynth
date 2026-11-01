@@ -31,6 +31,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Vocabulary** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /ontology` | reader |
 | | aliases, types, relations, move/merge, duplicates, ontology, corrector (`/retype`) | administrator |
 | | `POST /vocab/ops/{id}/revert` | curator |
+| **Needs your attention** | `GET /attention` (what waits for a decision: `proposals`, `corrections`, `duplicates`, `conflicts`, `stale`, `refqueries`, and `retype` for administrators; `null` when a counter could not be computed; cached for a minute and dropped by any successful write on the brain, `?fresh=true` recalculates) | curator |
 | **Facts to review** | `GET /review/stale` (current facts past their relation's shelf life, oldest first) · `POST /review/stale/{uuid}/confirm` | curator |
 | **Contradictions** | `GET /conflicts` (`?all=true` measures every relation) · `POST /conflicts/resolve` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{id}` | curator |
 | **Reference queries** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{id}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{id}` | curator |

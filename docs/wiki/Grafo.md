@@ -66,5 +66,5 @@ Si tu sistema pide **reducir el movimiento**, nada se mueve solo sea cual sea la
 ## Consejos
 - Empieza con pocas semillas y expande lo que te interese.
 - Nodos muy grandes y conectados a todo suelen ser entidades genéricas («servidor»): candidatos a revisar en [[Vocabulario]].
-- Dos nodos casi iguales (mismo nombre con distinta versión o mayúsculas) son **posibles duplicados**: fusiónalos en *Vocabulario → Duplicados*.
+- Dos nodos casi iguales (mismo nombre con distinta versión o mayúsculas) son **posibles duplicados**: fusiónalos en *Calidad del contenido → Duplicados*.
 - Agrupa por **Contribuidor** o por **Agente / token** para ver quién enseñó qué, y activa **Solo confirmados por 2 o más orígenes** para quedarte con aquello en lo que coinciden fuentes independientes.

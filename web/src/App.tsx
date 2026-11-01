@@ -24,6 +24,7 @@ import Jobs from "./pages/Jobs";
 import Notifications, { Summary } from "./pages/Notifications";
 import FirstSteps from "./pages/FirstSteps";
 import EntityPage from "./pages/EntityPage";
+import Quality from "./pages/Quality";
 
 const NAV = [
   { section: T("Memoria"), items: [
@@ -39,6 +40,7 @@ const NAV = [
   ] },
   { section: T("Curación"), items: [
     { to: "/propuestas", icon: "proposals" as const, label: T("Propuestas") },
+    { to: "/calidad", icon: "quality" as const, label: T("Calidad del contenido"), curators: true },
     { to: "/vocabulario", icon: "vocabulary" as const, label: T("Vocabulario") },
     { to: "/trabajos", icon: "jobs" as const, label: T("Trabajos") },
   ] },
@@ -98,7 +100,7 @@ export default function App() {
           {NAV.map((g) => (
             <div key={g.section} className="ms-nav-group">
               <div className="ms-nav-section">{t(g.section)}</div>
-              {g.items.map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"}
+              {g.items.filter((n) => !("curators" in n) || ["curator", "admin", "owner"].includes(cur?.role ?? "")).map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"}
                 rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("trabajos en cola o en marcha")}>{active.data!.active}</Pill> : undefined} />)}
             </div>))}
         </div>
@@ -129,7 +131,7 @@ export default function App() {
           <Route path="/notificaciones" element={<Notifications />} />
           {brain ? (
             <>
-              <Route path="/" element={<Overview graph={brain} />} />
+              <Route path="/" element={<Overview graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/preguntar" element={<Ask graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/propuestas" element={<Proposals graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/diario" element={<Journal graph={brain} />} />
@@ -138,7 +140,8 @@ export default function App() {
               <Route path="/hechos" element={<Facts graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/linea-temporal" element={<Navigate to="/hechos?vista=linea" replace />} />
               <Route path="/grafo" element={<GraphPage graph={brain} />} />
-              <Route path="/tipos" element={<Navigate to="/vocabulario?tab=corrector" replace />} />
+              <Route path="/tipos" element={<Navigate to="/calidad?tab=corrector" replace />} />
+              <Route path="/calidad" element={<Quality graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/vocabulario" element={<Vocabulary graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/consulta" element={<Query graph={brain} />} />
               <Route path="/entidad/:uuid" element={<EntityPage graph={brain} role={cur?.role ?? "reader"} />} />
