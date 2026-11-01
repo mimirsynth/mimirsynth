@@ -39,7 +39,7 @@ def _out(p: Proposal, full: bool = False) -> dict:
          "status": p.status, "author": p.author.email or p.author.name, "created_at": p.created_at, "reviewed_at": p.reviewed_at,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
-         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "correction": p.correction}
+         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "correction": p.correction, "purged_at": p.purged_at}
     d["body"] = p.body if full else p.body[:300]
     return d
 

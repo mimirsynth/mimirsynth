@@ -134,6 +134,7 @@ class Brain(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     secret_mode: Mapped[str] = mapped_column(String(8), default="mask", server_default="mask")  # mask | block | warn (ver secretguard)
     secret_allow: Mapped[str] = mapped_column(Text, default="", server_default="")  # excepciones del detector, una por línea
+    retention: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # days per kind of data (#137); empty: the instance's
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
@@ -239,6 +240,7 @@ class Proposal(Base):
     correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the correction of a fact: see corrections.py
     episode_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     ingested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # its text went with the retention period (#137)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     author: Mapped[User] = relationship(foreign_keys=[author_id])
 

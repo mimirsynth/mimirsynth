@@ -35,6 +35,13 @@ Presta la memoria de este brain, solo para leer, a otro brain, o mira qué brain
 ## Secretos
 Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave: **enmascararlo** (lo predeterminado), **bloquearlo** o **solo avisar**, además de una lista de excepciones y **Analizar lo ya guardado**. Solo los administradores del brain ven esta tarjeta. Ver [[Secretos]].
 
+## Retención
+Cuánto se conserva lo que ya no sirve, solo para el **propietario** del brain (o el administrador de la instancia):
+- **Texto de las propuestas rechazadas:** pasados estos días desde que se rechazó, una propuesta pierde su texto (título, cuerpo, origen, nota de revisión, el razonamiento del decisor y el detalle de la corrección). Quedan su estado, sus autores y sus fechas, y [[Propuestas]] muestra «(texto purgado)».
+- **Trabajos terminados:** los trabajos terminados, fallidos y cancelados del brain se borran pasados estos días, antes que con el plazo general de la instancia.
+
+Un campo vacío usa el plazo de la instancia ([[Referencia de ajustes]]: `retention_rejected_days`, `retention_jobs_days`) y **0 conserva para siempre**. Por defecto no hay plazo, así que no se purga nada hasta que alguien lo fije. Una tarea diaria los aplica y deja un resumen (la tarjeta enseña el último); **Purgar ahora** la lanza en el momento. Cada cambio queda en la auditoría (`brain.retention`). La auditoría y los episodios nunca se purgan desde aquí.
+
 ## Exportar
 Una copia de este brain en un paquete (grafo, curación, propuestas, documentos y consultas de referencia; nunca miembros, tokens ni secretos), cifrada si se quiere, para guardarla aparte o llevarla a otra instancia. Se prepara como un trabajo y se descarga una vez. Solo los administradores del brain ven esta tarjeta. Ver [[Exportar un brain]].
 
