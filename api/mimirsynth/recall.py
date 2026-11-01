@@ -197,7 +197,9 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
            embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
            min_sim: float | None = None) -> dict:
     t0 = time.time()
-    qvec = (embedder or get_embedder()).embed([query])[0]
+    from .usage import scope
+    with scope(brain_id, "recall"):
+        qvec = (embedder or get_embedder()).embed([query])[0]
     t1 = time.time()
     n_docs = appsettings.get("doc_passages") if n_docs is None else n_docs
     t_docs = time.time()

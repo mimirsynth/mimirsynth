@@ -881,7 +881,9 @@ def _import(job: jobs.JobCtx, work: Path, p: dict, password: str | None) -> dict
             job.progress(3, total, "grafo")
             graph = _graph(job, stage, man, slug, reuse, made, work, bool(p.get("dump")), shape)
             job.progress(4, total, "vectores del grafo")
-            computed = _embed_graph(job, slug, everything=graph["method"] == "dump" and not reuse) if man["graph"]["nodes"] else 0
+            from .usage import scope
+            with scope(bid, "import"):
+                computed = _embed_graph(job, slug, everything=graph["method"] == "dump" and not reuse) if man["graph"]["nodes"] else 0
             graph.update(zip(("nodes", "edges"), _count(client().select_graph(slug)) if man["graph"]["nodes"] else (0, 0)))
             if (graph["nodes"], graph["edges"]) != (man["graph"]["nodes"], man["graph"]["edges"]):
                 raise RuntimeError(f"el grafo importado no tiene los elementos del paquete ({graph['nodes']} nodos y {graph['edges']} aristas)")
@@ -892,7 +894,8 @@ def _import(job: jobs.JobCtx, work: Path, p: dict, password: str | None) -> dict
             vectors = {"reused": reuse, "graph_computed": computed}
             if index.enabled():
                 job.progress(6, total, "índice de documentos")
-                vectors["doc_chunks"] = _doc_chunks(job, db, stage, bid, dmap, texts, reuse)
+                with scope(bid, "import"):
+                    vectors["doc_chunks"] = _doc_chunks(job, db, stage, bid, dmap, texts, reuse)
                 job.progress(7, total, "índice de episodios")
                 vectors["episode_chunks"] = _episode_chunks(stage, bid, slug, reuse) if man["graph"]["nodes"] else {"copied": 0, "computed": 0}
             result.update(graph=graph, vectors=vectors)

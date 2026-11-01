@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -135,6 +135,7 @@ class Brain(Base):
     secret_mode: Mapped[str] = mapped_column(String(8), default="mask", server_default="mask")  # mask | block | warn (ver secretguard)
     secret_allow: Mapped[str] = mapped_column(Text, default="", server_default="")  # excepciones del detector, una por línea
     retention: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # days per kind of data (#137); empty: the instance's
+    ai_budget: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {limit, unit: tokens | cost, pause} (#132); empty: none
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
@@ -520,3 +521,34 @@ class ConflictDismissal(Base):
     facts: Mapped[list] = mapped_column(JSON, default=list)  # uuids of the facts the curator looked at
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AiUsage(Base):
+    """AI calls per day, brain, engine and purpose (#132): counters only, never the calls themselves."""
+    __tablename__ = "ai_usage"
+    __table_args__ = (UniqueConstraint("day", "brain_id", "kind", "model", "purpose", name="uq_ai_usage_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day: Mapped[date] = mapped_column(Date)
+    brain_id: Mapped[int] = mapped_column(Integer, default=0, index=True)  # 0: not on behalf of a brain
+    kind: Mapped[str] = mapped_column(String(16))  # llm | embedding | decision
+    model: Mapped[str] = mapped_column(String(255))
+    purpose: Mapped[str] = mapped_column(String(32))
+    calls: Mapped[int] = mapped_column(Integer, default=0)
+    errors_429: Mapped[int] = mapped_column(Integer, default=0)
+    errors_5xx: Mapped[int] = mapped_column(Integer, default=0)
+    errors_other: Mapped[int] = mapped_column(Integer, default=0)
+    prompt_tokens: Mapped[int] = mapped_column(BigInteger, default=0)
+    completion_tokens: Mapped[int] = mapped_column(BigInteger, default=0)
+    estimated_calls: Mapped[int] = mapped_column(Integer, default=0)
+    peak_rpm: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AiPrice(Base):
+    """Price per million tokens of a model, to estimate what the usage costs (#132). Local engines are left at zero."""
+    __tablename__ = "ai_prices"
+    __table_args__ = (UniqueConstraint("kind", "model", name="uq_ai_prices_key"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    model: Mapped[str] = mapped_column(String(255))
+    price_in: Mapped[float] = mapped_column(default=0.0)
+    price_out: Mapped[float] = mapped_column(default=0.0)
