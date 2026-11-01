@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     doc_min_similarity: float = 0.66  # coseno mínimo para que un pasaje entre en el recall (calibrado con nomic-embed-text; depende del modelo de embeddings)
     doc_passages: int = 2  # pasajes documentales máximos en el recall
     recall_stale_weight: float = 0.6  # weight in the recall of a fact past its relation's shelf life (#114)
+    answer_engine: str = ""  # LLM engine (by name) that writes the answers of Ask (#126); empty: the default engine
+    answer_per_hour: int = 30  # answers a person may ask per hour in a brain (#126); 0: no limit
+    answer_max_tokens: int = 800  # longest answer, in tokens (#126)
     doc_search_timeout: float = 0.6  # segundos máximos de la búsqueda documental dentro del recall
     index_sync_minutes: int = 10  # 0 = sin sincronización periódica del índice de texto
 

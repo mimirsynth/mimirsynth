@@ -16,6 +16,7 @@ Cada llamada que MimirSynth hace a un motor, en el punto donde la hace:
 | Índice de documentos / de episodios | Embeddings | Al indexar documentos y episodios |
 | Edición de hechos | Embeddings | Al editar el texto de un hecho |
 | Importación | Embeddings | Al calcular los vectores de un brain importado |
+| Respuestas redactadas | LLM | Cada respuesta de [[Preguntar]] → Responder |
 | Cambio de modelo | Embeddings | El relleno en sombra de un cambio de modelo (no en nombre de un brain) |
 
 De cada llamada se guardan los **tokens** (de entrada y de salida) que la respuesta da en su campo `usage`; si una respuesta no lo trae, se estima la entrada (4 caracteres por token) y la llamada se marca como estimada. También se cuentan las respuestas **429** (el proveedor limita el ritmo) y las **5xx**, y el **ritmo**: peticiones por minuto en este momento y el pico del día. Solo se guardan contadores por día, brain, motor y uso, nunca las llamadas ni su texto.

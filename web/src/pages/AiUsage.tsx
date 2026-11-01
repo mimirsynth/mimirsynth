@@ -15,7 +15,7 @@ type InstanceUsage = { days: number; engines: Engine[]; brains: { brain_id: numb
 
 export const PURPOSE: Record<string, string> = {
   extraction: T("Extracción de hechos"), decider: T("Decisor"), recall: T("Recall"), documents: T("Índice de documentos"), index: T("Índice de episodios"),
-  facts: T("Edición de hechos"), retype: T("Corrector de tipos"), reindex: T("Cambio de modelo"), import: T("Importación"), other: T("Otros"),
+  facts: T("Edición de hechos"), retype: T("Corrector de tipos"), reindex: T("Cambio de modelo"), import: T("Importación"), answer: T("Respuestas redactadas"), other: T("Otros"),
 };
 const KIND: Record<string, string> = { llm: T("LLM"), embedding: T("Embeddings"), decision: T("Decisor") };
 const num = (n: number) => n.toLocaleString();

@@ -16,6 +16,7 @@ Every call MimirSynth makes to an engine, where it makes it:
 | Document index / Episode index | Embeddings | Indexing documents and episodes |
 | Fact editing | Embeddings | Editing a fact's text |
 | Import | Embeddings | Computing the vectors of an imported brain |
+| Written answers | LLM | Each answer of [[Ask]] → Answer |
 | Model change | Embeddings | The shadow fill of a model change (not on behalf of a brain) |
 
 For each call it keeps the **tokens** (input and output) that the answer reports in its `usage` field; when an answer has none, the input is estimated (4 characters per token) and the call is marked as estimated. It also counts the **429** answers (the provider limits the pace) and the **5xx** ones, and the **pace**: requests per minute right now and the day's peak. Only counters per day, brain, engine and use are stored, never the calls or their text.
