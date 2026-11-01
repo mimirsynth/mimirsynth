@@ -67,6 +67,7 @@ Guide: [[Recall and ingestion]]
 
 | Setting | Key | Default | Range or values | Description |
 |---|---|---|---|---|
+| Weight of a fact to review | `recall_stale_weight` | `0.6` | 0–1 | A current fact past its relation's shelf life weighs this much in the recall (and is marked «not confirmed since …»). 1: the same as the others. |
 | Minimum similarity of a passage | `doc_min_similarity` | `0.66` | 0–1 | Minimum cosine for a document passage to enter the recall. It depends on the embedding model; with nomic-embed-text, 0.66. |
 | Document passages per recall | `doc_passages` | `2` | 0–10 | Maximum number of document passages that accompany the facts in each recall. |
 | Maximum time of the document search | `doc_search_timeout` | `0.6` s | 0.1–10 s | If it takes longer, the recall answers without documents. |

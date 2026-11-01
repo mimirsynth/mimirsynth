@@ -22,6 +22,7 @@ The **vocabulary** is the set of relation and entity types that exist in the gra
 | [[Ontology]] | Define which types and relations the ingestor may extract, and which relations are single-valued | Reading: everyone · Changes: administrator |
 | **Aliases** | List of active aliases, with the option to remove them | Reading: everyone · Removing: administrator |
 | [[Merge duplicates]] | Join entities that are the same thing | Reading: everyone · Merging: administrator |
+| **To review** | Current facts past their relation's shelf life: confirm the ones still true, invalidate the others (see «Shelf life» in [[Ontology]]) | Curator |
 | [[Contradictions]] | Resolve current facts that contradict each other in single-valued relations, and **Measure across all relations** to find which relations are single-valued | Curator and above |
 
 ## A good order of work

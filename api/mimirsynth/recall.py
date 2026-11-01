@@ -164,7 +164,10 @@ def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passage
     if cur:
         add(tr("## Hechos vigentes", lang))
         for f in cur:
-            if not add(tr("- {{fact}} (desde {{date}})", lang, fact=f["fact"], date=_fmt_date(f["valid_at"] or f["created_at"])) + _origin(f, lang)):
+            line = (tr("- {{fact}} (desde {{date}}; sin confirmar desde {{since}})", lang, fact=f["fact"], date=_fmt_date(f["valid_at"] or f["created_at"]),
+                       since=_fmt_date(f["stale_since"])) if f.get("stale_since")
+                    else tr("- {{fact}} (desde {{date}})", lang, fact=f["fact"], date=_fmt_date(f["valid_at"] or f["created_at"])))
+            if not add(line + _origin(f, lang)):
                 break
     if old:
         add(tr("## Hechos que dejaron de ser ciertos", lang))
@@ -225,6 +228,8 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         weights = [1.0] + [FED_WEIGHT] * (len(flists) - 1)
         facts = fuse(flists, lambda f: (f["fact"] or "").strip().lower(), weights)
         chunks = fuse(clists, lambda c: (c.get("origin"), c["id"]), weights)[:n_chunks]
+    from . import shelflife
+    facts = shelflife.mark(brain_id, facts, amap)  # past its relation's shelf life: weighs less and says so (#114)
     cur = [f for f in facts if f["status"] != "invalidated"][:n_facts]
     old = [f for f in facts if f["status"] == "invalidated"][: max(2, n_facts // 3)]
     t2 = time.time()

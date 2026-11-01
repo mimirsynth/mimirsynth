@@ -24,6 +24,7 @@ Alerts carry metadata only (what failed, where, how many times, a shortened erro
 | `security.lockout` | warning | An account was locked after too many failed sign-ins |
 | `reindex.orphan` | warning | An embedding model change has been failed or stalled for longer than the configured hours, with its shadow vectors taking up memory ([[AI providers]]) |
 | `refquery.regressed` | warning | After an embedding model change, a brain's reference queries stop finding expected items or show new false positives. If there was no earlier run to compare with, it says so, as information |
+| `facts.stale` | info | A brain has current facts past their relation's shelf life; counted once a day, without text ([[Ontology]]) |
 | `ai.budget` | warning (critical at 100 %) | A brain has spent 80 % or 100 % of its monthly AI budget; once per month and level. At 100 %, if so configured, its ingestion is paused ([[AI consumption]]) |
 | `token.expiring` | info | An API token expires within 7 days; announced once per token, with its name and prefix, never the token. A rotated token is not announced ([[Connect agents]]) |
 | `conflicts.found` | info | A brain has current facts that contradict each other in a single-valued relation; checked once a day ([[Vocabulary]]) |

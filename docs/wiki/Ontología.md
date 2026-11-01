@@ -50,6 +50,16 @@ Marca **Un solo valor a la vez** en un tipo de relación solo si un sujeto **no 
 
 **Ninguna relación viene marcada por defecto, tampoco en los paquetes**, porque muchas parecen de un solo valor y no lo son. Mide antes con **Medir en todas las relaciones** en [[Contradicciones]] y marca solo las relaciones con una proporción baja de sujetos con varios destinos.
 
+## Vida útil y hechos a revisar
+Hay datos que se quedan viejos sin que nadie los contradiga: una IP, una versión, quién lleva un servicio. Un tipo de relación puede tener una **vida útil** en días (en el diálogo de edición de la relación, **Vida útil (días)**); ninguno la tiene por defecto, ni siquiera en los paquetes, así que nada cambia hasta que un brain la ponga.
+
+Un hecho vigente de esa relación cuya última fecha (su última confirmación o, si no la hay, su fecha de validez) es más antigua que su vida útil queda **a revisar**:
+- En el recall pesa menos (`recall_stale_weight`, 0,6 por defecto) y sale marcado «sin confirmar desde …», también en el contexto que lee el agente.
+- Aparece en Vocabulario → **A revisar**, para curadores: **Confirmar** renueva su fecha (se guarda en PostgreSQL; el grafo no se toca) e **Invalidar** funciona como desde Hechos. Las confirmaciones quedan en la auditoría (`fact.confirm`).
+- Una vez al día, el aviso `facts.stale` los cuenta por brain, sin ningún texto.
+
+Un hecho sin fecha de validez (importado de otro sistema, por ejemplo) nunca caduca por fecha: no hay desde dónde medir. Los hechos prestados no se marcan aquí: la vida útil es cosa del brain que presta. Una relación genérica como `RELATES_TO` no puede tener vida útil.
+
 ## Escribir buenas descripciones
 El LLM decide mirando las descripciones. Las buenas:
 - Dicen **cuándo sí** y **cuándo no**, con ejemplos reales.

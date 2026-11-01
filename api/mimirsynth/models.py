@@ -552,3 +552,15 @@ class AiPrice(Base):
     model: Mapped[str] = mapped_column(String(255))
     price_in: Mapped[float] = mapped_column(default=0.0)
     price_out: Mapped[float] = mapped_column(default=0.0)
+
+
+class FactConfirmation(Base):
+    """A person confirmed that a fact is still true (#114): it renews the fact's date for its relation's shelf life without touching
+    the graph."""
+    __tablename__ = "fact_confirmations"
+    __table_args__ = (UniqueConstraint("brain_id", "fact_uuid", name="uq_fact_confirmations_fact"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    fact_uuid: Mapped[str] = mapped_column(String(64))
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

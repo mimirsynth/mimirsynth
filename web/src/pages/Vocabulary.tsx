@@ -8,6 +8,7 @@ import Retype from "./Retype";
 import VocabOntology from "./VocabOntology";
 import VocabTypes from "./VocabTypes";
 import VocabDuplicates from "./VocabDuplicates";
+import VocabStale from "./VocabStale";
 import VocabConflicts from "./VocabConflicts";
 
 type Rel = { name: string; facts: number; generic: boolean; variants: { raw: string; facts: number }[] };
@@ -97,6 +98,7 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
           <Tabs.Tab value="ali">{t("Alias (")}{aliases.length})</Tabs.Tab>
           <Tabs.Tab value="dup">{t("Duplicados (")}{data.duplicates.length})</Tabs.Tab>
           {["curator", "admin", "owner"].includes(role) && <Tabs.Tab value="conflicts">{t("Contradicciones")}</Tabs.Tab>}
+          {["curator", "admin", "owner"].includes(role) && <Tabs.Tab value="stale">{t("A revisar")}</Tabs.Tab>}
         </Tabs.List>
         <Tabs.Panel value="rel" pt="sm">
           <Toggle mb="xs" label={t("Solo cola larga (≤2 hechos)")} checked={tail} onChange={(e) => setTail(e.currentTarget.checked)} />
@@ -106,6 +108,7 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
         {isAdmin && <Tabs.Panel value="corrector" pt="sm"><Retype graph={graph} role={role} /></Tabs.Panel>}
         <Tabs.Panel value="onto" pt="sm"><VocabOntology graph={graph} role={role} /></Tabs.Panel>
         {["curator", "admin", "owner"].includes(role) && <Tabs.Panel value="conflicts" pt="sm"><VocabConflicts graph={graph} role={role} /></Tabs.Panel>}
+        {["curator", "admin", "owner"].includes(role) && <Tabs.Panel value="stale" pt="sm"><VocabStale graph={graph} /></Tabs.Panel>}
         <Tabs.Panel value="ali" pt="sm">
           <FillArea>
             {aliases.length === 0 ? <EmptyState>{t("Sin alias. Usa «Unificar con…» en la pestaña Relaciones.")}</EmptyState> : (
