@@ -6,7 +6,7 @@ RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM python:3.12-slim
+FROM python:3.15-slim
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="MimirSynth" org.opencontainers.image.description="Memory for AI agents on a temporal knowledge graph" org.opencontainers.image.licenses="Apache-2.0" org.opencontainers.image.source="https://github.com/MimirSynth/mimirsynth" org.opencontainers.image.version="${VERSION}"
 ENV PYTHONUNBUFFERED=1 MIMIRSYNTH_STATIC_DIR=/srv/web
