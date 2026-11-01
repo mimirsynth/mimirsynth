@@ -20,7 +20,7 @@ jobs:
           SUBJECT: ${{ github.event.head_commit.message }}
         run: |
           git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" wiki
-          rsync -a --delete --exclude .git docs/wiki/ wiki/
+          rsync -a --delete --exclude .git --exclude _index.yml docs/wiki/ wiki/
           cd wiki
           git add -A
           if git diff --cached --quiet; then echo "Wiki already up to date"; exit 0; fi

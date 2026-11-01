@@ -1,3 +1,4 @@
+<!-- generated from _index.yml by scripts/wiki_index.py: edit _index.yml, not this list -->
 **[MimirSynth](Home)** · [Español](Inicio)
 
 **Start**

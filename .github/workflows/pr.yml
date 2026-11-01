@@ -1,0 +1,14 @@
+name: PR
+# Checks of the pull request itself, not of its code: they run again when its description or its labels change, which the CI does not.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+permissions:
+  contents: read
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: The description has a «## Changelog» entry (or the label no-changelog)
+        run: python3 scripts/changelog.py --check-pr "$GITHUB_EVENT_PATH"

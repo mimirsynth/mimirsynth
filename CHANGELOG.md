@@ -2,6 +2,8 @@
 
 All notable changes to MimirSynth. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/) (0.x: the API and the schema may change between minor versions).
 
+Entries come from the `## Changelog` section of each pull request and are written here when a version is released (`scripts/changelog.py`), so `[Unreleased]` is not kept up to date between releases.
+
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
