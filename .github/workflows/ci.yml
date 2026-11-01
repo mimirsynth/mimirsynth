@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
-      - run: cd api && uv venv && uv pip install -e . pytest
+      - run: cd api && uv venv && uv pip install -e . pytest pyyaml   # pyyaml: the wiki index check (test_repo_tooling)
       - name: Tests (con FalkorDB real)
         env:
           MIMIRSYNTH_TEST_FALKOR: localhost
