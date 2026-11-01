@@ -3,7 +3,7 @@ import asyncio
 import secrets
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -42,12 +42,14 @@ def federated_kwargs(ctx: BrainCtx, body: "RecallIn") -> dict:
 
 
 @router.post("/recall")
-def do_recall(body: RecallIn, request: Request, ctx: BrainCtx = Depends(reader)):
+def do_recall(body: RecallIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(reader)):
     try:
-        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
-                      lang=language(request), **federated_kwargs(ctx, body))
+        out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
+                     lang=language(request), **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
+    from . import ratings
+    return {**out, "recall_id": ratings.log(ctx, body.query, out, bg)}  # to rate what it returned (#110), logged after answering
 
 
 @router.get("/index/status")

@@ -86,6 +86,7 @@ Guía: [[Recuerdo e ingesta]]
 | Avisar de un cambio de modelo parado | `reindex_orphan_hours` | `24` h | 0–8760 h | Horas que un relleno de embeddings puede estar fallido o parado, con sus vectores sombra ocupando memoria, antes de avisar (evento «reindex.orphan»). |
 | Conservar trabajos terminados | `jobs_keep_days` | `60` días | 1–3650 días | Pasado este plazo se borran los trabajos terminados, fallidos y cancelados. |
 | Retención: texto de las propuestas rechazadas | `retention_rejected_days` | `0` días | 0–3650 días | Pasado este plazo desde que se rechazó, una propuesta pierde su texto (queda su estado, sus autores y sus fechas). Cada brain puede fijar el suyo. 0: sin plazo. |
+| Retención: valoraciones del recall | `retention_ratings_days` | `0` días | 0–3650 días | Pasado este plazo se borran las valoraciones del recall de un brain (y los registros de las consultas que valoraban). Cada brain puede fijar el suyo. 0: sin plazo. |
 | Retención: trabajos terminados de cada brain | `retention_jobs_days` | `0` días | 0–3650 días | Pasado este plazo se borran los trabajos terminados, fallidos y cancelados de un brain, antes que con el plazo general de arriba. Cada brain puede fijar el suyo. 0: sin plazo. |
 | Conservar reescaneos programados | `jobs_keep_scheduled_days` | `7` días | 1–365 días | Los reescaneos automáticos sin incidencias son ruido (uno cada pocos minutos): se borran antes. |
 

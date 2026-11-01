@@ -39,6 +39,7 @@ What to do when a proposal or a document carries a password, a token or a key: *
 How long what is no longer useful is kept, only for the brain's **owner** (or the instance administrator):
 - **Text of rejected proposals:** after this many days since it was rejected, a proposal loses its text (title, body, source, review note, the decider's reasoning and the correction's detail). Its status, authors and dates remain, and [[Proposals]] shows «(text purged)».
 - **Finished jobs:** the brain's done, failed and cancelled jobs are deleted after this many days, sooner than with the instance's general period.
+- **Recall ratings:** the ratings of the recall ([[Ask]]) and the logs of the queries they rated are deleted after this many days.
 
 An empty field uses the instance's period ([[Settings reference]]: `retention_rejected_days`, `retention_jobs_days`) and **0 keeps forever**. By default there is no period, so nothing is purged until someone sets one. A daily job applies them and leaves a summary (the card shows the last one); **Purge now** runs it at once. Every change is audited (`brain.retention`). The audit log and the episodes are never purged from here.
 

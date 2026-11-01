@@ -16,7 +16,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 
 | Area | Routes | Role |
 |---|---|---|
-| **Recall** | `POST /recall` (optional `federated`) · `POST /mcp` | reader |
+| **Recall** | `POST /recall` (optional `federated`; returns a `recall_id`) · `POST /recall/{recall_id}/ratings` (`kind`: `fact`, `chunk` or `doc`, `id`, `rating`: `useful`, `irrelevant` or `incorrect`, optional `note`) · `GET /recall/quality?days=30` (curator) · `PUT /recall/settings` (`keep_query_text`, administrator) · `POST /mcp` | reader |
 | **Text index** | `GET /index/status` · `POST /index/sync` | reader · curator |
 | **Overview** | `GET /overview` · `GET /overview/activity` | reader |
 | **Episodes** | `GET /episodes` · `GET /episodes/sources` · `GET /episodes/{uuid}` | reader |

@@ -16,11 +16,12 @@ from sqlalchemy import delete, select, update
 
 from . import appsettings, jobs
 from .deps import BrainCtx, audit, owner_of_brain
-from .models import Brain, Job, Proposal
+from .models import Brain, Job, Proposal, RecallLog, RecallRating
 from .store import _factory
 
 KIND = "retention.purge"
-KEYS = {"rejected_days": "retention_rejected_days", "jobs_days": "retention_jobs_days"}  # brain's key -> instance setting
+KEYS = {"rejected_days": "retention_rejected_days", "jobs_days": "retention_jobs_days",
+        "ratings_days": "retention_ratings_days"}  # brain's key -> instance setting
 MAX_DAYS = 3650
 
 router = APIRouter(prefix="/api/brains/{slug}/retention")
@@ -48,7 +49,7 @@ def purge(brain_id: int, now: datetime | None = None) -> dict:
         if not b:
             return {}
         days = effective(b)
-        out = {"proposals": 0, "jobs": 0, **days}
+        out = {"proposals": 0, "jobs": 0, "ratings": 0, **days}
         if days["rejected_days"]:
             cut = now - timedelta(days=days["rejected_days"])
             r = db.execute(update(Proposal).where(Proposal.brain_id == b.id, Proposal.status == "rejected", Proposal.purged_at.is_(None),
@@ -61,6 +62,12 @@ def purge(brain_id: int, now: datetime | None = None) -> dict:
             r = db.execute(delete(Job).where(Job.brain_id == b.id, Job.status.in_(("done", "failed", "cancelled")),
                                              Job.finished_at.is_not(None), Job.finished_at < cut))
             out["jobs"] = r.rowcount or 0
+        if days["ratings_days"]:  # the recall's ratings (#110) and the logs they belong to
+            cut = now - timedelta(days=days["ratings_days"])
+            r = db.execute(delete(RecallRating).where(RecallRating.brain_id == b.id, RecallRating.created_at < cut))
+            out["ratings"] = r.rowcount or 0
+            db.execute(delete(RecallLog).where(RecallLog.brain_id == b.id, RecallLog.created_at < cut,
+                                               RecallLog.id.not_in(select(RecallRating.log_id))))
         db.commit()
     return out
 
@@ -82,6 +89,7 @@ def run_all() -> list[int]:
 class RetentionIn(BaseModel):
     rejected_days: int | None = Field(None, ge=0, le=MAX_DAYS, description="days a rejected proposal keeps its text; empty: the instance's; 0: forever")
     jobs_days: int | None = Field(None, ge=0, le=MAX_DAYS, description="days a finished job is kept; empty: the instance's; 0: forever")
+    ratings_days: int | None = Field(None, ge=0, le=MAX_DAYS, description="days the recall's ratings are kept; empty: the instance's; 0: forever")
 
 
 def _out(ctx: BrainCtx) -> dict:

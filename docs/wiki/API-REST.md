@@ -16,7 +16,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 
 | Área | Rutas | Rol |
 |---|---|---|
-| **Recall** | `POST /recall` (`federated` opcional) · `POST /mcp` | lector |
+| **Recall** | `POST /recall` (`federated` opcional; devuelve un `recall_id`) · `POST /recall/{recall_id}/ratings` (`kind`: `fact`, `chunk` o `doc`, `id`, `rating`: `useful`, `irrelevant` o `incorrect`, `note` opcional) · `GET /recall/quality?days=30` (curador) · `PUT /recall/settings` (`keep_query_text`, administrador) · `POST /mcp` | lector |
 | **Índice de texto** | `GET /index/status` · `POST /index/sync` | lector · curador |
 | **Resumen** | `GET /overview` · `GET /overview/activity` | lector |
 | **Episodios** | `GET /episodes` · `GET /episodes/sources` · `GET /episodes/{uuid}` | lector |

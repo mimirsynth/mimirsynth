@@ -136,6 +136,7 @@ class Brain(Base):
     secret_allow: Mapped[str] = mapped_column(Text, default="", server_default="")  # excepciones del detector, una por línea
     retention: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # days per kind of data (#137); empty: the instance's
     ai_budget: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {limit, unit: tokens | cost, pause} (#132); empty: none
+    recall_query_text: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # keep the text of rated recalls (#110)
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
@@ -564,3 +565,34 @@ class FactConfirmation(Base):
     fact_uuid: Mapped[str] = mapped_column(String(64))
     confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
+class RecallLog(Base):
+    """What a recall returned (#110), so that each item can be rated with its `rid` for a short time. The query is kept as a hash and
+    a length; its text only if the brain chooses to, and only for a short time."""
+    __tablename__ = "recall_logs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    rid: Mapped[str] = mapped_column(String(32), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    query_hash: Mapped[str] = mapped_column(String(64))
+    query_len: Mapped[int] = mapped_column(Integer, default=0)
+    query_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    items: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class RecallRating(Base):
+    """A person's or an agent's rating of one item a recall returned: useful, irrelevant or incorrect (#110)."""
+    __tablename__ = "recall_ratings"
+    __table_args__ = (UniqueConstraint("log_id", "kind", "item_id", "user_id", name="uq_recall_ratings_item"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    log_id: Mapped[int] = mapped_column(ForeignKey("recall_logs.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String(8))
+    item_id: Mapped[str] = mapped_column(String(80))
+    similarity: Mapped[float | None] = mapped_column(nullable=True)
+    rating: Mapped[str] = mapped_column(String(12))
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    proposal_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

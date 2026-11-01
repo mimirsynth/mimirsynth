@@ -27,6 +27,16 @@ Los fragmentos salen de un **índice del texto de los episodios** que se guarda 
 ## Guardar una consulta de referencia (curador o superior)
 Los curadores y roles superiores ven dos pestañas, **Preguntar** y **Consultas de referencia**. Tras una búsqueda, cada hecho, fragmento y pasaje tiene dos botones: **Debe salir** (tiene que aparecer para esta pregunta) y **Sobra** (no debería). **Guardar como consulta de referencia** abre el formulario ya relleno con la pregunta y lo que hayas marcado (los primeros 200 caracteres de cada resultado), para que el brain pueda comprobar más adelante que el recall lo sigue encontrando. Ver [[Consultas de referencia]].
 
+## Valorar los resultados
+Debajo de cada hecho, fragmento de episodio y pasaje de documento, **Útil**, **Irrelevante** e **Incorrecto** (incorrecto solo en los hechos propios del brain) dicen si el recall trajo lo que tocaba. Puede valorar cualquiera que pueda leer el brain, con un límite de peticiones por minuto.
+- **Incorrecto** en un hecho, de un colaborador o más, propone su **corrección** (ver [[Propuestas]]): la decide un curador, y desde aquí no se invalida nada. De un lector solo se guarda, y los curadores lo ven en **Calidad**.
+- Cada recall, aquí y por la API y el MCP, devuelve un `recall_id` que se puede valorar durante 48 horas; un recall que nadie valoró se olvida después. El recall se registra después de responder, así que valorar nunca lo frena; si no se pudo registrar, ese `recall_id` simplemente no se puede valorar. De la consulta solo se guarda una huella y su longitud, salvo que el brain decida guardar su texto (ver abajo).
+
+## Calidad (curador o superior)
+La pestaña **Calidad** resume los últimos 30 días: cuántos recalls hubo y cuántos se valoraron, y por tipo de elemento (hechos, fragmentos de episodios, pasajes de documentos) y por tramo de similitud cuánto fue útil, irrelevante o incorrecto. Los tramos son lo que dice si conviene subir o bajar un umbral como `doc_min_similarity`; **Descargar CSV** los saca. Las valoraciones llegan sobre todo cuando algo falla, así que léelas junto al total de recalls. También lista los últimos hechos valorados como incorrectos, con su corrección.
+
+Los administradores del brain pueden marcar **Guardar el texto de las consultas**: las consultas reales llevan los prompts de las personas, así que por defecto solo se guarda una huella; con esto, el texto se guarda 30 días, y al desmarcarlo se borra ya. Las valoraciones siguen el plazo de retención del brain para **Valoraciones del recall** ([[Administrar brains y miembros]]).
+
 ## Si el resultado es malo
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|

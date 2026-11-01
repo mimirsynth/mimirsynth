@@ -84,6 +84,15 @@ TOOLS = [
          "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo del texto devuelto (por defecto 8000)."},
          "origin": {"type": "string", "description": "Si el pasaje viene de otro brain («de «x»» en `recall`), su identificador."}},
          "required": ["document"]}, "annotations": {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}},
+    {"name": "rate", "title": "Valorar el recall", "description": "Di si lo que devolvió un `recall` sirvió: útil, irrelevante o incorrecto. Usa el `recall_id` del final de ese recall (vale unas horas) y señala un hecho por su texto tal como salió o un pasaje por sus números «[doc N, trozo M]». «Incorrecto» en un hecho propone su corrección, que decide una persona; nunca lo invalida por sí solo. Sirve para ajustar qué trae el recall.",
+     "inputSchema": {"type": "object", "properties": {
+         "recall_id": {"type": "string", "description": "El `recall_id` que dio el recall."},
+         "rating": {"type": "string", "enum": ["useful", "irrelevant", "incorrect"], "description": "useful (útil), irrelevant (sobraba) o incorrect (no es cierto)."},
+         "fact": {"type": "string", "description": "El hecho, con su texto tal como salió en el recall."},
+         "document": {"type": "integer", "minimum": 1, "description": "Para un pasaje: el número del documento («doc N»)."},
+         "chunk": {"type": "integer", "minimum": 0, "description": "Para un pasaje: el número del trozo («trozo M»)."},
+         "note": {"type": "string", "description": "Por qué, en pocas palabras (opcional)."}},
+         "required": ["recall_id", "rating"]}, "annotations": {"readOnlyHint": False, "idempotentHint": True, "openWorldHint": False}},
     {"name": "whats_new", "title": "Novedades", "description": "Qué ha cambiado en la memoria desde una fecha, de lo más antiguo a lo más reciente: hechos aprendidos y hechos que dejaron de ser ciertos. Sin `since`, desde donde se quedó la última llamada sin fecha de este token (la primera vez, la última semana): si no cabe todo, la llamada siguiente sin fecha sigue por ahí, así que sirve para ponerse al día al empezar una sesión sin guardar la fecha.",
      "inputSchema": {"type": "object", "properties": {
          "since": {"type": "string", "description": "Desde cuándo (ISO 8601: 2026-10-01 o 2026-10-01T09:00:00Z). Vacío = desde la última llamada sin fecha."},
@@ -107,7 +116,7 @@ def _text(text: str, error: bool = False) -> dict:
     return {"content": [{"type": "text", "text": text}], "isError": error}
 
 
-SCOPE = {"recall": "recall", "facts_about": "recall", "timeline": "recall", "whats_new": "recall", "get_document": "documents",
+SCOPE = {"recall": "recall", "rate": "recall", "facts_about": "recall", "timeline": "recall", "whats_new": "recall", "get_document": "documents",
          "remember": "propose", "correct": "propose"}  # what each tool needs from a token with a limited scope (#133)
 
 
@@ -133,7 +142,26 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
             body = RecallIn(**args)
             out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body), lang=lang,
                          **federated_kwargs(ctx, body))
-            return _text(out["context"] or tr("No hay nada relevante en la memoria para esa consulta.", lang))
+            if not out["context"]:
+                return _text(tr("No hay nada relevante en la memoria para esa consulta.", lang))
+            from . import ratings
+            rid = ratings.log(ctx, body.query, out, bg)  # the agent can say what was useful with `rate` (#110), logged after answering
+            return _text(out["context"] + "\n\n" + tr("(recall_id: {{rid}})", lang, rid=rid))
+        if name == "rate":
+            from . import ratings
+            args = dict(args)
+            rid = str(args.pop("recall_id", ""))
+            doc, chunk = args.pop("document", None), args.pop("chunk", None)
+            fact = args.pop("fact", "")
+            if doc is not None:
+                body = ratings.RateIn(kind="doc", id=f"{args.pop('origin', '') or ''}:{doc}:{chunk if chunk is not None else 0}", **args)
+            else:
+                body = ratings.RateIn(kind="fact", text=str(fact), **args)
+            r = ratings.rate(ctx, request, rid, body)
+            done = tr("Valoración guardada.", lang)
+            if r.get("proposal_id"):
+                done += " " + tr("Como es incorrecto, se ha propuesto una corrección del hecho (propuesta #{{id}}); la decide un curador.", lang, id=r["proposal_id"])
+            return _text(done)
         if name == "remember":
             if not allows(ctx.role, "contributor"):
                 return _text(tr("Este token solo puede leer (rol de lector): no puede proponer memorias.", lang), True)

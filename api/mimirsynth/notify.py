@@ -279,6 +279,8 @@ async def worker(version: str = "0.0.0") -> None:
                 from . import retention, shelflife
                 await asyncio.to_thread(retention.run_all)
                 await asyncio.to_thread(shelflife.check_all)
+                from . import ratings
+                await asyncio.to_thread(ratings.purge)
         except Exception:  # noqa: BLE001
             log.exception("fallo en el ciclo de notificaciones")
         await asyncio.sleep(10)
