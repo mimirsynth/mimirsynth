@@ -15,6 +15,8 @@ This wiki is the complete user guide, in English and [in Spanish](Inicio). If yo
 | Connect an agent (Claude Code or another) | [[Connect agents]] |
 | Know what each person can do | [[Roles and permissions]] |
 
+<!-- index:start -->
+<!-- generated from _index.yml by scripts/wiki_index.py: edit _index.yml, not this list -->
 ## Using the application (one page per screen)
 [[Overview]] · [[Journal]] · [[Facts]] · [[Entity page]] · [[Knowledge]] · [[Ask]] · [[Reference queries]] · [[Graph]] · [[Cypher query]] · [[Proposals]] · [[Content quality]] · [[Vocabulary]] · [[Jobs]] · [[My account]]
 
@@ -32,5 +34,6 @@ The content: [[Content quality]] · [[Merge duplicates]] · [[Contradictions]] �
 ## Help
 [[FAQ]] · [[Troubleshooting]] · [[Glossary]]
 
+<!-- index:end -->
 ---
 *MimirSynth is under active development (0.x): the interface and the API may change between versions. Apache-2.0 license.*

@@ -15,6 +15,8 @@ Esta wiki es la guía de usuario completa, en castellano y [en inglés](Home). S
 | Conectar un agente (Claude Code u otro) | [[Conectar agentes]] |
 | Saber qué puede hacer cada persona | [[Roles y permisos]] |
 
+<!-- index:start -->
+<!-- generated from _index.yml by scripts/wiki_index.py: edit _index.yml, not this list -->
 ## Usar la aplicación (una página por pantalla)
 [[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Calidad del contenido]] · [[Vocabulario]] · [[Trabajos]] · [[Mi cuenta]]
 
@@ -32,5 +34,6 @@ El contenido: [[Calidad del contenido]] · [[Fusionar duplicados]] · [[Contradi
 ## Ayuda
 [[Preguntas frecuentes]] · [[Solución de problemas]] · [[Glosario]]
 
+<!-- index:end -->
 ---
 *MimirSynth está en desarrollo activo (0.x): la interfaz y la API pueden cambiar entre versiones. Licencia Apache-2.0.*

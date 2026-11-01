@@ -1,6 +1,7 @@
 // Extrae las claves traducibles (t("…"), tr("…"), T("…")) y comprueba que el catálogo en.json las cubre todas y no tiene sobrantes.
 //   node scripts/i18n.mjs          comprueba (falla si faltan o sobran claves)
 //   node scripts/i18n.mjs --list   lista las claves que faltan por traducir
+//   node scripts/i18n.mjs --sort   ordena en.json alfabéticamente (se exige: así las claves nuevas de dos PR no chocan al final del fichero)
 // Además prohíbe texto sin traducir en la interfaz: todo texto visible pasa por t()/tr()/T(). Excepción justificada: `// i18n-ok: motivo` en la línea.
 import fs from "node:fs";
 import path from "node:path";
@@ -35,12 +36,24 @@ for (const f of files(ROOT)) {
   };
   visit(program);
 }
-const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "i18n", "en.json"), "utf8"));
+const CATALOG = path.join(ROOT, "i18n", "en.json");
+const raw = fs.readFileSync(CATALOG, "utf8");
+const catalog = JSON.parse(raw);
+const order = Object.keys(catalog);
+const sorted = [...order].sort();
+if (process.argv.includes("--sort")) {
+  const eol = raw.includes("\r\n") ? "\r\n" : "\n";
+  fs.writeFileSync(CATALOG, JSON.stringify(Object.fromEntries(sorted.map((k) => [k, catalog[k]])), null, 1).replace(/\n/g, eol) + eol);
+  console.log(`en.json: ${sorted.length} claves ordenadas.`);
+  process.exit(0);
+}
+const unsorted = order.some((k, i) => k !== sorted[i]);
 const missing = [...keys].filter((k) => !(k in catalog)).sort();
 const unused = Object.keys(catalog).filter((k) => !keys.has(k)).sort();
 if (process.argv.includes("--list")) { console.log(JSON.stringify(Object.fromEntries(missing.map((k) => [k, ""])), null, 1)); process.exit(0); }
 if (literal.length) { console.error(`Texto sin traducir en la interfaz (usa t(\"…\") o marca la línea con // i18n-ok: motivo):\n  - ${literal.slice(0, 20).join("\n  - ")}${literal.length > 20 ? "\n  …" : ""}`); }
-if (literal.length || missing.length || unused.length) {
+if (literal.length || missing.length || unused.length || unsorted) {
+  if (unsorted) console.error("en.json no está en orden alfabético: ejecuta «node scripts/i18n.mjs --sort».");
   if (missing.length) console.error(`Faltan ${missing.length} traducciones al inglés (node scripts/i18n.mjs --list):\n  - ${missing.slice(0, 15).join("\n  - ")}${missing.length > 15 ? "\n  …" : ""}`);
   if (unused.length) console.error(`Sobran ${unused.length} claves sin uso en en.json:\n  - ${unused.slice(0, 15).join("\n  - ")}`);
   process.exit(1);

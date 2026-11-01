@@ -1,0 +1,155 @@
+# The wiki's navigation. `python scripts/wiki_index.py` writes _Sidebar.md and the page lists of Home.md and Inicio.md from it;
+# never edit those by hand. Pages go by their English title (the file name with spaces); the Spanish title comes from the link at
+# the top of each English page. A new page goes into a «sidebar» section (and into «home» if it is a main entry point), or into
+# «unlisted» if it is only reached from other pages.
+sidebar:
+- title:
+    en: Start
+    es: Empezar
+  pages:
+  - Concepts
+  - Quick start
+  - Installation
+  - Upgrade and backups
+  - HTTPS and reverse proxy
+- title:
+    en: Use
+    es: Usar
+  pages:
+  - Overview
+  - Journal
+  - Facts
+  - Entity page
+  - Knowledge
+  - Ask
+  - Reference queries
+  - Graph
+  - Cypher query
+  - Proposals
+  - Content quality
+  - Vocabulary
+  - Contradictions
+  - Jobs
+  - My account
+- title:
+    en: Administer
+    es: Administrar
+  pages:
+  - Administration overview
+  - Brains and members
+  - Federation
+  - Secrets
+  - Export a brain
+  - Import a brain
+  - Notifications
+  - Administer users
+  - Security and two-factor
+  - OIDC identity
+  - SMTP email
+  - AI providers
+  - AI consumption
+  - Folders and limits
+  - Recall and ingestion
+  - Audit log
+  - Settings reference
+  - Roles and permissions
+- title:
+    en: Agents
+    es: Agentes
+  pages:
+  - Connect agents
+  - REST API
+  - Claude Code integration
+  - Writing good memory
+  - Document memory
+- title:
+    en: Reference
+    es: Referencia
+  pages:
+  - Environment variables
+  - Glossary
+  - FAQ
+  - Troubleshooting
+home:
+- title:
+    en: Using the application (one page per screen)
+    es: Usar la aplicación (una página por pantalla)
+  lines:
+  - pages:
+    - Overview
+    - Journal
+    - Facts
+    - Entity page
+    - Knowledge
+    - Ask
+    - Reference queries
+    - Graph
+    - Cypher query
+    - Proposals
+    - Content quality
+    - Vocabulary
+    - Jobs
+    - My account
+- title:
+    en: Curating the knowledge
+    es: Cuidar el conocimiento
+  lines:
+  - label:
+      en: 'The framework:'
+      es: 'El marco:'
+    pages:
+    - Vocabulary
+    - Ontology
+    - Entity types
+    - Relations and aliases
+  - label:
+      en: 'The content:'
+      es: 'El contenido:'
+    pages:
+    - Content quality
+    - Merge duplicates
+    - Contradictions
+    - Type corrector
+- title:
+    en: Administering the instance
+    es: Administrar la instancia
+  lines:
+  - pages:
+    - Administration overview
+    - Brains and members
+    - Federation
+    - Secrets
+    - Export a brain
+    - Import a brain
+    - Notifications
+    - Administer users
+    - Security and two-factor
+    - OIDC identity
+    - SMTP email
+    - AI providers
+    - AI consumption
+    - Folders and limits
+    - Recall and ingestion
+    - Audit log
+    - Settings reference
+    - Upgrade and backups
+- title:
+    en: For agents and developers
+    es: Para agentes y desarrolladores
+  lines:
+  - pages:
+    - Connect agents
+    - REST API
+    - Claude Code integration
+    - Writing good memory
+    - Document memory
+    - Environment variables
+- title:
+    en: Help
+    es: Ayuda
+  lines:
+  - pages:
+    - FAQ
+    - Troubleshooting
+    - Glossary
+unlisted: []
