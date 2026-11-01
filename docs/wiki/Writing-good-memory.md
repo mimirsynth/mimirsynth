@@ -8,7 +8,7 @@ The quality of what MimirSynth remembers depends on what you tell it. A model ex
 1. **One concrete fact per idea, with exact proper names.** "On 12 October the production database moved from server db01 to server db02" is far better than "we migrated the database".
 2. **Put the date.** If what you describe happened earlier, say so in the text (or in `reference_time` if you send it through the API). That way facts are ordered in time and old ones are invalidated properly.
 3. **Always use the same name for the same thing.** "Server db02", not "the new one", "the database machine" and "db-2" in three different texts: duplicate entities would be created.
-4. **Tell the change, not just the state.** "X now runs on Y (it used to run on Z)" makes clear what is invalidated. If an old value stays current next to the new one, and the relation is marked as single-valued, it shows up under Vocabulary → **Contradictions** for a curator to resolve.
+4. **Tell the change, not just the state.** "X now runs on Y (it used to run on Z)" makes clear what is invalidated. If an old value stays current next to the new one, and the relation is marked as single-valued, it shows up under Content quality → **Contradictions** for a curator to resolve.
 5. **Write self-contained statements.** Each paragraph must be understood without the context of the conversation ("that" and "the thing from before" do not work).
 6. **Include the why when it matters.** Decisions are worth more with their reason: "We chose PostgreSQL because…".
 

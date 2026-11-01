@@ -32,7 +32,7 @@ Un tipo de relación puede marcarse como **de un solo valor a la vez** (`"functi
 - Las relaciones se comparan tras normalizar formato y alias, y **solo se comparan destinos del mismo tipo de entidad**: «X ubicado en un host» y «X ubicado en una VLAN» no se contradicen. Dos destinos con el mismo nombre salvo mayúsculas y espacios cuentan como el mismo (eso es un duplicado del vocabulario, no una contradicción).
 
 ## Corrector de tipos
-El corrector de tipos (Vocabulario → Corrector de tipos) no supone ningún dominio: cada paquete indica, en su bloque `retype`, qué se revisa y qué se aparta antes de preguntar al decisor.
+El corrector de tipos (Calidad del contenido → Tipos dudosos) no supone ningún dominio: cada paquete indica, en su bloque `retype`, qué se revisa y qué se aparta antes de preguntar al decisor.
 
 ```json
 "retype": {"review_first": ["Topic", "Item"], "doubtful_rules": []}

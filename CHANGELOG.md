@@ -5,6 +5,11 @@ All notable changes to MimirSynth. The format follows [Keep a Changelog](https:/
 Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y.Z`, `X.Y`, `X` and `latest`; `linux/amd64` and `linux/arm64`).
 
 ## [Unreleased]
+### Added
+- **Content quality, and «Needs your attention»** (#164). A new **Content quality** page under Curation, for curators and above, gathers the work on what the graph already holds: **Duplicates**, **Contradictions**, **Doubtful types** (the type corrector, administrators only) and **To review**, with a summary at the top of what waits for a decision in each and the same counts in the tab labels. The **Overview** shows curators a **Needs your attention** block: proposals and corrections waiting, duplicate groups, possible contradictions, facts to review, doubtful types and reference queries that got worse, each line linking to the right tool (Proposals opens already filtered), hidden at zero, and «Nothing needs your attention» when everything is clear. The counters come from `GET /api/brains/{slug}/attention`, which reuses what each page computes and keeps it for a minute (`?fresh=true` recalculates).
+
+### Changed
+- **Vocabulary only holds the framework** (#164): Relations, Entity types, Ontology and Aliases. The page and each tab say in plain words what they are for and who uses them, Ontology (declared) is explained against Relations and Entity types (observed), and the jargon (single-valued, shelf life, alias) is explained where it appears. The schema and the content link both ways: the Ontology header and the relation dialog lead to Contradictions and To review, those lead back to Ontology, and Aliases and Duplicates explain how relation aliases and merged entity names differ. The old addresses (`/vocabulario?tab=dup`, `conflicts`, `stale`, `corrector` and `/tipos`) lead to the same tool in Content quality. Permissions do not change. Wiki: new «Content quality» page, and Vocabulary, Overview, Contradictions, Merge duplicates, Type corrector, Ontology, Roles and REST API updated in English and Spanish.
 
 ## [0.10.0] - 2026-11-01
 ### Added

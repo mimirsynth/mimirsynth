@@ -2,7 +2,22 @@
 
 # Resumen
 
-Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Es de solo lectura.
+Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Salvo el bloque **Necesita tu atención**, es de solo lectura.
+
+## Necesita tu atención
+Los curadores y superiores ven primero una lista corta de lo que **espera la decisión de una persona** en el brain, cada línea con su número y un enlace a la herramienta donde se decide:
+
+| Línea | Dónde se decide |
+|---|---|
+| Propuestas esperando una decisión | [[Propuestas]], filtradas a pendientes |
+| Correcciones pendientes, de agentes o de valoraciones «incorrecto» | [[Propuestas]], filtradas a correcciones pendientes |
+| Grupos de posibles duplicados | [[Calidad del contenido]] → Duplicados |
+| Posibles contradicciones | [[Calidad del contenido]] → Contradicciones |
+| Hechos a revisar, pasados de su vida útil | [[Calidad del contenido]] → A revisar |
+| Tipos dudosos con un cambio propuesto (solo administradores) | [[Calidad del contenido]] → Tipos dudosos |
+| Consultas de referencia que empeoraron en la última ejecución | [[Preguntar]] → Consultas de referencia |
+
+Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita tu atención». Los contadores son los mismos que calcula cada página y se guardan un minuto para que el inicio sea rápido: algo que acabas de resolver puede seguir contando durante ese minuto (Calidad del contenido los enseña siempre recalculados).
 
 ## Primeros pasos (instancia nueva)
 Un administrador de la instancia que abre la página de inicio cuando **todavía no existe ningún brain** ve en su lugar **Primeros pasos**. El botón **Crea tu primer brain** abre el diálogo para crearlo en Administración ([[Administrar brains y miembros]]), y una breve lista enlaza con cada pantalla:

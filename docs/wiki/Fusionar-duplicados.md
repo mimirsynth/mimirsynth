@@ -2,7 +2,7 @@
 
 # Fusionar duplicados
 
-Pestaña **Duplicados** de [[Vocabulario]]. Muestra **grupos de entidades que probablemente son la misma cosa**: mismo nombre salvo la versión o las mayúsculas (por ejemplo «Servidor 2» y «servidor 2», o «Nextcloud» y «Nextcloud 29»).
+Pestaña **Duplicados** de [[Calidad del contenido]]. Muestra **grupos de entidades que probablemente son la misma cosa**: mismo nombre salvo la versión o las mayúsculas (por ejemplo «Servidor 2» y «servidor 2», o «Nextcloud» y «Nextcloud 29»).
 
 ## Por qué molestan
 Si la misma entidad existe dos veces, sus hechos quedan repartidos: una búsqueda encuentra la mitad, el grafo muestra dos nodos y el [[Resumen]] cuenta de más.

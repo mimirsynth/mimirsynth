@@ -2,7 +2,7 @@
 
 # Contradicciones
 
-Pestaña **Contradicciones** de [[Vocabulario]] (curadores y superiores). Lista los **hechos vigentes que se contradicen** en relaciones que solo admiten un valor a la vez y te deja elegir cuál sigue vigente.
+Pestaña **Contradicciones** de [[Calidad del contenido]] (curadores y superiores). Lista los **hechos vigentes que se contradicen** en relaciones que solo admiten un valor a la vez y te deja elegir cuál sigue vigente.
 
 ## Por qué existe
 Cuando un episodio nuevo contradice un hecho, la ingesta suele invalidar el antiguo. No siempre: dos episodios redactados de forma distinta pueden dejar vigentes a la vez «el portátil está en la Oficina A» y «el portátil está en la Oficina B». El recall le pasa entonces los dos a tu agente como si ambos fueran ciertos. Esta pestaña encuentra esos casos **sin ningún modelo de IA** y deja la decisión a una persona.

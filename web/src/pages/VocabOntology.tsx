@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { get, send } from "../api";
 import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog } from "../ui";
 
@@ -124,7 +124,10 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   return (
     <FillArea>
       <Stack gap="sm">
-        <Text size="sm" c="dimmed">{t("La ontología guía qué tipos de entidad y de relación extrae el ingestor al escribir. Sin ella, el modelo inventa tipos y relaciones libremente. Los tipos de entidad se editan en su pestaña; aquí, las relaciones, las reglas del mapa y las instrucciones. Los cambios guían las ingestas futuras y no modifican lo que ya está en el grafo.")}</Text>
+        <Text size="sm" c="dimmed">{t("La ontología guía qué tipos de entidad y de relación extrae el ingestor al escribir. Sin ella, el modelo inventa tipos y relaciones libremente. Los tipos de entidad se editan en su pestaña; aquí, las relaciones, las reglas del mapa y las instrucciones. Los cambios guían las ingestas futuras y no modifican lo que ya está en el grafo.")}{" "}
+          {t("Dos marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones, y la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar.")}{" "}
+          <Btn kind="link" component={Link} to="/calidad?tab=conflicts">{t("Contradicciones")}</Btn>{" · "}
+          <Btn kind="link" component={Link} to="/calidad?tab=stale">{t("A revisar")}</Btn></Text>
         {done && <Notice tone="info">{done.summary}. <Btn kind="link" onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn>{undo.error && ` — ${(undo.error as Error).message}`}</Notice>}
         {q.data && !q.data.configured && <Notice tone="warn">{t("Este brain no tiene ontología: la extracción es libre. Aplica un paquete o crea tipos para empezar.")}</Notice>}
         {canEdit && upd && <Notice tone="info" title={t("Hay una versión nueva del paquete «{{name}}»", { name: updInfo?.title ?? upd.name })}>
@@ -163,9 +166,9 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
           <TextArea label={t("Descripción")} description={t("Cuándo se usa esta relación; guía al ingestor")} minRows={3} autosize value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
           <Check label={t("Un solo valor a la vez")} checked={functional && !isGeneric(name)} disabled={isGeneric(name)} onChange={(e) => setFunctional(e.currentTarget.checked)}
             description={isGeneric(name) ? t("Es una relación genérica: puede unir cualquier cosa, así que no puede ser de un solo valor.")
-              : t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes en Contradicciones → Medir en todas las relaciones.")} />
+              : t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Calidad del contenido → Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes allí, con «Medir en todas las relaciones».")} />
           <NumberField label={t("Vida útil (días)")} min={1} max={3650} value={shelf} onChange={setShelf} disabled={isGeneric(name)} placeholder={t("Sin vida útil")}
-            description={isGeneric(name) ? t("Es una relación genérica: no puede tener vida útil.") : t("Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en A revisar. Vacío: nunca.")} />
+            description={isGeneric(name) ? t("Es una relación genérica: no puede tener vida útil.") : t("Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en Calidad del contenido → A revisar. Vacío: nunca.")} />
           <MutationError error={saveRel.error} />
           <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></Group>
         </Stack>

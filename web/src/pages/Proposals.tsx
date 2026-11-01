@@ -5,6 +5,7 @@ import { Btn, ClearFilters, Icon, ColHead, CopyBtn, DataTable, FillArea, Modal, 
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { fmt, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
@@ -102,11 +103,12 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const qc = useQueryClient();
   const isCurator = ["curator", "admin", "owner"].includes(role);
   const canPropose = isCurator || role === "contributor";
-  const [status, setStatusRaw] = useState("all");
-  const [chose, setChose] = useState(false);
+  const [sp] = useSearchParams();   // ?estado=…&tipo=…: the links of «Needs your attention» open the list already filtered
+  const [status, setStatusRaw] = useState(() => sp.get("estado") ?? "all");
+  const [chose, setChose] = useState(() => sp.has("estado"));
   const view = useProposalsView();
   const setStatus = (s: string) => { setChose(true); setStatusRaw(s); view.setPage((p) => ({ ...p, offset: 0 })); };
-  const [kind, setKindRaw] = useState("all");
+  const [kind, setKindRaw] = useState(() => sp.get("tipo") ?? "all");
   const setKind = (k: string) => { setKindRaw(k); view.setPage((p) => ({ ...p, offset: 0 })); };
   const [open, setOpen] = useState<number | null>(null); const [note, setNote] = useState("");
   const [name, setName] = useState(""); const [body, setBody] = useState(""); const [conf, setConf] = useState<number | string>("");

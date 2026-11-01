@@ -18,6 +18,7 @@
 - [[Graph]]
 - [[Cypher query]]
 - [[Proposals]]
+- [[Content quality]]
 - [[Vocabulary]]
 - [[Contradictions]]
 - [[Jobs]]
@@ -62,7 +63,7 @@
 
 **Empezar:** [[Conceptos]] · [[Guía rápida]] · [[Instalación]] · [[Actualización y copias de seguridad]] · [[HTTPS y proxy inverso]]
 
-**Usar:** [[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Vocabulario]] · [[Contradicciones]] · [[Trabajos]] · [[Mi cuenta]]
+**Usar:** [[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Calidad del contenido]] · [[Vocabulario]] · [[Contradicciones]] · [[Trabajos]] · [[Mi cuenta]]
 
 **Administrar:** [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Roles y permisos]]
 

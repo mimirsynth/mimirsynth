@@ -1,8 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { fmt, get, Overview as O } from "../api";
-import { AreaChart, BarList, Donut, Page, Panel, Pill, StatCard, DataState, PageHeader, FillArea, HIDROMIEL, PIZARRA, StatGrid, ColGrid, EmptyState, Section } from "../ui";
+import { AreaChart, BarList, Btn, Donut, Page, Panel, Pill, StatCard, DataState, PageHeader, FillArea, HIDROMIEL, PIZARRA, StatGrid, ColGrid, EmptyState, Section } from "../ui";
+import { T } from "../i18n";
+import type { Attention } from "./Quality";
 
 type Activity = {
   weeks: string[]; episodes: number[]; facts_learned: number[]; facts_invalidated: number[];
@@ -11,7 +14,33 @@ type Activity = {
   documents: { by_status: Record<string, number>; total: number; chunks: number };
 };
 
-export default function Overview({ graph }: { graph: string }) {
+/** Each line of «Needs your attention»: what is waiting, and the tool where it is decided. */
+const ATTENTION: { key: keyof Attention; label: string; to: string }[] = [
+  { key: "proposals", label: T("Propuestas esperando una decisión"), to: "/propuestas?estado=pending&tipo=memory" },
+  { key: "corrections", label: T("Correcciones pendientes, de agentes o de valoraciones «incorrecto»"), to: "/propuestas?estado=pending&tipo=correction" },
+  { key: "duplicates", label: T("Grupos de posibles duplicados"), to: "/calidad?tab=dup" },
+  { key: "conflicts", label: T("Posibles contradicciones"), to: "/calidad?tab=conflicts" },
+  { key: "stale", label: T("Hechos a revisar, pasados de su vida útil"), to: "/calidad?tab=stale" },
+  { key: "retype", label: T("Tipos dudosos con un cambio propuesto"), to: "/calidad?tab=corrector" },
+  { key: "refqueries", label: T("Consultas de referencia que empeoraron en la última ejecución"), to: "/preguntar?tab=referencia" },
+];
+
+/** What waits for a curator's decision, each line a link to the tool where it is decided. Only for those who can act. */
+function NeedsAttention({ graph }: { graph: string }) {
+  const { t } = useTranslation();
+  const q = useQuery({ queryKey: ["attention", graph], queryFn: () => get<Attention>(`brains/${graph}/attention`), staleTime: 30000 });
+  const lines = ATTENTION.filter((l) => (q.data?.[l.key] ?? 0) > 0);
+  return (
+    <Section title={t("Necesita tu atención")}>
+      {!q.data ? <DataState query={q} /> : lines.length ? <Stack gap={6}>{lines.map((l) => (
+        <Group key={l.key} gap="xs" wrap="nowrap"><Pill size="sm" tone="warn">{q.data[l.key]}</Pill>
+          <Btn kind="link" component={Link} to={l.to}>{t(l.label)}</Btn></Group>))}</Stack>
+        : <Text size="sm" c="dimmed">{t("Nada necesita tu atención.")}</Text>}
+    </Section>
+  );
+}
+
+export default function Overview({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ["overview", graph], queryFn: () => get<O>("overview", { graph }) });
   const data = q.data;
@@ -24,6 +53,7 @@ export default function Overview({ graph }: { graph: string }) {
     <Page>
       <PageHeader title={t("Resumen")} description={<>{t("Estado del brain «{{graph}}»: volumen de conocimiento, actividad por semanas y lo más conectado.", { graph })}{data.last_episode && <> {t("Último episodio: {{name}} · {{date}}.", { name: data.last_episode.name, date: fmt(data.last_episode.created_at) })}</>}</>} />
       <FillArea><Stack gap="md">
+      {["curator", "admin", "owner"].includes(role) && <NeedsAttention graph={graph} />}
       <StatGrid>
         <StatCard label={t("Episodios")} value={data.episodes} hint={a ? t("+{{episodes}} esta semana", { episodes: last(a.episodes) }) : t("memoria episódica")} />
         <StatCard label={t("Entidades")} value={data.entities} />

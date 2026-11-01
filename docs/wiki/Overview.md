@@ -2,7 +2,22 @@
 
 # Overview
 
-The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. It is read-only.
+The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Needs your attention** block, it is read-only.
+
+## Needs your attention
+Curators and above see first a short list of what is **waiting for a person's decision** in the brain, each line with its count and a link to the tool where it is decided:
+
+| Line | Where it is decided |
+|---|---|
+| Proposals waiting for a decision | [[Proposals]], filtered to pending |
+| Pending corrections, from agents or from «incorrect» ratings | [[Proposals]], filtered to pending corrections |
+| Groups of possible duplicates | [[Content quality]] → Duplicates |
+| Possible contradictions | [[Content quality]] → Contradictions |
+| Facts to review, past their shelf life | [[Content quality]] → To review |
+| Doubtful types with a proposed change (administrators only) | [[Content quality]] → Doubtful types |
+| Reference queries that got worse in the last run | [[Ask]] → Reference queries |
+
+Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast: something you have just resolved may still be counted for that minute (Content quality always shows them recalculated).
 
 ## First steps (new instance)
 An instance administrator who opens the home page while **no brain exists yet** sees **First steps** instead. The **Create your first brain** button opens the dialog to create it under Administration ([[Brains and members]]), and a short checklist links to each screen:

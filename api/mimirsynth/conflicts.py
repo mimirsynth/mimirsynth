@@ -268,7 +268,7 @@ def _job_scan(ctx: "jobs.JobCtx", p: dict) -> dict:
     if out["total"]:
         notify.emit("conflicts.found", f"«{name}» tiene {out['total']} posibles contradicciones entre hechos",
                     f"Hechos vigentes con el mismo sujeto y la misma relación funcional ({', '.join(out['functional'])}) y destinos distintos. "
-                    "Revísalos en Vocabulario → Contradicciones.", severity="info", brain_id=ctx.brain_id, key=key)
+                    "Revísalos en Calidad del contenido → Contradicciones.", severity="info", brain_id=ctx.brain_id, key=key)
     else:
         notify.resolve("conflicts.found", key, "Ya no hay contradicciones pendientes.")
     return {"total": out["total"], "scanned": out["scanned"]}

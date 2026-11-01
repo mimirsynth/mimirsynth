@@ -36,13 +36,13 @@ Some data goes stale without anyone contradicting it: an IP, a version, who runs
 
 A current fact of that relation whose last date (its last confirmation or, failing that, its validity date) is older than its shelf life is **to review**:
 - In the recall it weighs less (`recall_stale_weight`, 0.6 by default) and is marked «not confirmed since …», also in the context the agent reads.
-- It is listed in Vocabulary → **To review**, for curators: **Confirm** renews its date (stored in PostgreSQL; the graph is not touched) and **Invalidate** works as from Facts. Confirmations are audited (`fact.confirm`).
+- It is listed in Content quality → **To review**, for curators: **Confirm** renews its date (stored in PostgreSQL; the graph is not touched) and **Invalidate** works as from Facts. Confirmations are audited (`fact.confirm`).
 - Once a day, the `facts.stale` notification counts them per brain, without any text.
 
 A fact without a validity date (imported from another system, for example) never goes stale by date: there is nothing to measure from. Lent facts are not marked here: the shelf life is the lending brain's. A generic relation such as `RELATES_TO` cannot have a shelf life.
 
 ## Type corrector
-The type corrector (Vocabulary → Type corrector) does not assume any domain: each package says, in its `retype` block, what to review and what to set aside before asking the decider.
+The type corrector (Content quality → Doubtful types) does not assume any domain: each package says, in its `retype` block, what to review and what to set aside before asking the decider.
 
 ```json
 "retype": {"review_first": ["Topic", "Item"], "doubtful_rules": []}

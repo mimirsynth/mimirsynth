@@ -2,7 +2,7 @@
 
 # Merge duplicates
 
-The **Duplicates** tab of [[Vocabulary]]. It shows **groups of entities that are probably the same thing**: same name except for version or capitalisation (for example "Server 2" and "server 2", or "Nextcloud" and "Nextcloud 29").
+The **Duplicates** tab of [[Content quality]]. It shows **groups of entities that are probably the same thing**: same name except for version or capitalisation (for example "Server 2" and "server 2", or "Nextcloud" and "Nextcloud 29").
 
 ## Why they are a nuisance
 If the same entity exists twice, its facts are split: a search finds half, the graph shows two nodes and the [[Overview]] over-counts.

@@ -3,7 +3,7 @@
 A relation type of the ontology can have a shelf life in days (`shelf_life_days`); none has one by default. A current fact of that
 relation whose last date (its last confirmation, or else its `valid_at`) is older than its shelf life is **to review**:
 - in the recall it weighs less (`recall_stale_weight`) and says «not confirmed since …», also in the context the agent reads;
-- it is listed in Vocabulary → **To review**, where a curator **confirms** it (stores the date in PostgreSQL, the graph is not
+- it is listed in Content quality → **To review**, where a curator **confirms** it (stores the date in PostgreSQL, the graph is not
   touched) or **invalidates** it (as from Facts);
 - a daily check counts them per brain (`facts.stale`, information, without text).
 
@@ -177,7 +177,7 @@ def check_all() -> int:
             key = f"stale:{b.slug}"
             if total:
                 notify.emit("facts.stale", f"«{b.name}» tiene {total} hechos sin confirmar desde hace más de su vida útil",
-                            "Revísalos en Vocabulario → A revisar: confirma los que siguen siendo ciertos e invalida los demás.",
+                            "Revísalos en Calidad del contenido → A revisar: confirma los que siguen siendo ciertos e invalida los demás.",
                             severity="info", brain_id=b.id, key=key)
                 n += 1
             else:

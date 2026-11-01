@@ -12,7 +12,7 @@
 | **CoALA** | Marco cognitivo para agentes (memoria episódica, semántica, procedimental…) en el que se inspira el diseño |
 | **Consulta de referencia** | Pregunta guardada en un brain con lo que su recall debe traer y lo que no; al ejecutarlas se mide si el recall mejora o empeora. Están en Preguntar → Consultas de referencia |
 | **Contexto inyectado** | El bloque de texto que devuelve el recall, listo para ponerlo en el prompt de un agente |
-| **Contradicción** | Dos o más hechos vigentes con el mismo sujeto y una relación de un solo valor, pero con valores distintos. Un curador decide cuál se queda en Vocabulario → Contradicciones |
+| **Contradicción** | Dos o más hechos vigentes con el mismo sujeto y una relación de un solo valor, pero con valores distintos. Un curador decide cuál se queda en Calidad del contenido → Contradicciones |
 | **Cuarentena** | Estado de una propuesta pendiente de revisión, antes de entrar al grafo |
 | **Curador** | Rol que aprueba o rechaza propuestas y corrige hechos |
 | **Decisor** | Modelo de decisión cerrada que triaja propuestas según el ámbito del brain y sugiere tipos; nunca rechaza por su cuenta |

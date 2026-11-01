@@ -2,7 +2,7 @@
 
 # Contradictions
 
-The **Contradictions** tab of [[Vocabulary]] (curators and above). It lists **current facts that contradict each other** in relations that can only hold one value at a time, and lets you choose which one stays current.
+The **Contradictions** tab of [[Content quality]] (curators and above). It lists **current facts that contradict each other** in relations that can only hold one value at a time, and lets you choose which one stays current.
 
 ## Why it exists
 When a new episode contradicts a fact, ingestion usually invalidates the old one. Not always: two episodes worded differently can leave «the laptop is in Office A» and «the laptop is in Office B» current at the same time. Recall then hands both to your agent as if both were true. This tab finds those cases **without any AI model** and leaves the decision to a person.

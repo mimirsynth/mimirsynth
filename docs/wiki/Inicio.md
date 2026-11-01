@@ -16,10 +16,12 @@ Esta wiki es la guía de usuario completa, en castellano y [en inglés](Home). S
 | Saber qué puede hacer cada persona | [[Roles y permisos]] |
 
 ## Usar la aplicación (una página por pantalla)
-[[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Vocabulario]] · [[Trabajos]] · [[Mi cuenta]]
+[[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Calidad del contenido]] · [[Vocabulario]] · [[Trabajos]] · [[Mi cuenta]]
 
 ## Cuidar el conocimiento
-[[Vocabulario]] · [[Ontología]] · [[Tipos de entidad]] · [[Relaciones y alias]] · [[Fusionar duplicados]] · [[Corrector de tipos]] · [[Contradicciones]]
+El marco: [[Vocabulario]] · [[Ontología]] · [[Tipos de entidad]] · [[Relaciones y alias]]
+
+El contenido: [[Calidad del contenido]] · [[Fusionar duplicados]] · [[Contradicciones]] · [[Corrector de tipos]]
 
 ## Administrar la instancia
 [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Actualización y copias de seguridad]]

@@ -3,19 +3,17 @@ import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, ClearFilters, ColHead, ComboField, DataTable, FillArea, Modal, Notice, Page, Panel, Pill, StatCard, Tabs, Toggle, useTableView, MutationError, ConfirmDialog, DataState, EmptyState, PageHeader, useTabParam, StatGrid } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { get, send } from "../api";
-import Retype from "./Retype";
 import VocabOntology from "./VocabOntology";
 import VocabTypes from "./VocabTypes";
-import VocabDuplicates from "./VocabDuplicates";
-import VocabStale from "./VocabStale";
-import VocabConflicts from "./VocabConflicts";
+import { TabIntro } from "./Quality";
+
+/** The tabs that moved to Content quality (issue 164): old links and bookmarks land on the same tool there. */
+const MOVED = ["dup", "conflicts", "stale", "corrector"];
 
 type Rel = { name: string; facts: number; generic: boolean; variants: { raw: string; facts: number }[] };
-type Dup = { key: string; members: { uuid: string; name: string; labels: string[]; degree: number }[] };
-type Vocab = {
-  summary: Record<string, number>; ignored_duplicates?: string[]; relations: Rel[]; labels: { label: string; count: number }[]; duplicates: Dup[];
-};
+type Vocab = { summary: Record<string, number>; relations: Rel[]; labels: { label: string; count: number }[] };
 type Alias = { id: number; alias: string; canonical: string };
 
 type RelRow = { name: string; facts: number; generic?: boolean; variants: { raw: string; facts: number }[] };
@@ -69,6 +67,7 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
   const data = q.data;
   const { data: aliases = [] } = useQuery({ queryKey: ["vocab-aliases", graph], queryFn: () => get<Alias[]>("vocab/aliases", { graph }) });
   const [tab, setTab] = useTabParam("rel");
+  const [sp] = useSearchParams();
   const [tail, setTail] = useState(false);
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState("");
@@ -76,46 +75,46 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
   const refresh = () => { qc.invalidateQueries({ queryKey: ["vocab", graph] }); qc.invalidateQueries({ queryKey: ["vocab-aliases", graph] }); };
   const add = useMutation({ mutationFn: () => send("POST", `vocab/aliases`, { alias: from, canonical: to }, { graph }), onSuccess: () => { setFrom(null); setTo(""); refresh(); } });
   const del = useMutation({ mutationFn: (id: number) => send("DELETE", `vocab/aliases/${id}`, undefined, { graph }), onSuccess: refresh });
+  if (MOVED.includes(tab)) return <Navigate to={`/calidad?${sp.toString()}`} replace />;
   if (!data) return <DataState query={q} />;
   const s = data.summary;
   const rels = data.relations.filter((r) => !tail || r.facts <= 2);
   return (
     <Page>
-      <PageHeader title={t("Vocabulario")} description={<>{t("Qué tipos de relación y de entidad existen en el grafo, para decidir qué normalizar o fusionar. Unificar una relación con otra es un alias: se aplica al leer y no modifica los datos del grafo (se puede deshacer).")}</>} />
+      <PageHeader title={t("Vocabulario")} description={<>
+        {t("El marco del brain: qué tipos de cosas y de relaciones existen y cómo se normalizan sus nombres. Vale para todo el brain, se aplica a lo que se ingiera a partir de ahora y lo cambian los administradores.")}{" "}
+        {t("Ontología es lo declarado, lo que se pide al ingestor; Relaciones y Tipos de entidad son lo observado, lo que hay de verdad en el grafo. Compararlos dice qué falta declarar y qué sobra.")}{" "}
+        {t("Para limpiar el contenido que ya hay (duplicados, contradicciones, tipos dudosos, hechos a revisar), ve a")}{" "}
+        <Btn kind="link" component={Link} to="/calidad">{t("Calidad del contenido")}</Btn>.</>} />
       <StatGrid>
         <StatCard label={t("Tipos de relación")} value={`${s.relation_types_raw} → ${s.relation_types_canonical}`} hint={t("crudos → tras normalizar formato")} />
         <StatCard label={t("Hechos genéricos")} value={`${s.generic_pct} %`} hint={t("RELATES_TO, MENTIONED_IN…")} />
         <StatCard label={t("Cola larga")} value={s.long_tail_types} hint={t("{{long_tail_facts}} hechos en tipos con ≤2 usos", { long_tail_facts: s.long_tail_facts })} />
         <StatCard label={t("Entidades")} value={s.entities} />
-        <StatCard label={t("Posibles duplicados")} value={s.duplicate_groups} hint={t("mismo nombre salvo versión/mayúsculas")} />
       </StatGrid>
       <Tabs value={tab} onChange={setTab} className="ms-tabs-fill">
         <Tabs.List>
-          <Tabs.Tab value="rel">{t("Relaciones (")}{data.relations.length})</Tabs.Tab>
-          <Tabs.Tab value="ent">{t("Tipos de entidad (")}{data.labels.length})</Tabs.Tab>
-          {isAdmin && <Tabs.Tab value="corrector">{t("Corrector de tipos")}</Tabs.Tab>}
+          <Tabs.Tab value="rel">{t("Relaciones")}</Tabs.Tab>
+          <Tabs.Tab value="ent">{t("Tipos de entidad")}</Tabs.Tab>
           <Tabs.Tab value="onto">{t("Ontología")}</Tabs.Tab>
-          <Tabs.Tab value="ali">{t("Alias (")}{aliases.length})</Tabs.Tab>
-          <Tabs.Tab value="dup">{t("Duplicados (")}{data.duplicates.length})</Tabs.Tab>
-          {["curator", "admin", "owner"].includes(role) && <Tabs.Tab value="conflicts">{t("Contradicciones")}</Tabs.Tab>}
-          {["curator", "admin", "owner"].includes(role) && <Tabs.Tab value="stale">{t("A revisar")}</Tabs.Tab>}
+          <Tabs.Tab value="ali">{t("Alias")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="rel" pt="sm">
-          <Toggle mb="xs" label={t("Solo cola larga (≤2 hechos)")} checked={tail} onChange={(e) => setTail(e.currentTarget.checked)} />
+          <TabIntro>{t("Las relaciones que hay de verdad en el grafo, con cuántos hechos usa cada una. Sirve para ver variantes del mismo nombre (RunsOn, IsHostedOn…) y unificarlas con un alias, lo que hace un administrador: no cambia el grafo y se puede quitar. Qué relaciones debe extraer el ingestor se declara en Ontología.")}</TabIntro>
+          <Toggle my="xs" label={t("Solo cola larga (≤2 hechos)")} checked={tail} onChange={(e) => setTail(e.currentTarget.checked)} />
           <RelationsTable rows={rels} isAdmin={isAdmin} onUnify={(n) => { setFrom(n); setTo(""); }} />
         </Tabs.Panel>
         <Tabs.Panel value="ent" pt="sm"><VocabTypes graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
-        {isAdmin && <Tabs.Panel value="corrector" pt="sm"><Retype graph={graph} role={role} /></Tabs.Panel>}
         <Tabs.Panel value="onto" pt="sm"><VocabOntology graph={graph} role={role} /></Tabs.Panel>
-        {["curator", "admin", "owner"].includes(role) && <Tabs.Panel value="conflicts" pt="sm"><VocabConflicts graph={graph} role={role} /></Tabs.Panel>}
-        {["curator", "admin", "owner"].includes(role) && <Tabs.Panel value="stale" pt="sm"><VocabStale graph={graph} /></Tabs.Panel>}
         <Tabs.Panel value="ali" pt="sm">
-          <FillArea>
+          <FillArea><Stack gap="sm">
+            <TabIntro>{t("Un alias hace que un nombre de relación se lea como otro (HostedOn como HOSTED_ON), al leer y al ingerir, sin cambiar los datos del grafo; se puede quitar. Se crean con «Unificar con…» en Relaciones.")}{" "}
+              {t("Los nombres de las entidades fusionadas no están aquí: se guardan en la entidad principal, para que lo que se ingiera después con ese nombre vaya a ella, y la fusión se deshace en")}{" "}
+              <Btn kind="link" component={Link} to="/calidad?tab=dup">{t("Calidad del contenido → Duplicados")}</Btn>.</TabIntro>
             {aliases.length === 0 ? <EmptyState>{t("Sin alias. Usa «Unificar con…» en la pestaña Relaciones.")}</EmptyState> : (
               <AliasesTable rows={aliases} isAdmin={isAdmin} onDelete={setDelAlias} />)}
-          </FillArea>
+          </Stack></FillArea>
         </Tabs.Panel>
-        <Tabs.Panel value="dup" pt="sm"><VocabDuplicates graph={graph} groups={data.duplicates} ignored={data.ignored_duplicates ?? []} isAdmin={isAdmin} /></Tabs.Panel>
       </Tabs>
       <ConfirmDialog opened={!!delAlias} onClose={() => setDelAlias(null)} title={t("Quitar alias")} action={t("Quitar alias")} subject={delAlias && `${delAlias.alias} → ${delAlias.canonical}`}
         warning={t("La relación vuelve a leerse con su nombre propio. Los hechos del grafo no se modifican.")} onConfirm={() => del.mutateAsync(delAlias!.id)} />

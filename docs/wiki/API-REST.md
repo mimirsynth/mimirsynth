@@ -31,6 +31,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Vocabulario** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /ontology` | lector |
 | | alias, tipos, relaciones, mover/fusionar, duplicados, ontología, corrector (`/retype`) | administrador |
 | | `POST /vocab/ops/{id}/revert` | curador |
+| **Necesita tu atención** | `GET /attention` (lo que espera una decisión: `proposals`, `corrections`, `duplicates`, `conflicts`, `stale`, `refqueries`, y `retype` para administradores; `null` si un contador no se pudo calcular; se guarda un minuto, `?fresh=true` lo recalcula) | curador |
 | **Hechos a revisar** | `GET /review/stale` (hechos vigentes que han superado la vida útil de su relación, los más antiguos primero) · `POST /review/stale/{uuid}/confirm` | curador |
 | **Contradicciones** | `GET /conflicts` (`?all=true` mide todas las relaciones) · `POST /conflicts/resolve` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{id}` | curador |
 | **Consultas de referencia** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{id}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{id}` | curador |

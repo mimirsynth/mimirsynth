@@ -210,6 +210,13 @@ def _eff_status(s: RetypeSuggestion, rules: frozenset[str]) -> str:
     return s.status
 
 
+def pending_count(db, brain_id: int) -> int:
+    """Type corrections waiting for an administrator to apply or discard them."""
+    rules = profile(get_ontology(db, brain_id))["rules"]
+    return sum(1 for r in db.scalars(select(RetypeSuggestion).where(RetypeSuggestion.brain_id == brain_id, RetypeSuggestion.status == "pending"))
+               if _eff_status(r, rules) == "pending")
+
+
 @router.get("")
 def overview(status: str = "pending", min_conf: float = 0.0, limit: int = 300, ctx: BrainCtx = Depends(admin_of_brain)):
     onto = get_ontology(ctx.db, ctx.brain.id)

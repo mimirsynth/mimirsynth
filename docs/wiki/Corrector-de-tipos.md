@@ -2,7 +2,7 @@
 
 # Corrector de tipos
 
-Pestaña **Corrector de tipos** de [[Vocabulario]] (solo administradores del brain). Reclasifica **entidades que quedaron sin tipo, con un tipo que la ontología no tiene o con un tipo comodín** y que en realidad son otra cosa.
+Pestaña **Tipos dudosos** de [[Calidad del contenido]] (solo administradores del brain), también llamada corrector de tipos. Reclasifica **entidades que quedaron sin tipo, con un tipo que la ontología no tiene o con un tipo comodín** y que en realidad son otra cosa.
 
 ## Por qué existe
 Graphiti no cambia el tipo de las entidades ya existentes. Si una aplicación se clasificó una vez como «Organization» (error típico), se queda así para siempre, aunque la ontología mejore. El corrector pone al **decisor** a revisar cada entidad, con los tipos de la ontología como opciones, y propone el correcto. **Tú apruebas** y el cambio es **reversible**.
