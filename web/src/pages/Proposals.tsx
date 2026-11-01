@@ -169,6 +169,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
             <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text></Step>
             <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
               {d.review_kind === "direct" && <Text size="xs" c="dimmed">{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</Text>}
+              {d.review_kind === "webhook" && <Text size="xs" c="dimmed">{t("Aprobada al llegar por un webhook de confianza ·")} {fmt(d.reviewed_at)}</Text>}
               {d.review_kind === "human" && <Text size="xs" c="dimmed">{d.status === "rejected" ? t("Rechazada") : t("Aprobada")} {t("por un curador ·")} {fmt(d.reviewed_at)}{d.review_note ? ` · «${d.review_note}»` : ""}</Text>}
               {d.decision && !d.decision.error && <Stack gap={2}>
                 <Text size="xs" c="dimmed">{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: d.decision.threshold })}</Text>

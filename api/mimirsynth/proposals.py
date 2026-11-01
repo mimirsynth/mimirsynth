@@ -63,20 +63,28 @@ def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalI
         labels = secretguard.labels(language(request))
         raise HTTPException(422, tr("La propuesta contiene secretos ({{labels}}). Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).",
                                     language(request), labels=", ".join(labels[r] for r in rules)))
-    found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
-    direct = allows(ctx.role, "curator") and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
     tok = getattr(request.state, "token", None)
-    p = Proposal(brain_id=ctx.brain.id, author_id=ctx.user.id, token_id=tok.id if tok else None, name=name[:255], body=text, source=body.source,
+    return store(ctx.db, ctx.brain, ctx.user, body, name, text, in_name, in_body, allows(ctx.role, "curator"), bg.add_task,
+                 token_id=tok.id if tok else None)
+
+
+def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list, in_body: list, direct: bool, later,
+          token_id: int | None = None, how: str = "direct") -> Proposal:
+    """Saves a proposal whose name and text already went through the secret detector (`in_name`, `in_body`: its findings). `direct`
+    approves it, unless the detector flagged something; otherwise the decider triages it, through `later` (a background task)."""
+    found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
+    direct = direct and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
+    p = Proposal(brain_id=brain.id, author_id=user.id, token_id=token_id, name=name[:255], body=text, source=body.source,
                  source_description=body.source_description, reference_time=body.reference_time, confidence=body.confidence,
                  status="approved" if direct else "pending", secret_findings=found or None)
     if direct:
-        p.reviewer_id, p.reviewed_at, p.review_kind = ctx.user.id, datetime.now(timezone.utc), "direct"
-    ctx.db.add(p); ctx.db.commit()
-    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, name=secretguard.safe_name(p), **({"secrets": found} if found else {}))
+        p.reviewer_id, p.reviewed_at, p.review_kind = user.id, datetime.now(timezone.utc), how
+    db.add(p); db.commit()
+    audit(db, user, "proposal.submit", brain, id=p.id, status=p.status, name=secretguard.safe_name(p), **({"secrets": found} if found else {}))
     if direct and ingest.enabled():
-        ingest.submit_ingest(p.id, ctx.brain.id, secretguard.safe_name(p), ctx.user.id)
+        ingest.submit_ingest(p.id, brain.id, secretguard.safe_name(p), user.id)
     elif not direct:
-        bg.add_task(deciders_admin.triage_proposal, p.id)  # sin decisor configurado no hace nada; con secretos marcados, tampoco
+        later(deciders_admin.triage_proposal, p.id)  # sin decisor configurado no hace nada; con secretos marcados, tampoco
     return p
 
 

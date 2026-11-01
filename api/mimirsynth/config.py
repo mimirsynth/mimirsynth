@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     llm_model: str = ""
     llm_small_model: str = ""  # opcional; por defecto llm_model
     jobs_keep_days: int = 60  # días que se conservan los trabajos terminados
+    webhook_group_minutes: int = 15  # minutes an alert from a webhook may keep firing and still become one proposal with its end (#122)
     retention_rejected_days: int = 0  # days a rejected proposal keeps its text (#137); 0: no period, the default
     retention_jobs_days: int = 0  # days a brain's finished jobs are kept (#137); 0: only jobs_keep_days applies
     retention_ratings_days: int = 0  # days a brain's recall ratings are kept (#110); 0: no period

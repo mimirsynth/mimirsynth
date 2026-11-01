@@ -596,3 +596,48 @@ class RecallRating(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     proposal_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Webhook(Base):
+    """An incoming webhook of a brain (#122): external events (alerts, deployments) become proposals through a template. The secret is
+    kept sealed, because a signature (HMAC) has to be computed with it."""
+    __tablename__ = "webhooks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(32), unique=True)          # the public part of its address
+    name: Mapped[str] = mapped_column(String(120))
+    template: Mapped[str] = mapped_column(String(32))
+    config: Mapped[dict] = mapped_column(JSON, default=dict)            # the generic template's mapping
+    secret_enc: Mapped[str] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_approve: Mapped[bool] = mapped_column(Boolean, default=False)
+    daily_cap: Mapped[int] = mapped_column(Integer, default=200)        # proposals per day
+    per_minute: Mapped[int] = mapped_column(Integer, default=60)        # requests per minute
+    day: Mapped[date | None] = mapped_column(Date, nullable=True)
+    day_count: Mapped[int] = mapped_column(Integer, default=0)
+    received: Mapped[int] = mapped_column(Integer, default=0)
+    rejected: Mapped[int] = mapped_column(Integer, default=0)
+    last_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str] = mapped_column(String(300), default="")  # bad_secret | rate_limited | not_json | no_events
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class WebhookEvent(Base):
+    """What a webhook received, without its body (#122): an event, or a group of repetitions of the same alert (same fingerprint) from
+    its first firing to its resolution, with the proposals it became."""
+    __tablename__ = "webhook_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    webhook_id: Mapped[int] = mapped_column(ForeignKey("webhooks.id", ondelete="CASCADE"), index=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(200), default="")
+    kind: Mapped[str] = mapped_column(String(12))                       # alert | event
+    outcome: Mapped[str] = mapped_column(String(16))                    # open | proposed | closed | capped | blocked
+    title: Mapped[str] = mapped_column(String(300), default="")
+    count: Mapped[int] = mapped_column(Integer, default=1)
+    first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    proposal_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    resolution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # the second proposal, when the alert outlived the grouping window
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
