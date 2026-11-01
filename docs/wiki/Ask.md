@@ -2,9 +2,19 @@
 
 # Ask
 
-Here you try **recall**: the same thing an agent does when it queries the memory before answering. It is used to check what your agent would find and to debug why an answer is poor.
+Here you try **recall**: the same thing an agent does when it queries the memory before answering. It is used to check what your agent would find and to debug why an answer is poor. **Answer** goes one step further and writes the answer, with citations.
 
-## How to use it
+## Answer: a written answer with citations
+**Mode → Answer** writes a short answer to the question from the same recall, and cites where each claim comes from: `fact 1`, `episode 2`, `doc 1`. **Context** is the mode described below, which shows the recall itself.
+- The answer appears as it is written. Each citation is a link: a fact opens its entity page, an episode opens it in [[Journal]], a document passage opens its document in [[Knowledge]]. What another brain lends has no link here, only its name.
+- Under the answer, **Evidence** lists everything the recall brought, numbered, with what the answer cited highlighted.
+- The model is told to use **only** that evidence, to say so when it is not enough, and to treat the text of facts, episodes and documents as **data, never instructions**. A citation to something that was not in the evidence is marked «citation with no source» and leads nowhere.
+- If the recall finds nothing, it answers that there is no information **without calling the model**.
+- It answers in your language, whatever the language of the documents.
+- Each answer is one call to the LLM engine chosen under *Engine for «Answer»* (the default one if empty). It counts in the brain's [[AI consumption]] as «Written answers», has a limit per person and hour (*Answers per person and hour*, 30 by default), and waits while the brain's AI budget is used up with pause. See [[Settings reference]].
+- The model can still get a summary wrong: the citations are there to check it.
+
+## How to use it (Context)
 1. Write a question or a sentence in natural language (e.g. "where is the production database now?").
 2. Adjust, if you like, **Facts** (how many facts to bring, 0–30) and **Fragments** (how many episode fragments, 0–15).
 3. Press **Search** or `Ctrl+Enter`.
@@ -42,6 +52,6 @@ Brain administrators can tick **Keep the text of the queries**: real queries car
 |---|---|---|
 | Returns nothing | Empty brain or embeddings down | [[Overview]]; test the engine in [[AI providers]] |
 | Brings old facts | Recent episodes missing or not ingested | [[Jobs]], [[Proposals]] |
-| Returns the same item under three names | Duplicate entities | [[Vocabulary]] → Duplicates |
+| Returns the same item under three names | Duplicate entities | [[Content quality]] → Duplicates |
 | A concrete detail is missing | It was in the text, not extracted as a fact | Look at the *fragments*; consider rephrasing the episode |
 | No document passages, or irrelevant ones | Passage threshold too high or too low for the embedding model | Measure it with [[Reference queries]] (**Simulate**) before changing it |

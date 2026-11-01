@@ -2,9 +2,19 @@
 
 # Preguntar
 
-Aquí pruebas el **recall**: lo mismo que hace un agente cuando consulta la memoria antes de responder. Sirve para comprobar qué encontraría tu agente y para depurar por qué una respuesta es mala.
+Aquí pruebas el **recall**: lo mismo que hace un agente cuando consulta la memoria antes de responder. Sirve para comprobar qué encontraría tu agente y para depurar por qué una respuesta es mala. **Responder** va un paso más allá y redacta la respuesta, con citas.
 
-## Cómo se usa
+## Responder: una respuesta redactada con citas
+**Modo → Responder** redacta una respuesta corta a la pregunta con ese mismo recall, y cita de dónde sale cada afirmación: `hecho 1`, `episodio 2`, `doc 1`. **Contexto** es el modo que se describe más abajo, que enseña el recall tal cual.
+- La respuesta aparece según se escribe. Cada cita es un enlace: un hecho abre la página de su entidad, un episodio lo abre en [[Diario]] y un pasaje abre su documento en [[Conocimiento]]. Lo que presta otro brain no tiene enlace aquí, solo su nombre.
+- Debajo, **Pruebas** lista todo lo que trajo el recall, numerado, con lo que citó la respuesta resaltado.
+- Al modelo se le pide que use **solo** esas pruebas, que diga cuándo no bastan y que trate el texto de los hechos, episodios y documentos como **datos, nunca como instrucciones**. Una cita a algo que no estaba entre las pruebas sale como «cita sin origen» y no lleva a ningún sitio.
+- Si el recall no encuentra nada, responde que no hay información **sin llamar al modelo**.
+- Responde en tu idioma, sea cual sea el de los documentos.
+- Cada respuesta es una llamada al motor LLM elegido en *Motor para «Responder»* (el predeterminado si está vacío). Cuenta en el [[Consumo de IA]] del brain como «Respuestas redactadas», tiene un límite por persona y hora (*Respuestas por persona y hora*, 30 por defecto) y espera mientras el presupuesto de IA del brain esté agotado con pausa. Ver [[Referencia de ajustes]].
+- El modelo puede equivocarse al resumir: las citas están para comprobarlo.
+
+## Cómo se usa (Contexto)
 1. Escribe una pregunta o una frase en lenguaje natural (por ejemplo, «¿dónde está la base de datos de producción ahora?»).
 2. Ajusta, si quieres, **Hechos** (cuántos hechos traer, 0–30) y **Fragmentos** (cuántos fragmentos de episodios, 0–15).
 3. Pulsa **Buscar** o `Ctrl+Enter`.
@@ -42,6 +52,6 @@ Los administradores del brain pueden marcar **Guardar el texto de las consultas*
 |---|---|---|
 | No devuelve nada | Brain vacío o embeddings caídos | [[Resumen]]; probar el motor en [[Proveedores de IA]] |
 | Trae hechos viejos | Faltan episodios recientes o no se ingirieron | [[Trabajos]], [[Propuestas]] |
-| Devuelve el mismo dato con tres nombres | Entidades duplicadas | [[Vocabulario]] → Duplicados |
+| Devuelve el mismo dato con tres nombres | Entidades duplicadas | [[Calidad del contenido]] → Duplicados |
 | Falta un detalle concreto | Estaba en el texto, no se extrajo como hecho | Mira los *fragmentos*; considera reformular el episodio |
 | No salen pasajes de documentos, o salen irrelevantes | Umbral de los pasajes demasiado alto o bajo para el modelo de embeddings | Mídelo con [[Consultas de referencia]] (**Simular**) antes de cambiarlo |

@@ -1574,5 +1574,22 @@
  "cambios de tipo por aprobar": "type changes to approve",
  "grupos por decidir": "groups to decide",
  "grupos por revisar": "groups to review",
- "pasados de su vida útil": "past their shelf life"
+ "pasados de su vida útil": "past their shelf life",
+ "Contexto": "Context",
+ "El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.": "The model cited {{refs}}, which were not in the evidence: those citations lead nowhere.",
+ "Esta cita no estaba entre las pruebas: no lleva a ningún sitio.": "This citation was not in the evidence: it leads nowhere.",
+ "Modo": "Mode",
+ "Parar": "Stop",
+ "Pruebas ({{n}})": "Evidence ({{n}})",
+ "Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.": "Writes an answer only from what the recall returns and cites where each claim comes from. If there is no information, it says so without asking the model. Check the citations: the model can get a summary wrong.",
+ "Redactando…": "Writing…",
+ "Responder": "Answer",
+ "Respuesta": "Answer",
+ "Respuestas redactadas": "Written answers",
+ "cita sin origen": "citation with no source",
+ "doc {{n}}": "doc {{n}}",
+ "episodio {{n}}": "episode {{n}}",
+ "hecho {{n}}": "fact {{n}}",
+ "{{ms}} ms": "{{ms}} ms",
+ "«Responder» redacta con ese mismo recall una respuesta que cita de dónde sale cada afirmación.": "«Answer» writes, from that same recall, an answer that cites where each claim comes from."
 }

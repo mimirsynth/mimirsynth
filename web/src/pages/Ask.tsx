@@ -1,13 +1,14 @@
 
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, NumberField, Pill, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam } from "../ui";
+import { Btn, NumberField, Pill, Segments, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { fmt, get, send } from "../api";
 import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries";
 import RecallQuality from "./RecallQuality";
+import AskAnswer from "./AskAnswer";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score: number; origin?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
@@ -25,6 +26,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const [marks, setMarks] = useState<Record<string, { mark: Mark; item: Item }>>({});
   const [save, setSave] = useState<RefQuery | null>(null);
   const [tab, setTab] = useTabParam("preguntar");
+  const [mode, setMode] = useTabParam("contexto", "modo");   // «Responder» writes an answer with citations (issue 126); «Contexto» shows the recall
   const status = useQuery({ queryKey: ["index", graph], queryFn: () => get<{ enabled: boolean; chunks: number; episodes: number }>("index/status", { graph }) });
   const [rated, setRated] = useState<Record<string, Rating>>({});
   const [rateMsg, setRateMsg] = useState("");
@@ -62,17 +64,20 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         {sync.data && <Text size="xs" c="dimmed">{sync.data.reindexed} {t("episodios reindexados")}</Text>}
       </Group>
       <TextArea autosize minRows={2} placeholder={t("¿Dónde está Nextcloud ahora?")} value={q} onChange={(e) => setQ(e.currentTarget.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && q) run.mutate(); }} />
+        onKeyDown={(e) => { if (mode === "contexto" && e.key === "Enter" && (e.ctrlKey || e.metaKey) && q) run.mutate(); }} />
+      <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
+        data={[{ value: "responder", label: t("Responder") }, { value: "contexto", label: t("Contexto") }]} />
       <Group align="flex-end">
         <NumberField size="xs" label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} w={80} />
         <NumberField size="xs" label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={100} />
-        <Btn kind="primary" disabled={!q} loading={run.isPending} onClick={() => run.mutate()}>{t("Buscar (Ctrl+Enter)")}</Btn>
-        {r && <Text size="xs" c="dimmed">{r.ms.total} {t("ms (embedding")} {r.ms.embed} {t("· hechos")} {r.ms.facts} {t("· fragmentos")} {r.ms.chunks})</Text>}
-        {r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
+        {mode === "contexto" && <Btn kind="primary" disabled={!q} loading={run.isPending} onClick={() => run.mutate()}>{t("Buscar (Ctrl+Enter)")}</Btn>}
+        {mode === "contexto" && r && <Text size="xs" c="dimmed">{r.ms.total} {t("ms (embedding")} {r.ms.embed} {t("· hechos")} {r.ms.facts} {t("· fragmentos")} {r.ms.chunks})</Text>}
+        {mode === "contexto" && r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
       </Group>
-      <MutationError error={run.error ?? rate.error} />
-      {rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
-      {r && (
+      {mode === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} />}
+      {mode === "contexto" && <MutationError error={run.error ?? rate.error} />}
+      {mode === "contexto" && rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
+      {mode === "contexto" && r && (
         <Group align="flex-start" wrap="nowrap" gap="md">
           <Stack className="ms-ask-main" gap="xs">
             <Title order={5}>{t("Hechos (")}{r.facts.length})</Title>
@@ -102,7 +107,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   );
   return (
     <Page>
-      <PageHeader title={t("Preguntar")} description={<>{t("Recall híbrido: hechos del grafo (vigentes e invalidados) más fragmentos de los episodios originales. Es el contexto que se inyecta al agente.")}</>} />
+      <PageHeader title={t("Preguntar")} description={<>{t("Recall híbrido: hechos del grafo (vigentes e invalidados) más fragmentos de los episodios originales. Es el contexto que se inyecta al agente.")} {t("«Responder» redacta con ese mismo recall una respuesta que cita de dónde sale cada afirmación.")}</>} />
       <FillArea>
         {canSync ? <Tabs value={tab} onChange={(v) => setTab(v)}>
           <Tabs.List>
