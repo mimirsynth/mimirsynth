@@ -61,7 +61,7 @@ Start it:
 ```bash
 docker compose --profile bundled up -d
 ```
-The first time it downloads the published image (`ghcr.io/mimirsynth/mimirsynth`, for amd64 and arm64). To pin a version, set `MIMIRSYNTH_VERSION=0.9.0` in `.env` (default: `latest`). Check that it is healthy:
+The first time it downloads the published image (`ghcr.io/mimirsynth/mimirsynth`, for amd64 and arm64). To pin a version, set `MIMIRSYNTH_VERSION=0.10.0` in `.env` (default: `latest`). Check that it is healthy:
 ```bash
 docker compose ps                          # the services "healthy"
 curl -s http://localhost:8000/api/health   # {"ok":true,"db":true,"graph":true,...}
