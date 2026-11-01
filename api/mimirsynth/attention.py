@@ -5,6 +5,11 @@ Each counter is the one its own page already computes (proposals, corrections, d
 review, type corrections and the last run of the reference queries). They are kept CACHE_SECONDS per brain, so opening the home
 screen does not scan the graph each time; a counter that fails comes back as `null` instead of breaking the rest. Only curators and
 above can ask, and the type corrections are only given to administrators, the only ones who can apply them.
+
+The cache is dropped by any successful write on the brain (`invalidate_after_writes`: deciding a proposal, merging, resolving or
+dismissing a contradiction, confirming or invalidating a fact, a type correction…), so the next read already shows the change. What
+changes on its own (a fact that goes past its shelf life, a job that ingests, an agent proposing over MCP) shows within the minute.
+With the cache empty the scans run in the request, one computation per brain at a time: on a large brain that first read is slower.
 """
 import logging
 import threading
@@ -22,7 +27,11 @@ router = APIRouter(prefix="/api/brains/{slug}/attention")
 curator = brain_access("curator")
 CACHE_SECONDS = 60.0
 _CACHE: dict[int, tuple[float, dict]] = {}
+_GEN: dict[int, int] = {}                 # bumped by forget(): a computation that started before it is not kept
+_LOCKS: dict[int, threading.Lock] = {}    # one computation per brain at a time
 _LOCK = threading.Lock()
+WRITES = {"POST", "PUT", "PATCH", "DELETE"}
+READS = ("/recall", "/query", "/attention", "/duplicates/preview")  # POSTs that only read: they keep the cache
 
 
 def _proposals(ctx: BrainCtx) -> dict:
@@ -68,11 +77,31 @@ def _refqueries(ctx: BrainCtx) -> int:
 COUNTERS = {"duplicates": _duplicates, "conflicts": _conflicts, "stale": _stale, "retype": _retype, "refqueries": _refqueries}
 
 
+def _brain_lock(brain_id: int) -> threading.Lock:
+    with _LOCK:
+        return _LOCKS.setdefault(brain_id, threading.Lock())
+
+
 def counts(ctx: BrainCtx, fresh: bool = False) -> dict:
-    """Every counter of the brain, read at most every CACHE_SECONDS unless `fresh`."""
-    hit = _CACHE.get(ctx.brain.id)
-    if hit and not fresh and time.monotonic() - hit[0] < CACHE_SECONDS:
+    """Every counter of the brain, read at most every CACHE_SECONDS unless `fresh`. Concurrent requests with the cache empty wait for one
+    computation and take its result; with `fresh`, a result computed after the request arrived is good enough."""
+    bid, asked = ctx.brain.id, time.monotonic()
+    hit = _CACHE.get(bid)
+    if hit and not fresh and asked - hit[0] < CACHE_SECONDS:
         return hit[1]
+    with _brain_lock(bid):
+        hit = _CACHE.get(bid)
+        if hit and (hit[0] >= asked or (not fresh and time.monotonic() - hit[0] < CACHE_SECONDS)):
+            return hit[1]
+        gen = _GEN.get(bid, 0)
+        out = _compute(ctx)
+        with _LOCK:
+            if _GEN.get(bid, 0) == gen:  # a write during the computation may be missing from it: it is not kept
+                _CACHE[bid] = (time.monotonic(), out)
+        return out
+
+
+def _compute(ctx: BrainCtx) -> dict:
     out: dict = {}
     try:
         out.update(_proposals(ctx))
@@ -85,14 +114,28 @@ def counts(ctx: BrainCtx, fresh: bool = False) -> dict:
         except Exception:  # noqa: BLE001
             log.warning("no se pudo calcular el contador %s del brain %s", name, ctx.brain.id, exc_info=True)
             out[name] = None
-    with _LOCK:
-        _CACHE[ctx.brain.id] = (time.monotonic(), out)
     return out
 
 
-def forget(brain_id: int) -> None:
+def forget(brain_id: int, gone: bool = False) -> None:
+    """Something in the brain changed: the next read computes the counters again. `gone`: the brain was deleted."""
     with _LOCK:
         _CACHE.pop(brain_id, None)
+        _GEN[brain_id] = _GEN.get(brain_id, 0) + 1
+        if gone:
+            _GEN.pop(brain_id, None)
+            _LOCKS.pop(brain_id, None)
+
+
+async def invalidate_after_writes(request, call_next):
+    """HTTP middleware: a successful write on a brain (its routes leave `request.state.brain_id`) drops the counters of that brain."""
+    state = request.state  # created before the call, so the route writes into this same state
+    response = await call_next(request)
+    bid = getattr(state, "brain_id", None)
+    path = request.url.path
+    if bid and request.method in WRITES and response.status_code < 400 and not path.endswith(READS) and "/mcp" not in path:
+        forget(bid)
+    return response
 
 
 @router.get("")

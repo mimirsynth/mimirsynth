@@ -78,7 +78,7 @@ def test_a_fact_past_its_shelf_life_is_to_review(client, graph):  # noqa: F811
     assert client.post("/api/brains/sl1/review/stale/gone/confirm").status_code == 409     # already invalidated
     assert client.post("/api/brains/sl1/review/stale/nope/confirm").status_code == 404
     with _factory()() as db:
-        assert db.query(Audit).filter(Audit.action == "fact.confirm").count() == 1
+        assert db.query(Audit).filter(Audit.action == "fact.confirm", Audit.brain_id == _bid("sl1")).count() == 1
 
 
 def _bid(slug: str) -> int:

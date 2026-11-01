@@ -17,7 +17,7 @@ Curators and above see first a short list of what is **waiting for a person's de
 | Doubtful types with a proposed change (administrators only) | [[Content quality]] → Doubtful types |
 | Reference queries that got worse in the last run | [[Ask]] → Reference queries |
 
-Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast: something you have just resolved may still be counted for that minute (Content quality always shows them recalculated).
+Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast. Any change made in the brain (deciding a proposal, merging, resolving a contradiction, confirming a fact…) recalculates them, so it shows at once; what changes on its own (a fact going past its shelf life, an agent proposing over MCP) shows within the minute. On a large brain, the first read after a change is slower, because the scans run then.
 
 ## First steps (new instance)
 An instance administrator who opens the home page while **no brain exists yet** sees **First steps** instead. The **Create your first brain** button opens the dialog to create it under Administration ([[Brains and members]]), and a short checklist links to each screen:

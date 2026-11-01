@@ -17,7 +17,7 @@ Los curadores y superiores ven primero una lista corta de lo que **espera la dec
 | Tipos dudosos con un cambio propuesto (solo administradores) | [[Calidad del contenido]] → Tipos dudosos |
 | Consultas de referencia que empeoraron en la última ejecución | [[Preguntar]] → Consultas de referencia |
 
-Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita tu atención». Los contadores son los mismos que calcula cada página y se guardan un minuto para que el inicio sea rápido: algo que acabas de resolver puede seguir contando durante ese minuto (Calidad del contenido los enseña siempre recalculados).
+Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita tu atención». Los contadores son los mismos que calcula cada página y se guardan un minuto para que el inicio sea rápido. Cualquier cambio hecho en el brain (decidir una propuesta, fusionar, resolver una contradicción, confirmar un hecho…) los recalcula, así que se ve al momento; lo que cambia solo (un hecho que pasa su vida útil, un agente que propone por MCP) se ve antes de un minuto. En un brain grande, la primera lectura tras un cambio es más lenta, porque es cuando se hacen los recorridos.
 
 ## Primeros pasos (instancia nueva)
 Un administrador de la instancia que abre la página de inicio cuando **todavía no existe ningún brain** ve en su lugar **Primeros pasos**. El botón **Crea tu primer brain** abre el diálogo para crearlo en Administración ([[Administrar brains y miembros]]), y una breve lista enlaza con cada pantalla:

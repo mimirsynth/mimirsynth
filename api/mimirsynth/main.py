@@ -147,6 +147,7 @@ app.include_router(usage.router)
 app.include_router(shelflife.router)
 app.include_router(ratings.router)
 app.include_router(attention.router)
+app.middleware("http")(attention.invalidate_after_writes)
 
 
 @app.get("/api/config")

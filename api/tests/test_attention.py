@@ -79,6 +79,65 @@ def test_every_counter_and_who_sees_it(client, graph, monkeypatch):  # noqa: F81
 
 
 @needs_falkor
+def test_a_write_on_the_brain_shows_at_once_and_a_read_keeps_the_cache(client, graph, monkeypatch):  # noqa: F811
+    """Review of #165: confirming a fact or dismissing a contradiction drops the cache, so the home screen sees it without `fresh`;
+    a POST that only reads (a Cypher query) keeps it; deleting the brain removes its entry."""
+    from mimirsynth import attention
+    assert client.post("/api/brains", json={"slug": "at3", "name": "At3", "graph_name": GRAPH}).status_code == 201
+    bid = _bid("at3")
+    client.post("/api/brains/at3/vocab/relations", json={"name": "HasIp", "description": "La IP de un host", "functional": True,
+                                                          "shelf_life_days": 90})
+    first = client.get("/api/brains/at3/attention").json()
+    assert first["stale"] == 1 and first["conflicts"] == 1
+    calls = []
+    real = attention._compute
+    monkeypatch.setattr(attention, "_compute", lambda ctx: calls.append(1) or real(ctx))
+    assert client.post("/api/brains/at3/query", json={"query": "MATCH (n) RETURN count(n)"}).status_code == 200
+    client.get("/api/brains/at3/attention")
+    assert calls == []                                                                  # a read leaves the cache alone
+    assert client.post("/api/brains/at3/review/stale/old/confirm").status_code == 200
+    assert client.get("/api/brains/at3/attention").json()["stale"] == 0                 # no `fresh` needed
+    group = client.get("/api/brains/at3/conflicts").json()["groups"][0]
+    body = {"source_uuid": group["source_uuid"], "source": group["source"], "relation": group["relation"],
+            "target_type": group["target_type"], "facts": [f["uuid"] for f in group["facts"]]}
+    assert client.post("/api/brains/at3/conflicts/dismiss", json=body).status_code == 201
+    assert client.get("/api/brains/at3/attention").json()["conflicts"] == 0
+    assert bid in attention._CACHE
+    assert client.post("/api/brains/at3/delete", json={"confirm": "at3"}).status_code == 200
+    assert bid not in attention._CACHE and bid not in attention._LOCKS
+
+
+def test_concurrent_reads_with_the_cache_empty_compute_once(monkeypatch):
+    """Review of #165: several requests with the cache empty wait for one computation and take its result."""
+    import threading
+    import time
+    from types import SimpleNamespace
+    from mimirsynth import attention
+    calls = []
+    monkeypatch.setattr(attention, "_compute", lambda ctx: calls.append(1) or time.sleep(0.2) or {"stale": 0})
+    ctx = SimpleNamespace(brain=SimpleNamespace(id=987654))
+    attention.forget(987654)
+    out = []
+    threads = [threading.Thread(target=lambda: out.append(attention.counts(ctx))) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(calls) == 1 and out == [{"stale": 0}] * 5
+    attention.forget(987654, gone=True)
+
+
+def test_a_write_during_the_computation_is_not_hidden_by_it(monkeypatch):
+    """A computation that started before a write may miss it: its result is returned but not kept."""
+    from types import SimpleNamespace
+    from mimirsynth import attention
+    ctx = SimpleNamespace(brain=SimpleNamespace(id=987655))
+    monkeypatch.setattr(attention, "_compute", lambda c: attention.forget(987655) or {"stale": 1})
+    assert attention.counts(ctx) == {"stale": 1} and 987655 not in attention._CACHE
+    attention.forget(987655, gone=True)
+
+
+@needs_falkor
 def test_cached_for_a_short_time_and_a_failing_counter_leaves_the_rest(client, graph, monkeypatch):  # noqa: F811
     from mimirsynth import attention
     assert client.post("/api/brains", json={"slug": "at2", "name": "At2", "graph_name": GRAPH}).status_code == 201
