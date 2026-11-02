@@ -118,6 +118,7 @@ def search(body: SearchIn, request: Request, user: User = Depends(current_user),
     slot = _INFLIGHT
     if not slot.acquire(blocking=False):
         raise HTTPException(429, "hay demasiadas búsquedas en todos los brains en marcha; vuelve a intentarlo en unos segundos")
+    db.close()   # what follows waits on the embedding engine and the brains: it must not hold a database connection meanwhile (#177)
     pool = ThreadPoolExecutor(max_workers=PARALLEL, thread_name_prefix="search")
     futures: dict = {}
     try:

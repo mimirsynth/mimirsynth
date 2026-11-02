@@ -353,7 +353,7 @@ def test_what_changed_for_the_overview(client, monkeypatch):  # noqa: F811
     assert abs((datetime.now(UTC) - seen[-1]).total_seconds() - 7 * 86400) < 60
     assert client.get("/api/brains/dg10/changes", params={"days": 31}).json()["proposals_new"] == 3
     assert client.get("/api/brains/dg10/changes", params={"days": 32}).status_code == 422
-    app.dependency_overrides[current_user] = lambda: _factory()().get(User, rid)
+    app.dependency_overrides[current_user] = _signed_in(rid)
     try:
         assert client.get("/api/brains/dg10/changes").status_code == 403                  # curators and above
     finally:
@@ -386,3 +386,16 @@ def test_the_failure_notification_never_shows_an_address(client, outbox, monkeyp
     assert digest._label(User(id=7, name="Ana", display_name="")) == "Ana"
     assert digest._label(User(id=7, name="ana@example.com", display_name="Ana R.")) == "Ana R."
 
+
+def _signed_in(uid: int):
+    """A dependency that acts as the person `uid`, with a session that is closed at once: one left open per request would hold a
+    database connection until the garbage collector runs, and enough of them exhaust the pool for the tests that follow (#177)."""
+    from mimirsynth.models import User
+    from mimirsynth.store import _factory
+
+    def who():
+        with _factory()() as db:
+            user = db.get(User, uid)
+            db.expunge(user)
+            return user
+    return who

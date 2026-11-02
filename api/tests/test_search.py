@@ -33,7 +33,22 @@ def fake_recall(monkeypatch):
     monkeypatch.setattr(recall, "search_facts", facts)
     monkeypatch.setattr(recall.index, "search", lambda *a, **k: [])
     monkeypatch.setattr(recall, "search_documents", lambda *a, **k: ([], "ok"))
-    return calls
+    yield calls
+    calls["held"].set()   # whatever happened in the test, no held brain outlives it
+
+
+def _signed_in(uid: int):
+    """A dependency that acts as the person `uid`, with a session that is closed at once: one left open per request would hold a
+    database connection until the garbage collector runs, and enough of them exhaust the pool for the tests that follow (#177)."""
+    from mimirsynth.models import User
+    from mimirsynth.store import _factory
+
+    def who():
+        with _factory()() as db:
+            user = db.get(User, uid)
+            db.expunge(user)
+            return user
+    return who
 
 
 def _person(slugs_roles: dict[str, str], other: list[str]) -> int:
@@ -55,9 +70,7 @@ def _person(slugs_roles: dict[str, str], other: list[str]) -> int:
 def _as(uid: int):
     from mimirsynth.deps import current_user
     from mimirsynth.main import app
-    from mimirsynth.models import User
-    from mimirsynth.store import _factory
-    app.dependency_overrides[current_user] = lambda: _factory()().get(User, uid)
+    app.dependency_overrides[current_user] = _signed_in(uid)
 
 
 def test_only_the_brains_the_person_can_read(client, fake_recall):  # noqa: F811
