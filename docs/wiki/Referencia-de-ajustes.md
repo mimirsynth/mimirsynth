@@ -72,6 +72,7 @@ Guía: [[Recuerdo e ingesta]]
 | Pasajes documentales por recall | `doc_passages` | `2` | 0–10 | Máximo de pasajes de documentos que acompañan a los hechos en cada recall. |
 | Motor para «Responder» | `answer_engine` | vacío | | Nombre del motor LLM que redacta las respuestas con citas de [[Preguntar]]. Conviene el más capaz. Vacío: el motor LLM predeterminado. |
 | Respuestas por persona y hora | `answer_per_hour` | `30` | 0–1000 | Cuántas respuestas redactadas puede pedir cada persona en cada brain por hora. Cada una es una llamada al motor. 0: sin límite. |
+| Búsquedas en todos los brains por persona y hora | `search_per_hour` | `60` | 0–1000 | Cuántas veces puede buscar cada persona en todos sus brains a la vez por hora. Cada búsqueda es un recall en cada brain. 0: sin límite. |
 | Longitud máxima de una respuesta | `answer_max_tokens` | `800` tokens | 100–4000 | Tokens que puede ocupar como mucho una respuesta redactada. |
 | Tiempo máximo de la búsqueda documental | `doc_search_timeout` | `0.6` s | 0.1–10 s | Si tarda más, el recall responde sin documentos. |
 | Sincronización del índice de texto | `index_sync_minutes` | `10` min | 0–1440 min | Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada. |

@@ -53,6 +53,8 @@ Brain administrators can tick **Keep the text of the queries**: real queries car
 - **Each result opens in its brain:** an entity, the episode in Journal or the document in Knowledge, after switching to that brain. **Open in Ask** repeats the search in Ask, in that brain.
 - **Fast and robust:** the query's vector is computed once for every brain, which is the costly part. Brains are searched a few at a time, and the page waits at most 8 seconds: a brain that does not answer in time or fails is marked, and the others are shown anyway.
 - **Not for API tokens:** they stay bound to one brain, so agents keep asking each brain on its own.
+- **Limits:** each person may search all their brains `search_per_hour` times per hour (60 by default, [[Settings reference]]), and the instance runs a few such searches at a time: past either limit it answers «too many» and you can search one brain from Ask meanwhile.
+- **AI consumption:** the query's vector counts in the brain you have open (or the first one searched), as a recall. If that brain has used up its AI budget with pause, the next one pays; if all of yours have, the search waits for next month. The other brains reuse the vector and cost nothing.
 
 ## If the result is poor
 | Symptom | Likely cause | What to do |

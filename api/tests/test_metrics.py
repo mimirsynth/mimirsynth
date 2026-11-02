@@ -82,7 +82,7 @@ def test_the_token_is_managed_from_administration(client):  # noqa: F811
         u = User(email="nonadmin-metrics@example.com", name="n", status="active")
         db.add(u); db.commit()
         uid = u.id
-    app.dependency_overrides[current_user] = lambda: _factory()().get(User, uid)
+    app.dependency_overrides[current_user] = _signed_in(uid)
     try:
         assert client.get("/api/admin/metrics").status_code == 403
         assert client.post("/api/admin/metrics/token").status_code == 403
@@ -258,3 +258,17 @@ def test_graph_sizes(client, token, monkeypatch):  # noqa: F811
         assert _value(_scrape(client, token)["mimirsynth_brain_entities"], "mimirsynth_brain_entities", brain=graph) == 2   # cached
     finally:
         g.delete()
+
+
+def _signed_in(uid: int):
+    """A dependency that acts as the person `uid`, with a session that is closed at once: one left open per request would hold a
+    database connection until the garbage collector runs, and enough of them exhaust the pool for the tests that follow (#177)."""
+    from mimirsynth.models import User
+    from mimirsynth.store import _factory
+
+    def who():
+        with _factory()() as db:
+            user = db.get(User, uid)
+            db.expunge(user)
+            return user
+    return who

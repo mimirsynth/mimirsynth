@@ -233,8 +233,16 @@ def _failed(db: Session, user: User, at: datetime, error: BaseException | None) 
                     (str(error) or type(error).__name__)[:200] if error else "")
     if n >= ALERT_AFTER:
         notify.emit("digest.failed", "El resumen por correo de una persona falla una y otra vez",
-                    f"{user.display_name or user.name or user.id}: {n} envíos fallidos seguidos. Se reintenta una vez al día; "
+                    f"{_label(user)}: {n} envíos fallidos seguidos. Se reintenta una vez al día; "
                     "revisa su dirección de correo o el servidor SMTP.", key=f"user:{user.id}")
+
+
+def _label(user: User) -> str:
+    """How a notification names the person: their name, but never anything with an @ in it (a name may be their address, #176)."""
+    for v in (user.display_name, user.name):
+        if v and "@" not in v:
+            return v
+    return f"la cuenta {user.id}"
 
 
 def _delivered(db: Session, user: User) -> None:

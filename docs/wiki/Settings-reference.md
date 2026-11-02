@@ -72,6 +72,7 @@ Guide: [[Recall and ingestion]]
 | Document passages per recall | `doc_passages` | `2` | 0–10 | Maximum number of document passages that accompany the facts in each recall. |
 | Engine for «Answer» | `answer_engine` | empty | | Name of the LLM engine that writes the cited answers of [[Ask]]. The most capable one is best. Empty: the default LLM engine. |
 | Answers per person and hour | `answer_per_hour` | `30` | 0–1000 | How many written answers each person may ask for in each brain per hour. Each one is a call to the engine. 0: no limit. |
+| Searches in all brains per person and hour | `search_per_hour` | `60` | 0–1000 | How many times each person may search all their brains at once per hour. Each search is a recall in each brain. 0: no limit. |
 | Longest answer | `answer_max_tokens` | `800` tokens | 100–4000 | The most tokens a written answer may take. |
 | Maximum time of the document search | `doc_search_timeout` | `0.6` s | 0.1–10 s | If it takes longer, the recall answers without documents. |
 | Text index synchronisation | `index_sync_minutes` | `10` min | 0–1440 min | How many minutes between copies of the episode text into the index. 0 = disabled. |
