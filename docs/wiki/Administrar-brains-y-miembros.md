@@ -43,6 +43,9 @@ Cuánto se conserva lo que ya no sirve, solo para el **propietario** del brain (
 
 Un campo vacío usa el plazo de la instancia ([[Referencia de ajustes]]: `retention_rejected_days`, `retention_jobs_days`) y **0 conserva para siempre**. Por defecto no hay plazo, así que no se purga nada hasta que alguien lo fije. Una tarea diaria los aplica y deja un resumen (la tarjeta enseña el último); **Purgar ahora** la lanza en el momento. Cada cambio queda en la auditoría (`brain.retention`). La auditoría y los episodios nunca se purgan desde aquí.
 
+## Webhooks de entrada
+Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain: cada webhook tiene su dirección, su secreto y una plantilla para su emisor (Alertmanager, CheckMK, Uptime Kuma, Proxmox VE, GitHub Actions, GitLab CI o una genérica), con un tope diario de propuestas. Solo la ven los administradores del brain. Ver [[Webhooks de entrada]].
+
 ## Exportar
 Una copia de este brain en un paquete (grafo, curación, propuestas, documentos y consultas de referencia; nunca miembros, tokens ni secretos), cifrada si se quiere, para guardarla aparte o llevarla a otra instancia. Se prepara como un trabajo y se descarga una vez. Solo los administradores del brain ven esta tarjeta. Ver [[Exportar un brain]].
 

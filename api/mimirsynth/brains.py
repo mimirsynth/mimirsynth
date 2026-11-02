@@ -161,14 +161,14 @@ def delete_brain(body: DeleteIn, ctx: BrainCtx = Depends(owner_of_brain)):
     from sqlalchemy import delete, text
 
     from .index import enabled as index_enabled
-    from .models import ApiToken, BrainGrant, BrainOntology, Proposal, RetypeSuggestion
+    from .models import ApiToken, BrainGrant, BrainOntology, Proposal, RetypeSuggestion, Webhook, WebhookEvent
     b, db = ctx.brain, ctx.db
     if body.confirm != b.slug:
         raise HTTPException(400, "la confirmación no coincide con el slug del brain")
     graph = b.graph_name
     if body.delete_graph and db.scalar(select(Brain).where(Brain.graph_name == graph, Brain.id != b.id)):
         raise HTTPException(409, "otro brain usa el mismo grafo; no se puede borrar")
-    for model in (ApiToken, Proposal, BrainOntology, RetypeSuggestion, Membership):
+    for model in (ApiToken, Proposal, BrainOntology, RetypeSuggestion, Membership, WebhookEvent, Webhook):
         db.execute(delete(model).where(model.brain_id == b.id))
     db.execute(delete(BrainGrant).where((BrainGrant.source_brain_id == b.id) | (BrainGrant.target_brain_id == b.id)))  # las concesiones, de ida y de vuelta
     if index_enabled():

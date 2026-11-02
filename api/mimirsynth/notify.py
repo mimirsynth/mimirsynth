@@ -31,6 +31,7 @@ EVENTS = {
     "token.expiring": ("info", "Un token de API caduca en pocos días"),
     "facts.stale": ("info", "Hay hechos vigentes que han superado la vida útil de su relación y piden revisión"),
     "ai.budget": ("warning", "Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes"),
+    "webhook.capped": ("warning", "Un webhook de entrada ha llegado a su tope diario de propuestas"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
@@ -251,7 +252,7 @@ async def worker(version: str = "0.0.0") -> None:
     if jobs.INLINE:  # pruebas: nada en segundo plano
         return
     await asyncio.sleep(15)
-    last_health = last_update = last_prune = last_reindex = last_conflicts = 0.0
+    last_health = last_update = last_prune = last_reindex = last_conflicts = last_hooks = 0.0
     while True:
         try:
             await asyncio.to_thread(process_due)
@@ -266,6 +267,10 @@ async def worker(version: str = "0.0.0") -> None:
             if t - last_prune >= 3600:
                 last_prune = t
                 await asyncio.to_thread(prune)
+            if t - last_hooks >= 60:
+                last_hooks = t
+                from . import webhooks
+                await asyncio.to_thread(webhooks.flush_due)  # alerts still firing past the grouping window (#122)
             if t - last_reindex >= 600:
                 last_reindex = t
                 from . import reembed, usage

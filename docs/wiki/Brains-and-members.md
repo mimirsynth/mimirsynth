@@ -43,6 +43,9 @@ How long what is no longer useful is kept, only for the brain's **owner** (or th
 
 An empty field uses the instance's period ([[Settings reference]]: `retention_rejected_days`, `retention_jobs_days`) and **0 keeps forever**. By default there is no period, so nothing is purged until someone sets one. A daily job applies them and leaves a summary (the card shows the last one); **Purge now** runs it at once. Every change is audited (`brain.retention`). The audit log and the episodes are never purged from here.
 
+## Incoming webhooks
+Alerts, deployments and other events from your tools as the brain's episodic memory: each webhook has its address, its secret and a template for its emitter (Alertmanager, CheckMK, Uptime Kuma, Proxmox VE, GitHub Actions, GitLab CI or a generic one), with a daily cap of proposals. Only brain administrators see this card. See [[Incoming webhooks]].
+
 ## Export
 A copy of this brain in a package (graph, curation, proposals, documents and reference queries; never members, tokens or secrets), optionally encrypted, to keep apart or to take to another instance. Prepared as a job and downloaded once. Only brain administrators see this card. See [[Export a brain]].
 

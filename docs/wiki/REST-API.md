@@ -43,6 +43,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Tokens** | `GET/POST /tokens` (`scopes`: `recall`, `documents`, `propose`; `days`: until it expires, empty for never) · `POST /tokens/{id}/rotate` (`grace_hours`, 0–168, default 24; only its owner) · `DELETE /tokens/{id}`. Only from a session, never with an API token | reader (from your own role down) |
 | **The brain itself** | `PATCH /api/brains/{slug}` (name, description, slug, secrets policy) · `GET /api/brains/{slug}/secrets/scan` | administrator |
 | **AI consumption** | `GET /ai-usage?days=30` · `PUT /ai-budget` (`limit`, `unit`: `tokens` or `cost`, `pause`). See [[AI consumption]] | administrator |
+| **Incoming webhooks** | `POST /hooks/{key}` (no session: the webhook secret, as an HMAC signature or a token header; answers `202` with what happened to each event) · `GET/POST /webhooks` · `PUT/DELETE /webhooks/{id}` · `POST /webhooks/{id}/rotate` (new secret, shown once) · `GET /webhooks/{id}/events` · `POST /webhooks/preview` (`template`, `config`, `body`, `event`) | administrator (the incoming route: its secret) |
 | **Retention** | `GET/PUT /retention` (`rejected_days`, `jobs_days`: days, empty for the instance's, 0 for forever) · `POST /retention/run` (purge now) | owner |
 | **Export** | `POST /exports` (`vectors`, optional `password`) · `GET /exports` · `GET /exports/{id}/download` (once; 410 once downloaded or expired). See [[Export a brain]] | administrator |
 | | `POST /api/brains/{slug}/delete` | owner |
