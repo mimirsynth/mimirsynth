@@ -22,6 +22,7 @@ import Knowledge from "./pages/Knowledge";
 import Account from "./pages/Account";
 import Jobs from "./pages/Jobs";
 import Notifications, { Summary } from "./pages/Notifications";
+import Search from "./pages/Search";
 import FirstSteps from "./pages/FirstSteps";
 import EntityPage from "./pages/EntityPage";
 import Quality from "./pages/Quality";
@@ -115,6 +116,7 @@ export default function App() {
             </div>))}
         </div>
         <div className="ms-nav-bottom">
+          <NavItem icon="search" component={RouterLink} to="/buscar" label={t("Buscar en todos mis brains")} />
           <NavItem icon="bell" component={RouterLink} to="/notificaciones" label={t("Notificaciones")}
             rightSection={bell.data?.unread ? <Pill size="xs" tone={bell.data.worst === "critical" ? "danger" : "warn"} title={t("avisos sin leer")}>{bell.data.unread}</Pill>
               : bell.data?.open ? <Pill size="xs" title={t("problemas abiertos")}>{bell.data.open}</Pill> : undefined} />
@@ -139,6 +141,7 @@ export default function App() {
           <Route path="/admin" element={<Admin me={me.data} brain={brain} setBrain={setBrain} />} />
           <Route path="/cuenta" element={<Account />} />
           <Route path="/notificaciones" element={<Notifications />} />
+          <Route path="/buscar" element={<Search />} />
           {brain ? (
             <>
               <Route path="/" element={<Overview graph={brain} role={cur?.role ?? "reader"} />} />
