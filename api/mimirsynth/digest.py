@@ -18,14 +18,14 @@ import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import appsettings, brand, mail
 from .db import graph
-from .deps import BrainCtx, current_user, effective_role
+from .deps import BrainCtx, brain_access, current_user, effective_role
 from .i18n import tr
 from .models import Brain, DigestSubscription, Document, Proposal, User, now
 from .roles import allows
@@ -34,6 +34,8 @@ from .userlib import mail_language
 
 log = logging.getLogger("mimirsynth.digest")
 router = APIRouter(prefix="/api/me/digest")
+brain_router = APIRouter(prefix="/api/brains/{slug}/changes")
+curator = brain_access("curator")
 FREQUENCIES = ("daily", "weekly")
 PERIOD = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 WAITING = ("proposals", "corrections", "doc_errors", "conflicts", "stale")   # what a curator is waiting on: compared with the last summary
@@ -303,3 +305,17 @@ def preview(user: User = Depends(current_user), db: Session = Depends(get_db)):
         raise HTTPException(409, "no estás suscrito al resumen de ningún brain")
     subject, body = render(user, sections, since, frequency, mail_language(user))
     return {"subject": subject, "body": body}
+
+
+# ---- Overview ----
+@brain_router.get("")
+def brain_changes(days: int = Query(7, ge=1, le=31), ctx: BrainCtx = Depends(curator)):
+    """What changed in the brain over the last `days`, for the Overview of curators and above: the counts of the summary (new and
+    invalidated facts, documents added) and the proposals that came in and were decided. What is waiting is `/attention`."""
+    since = now() - timedelta(days=days)
+    new = section(ctx.db, ctx.brain, ctx.user, "reader", since)["new"]
+    b = ctx.brain.id
+    received = ctx.db.scalar(select(func.count()).select_from(Proposal).where(Proposal.brain_id == b, Proposal.created_at >= since))
+    decided = ctx.db.scalar(select(func.count()).select_from(Proposal).where(
+        Proposal.brain_id == b, Proposal.reviewed_at >= since, Proposal.status != "pending"))
+    return {"days": days, "since": since.isoformat(), **new, "proposals_new": received, "proposals_decided": decided}

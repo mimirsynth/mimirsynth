@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fmt, get, Overview as O } from "../api";
-import { AreaChart, BarList, Btn, Donut, Page, Panel, Pill, StatCard, DataState, PageHeader, FillArea, HIDROMIEL, PIZARRA, StatGrid, ColGrid, EmptyState, Section } from "../ui";
+import { AreaChart, BarList, Btn, Donut, Page, Panel, Pill, StatCard, DataState, PageHeader, FillArea, HIDROMIEL, PIZARRA, StatGrid, ColGrid, EmptyState, Section, Segments } from "../ui";
 import { T } from "../i18n";
 import type { Attention } from "./Quality";
 
@@ -40,6 +41,36 @@ function NeedsAttention({ graph }: { graph: string }) {
   );
 }
 
+type Changes = { days: number; facts_new: number | null; facts_gone: number | null; docs_new: number; proposals_new: number; proposals_decided: number };
+
+/** Each line of «What changed»: the same counts as the email summary, plus the proposals that came in and were decided. */
+const CHANGES: { key: keyof Changes; label: string; to: string }[] = [
+  { key: "facts_new", label: T("Hechos nuevos"), to: "/hechos" },
+  { key: "facts_gone", label: T("Hechos invalidados"), to: "/hechos" },
+  { key: "docs_new", label: T("Documentos añadidos"), to: "/conocimiento" },
+  { key: "proposals_new", label: T("Propuestas recibidas"), to: "/propuestas" },
+  { key: "proposals_decided", label: T("Propuestas decididas"), to: "/propuestas" },
+];
+
+/** What moved in the brain in the last day or week, next to what waits for a decision. Only for those who curate. */
+function WhatChanged({ graph }: { graph: string }) {
+  const { t } = useTranslation();
+  const [days, setDays] = useState("7");
+  const q = useQuery({ queryKey: ["changes", graph, days], queryFn: () => get<Changes>(`brains/${graph}/changes`, { days }), staleTime: 60000 });
+  const lines = CHANGES.filter((l) => ((q.data?.[l.key] as number | null) ?? 0) > 0);
+  return (
+    <Section title={t("Lo que ha cambiado")}>
+      <Stack gap="xs">
+        <Segments label={t("Periodo")} value={days} onChange={setDays} data={[{ value: "1", label: t("Últimas 24 h") }, { value: "7", label: t("Últimos 7 días") }]} />
+        {!q.data ? <DataState query={q} /> : lines.length ? <Stack gap={6}>{lines.map((l) => (
+          <Group key={l.key} gap="xs" wrap="nowrap"><Pill size="sm">{q.data[l.key] as number}</Pill>
+            <Btn kind="link" component={Link} to={l.to}>{t(l.label)}</Btn></Group>))}</Stack>
+          : <Text size="sm" c="dimmed">{days === "1" ? t("Nada nuevo en las últimas 24 horas.") : t("Nada nuevo en los últimos 7 días.")}</Text>}
+      </Stack>
+    </Section>
+  );
+}
+
 export default function Overview({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ["overview", graph], queryFn: () => get<O>("overview", { graph }) });
@@ -53,7 +84,7 @@ export default function Overview({ graph, role }: { graph: string; role: string 
     <Page>
       <PageHeader title={t("Resumen")} description={<>{t("Estado del brain «{{graph}}»: volumen de conocimiento, actividad por semanas y lo más conectado.", { graph })}{data.last_episode && <> {t("Último episodio: {{name}} · {{date}}.", { name: data.last_episode.name, date: fmt(data.last_episode.created_at) })}</>}</>} />
       <FillArea><Stack gap="md">
-      {["curator", "admin", "owner"].includes(role) && <NeedsAttention graph={graph} />}
+      {["curator", "admin", "owner"].includes(role) && <ColGrid min={320}><NeedsAttention graph={graph} /><WhatChanged graph={graph} /></ColGrid>}
       <StatGrid>
         <StatCard label={t("Episodios")} value={data.episodes} hint={a ? t("+{{episodes}} esta semana", { episodes: last(a.episodes) }) : t("memoria episódica")} />
         <StatCard label={t("Entidades")} value={data.entities} />

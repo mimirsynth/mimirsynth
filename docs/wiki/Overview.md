@@ -2,7 +2,7 @@
 
 # Overview
 
-The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Needs your attention** block, it is read-only.
+The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Needs your attention** and **What changed** blocks, it is read-only.
 
 ## Needs your attention
 Curators and above see first a short list of what is **waiting for a person's decision** in the brain, each line with its count and a link to the tool where it is decided:
@@ -18,6 +18,9 @@ Curators and above see first a short list of what is **waiting for a person's de
 | Reference queries that got worse in the last run | [[Ask]] → Reference queries |
 
 Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast. Any change made in the brain (deciding a proposal, merging, resolving a contradiction, confirming a fact…) recalculates them, so it shows at once; what changes on its own (a fact going past its shelf life, an agent proposing over MCP) shows within the minute. On a large brain, the first read after a change is slower, because the scans run then.
+
+## What changed
+Next to it, for the same people, **What changed** says what moved in the brain over the **last 24 hours** or the **last 7 days** (you choose): new facts, invalidated facts, documents added, and proposals received and decided. Each line opens its page. They are the same counts as the [[My account]] email summary, which sends them to whoever wants them without opening the application. Lines at zero are hidden.
 
 ## First steps (new instance)
 An instance administrator who opens the home page while **no brain exists yet** sees **First steps** instead. The **Create your first brain** button opens the dialog to create it under Administration ([[Brains and members]]), and a short checklist links to each screen:

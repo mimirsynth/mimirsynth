@@ -46,7 +46,7 @@ Añade a la contraseña un código de 6 dígitos de una **app de autenticación*
 **Cerrar sesión en otros dispositivos** (esta sesión sigue abierta) si crees que alguien más la tiene abierta, y **Salir**. También hay un enlace a tu cuenta en el proveedor de identidad, si el administrador lo configuró.
 
 ## Resumen por correo
-Un correo periódico con lo que ha cambiado en tus brains, para cuando no abres la aplicación a diario. En **Resumen por correo**, elige para cada brain **Nunca**, **Cada día** o **Cada semana**, y en **Cuándo** la hora, el día de la semana (para los semanales) y tu **zona horaria** (la del navegador, la primera vez). **Ver un ejemplo** enseña lo que diría ahora un resumen de tus brains.
+Un correo periódico con lo que ha cambiado en tus brains, para cuando no abres la aplicación a diario. En **Resumen por correo**, elige para cada brain **Nunca**, **Cada día** o **Cada semana**, y en **Cuándo** la hora, el día de la semana (para los semanales) y tu **zona horaria** (la del navegador, la primera vez). **Ver un ejemplo** enseña lo que diría ahora un resumen de tus brains. Los curadores y por encima ven también estos recuentos en el [[Resumen]] de cada brain, en «Lo que ha cambiado».
 
 - **Qué dice:** de cada brain, cuántos hechos son nuevos y cuántos se han invalidado, y cuántos documentos se han añadido. Si eres **curador o más**, también lo que espera por ti: propuestas y correcciones por revisar (y la antigüedad de la más antigua), documentos con errores, posibles contradicciones y hechos a revisar. Cada línea enlaza con su página, ya en ese brain.
 - **Solo recuentos y enlaces, nunca el contenido de las memorias.** Para leerlo, sigue el enlace.

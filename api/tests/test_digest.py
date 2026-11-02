@@ -241,3 +241,41 @@ def test_graph_counts_of_the_period(client, monkeypatch):  # noqa: F811
         assert n == {"facts_new": 1, "facts_gone": 1}
     finally:
         g.delete()
+
+
+def test_what_changed_for_the_overview(client, monkeypatch):  # noqa: F811
+    from mimirsynth import digest
+    from mimirsynth.deps import current_user
+    from mimirsynth.main import app
+    from mimirsynth.models import Brain, Document, DocSource, Membership, Proposal, User
+    from mimirsynth.store import _factory
+    seen = []
+    monkeypatch.setattr(digest, "_graph_counts", lambda brain, since: seen.append(since) or {"facts_new": 4, "facts_gone": 2})
+    assert client.post("/api/brains", json={"slug": "dg10", "name": "DG10"}).status_code == 201
+    old = datetime.now(UTC) - timedelta(days=10)
+    with _factory()() as db:
+        bid = db.query(Brain).filter_by(slug="dg10").one().id
+        uid = db.query(User).first().id
+        db.add_all([Proposal(brain_id=bid, author_id=uid, name="p", body="x", status="pending"),
+                    Proposal(brain_id=bid, author_id=uid, name="p", body="x", status="approved", reviewed_at=datetime.now(UTC)),
+                    Proposal(brain_id=bid, author_id=uid, name="p", body="x", status="rejected", created_at=old, reviewed_at=old)])
+        src = DocSource(brain_id=bid, kind="upload", name="s")
+        db.add(src); db.flush()
+        db.add_all([Document(brain_id=bid, source_id=src.id, external_id="a", status="active"),
+                    Document(brain_id=bid, source_id=src.id, external_id="b", status="active", first_seen_at=old)])
+        reader = User(email="reader-dg10@example.com", name="r", status="active")
+        db.add(reader); db.flush()
+        db.add(Membership(user_id=reader.id, brain_id=bid, role="reader"))
+        db.commit()
+        rid = reader.id
+    d = client.get("/api/brains/dg10/changes").json()
+    assert (d["days"], d["facts_new"], d["facts_gone"], d["docs_new"]) == (7, 4, 2, 1)
+    assert (d["proposals_new"], d["proposals_decided"]) == (2, 1)
+    assert abs((datetime.now(UTC) - seen[-1]).total_seconds() - 7 * 86400) < 60
+    assert client.get("/api/brains/dg10/changes", params={"days": 31}).json()["proposals_new"] == 3
+    assert client.get("/api/brains/dg10/changes", params={"days": 32}).status_code == 422
+    app.dependency_overrides[current_user] = lambda: _factory()().get(User, rid)
+    try:
+        assert client.get("/api/brains/dg10/changes").status_code == 403                  # curators and above
+    finally:
+        app.dependency_overrides.pop(current_user)

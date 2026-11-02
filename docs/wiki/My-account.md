@@ -46,7 +46,7 @@ It adds to the password a 6-digit code from an **authenticator app** (Aegis, 2FA
 **Sign out on other devices** (this session stays open) if you think someone else has it open, and **Sign out**. There is also a link to your account at the identity provider, if the administrator configured it.
 
 ## Email summary
-A periodic email with what changed in your brains, for when you do not open the application every day. In **Email summary**, choose for each brain **Never**, **Every day** or **Every week**, and under **When** the hour, the day of the week (for weekly summaries) and your **time zone** (the browser's, the first time). **See an example** shows what a summary of your brains would say now.
+A periodic email with what changed in your brains, for when you do not open the application every day. In **Email summary**, choose for each brain **Never**, **Every day** or **Every week**, and under **When** the hour, the day of the week (for weekly summaries) and your **time zone** (the browser's, the first time). **See an example** shows what a summary of your brains would say now. Curators and above also see these counts on each brain's [[Overview]], under «What changed».
 
 - **What it says:** for each brain, how many facts are new and how many were invalidated, and how many documents were added. If you are a **curator or above**, also what waits for you: proposals and corrections to review (and how old the oldest is), documents with errors, possible contradictions and facts to review. Each line links to its page, already in that brain.
 - **Only counts and links, never the content of the memories.** To read it, follow the link.

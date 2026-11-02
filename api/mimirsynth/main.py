@@ -152,6 +152,7 @@ app.include_router(answer.router)
 app.include_router(webhooks.router)
 app.include_router(metrics.router)
 app.include_router(digest.router)
+app.include_router(digest.brain_router)
 app.middleware("http")(attention.invalidate_after_writes)
 
 
