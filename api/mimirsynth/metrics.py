@@ -1,8 +1,10 @@
 """Prometheus metrics (#131): `GET /metrics`, in the Prometheus text format, for whoever watches the instance.
 
-- **Who can read it:** nobody by default. `MIMIRSYNTH_METRICS_TOKEN` turns it on, and then a request needs `Authorization: Bearer
-  <token>`; without it, or with another one, it answers 401. Without the variable the route answers 404, as if it did not exist. An
-  instance behind a reverse proxy usually publishes every path, so it is the token, not the network, that keeps it private.
+- **Who can read it:** nobody by default. An instance administrator generates its token under Administration → Metrics (shown once;
+  only its hash is kept, in `app_settings`), and from then on a request needs `Authorization: Bearer <token>`; without it, or with
+  another one, it answers 401. Without a token the route answers 404, as if it did not exist. Generating a new one replaces the old
+  one at once; revoking it turns the route off. An instance behind a reverse proxy usually publishes every path, so it is the token,
+  not the network, that keeps it private.
 - **Labels:** a closed list (`LABELS`): the brain's slug, the kind and model of an AI engine, the kind of a job and closed values such
   as a state. Never a query, a document, a person or any text of the memories: they would multiply the series and leak content.
 - **Two sources.** What happens in this process (recall time, finished jobs, calls to AI engines) is counted in memory, starts again
@@ -14,18 +16,21 @@
 """
 import hmac
 import logging
+import secrets
 import threading
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, Counter, Histogram, generate_latest
 from prometheus_client.core import GaugeMetricFamily
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from .config import settings
-from .models import Brain, Document, Job, NotifyDelivery, Proposal
-from .store import _factory
+from . import appsettings
+from .deps import audit, hash_token, require_admin
+from .models import AppSetting, Brain, Document, Job, NotifyDelivery, Proposal, User, now
+from .store import _factory, get_db
 
 log = logging.getLogger("mimirsynth.metrics")
 router = APIRouter()
@@ -251,13 +256,70 @@ class _Stored:
 REGISTRY.register(_Stored())
 
 
+TOKEN_KEY = "metrics_token"   # app_settings row: {hash, prefix, created_at, created_by}; no row, no metrics
+_LAST: dict[str, float] = {}   # when the metrics were last read with the token, in this process
+
+
+def _stored() -> dict | None:
+    v = appsettings.stored(TOKEN_KEY)
+    return v if isinstance(v, dict) and v.get("hash") else None
+
+
 @router.get("/metrics", include_in_schema=False)
 def metrics(request: Request):
-    """The metrics, for a request with the token of `MIMIRSYNTH_METRICS_TOKEN`; 404 while it is not set."""
-    token = settings.metrics_token
-    if not token:
+    """The metrics, for a request with the token generated under Administration → Metrics; 404 while there is none."""
+    tok = _stored()
+    if not tok:
         raise HTTPException(404)
     scheme, _, given = request.headers.get("authorization", "").partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(given.strip().encode(), token.encode()):
+    if scheme.lower() != "bearer" or not hmac.compare_digest(hash_token(given.strip()), tok["hash"]):
         raise HTTPException(401, "falta el token de las métricas o no es válido", headers={"WWW-Authenticate": "Bearer"})
+    _LAST["at"] = time.time()
     return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
+
+
+def _state(db: Session) -> dict:
+    tok = _stored()
+    by = db.get(User, tok["created_by"]) if tok and tok.get("created_by") else None
+    last = datetime.fromtimestamp(_LAST["at"], timezone.utc).isoformat() if tok and "at" in _LAST else None
+    return {"enabled": bool(tok), "prefix": tok["prefix"] if tok else "", "created_at": tok.get("created_at") if tok else None,
+            "created_by": (by.display_name or by.name or by.email) if by else None, "last_read_at": last,
+            "url": (appsettings.get("public_url") or "").rstrip("/") + "/metrics"}
+
+
+@router.get("/api/admin/metrics")
+def metrics_state(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Whether the metrics are on, with the token's prefix, who made it and when they were last read (since this process started)."""
+    return _state(db)
+
+
+@router.post("/api/admin/metrics/token")
+def new_token(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """A new token, shown once. It replaces the previous one at once: whoever reads the metrics needs the new one."""
+    raw = "msm_" + secrets.token_urlsafe(32)
+    replaced = bool(_stored())
+    value = {"hash": hash_token(raw), "prefix": raw[:10], "created_at": now().isoformat(), "created_by": user.id}
+    row = db.get(AppSetting, TOKEN_KEY)
+    if row:
+        row.value, row.updated_at, row.updated_by = {"v": value}, now(), user.id
+    else:
+        db.add(AppSetting(key=TOKEN_KEY, value={"v": value}, updated_by=user.id))
+    db.commit()
+    appsettings.invalidate()
+    _LAST.clear()
+    audit(db, user, "metrics.token.rotate" if replaced else "metrics.token.create", prefix=value["prefix"])
+    return {**_state(db), "token": raw}
+
+
+@router.delete("/api/admin/metrics/token")
+def revoke_token(user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Revokes the token: /metrics answers 404 again."""
+    row = db.get(AppSetting, TOKEN_KEY)
+    if row:
+        prefix = ((row.value or {}).get("v") or {}).get("prefix", "")
+        db.delete(row)
+        db.commit()
+        appsettings.invalidate()
+        _LAST.clear()
+        audit(db, user, "metrics.token.revoke", prefix=prefix)
+    return _state(db)

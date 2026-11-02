@@ -24,6 +24,7 @@ The gear icon in the side bar opens **Administration**. Sections are in a list o
 | | Recall | Document recall and index parameters | [[Recall and ingestion]] |
 | | Ingestion and jobs | Retries, retention and the pace of an embedding model change | [[Recall and ingestion]] |
 | | Notifications | Alert channels, delivery history and the instance's own checks | [[Notifications]] |
+| | Metrics | The token that reads the Prometheus metrics at `/metrics` | [[Metrics]] |
 | | Audit | Log of actions | [[Audit log]] |
 
 All numeric and text parameters, with their defaults and ranges, are in [[Settings reference]].

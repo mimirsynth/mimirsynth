@@ -5,20 +5,18 @@
 `/api/health` says whether the instance is alive ([[Installation]], «Monitoring the instance»), but not how it is doing: how long a recall takes, how many jobs are waiting, how many calls to the AI engines fail. **`GET /metrics`** gives all that in the Prometheus text format, for Prometheus or for any agent that reads it (Grafana Agent or Alloy, VictoriaMetrics, Telegraf, the Prometheus plugin of a monitoring tool…).
 
 ## Turning it on
-It is **off** by default: without a token, `/metrics` answers `404`, as if it did not exist. To turn it on, generate a token and put it in `.env`:
-```bash
-# in .env
-MIMIRSYNTH_METRICS_TOKEN=<the output of: openssl rand -hex 32>
-docker compose up -d
-```
+It is **off** by default: without a token, `/metrics` answers `404`, as if it did not exist. An instance administrator turns it on under **Administration → Metrics** with **Turn on and generate a token**. The token (`msm_…`) is shown **only once**; only its hash is kept. Nothing goes in `.env`.
+
 From then on, a request needs `Authorization: Bearer <token>`; without it, or with another one, it answers `401`. Signing in to the interface does not open it: only the token does. A reverse proxy usually publishes every path, `/metrics` included, so the token is what keeps it private; if Prometheus reaches the container directly, you can also block `/metrics` in the proxy.
+
+The same screen shows who generated the token and when, and when the metrics were last read (since the application last started). **Generate another token** replaces it and the old one stops working at once; **Revoke and turn off** makes `/metrics` answer `404` again. Each of these goes to the [[Audit log]].
 
 Check it:
 ```bash
-curl -s -H "Authorization: Bearer $MIMIRSYNTH_METRICS_TOKEN" http://localhost:8000/metrics | head
+curl -s -H "Authorization: Bearer msm_…" http://localhost:8000/metrics | head
 ```
 
-Prometheus:
+Prometheus (the same block, with your address, is on the Metrics screen to copy):
 ```yaml
 scrape_configs:
   - job_name: mimirsynth
@@ -87,4 +85,4 @@ groups:
 
 ## Limits
 - The counters are kept by the process that serves the API: a restart starts them again, which Prometheus handles with `rate()` and `increase()`.
-- Traces (OpenTelemetry) are not available yet.
+- Traces (OpenTelemetry) are not available yet; they are planned in [#170](https://github.com/mimirsynth/mimirsynth/issues/170).

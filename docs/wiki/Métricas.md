@@ -5,20 +5,18 @@
 `/api/health` dice si la instancia está viva ([[Instalación]], «Vigilar la instancia»), pero no cómo va: cuánto tarda el recall, cuántos trabajos esperan, cuántas llamadas a los motores de IA fallan. **`GET /metrics`** da todo eso en el formato de texto de Prometheus, para Prometheus o para cualquier agente que lo lea (Grafana Agent o Alloy, VictoriaMetrics, Telegraf, el plugin de Prometheus de una herramienta de monitorización…).
 
 ## Activarlo
-Viene **desactivado**: sin token, `/metrics` responde `404`, como si no existiera. Para activarlo, genera un token y ponlo en `.env`:
-```bash
-# en .env
-MIMIRSYNTH_METRICS_TOKEN=<la salida de: openssl rand -hex 32>
-docker compose up -d
-```
+Viene **desactivado**: sin token, `/metrics` responde `404`, como si no existiera. Lo activa un administrador de la instancia en **Administración → Métricas** con **Activar y generar token**. El token (`msm_…`) se muestra **una sola vez**; solo se guarda su hash. No hay que tocar el `.env`.
+
 Desde entonces, una petición necesita `Authorization: Bearer <token>`; sin él, o con otro, responde `401`. Haber iniciado sesión en la interfaz no lo abre: solo el token. Un proxy inverso suele publicar todas las rutas, `/metrics` incluida, así que lo que la mantiene privada es el token; si Prometheus llega directamente al contenedor, también puedes bloquear `/metrics` en el proxy.
+
+La misma pantalla enseña quién generó el token y cuándo, y cuándo se leyeron las métricas por última vez (desde el último arranque de la aplicación). **Generar otro token** lo sustituye y el anterior deja de valer al momento; **Revocar y desactivar** hace que `/metrics` vuelva a responder `404`. Cada una de estas acciones queda en la [[Auditoría]].
 
 Compruébalo:
 ```bash
-curl -s -H "Authorization: Bearer $MIMIRSYNTH_METRICS_TOKEN" http://localhost:8000/metrics | head
+curl -s -H "Authorization: Bearer msm_…" http://localhost:8000/metrics | head
 ```
 
-Prometheus:
+Prometheus (el mismo bloque, con tu dirección, está en la pantalla de Métricas para copiarlo):
 ```yaml
 scrape_configs:
   - job_name: mimirsynth
@@ -87,4 +85,4 @@ groups:
 
 ## Límites
 - Los contadores los guarda el proceso que sirve la API: un reinicio los pone a cero, cosa que Prometheus resuelve con `rate()` e `increase()`.
-- Las trazas (OpenTelemetry) todavía no están disponibles.
+- Las trazas (OpenTelemetry) todavía no están disponibles; están previstas en [#170](https://github.com/mimirsynth/mimirsynth/issues/170).

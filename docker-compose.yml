@@ -60,7 +60,6 @@ services:
       MIMIRSYNTH_DEFAULT_LANGUAGE: "${MIMIRSYNTH_DEFAULT_LANGUAGE:-en}"
       MIMIRSYNTH_ADMIN_EMAILS: "${MIMIRSYNTH_ADMIN_EMAILS:-}"
       MIMIRSYNTH_ACCOUNT_URL: "${MIMIRSYNTH_ACCOUNT_URL:-}"
-      MIMIRSYNTH_METRICS_TOKEN: "${MIMIRSYNTH_METRICS_TOKEN:-}"
       MIMIRSYNTH_DOC_STORE: "/data/documents"
       MIMIRSYNTH_DOC_MAX_MB: "${MIMIRSYNTH_DOC_MAX_MB:-2048}"
       MIMIRSYNTH_DOC_ROOTS_BASE: "/sources"  # source roots are registered under Administration and can only be inside this folder

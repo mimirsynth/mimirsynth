@@ -4,18 +4,19 @@ import os
 
 import pytest
 from prometheus_client.parser import text_string_to_metric_families
+
 from test_control import client  # noqa: F401
 
-TOKEN = "metrics-token-for-tests"
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 needs_falkor = pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
 
 
 @pytest.fixture()
-def token(monkeypatch):
-    from mimirsynth.config import settings
-    monkeypatch.setattr(settings, "metrics_token", TOKEN)
-    return {"Authorization": f"Bearer {TOKEN}"}
+def token(client):  # noqa: F811
+    """A metrics token generated as the instance administrator does it, revoked afterwards."""
+    raw = client.post("/api/admin/metrics/token").json()["token"]
+    yield {"Authorization": f"Bearer {raw}"}
+    client.delete("/api/admin/metrics/token")
 
 
 def _scrape(client, headers) -> dict[str, list]:  # noqa: F811
@@ -37,19 +38,57 @@ def _brain(client, slug: str) -> int:  # noqa: F811
         return db.query(Brain).filter(Brain.slug == slug).one().id
 
 
-def test_metrics_need_their_token(client, monkeypatch):  # noqa: F811
-    from mimirsynth.config import settings
-    monkeypatch.setattr(settings, "metrics_token", "")
+def test_metrics_need_their_token(client):  # noqa: F811
+    client.delete("/api/admin/metrics/token")
     assert client.get("/metrics").status_code == 404                                    # off: as if it did not exist
-    assert client.get("/metrics", headers={"Authorization": f"Bearer {TOKEN}"}).status_code == 404
-    monkeypatch.setattr(settings, "metrics_token", TOKEN)
-    r = client.get("/metrics")
-    assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
-    assert "mimirsynth_" not in r.text
-    for bad in ("Bearer otro", f"Basic {TOKEN}", TOKEN, f"Bearer {TOKEN}x"):
-        assert client.get("/metrics", headers={"Authorization": bad}).status_code == 401
-    assert client.get("/metrics", headers={"Authorization": f"bearer {TOKEN}"}).status_code == 200
-    assert client.get("/api/metrics").status_code != 200                                # only at /metrics, not under /api
+    assert client.get("/metrics", headers={"Authorization": "Bearer msm_whatever"}).status_code == 404
+    raw = client.post("/api/admin/metrics/token").json()["token"]
+    try:
+        r = client.get("/metrics")
+        assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer"
+        assert "mimirsynth_" not in r.text
+        for bad in ("Bearer otro", f"Basic {raw}", raw, f"Bearer {raw}x"):
+            assert client.get("/metrics", headers={"Authorization": bad}).status_code == 401
+        assert client.get("/metrics", headers={"Authorization": f"bearer {raw}"}).status_code == 200
+        assert client.get("/api/metrics").status_code != 200                            # only at /metrics, not under /api
+    finally:
+        client.delete("/api/admin/metrics/token")
+
+
+def test_the_token_is_managed_from_administration(client):  # noqa: F811
+    from mimirsynth.deps import current_user
+    from mimirsynth.main import app
+    from mimirsynth.models import AppSetting, Audit, User
+    from mimirsynth.store import _factory
+    client.delete("/api/admin/metrics/token")
+    assert client.get("/api/admin/metrics").json()["enabled"] is False
+    first = client.post("/api/admin/metrics/token").json()
+    assert first["enabled"] and first["token"].startswith("msm_") and first["prefix"] == first["token"][:10]
+    assert first["created_at"] and first["last_read_at"] is None and first["url"].endswith("/metrics")
+    with _factory()() as db:
+        kept = db.get(AppSetting, "metrics_token").value["v"]
+        assert first["token"] not in str(kept) and set(kept) == {"hash", "prefix", "created_at", "created_by"}   # only its hash
+    assert client.get("/metrics", headers={"Authorization": f"Bearer {first['token']}"}).status_code == 200
+    state = client.get("/api/admin/metrics").json()
+    assert "token" not in state and state["last_read_at"]
+    second = client.post("/api/admin/metrics/token").json()                              # rotate: the old one stops at once
+    assert client.get("/metrics", headers={"Authorization": f"Bearer {first['token']}"}).status_code == 401
+    assert client.get("/metrics", headers={"Authorization": f"Bearer {second['token']}"}).status_code == 200
+    assert client.delete("/api/admin/metrics/token").json()["enabled"] is False
+    assert client.get("/metrics", headers={"Authorization": f"Bearer {second['token']}"}).status_code == 404
+    with _factory()() as db:
+        actions = [a.action for a in db.query(Audit).filter(Audit.action.like("metrics.token.%")).order_by(Audit.id.desc()).limit(3)]
+        assert actions == ["metrics.token.revoke", "metrics.token.rotate", "metrics.token.create"]
+        u = User(email="nonadmin-metrics@example.com", name="n", status="active")
+        db.add(u); db.commit()
+        uid = u.id
+    app.dependency_overrides[current_user] = lambda: _factory()().get(User, uid)
+    try:
+        assert client.get("/api/admin/metrics").status_code == 403
+        assert client.post("/api/admin/metrics/token").status_code == 403
+        assert client.delete("/api/admin/metrics/token").status_code == 403
+    finally:
+        app.dependency_overrides.pop(current_user)
 
 
 def test_a_session_does_not_open_the_metrics(client, token):  # noqa: F811

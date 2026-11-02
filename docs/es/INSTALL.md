@@ -100,7 +100,7 @@ MimirSynth avisa por sí mismo del grafo y de los modelos de IA ([NOTIFICATIONS.
 
 Avisa ante cualquier código distinto de `200`; para distinguir los casos, mira `db` y `graph` en el cuerpo. Cada comprobación espera como mucho 2 segundos, y la causa de un fallo va al log del contenedor (`docker compose logs mimirsynth`), nunca a la respuesta. Si el monitor está en otra máquina, usa la dirección pública detrás del proxy inverso (`https://memoria.example.com/api/health`). La comprobación de salud de Docker del contenedor usa el mismo endpoint, así que `docker ps` lo marca como `unhealthy` en ambos casos.
 
-Para ver cómo va (tiempo del recall, trabajos en cola, propuestas, errores de los motores de IA), activa las métricas de Prometheus en `/metrics` con `MIMIRSYNTH_METRICS_TOKEN`: consulta «Métricas» en la wiki.
+Para ver cómo va (tiempo del recall, trabajos en cola, propuestas, errores de los motores de IA), activa las métricas de Prometheus en `/metrics` desde Administración → Métricas: consulta «Métricas» en la wiki.
 
 ## Contribuir
 Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTRIBUTING.md).
