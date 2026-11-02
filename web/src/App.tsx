@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { AppShell, Burger, Center, Group, Stack, Text, Title } from "@mantine/core";
 import { Avatar, Btn, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState } from "./ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, NavLink as RouterLink, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ApiError, Brain, get, Me, send } from "./api";
 import Overview from "./pages/Overview";
@@ -59,8 +59,18 @@ export default function App() {
   const [brain, setBrainState] = useState(() => { try { return localStorage.getItem(KEY) ?? ""; } catch { return ""; } });
   const [menu, setMenu] = useState(false);
   const loc = useLocation();
+  const navigate = useNavigate();
   useEffect(() => setMenu(false), [loc.pathname]);
   const setBrain = (slug: string) => { setBrainState(slug); try { localStorage.setItem(KEY, slug); } catch { /* sin almacenamiento */ } };
+  // A link with ?brain=<slug> (the periodic summary) opens that brain if the person has it; the parameter then goes away.
+  useEffect(() => {
+    const q = new URLSearchParams(loc.search);
+    const want = q.get("brain");
+    if (!want || !brains.data) return;
+    if (brains.data.some((b) => b.slug === want)) setBrain(want);
+    q.delete("brain");
+    navigate({ pathname: loc.pathname, search: q.toString() ? `?${q}` : "" }, { replace: true });
+  }, [brains.data, loc.search]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Recuerda el brain activo entre recargas; si el guardado ya no existe (borrado, sin acceso), cae al primero de la lista.
   useEffect(() => {
     const list = brains.data;

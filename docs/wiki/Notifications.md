@@ -6,6 +6,8 @@ MimirSynth tells you when something needs attention: a model that stops respondi
 
 Alerts carry metadata only (what failed, where, how many times, a shortened error), **never the text of your memories**.
 
+What changed in a brain (new facts, proposals waiting…) is not an alert: each person can get it in a periodic **email summary**, set up in [[My account]].
+
 ## The bell
 **Notifications**, at the bottom of the side bar, opens the list of alerts you can see. Next to it, a counter shows the unread ones (red if one is critical) or, when everything is read, how many problems are still open.
 - **Instance administrators** see every alert.

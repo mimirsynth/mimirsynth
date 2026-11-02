@@ -252,7 +252,7 @@ async def worker(version: str = "0.0.0") -> None:
     if jobs.INLINE:  # pruebas: nada en segundo plano
         return
     await asyncio.sleep(15)
-    last_health = last_update = last_prune = last_reindex = last_conflicts = last_hooks = 0.0
+    last_health = last_update = last_prune = last_reindex = last_conflicts = last_hooks = last_digest = 0.0
     while True:
         try:
             await asyncio.to_thread(process_due)
@@ -271,6 +271,10 @@ async def worker(version: str = "0.0.0") -> None:
                 last_hooks = t
                 from . import webhooks
                 await asyncio.to_thread(webhooks.flush_due)  # alerts still firing past the grouping window (#122)
+            if t - last_digest >= 600:
+                last_digest = t
+                from . import digest
+                await asyncio.to_thread(digest.run_due)  # the periodic summaries that are due (#128)
             if t - last_reindex >= 600:
                 last_reindex = t
                 from . import reembed, usage
