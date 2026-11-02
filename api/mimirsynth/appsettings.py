@@ -131,6 +131,11 @@ def set_secret(key: str, raw: str, user_id: int | None) -> None:
     invalidate()
 
 
+def stored(key: str):
+    """What is saved under `key` for something that is not a setting of the registry (the metrics token): None if nothing."""
+    return _overrides().get(key)
+
+
 def default(key: str):
     return getattr(settings, key)
 

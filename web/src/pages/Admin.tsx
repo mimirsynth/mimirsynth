@@ -19,6 +19,7 @@ import BrainWebhooks from "./BrainWebhooks";
 import { BrainAiUsage, InstanceAiUsage } from "./AiUsage";
 import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
+import AdminMetrics from "./AdminMetrics";
 
 type AuditRow = { ts: string; action: string; detail: unknown };
 const AUDIT_COLS = { ts: { get: (a: AuditRow) => a.ts }, action: { get: (a: AuditRow) => a.action, exact: true }, detail: { get: (a: AuditRow) => JSON.stringify(a.detail ?? "") } };
@@ -226,7 +227,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
       { heading: t("Cuentas") }, { value: "users", label: t("Usuarios") }, { value: "security", label: t("Seguridad") }, { value: "identity", label: t("Identidad") }, { value: "mail", label: t("Correo (SMTP)") },
       { heading: t("Modelos de IA") }, { value: "llm", label: t("Modelo LLM") }, { value: "embedding", label: t("Embeddings") }, { value: "decision", label: t("Decisor") }, { value: "usage", label: t("Consumo") },
       { heading: t("Documentos") }, { value: "folders", label: t("Carpetas") }, { value: "docs", label: t("Límites") },
-      { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "notifications", label: t("Notificaciones") }, { value: "audit", label: t("Auditoría") },
+      { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "notifications", label: t("Notificaciones") }, { value: "metrics", label: t("Métricas") }, { value: "audit", label: t("Auditoría") },
     ] : []),
   ];
   const canAdmin = cur && ["admin", "owner"].includes(cur.role);
@@ -304,6 +305,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
           {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
           {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}
           {section === "notifications" && <AdminNotifications />}
+          {section === "metrics" && <AdminMetrics />}
           {["general", "security", "mail", "identity", "docs", "recall", "ingest"].includes(section) && <AdminSettings group={section} />}
         </SettingsLayout>
       </FillArea>

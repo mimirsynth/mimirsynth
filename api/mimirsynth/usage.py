@@ -114,6 +114,8 @@ def record(kind: str, model: str, status: int, tin: int = 0, tout: int = 0, esti
                 acc[c] += v
             acc["peak_rpm"] = max(acc["peak_rpm"], _MINUTE[mk])
         _start_flusher()
+        from . import metrics
+        metrics.ai_call(kind, model, status, tin, tout)
         if b and _over_budget_soon(b):
             _check_budget(b)
     except Exception:  # noqa: BLE001
@@ -189,6 +191,19 @@ def _on_response(kind: str, model: str, response, body: bytes) -> None:
             payload = None
     tin, tout, est = _tokens(response.request.content if response.request else b"", payload) if response.status_code == 200 else (0, 0, False)
     record(kind, model, response.status_code, tin, tout, est)
+    seconds = _seconds(response)
+    if seconds is not None:
+        from . import metrics
+        metrics.ai_time(kind, model, seconds)
+
+
+def _seconds(response) -> float | None:
+    """How long the call took: from the request hook of `hooks`, or httpx's own measure once the answer is closed (#131)."""
+    try:
+        t0 = response.request.extensions.get(_T0)
+        return time.monotonic() - t0 if t0 is not None else response.elapsed.total_seconds()
+    except RuntimeError:  # no request, or an answer not read to the end: no time to give
+        return None
 
 
 def observe(kind: str, model: str, response) -> None:
@@ -199,23 +214,33 @@ def observe(kind: str, model: str, response) -> None:
         log.debug("respuesta no contable de %s:%s", kind, model)
 
 
+_T0 = "mimirsynth_started"
+
+
+def _started(request) -> None:
+    request.extensions[_T0] = time.monotonic()
+
+
 def hooks(kind: str, model: str) -> dict:
     """Event hooks for an `httpx.Client` that calls an engine. They read the whole body to find `usage`: do not use a hooked client for
     a streaming call, it would wait for the end of the stream."""
     def on_response(response):
         response.read()
         _on_response(kind, model, response, response.content)
-    return {"response": [on_response]}
+    return {"request": [_started], "response": [on_response]}
 
 
 def async_hooks(kind: str, model: str) -> dict:
     """The same for an `httpx.AsyncClient` (Graphiti's OpenAI clients); the same warning about streaming."""
     import asyncio
 
+    async def started(request):
+        _started(request)
+
     async def on_response(response):
         await response.aread()
         _on_response(kind, model, response, response.content)  # only memory: the budget check is cached
-    return {"response": [on_response]}
+    return {"request": [started], "response": [on_response]}
 
 
 def live_rpm() -> dict[str, int]:

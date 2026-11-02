@@ -144,6 +144,16 @@ def search_documents(brain_id: int, qvec: list[float], query: str, n: int, sourc
         return [], "error"
 
 
+def _timed_documents(brain_id: int, *args) -> tuple[list[dict], str]:
+    """`search_documents` with its time measured to the end, also when the recall has stopped waiting for it (#131)."""
+    t = time.time()
+    out = search_documents(brain_id, *args)
+    if out[1] != "off":
+        from . import metrics
+        metrics.documents_searched(brain_id, time.time() - t)
+    return out
+
+
 def _origin(x: dict, lang: str) -> str:
     return tr(" · de «{{origin}}»", lang, origin=x["origin"]) if x.get("origin") else ""
 
@@ -207,12 +217,15 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     n_docs = appsettings.get("doc_passages") if n_docs is None else n_docs
     t_docs = time.time()
     sources = sources or []
-    docs_fut = _pool.submit(search_documents, brain_id, qvec, query, n_docs, sources, min_sim) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
+    docs_fut = _pool.submit(_timed_documents, brain_id, qvec, query, n_docs, sources, min_sim) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
     from .store import _factory
     with _factory()() as db:
         amap = alias_map(db, brain_id)
+    tf = time.time()
     facts = search_facts(graph_name, qvec, n_facts * 3, amap)
+    tc = time.time()
     chunks = index.search(brain_id, qvec, query, k=n_chunks, recency=recency_weight(query))
+    t_chunks = time.time() - tc
     fed = []   # estado de cada origen prestado
     flists, clists = [facts], [chunks]
     for src in sources:
@@ -245,6 +258,8 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
             fed.append({"slug": src.slug, "name": src.name, "scope": src.scope, "state": docs_state})
     t4 = time.time()
     keep = cur + old
+    from . import metrics
+    metrics.recall_done(brain_id, {"embed": t1 - t0, "facts": tc - tf, "chunks": t_chunks, "total": t4 - t0}, docs_state)
     return {
         "query": query, "facts": keep, "chunks": chunks, "documents": passages, "documents_state": docs_state, "index": index.enabled(),
         **({"federated": fed} if sources else {}),

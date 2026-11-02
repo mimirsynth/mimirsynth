@@ -383,6 +383,7 @@
  "este token ya se ha rotado o ha caducado: crea uno nuevo": "this token was already rotated or has expired: create a new one",
  "excepción de secretos no válida: {{e}}": "invalid secret exception: {{e}}",
  "exportación no encontrada": "export not found",
+ "falta el token de las métricas o no es válido": "the metrics token is missing or not valid",
  "faltan partes de la subida": "parts of the upload are missing",
  "fecha no válida": "invalid date",
  "fichero no disponible": "file not available",

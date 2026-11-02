@@ -34,6 +34,7 @@
 - [[Import a brain]]
 - [[Incoming webhooks]]
 - [[Notifications]]
+- [[Metrics]]
 - [[Administer users]]
 - [[Security and two-factor]]
 - [[OIDC identity]]
@@ -67,7 +68,7 @@
 
 **Usar:** [[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Calidad del contenido]] · [[Vocabulario]] · [[Contradicciones]] · [[Trabajos]] · [[Mi cuenta]]
 
-**Administrar:** [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Webhooks de entrada]] · [[Notificaciones]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Roles y permisos]]
+**Administrar:** [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Webhooks de entrada]] · [[Notificaciones]] · [[Métricas]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Roles y permisos]]
 
 **Agentes:** [[Conectar agentes]] · [[API REST]] · [[Integración con Claude Code]] · [[Escribir buena memoria]] · [[Memoria documental]]
 

@@ -24,6 +24,7 @@ El icono del engranaje de la barra lateral abre **Administración**. Las seccion
 | | Recuerdo | Parámetros del recall documental e índice | [[Recuerdo e ingesta]] |
 | | Ingesta y trabajos | Reintentos, retención y el ritmo de un cambio de modelo de embeddings | [[Recuerdo e ingesta]] |
 | | Notificaciones | Canales de avisos, historial de envíos y comprobaciones propias de la instancia | [[Notificaciones]] |
+| | Métricas | El token que lee las métricas de Prometheus en `/metrics` | [[Métricas]] |
 | | Auditoría | Registro de acciones | [[Auditoría]] |
 
 Todos los parámetros numéricos y de texto, con sus valores por defecto y rangos, están en [[Referencia de ajustes]].
