@@ -63,6 +63,7 @@ REGISTRY: list[Def] = [
     Def("doc_passages", "recall", "Pasajes documentales por recall", "Máximo de pasajes de documentos que acompañan a los hechos en cada recall.", "int", "", 0, 10),
     Def("answer_engine", "recall", "Motor para «Responder»", "Nombre del motor LLM que redacta las respuestas con citas de Preguntar. Conviene el más capaz. Vacío: el motor LLM predeterminado.", "str"),
     Def("answer_per_hour", "recall", "Respuestas por persona y hora", "Cuántas respuestas redactadas puede pedir cada persona en cada brain por hora. Cada una es una llamada al motor. 0: sin límite.", "int", "", 0, 1000),
+    Def("search_per_hour", "recall", "Búsquedas en todos los brains por persona y hora", "Cuántas veces puede buscar cada persona en todos sus brains a la vez por hora. Cada búsqueda es un recall en cada brain. 0: sin límite.", "int", "", 0, 1000),
     Def("answer_max_tokens", "recall", "Longitud máxima de una respuesta", "Tokens que puede ocupar como mucho una respuesta redactada.", "int", "tokens", 100, 4000),
     Def("doc_search_timeout", "recall", "Tiempo máximo de la búsqueda documental", "Si tarda más, el recall responde sin documentos.", "float", "s", 0.1, 10),
     Def("index_sync_minutes", "recall", "Sincronización del índice de texto", "Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada.", "int", "min", 0, 1440),

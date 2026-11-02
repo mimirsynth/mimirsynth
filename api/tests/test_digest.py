@@ -358,3 +358,31 @@ def test_what_changed_for_the_overview(client, monkeypatch):  # noqa: F811
         assert client.get("/api/brains/dg10/changes").status_code == 403                  # curators and above
     finally:
         app.dependency_overrides.pop(current_user)
+
+
+def test_the_failure_notification_never_shows_an_address(client, outbox, monkeypatch):  # noqa: F811
+    """#176: a person whose name is their email address is named by their account, not by the address."""
+    from mimirsynth import digest
+    from mimirsynth.models import Notification, User
+    from mimirsynth.store import _factory
+    at = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)
+    uid, bid = _person("named-dg13@example.com", "dg13", "curator", last=at - timedelta(days=2))
+    with _factory()() as db:
+        u = db.get(User, uid)
+        u.name, u.display_name = "named-dg13@example.com", "named-dg13@example.com"
+        db.commit()
+    _pending(bid, 1)
+
+    def down(to, subject, body):
+        raise ConnectionError("550")
+    monkeypatch.setattr(digest.mail, "send", down)
+    t = at
+    for wait in (timedelta(0), timedelta(minutes=10), timedelta(hours=1), timedelta(hours=6), timedelta(days=1)):
+        t += wait
+        digest.run_due(t)
+    with _factory()() as db:
+        n = db.query(Notification).filter_by(event="digest.failed", key=f"user:{uid}").one()
+        assert "@" not in n.body and f"la cuenta {uid}" in n.body
+    assert digest._label(User(id=7, name="Ana", display_name="")) == "Ana"
+    assert digest._label(User(id=7, name="ana@example.com", display_name="Ana R.")) == "Ana R."
+

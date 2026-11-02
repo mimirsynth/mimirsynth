@@ -21,7 +21,9 @@ export default function Search() {
   const { t } = useTranslation();
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState(params.get("q") ?? "");
-  const run = useMutation({ mutationFn: (query: string) => send<Res>("POST", "search", { query }) });
+  // The open brain pays for the query's embedding in the AI consumption (issue 176).
+  const open = () => { try { return localStorage.getItem("mimirsynth.brain") ?? ""; } catch { return ""; } };
+  const run = useMutation({ mutationFn: (query: string) => send<Res>("POST", "search", { query, brain: open() }) });
   const go = (query: string) => { if (!query.trim()) return; setParams({ q: query }, { replace: true }); run.mutate(query); };
   useEffect(() => { if (params.get("q")) run.mutate(params.get("q")!); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const r = run.data;

@@ -53,6 +53,8 @@ Los administradores del brain pueden marcar **Guardar el texto de las consultas*
 - **Cada resultado se abre en su brain:** una entidad, el episodio en Diario o el documento en Conocimiento, cambiando antes a ese brain. **Abrir en Preguntar** repite la búsqueda en Preguntar, en ese brain.
 - **Rápida y sin bloqueos:** el vector de la consulta se calcula una sola vez para todos los brains, que es lo caro. Los brains se consultan de pocos en pocos y la página espera como mucho 8 segundos: un brain que no responde a tiempo o falla se marca, y el resto se muestra igualmente.
 - **No disponible para tokens de API:** siguen acotados a un brain, así que los agentes siguen preguntando a cada brain por separado.
+- **Límites:** cada persona puede buscar en todos sus brains `search_per_hour` veces por hora (60 por defecto, [[Referencia de ajustes]]), y la instancia hace pocas búsquedas de este tipo a la vez: pasado cualquiera de los dos límites responde «demasiadas», y mientras tanto puedes buscar en un brain desde Preguntar.
+- **Consumo de IA:** el vector de la consulta cuenta en el brain que tienes abierto (o en el primero consultado), como un recall. Si ese brain ha agotado su presupuesto de IA con pausa, paga el siguiente; si lo han agotado todos los tuyos, la búsqueda espera al mes que viene. El resto de brains reutiliza el vector y no cuesta nada.
 
 ## Si el resultado es malo
 | Síntoma | Causa probable | Qué hacer |
