@@ -6,6 +6,8 @@ MimirSynth avisa cuando algo necesita atención: un modelo que deja de responder
 
 Los avisos solo llevan metadatos (qué falló, dónde, cuántas veces, un error recortado), **nunca el texto de tus memorias**.
 
+Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un aviso: cada persona puede recibirlo en un **resumen por correo** periódico, que se configura en [[Mi cuenta]].
+
 ## La campana
 **Notificaciones**, abajo en la barra lateral, abre la lista de avisos que puedes ver. A su lado, un contador muestra los no leídos (en rojo si alguno es crítico) o, cuando está todo leído, cuántos problemas siguen abiertos.
 - **Los administradores de la instancia** ven todos los avisos.

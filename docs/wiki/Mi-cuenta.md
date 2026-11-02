@@ -2,7 +2,7 @@
 
 # Mi cuenta
 
-Tu perfil, tu seguridad, tus tokens de API y tu actividad. Se abre desde tu **avatar y tu nombre**, abajo en la barra lateral; el botón de al lado **cierra la sesión** con un solo clic. Las secciones están en la lista de la izquierda (en móvil, arriba), agrupadas en **Cuenta** (Perfil, Seguridad), **Acceso** (Tokens de API) e **Historial** (Actividad). Debajo de esa lista hay también un botón destacado de **Cerrar sesión**.
+Tu perfil, tu seguridad, tus tokens de API y tu actividad. Se abre desde tu **avatar y tu nombre**, abajo en la barra lateral; el botón de al lado **cierra la sesión** con un solo clic. Las secciones están en la lista de la izquierda (en móvil, arriba), agrupadas en **Cuenta** (Perfil, Seguridad, Resumen por correo), **Acceso** (Tokens de API) e **Historial** (Actividad). Debajo de esa lista hay también un botón destacado de **Cerrar sesión**.
 
 ## Perfil
 - **Avatar:** sube una imagen (PNG, JPEG o WebP, hasta **1 MB**) o **Quítala** para volver a la del proveedor de identidad o a tus iniciales.
@@ -44,6 +44,15 @@ Añade a la contraseña un código de 6 dígitos de una **app de autenticación*
 
 ### Sesiones
 **Cerrar sesión en otros dispositivos** (esta sesión sigue abierta) si crees que alguien más la tiene abierta, y **Salir**. También hay un enlace a tu cuenta en el proveedor de identidad, si el administrador lo configuró.
+
+## Resumen por correo
+Un correo periódico con lo que ha cambiado en tus brains, para cuando no abres la aplicación a diario. En **Resumen por correo**, elige para cada brain **Nunca**, **Cada día** o **Cada semana**, y en **Cuándo** la hora, el día de la semana (para los semanales) y tu **zona horaria** (la del navegador, la primera vez). **Ver un ejemplo** enseña lo que diría ahora un resumen de tus brains. Los curadores y por encima ven también estos recuentos en el [[Resumen]] de cada brain, en «Lo que ha cambiado».
+
+- **Qué dice:** de cada brain, cuántos hechos son nuevos y cuántos se han invalidado, y cuántos documentos se han añadido. Si eres **curador o más**, también lo que espera por ti: propuestas y correcciones por revisar (y la antigüedad de la más antigua), documentos con errores, posibles contradicciones y hechos a revisar. Cada línea enlaza con su página, ya en ese brain.
+- **Solo recuentos y enlaces, nunca el contenido de las memorias.** Para leerlo, sigue el enlace.
+- **Si no hay nada que contar, no se envía:** un brain sin novedades y con los mismos pendientes que en su último resumen se omite, y si no queda ningún brain, no llega ningún correo.
+- **Un solo correo** reúne todos los brains que tocan en ese momento. El primero cuenta desde que te suscribiste. Si la instancia estuvo parada, al volver envía un resumen, no uno por cada día perdido.
+- Va al correo de tu cuenta, en tu idioma, y necesita el correo de la instancia ([[Correo SMTP]]). Si pierdes el acceso a un brain, su resumen desaparece.
 
 ## Tokens de API
 Los tokens permiten a **plugins y agentes** acceder a un brain sin usar tu contraseña.

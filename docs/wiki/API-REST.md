@@ -32,6 +32,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | | alias, tipos, relaciones, mover/fusionar, duplicados, ontología, corrector (`/retype`) | administrador |
 | | `POST /vocab/ops/{id}/revert` | curador |
 | **Necesita tu atención** | `GET /attention` (lo que espera una decisión: `proposals`, `corrections`, `duplicates`, `conflicts`, `stale`, `refqueries`, y `retype` para administradores; `null` si un contador no se pudo calcular; se guarda un minuto y lo descarta cualquier escritura correcta en el brain, `?fresh=true` lo recalcula) | curador |
+| **Lo que ha cambiado** | `GET /changes?days=7` (1–31; curador o más): `facts_new`, `facts_gone`, `docs_new`, `proposals_new` y `proposals_decided` del periodo; `null` si no se pudo contar el grafo |
 | **Hechos a revisar** | `GET /review/stale` (hechos vigentes que han superado la vida útil de su relación, los más antiguos primero) · `POST /review/stale/{uuid}/confirm` | curador |
 | **Contradicciones** | `GET /conflicts` (`?all=true` mide todas las relaciones) · `POST /conflicts/resolve` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{id}` | curador |
 | **Consultas de referencia** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{id}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{id}` | curador |
@@ -68,7 +69,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | Área | Rutas |
 |---|---|
 | **Acceso** | `GET /auth/options` · `POST /auth/login` · `POST /auth/mfa` · `POST /auth/logout` · `POST /auth/forgot` · `GET /auth/token/{código}` · `POST /auth/accept` · `POST /auth/setup` · `GET /auth/login/{proveedor}` y `/auth/callback/{proveedor}` (OIDC) · `POST /auth/passkey/options`, `/auth/passkey/login`, `/auth/passkey/mfa/options`, `/auth/passkey/mfa` |
-| **Mi cuenta** | `GET /me` · `GET/PATCH /me/profile` · `POST/DELETE /me/avatar` · `POST /me/password` · `GET /me/tokens` · `GET /me/activity` · `POST /me/sessions/revoke-others` · `GET /me/2fa` y las del doble factor · `GET /me/passkeys`, `POST /me/passkeys/begin`, `…/finish`, `PATCH /me/passkeys/{id}`, `POST /me/passkeys/{id}/delete` · `GET /me/identities`, `DELETE /me/identities/{id}`, `GET /me/identities/link/{proveedor}` |
+| **Mi cuenta** | `GET /me` · `GET/PATCH /me/profile` · `POST/DELETE /me/avatar` · `POST /me/password` · `GET /me/tokens` · `GET /me/activity` · `POST /me/sessions/revoke-others` · `GET /me/2fa` y las del doble factor · `GET /me/passkeys`, `POST /me/passkeys/begin`, `…/finish`, `PATCH /me/passkeys/{id}`, `POST /me/passkeys/{id}/delete` · `GET /me/identities`, `DELETE /me/identities/{id}`, `GET /me/identities/link/{proveedor}` · `GET/PUT /me/digest`, `GET /me/digest/preview` (resumen por correo) |
 | **Notificaciones** | `GET /notifications` · `GET /notifications/summary` · `POST /notifications/read` (los avisos que puedes ver) |
 | **Brains** | `GET /brains` · `POST /brains` (administrador de la instancia) |
 | **Consumo de IA** (administrador de la instancia) | `GET /ai-usage?days=30` (por brain y motor, con las peticiones por minuto de ahora) · `PUT/DELETE /ai-usage/prices` (precio por millón de tokens de un modelo). Ver [[Consumo de IA]] |

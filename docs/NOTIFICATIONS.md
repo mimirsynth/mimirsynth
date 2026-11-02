@@ -4,6 +4,8 @@
 
 MimirSynth tells administrators when something needs attention: a model that stops responding, an ingestion that fails after its retries, a document source that cannot be synced, a new version. Alerts always appear in the **bell** of the interface; optionally they are also sent through **channels**.
 
+What changed in a brain (new facts, proposals waiting…) is not an alert: each person can get it in a periodic **email summary**, set up in My account (see «My account» in the wiki).
+
 ## The bell
 
 The bell (sidebar → Notifications) lists the alerts you can see and how many are unread.

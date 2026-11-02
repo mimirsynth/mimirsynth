@@ -4,6 +4,8 @@
 
 MimirSynth avisa a los administradores cuando algo necesita atención: un modelo que deja de responder, una ingesta que falla tras sus reintentos, una fuente de documentos que no se puede sincronizar, una versión nueva. Los avisos aparecen siempre en la **campana** de la interfaz y, opcionalmente, se envían también por **canales**.
 
+Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un aviso: cada persona puede recibirlo en un **resumen por correo** periódico, que se configura en Mi cuenta (consulta «Mi cuenta» en la wiki).
+
 ## La campana
 
 La campana (barra lateral → Notificaciones) lista los avisos que puedes ver y cuántos tienes sin leer.

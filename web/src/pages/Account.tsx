@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { tr, setLanguage } from "../i18n";
 import { TwoFactor } from "./TwoFactor";
 import { Passkeys } from "./Passkeys";
+import { DigestSettings } from "./DigestSettings";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -119,7 +120,7 @@ export default function Account() {
     if (q.has("linked") || q.has("link_error")) window.history.replaceState(null, "", window.location.pathname + "?seccion=seguridad");
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const [section, setSection] = useTabParam("perfil", "seccion");
-  const nav = [{ heading: t("Cuenta") }, { value: "perfil", label: t("Perfil") }, { value: "seguridad", label: t("Seguridad") }, { heading: t("Acceso") }, { value: "tokens", label: t("Tokens de API") }, { heading: t("Historial") }, { value: "actividad", label: t("Actividad") }];
+  const nav = [{ heading: t("Cuenta") }, { value: "perfil", label: t("Perfil") }, { value: "seguridad", label: t("Seguridad") }, { value: "resumen", label: t("Resumen por correo") }, { heading: t("Acceso") }, { value: "tokens", label: t("Tokens de API") }, { heading: t("Historial") }, { value: "actividad", label: t("Actividad") }];
   const p = prof.data;
   if (!p) return <DataState query={prof} />;
   const editing = name !== null;
@@ -178,6 +179,7 @@ export default function Account() {
                 </Group></SettingsBody>
               </SettingsGroup>
             </>)}
+          {section === "resumen" && <DigestSettings />}
           {section === "tokens" && (
             <SettingsGroup title={t("Mis tokens de API")} description={t("Para plugins y agentes. Cada token vale para un solo brain y nunca tiene más rol que el tuyo. Se muestra una única vez al crearlo.")}>
               <SettingsBody><TokensPanel brains={p.brains} /></SettingsBody>

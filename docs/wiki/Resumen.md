@@ -2,7 +2,7 @@
 
 # Resumen
 
-Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Salvo el bloque **Necesita tu atención**, es de solo lectura.
+Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Salvo los bloques **Necesita tu atención** y **Lo que ha cambiado**, es de solo lectura.
 
 ## Necesita tu atención
 Los curadores y superiores ven primero una lista corta de lo que **espera la decisión de una persona** en el brain, cada línea con su número y un enlace a la herramienta donde se decide:
@@ -18,6 +18,9 @@ Los curadores y superiores ven primero una lista corta de lo que **espera la dec
 | Consultas de referencia que empeoraron en la última ejecución | [[Preguntar]] → Consultas de referencia |
 
 Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita tu atención». Los contadores son los mismos que calcula cada página y se guardan un minuto para que el inicio sea rápido. Cualquier cambio hecho en el brain (decidir una propuesta, fusionar, resolver una contradicción, confirmar un hecho…) los recalcula, así que se ve al momento; lo que cambia solo (un hecho que pasa su vida útil, un agente que propone por MCP) se ve antes de un minuto. En un brain grande, la primera lectura tras un cambio es más lenta, porque es cuando se hacen los recorridos.
+
+## Lo que ha cambiado
+Al lado, para las mismas personas, **Lo que ha cambiado** dice qué se ha movido en el brain en las **últimas 24 horas** o en los **últimos 7 días** (a elegir): hechos nuevos, hechos invalidados, documentos añadidos y propuestas recibidas y decididas. Cada línea abre su página. Son los mismos recuentos del resumen por correo de [[Mi cuenta]], que se los envía a quien los quiera sin abrir la aplicación. Las líneas a cero no salen.
 
 ## Primeros pasos (instancia nueva)
 Un administrador de la instancia que abre la página de inicio cuando **todavía no existe ningún brain** ve en su lugar **Primeros pasos**. El botón **Crea tu primer brain** abre el diálogo para crearlo en Administración ([[Administrar brains y miembros]]), y una breve lista enlaza con cada pantalla:

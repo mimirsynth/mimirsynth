@@ -25,6 +25,7 @@ dependencies = [
   "pgvector>=0.3",
   "alembic>=1.13",
   "prometheus-client>=0.20",  # GET /metrics (#131)
+  "tzdata>=2024.1",  # time zones of the periodic summary (#128) where the system has none (Windows, slim images)
   "graphiti-core[falkordb]==0.30.2",  # fijada: el formato de los datos en FalkorDB depende de la versión
 ]
 

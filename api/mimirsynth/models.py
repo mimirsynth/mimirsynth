@@ -36,6 +36,9 @@ class User(Base):
     totp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     locale: Mapped[str] = mapped_column(String(5), default="")  # idioma elegido (es, en…); vacío = el de la instancia
     totp_last_step: Mapped[int] = mapped_column(Integer, default=0)  # último intervalo de 30 s aceptado: un código no se puede reutilizar
+    digest_hour: Mapped[int] = mapped_column(Integer, default=8, server_default="8")  # hour of the periodic summary, in `timezone` (#128)
+    digest_weekday: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # weekday of the weekly summary, 0 = Monday
+    timezone: Mapped[str] = mapped_column(String(64), default="", server_default="")  # IANA zone (Europe/Madrid); empty: UTC
 
 
 class Identity(Base):
@@ -640,4 +643,17 @@ class WebhookEvent(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     proposal_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     resolution_id: Mapped[int | None] = mapped_column(Integer, nullable=True)   # the second proposal, when the alert outlived the grouping window
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class DigestSubscription(Base):
+    """A person's periodic summary of a brain (#128): daily or weekly; no row means never. See digest.py."""
+    __tablename__ = "digest_subscriptions"
+    __table_args__ = (UniqueConstraint("user_id", "brain_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    frequency: Mapped[str] = mapped_column(String(8))  # daily | weekly
+    last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # last summary considered (sent or empty)
+    last_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the waiting counters of that summary: unchanged ones are not repeated
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

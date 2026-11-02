@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, metrics
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
@@ -150,6 +151,8 @@ app.include_router(attention.router)
 app.include_router(answer.router)
 app.include_router(webhooks.router)
 app.include_router(metrics.router)
+app.include_router(digest.router)
+app.include_router(digest.brain_router)
 app.middleware("http")(attention.invalidate_after_writes)
 
 
