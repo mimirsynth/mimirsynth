@@ -53,6 +53,7 @@ A periodic email with what changed in your brains, for when you do not open the 
 - **Nothing to say, nothing sent:** a brain with nothing new and the same pending counts as in its last summary is left out, and if no brain is left, no email arrives.
 - **One email** covers every brain due at that moment. The first one counts from when you subscribed. If the instance was stopped, it sends one summary when it comes back, not one per missed day.
 - It goes to your account's email, in your language, and needs the instance's email ([[SMTP email]]). Losing access to a brain removes its summary.
+- **If the email fails** (a rejected address, the mail server down), it is tried again later, waiting longer each time: 10 minutes, 1 hour, 6 hours, then once a day. After 5 failures in a row the administrators get a `digest.failed` notification ([[Notifications]]); it goes away once an email reaches you.
 
 ## API tokens
 Tokens let **plugins and agents** access a brain without using your password.

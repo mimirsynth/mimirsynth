@@ -39,6 +39,8 @@ class User(Base):
     digest_hour: Mapped[int] = mapped_column(Integer, default=8, server_default="8")  # hour of the periodic summary, in `timezone` (#128)
     digest_weekday: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # weekday of the weekly summary, 0 = Monday
     timezone: Mapped[str] = mapped_column(String(64), default="", server_default="")  # IANA zone (Europe/Madrid); empty: UTC
+    digest_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # summary emails failed in a row (#173)
+    digest_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # no summary before this, after a failure
 
 
 class Identity(Base):
