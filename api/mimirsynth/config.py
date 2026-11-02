@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     answer_max_tokens: int = 800  # longest answer, in tokens (#126)
     doc_search_timeout: float = 0.6  # segundos máximos de la búsqueda documental dentro del recall
     index_sync_minutes: int = 10  # 0 = sin sincronización periódica del índice de texto
+    metrics_token: str = ""  # bearer token that reads GET /metrics (#131); empty: the route does not exist
 
     # Plano de control
     database_url: str = "sqlite:///./mimirsynth.db"  # en producción: postgresql+psycopg://...

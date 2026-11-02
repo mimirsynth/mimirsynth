@@ -24,6 +24,7 @@ dependencies = [
   "webauthn>=2.5",  # llaves de acceso (WebAuthn / passkeys)
   "pgvector>=0.3",
   "alembic>=1.13",
+  "prometheus-client>=0.20",  # GET /metrics (#131)
   "graphiti-core[falkordb]==0.30.2",  # fijada: el formato de los datos en FalkorDB depende de la versión
 ]
 

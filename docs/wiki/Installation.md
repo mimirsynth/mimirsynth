@@ -96,6 +96,8 @@ MimirSynth raises alerts about the graph and the AI models itself (the bell and 
 
 Alert on any status other than `200`; to tell the cases apart, look at `db` and `graph` in the body. Each check waits at most 2 seconds, and the cause of a failure goes to the container log (`docker compose logs mimirsynth`), never to the response. If the monitor runs on another machine, use the public address behind the reverse proxy (`https://memory.example.com/api/health`). The container's Docker health check uses the same endpoint, so `docker ps` shows it as `unhealthy` in both cases.
 
+To see how it is doing (recall time, jobs waiting, proposals, AI engine errors), turn on the Prometheus metrics at `/metrics` with `MIMIRSYNTH_METRICS_TOKEN`: see [[Metrics]].
+
 ## Installing without the bundled FalkorDB
 If you already have a FalkorDB (for example, the one of an existing Graphiti), do not use `--profile bundled`:
 ```bash

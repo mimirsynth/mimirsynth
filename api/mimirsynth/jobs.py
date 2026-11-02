@@ -141,6 +141,7 @@ def _run(jid: int) -> None:
         db.commit()
     ctx = JobCtx(jid, brain_id, params)
     status, error, result = "done", "", None
+    started = time.monotonic()
     try:
         result = _KINDS[kind].fn(ctx, params)
     except Cancelled:
@@ -152,6 +153,8 @@ def _run(jid: int) -> None:
             from . import notify
             notify.emit("job.failed", f"Trabajo fallido: {label_of(kind)}", error[:300], brain_id=brain_id, key=f"{kind}:{jid}")
     _CANCEL.discard(jid)
+    from . import metrics
+    metrics.job_done(kind, status, time.monotonic() - started)
     ctx.flush()
     with _factory()() as db:
         j = db.get(Job, jid)

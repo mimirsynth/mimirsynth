@@ -38,6 +38,7 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 | `MIMIRSYNTH_DEFAULT_LANGUAGE` | `en` | Default language (`en` or `es`) of the interface and emails for people who have not chosen one, and the last fallback for the language of API errors, MCP texts and recall headings ([[Connect agents]]). Also under Administration → General |
 | `MIMIRSYNTH_ADMIN_EMAILS` | empty | Emails that become instance administrators when they first sign in through OIDC, **only with an email the provider marks as verified** |
 | `MIMIRSYNTH_ACCOUNT_URL` | empty | Page of your identity provider where password, passkeys and two-factor are managed; linked from My account |
+| `MIMIRSYNTH_METRICS_TOKEN` | empty | Turns on the Prometheus metrics at `/metrics`, read with `Authorization: Bearer <token>`. Empty: `/metrics` answers 404. See [[Metrics]] |
 | `MIMIRSYNTH_OIDC_*` | — | **Only read once**, on the first start after upgrading to 0.5, to import the provider you had as `oidc`. After that, providers are managed in Administration → Identity and these variables can be removed |
 
 ## Default engines

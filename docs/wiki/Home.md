@@ -26,7 +26,7 @@ The framework: [[Vocabulary]] · [[Ontology]] · [[Entity types]] · [[Relations
 The content: [[Content quality]] · [[Merge duplicates]] · [[Contradictions]] · [[Type corrector]]
 
 ## Administering the instance
-[[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Export a brain]] · [[Import a brain]] · [[Notifications]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[AI consumption]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]
+[[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Export a brain]] · [[Import a brain]] · [[Notifications]] · [[Metrics]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[AI consumption]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]
 
 ## For agents and developers
 [[Connect agents]] · [[REST API]] · [[Claude Code integration]] · [[Writing good memory]] · [[Document memory]] · [[Environment variables]]

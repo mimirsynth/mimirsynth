@@ -38,6 +38,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_DEFAULT_LANGUAGE` | `en` | Idioma por defecto (`en` o `es`) de la interfaz y los correos para quien no haya elegido uno, y último recurso para el idioma de los errores de la API, los textos del MCP y los encabezados del recall ([[Conectar agentes]]). También en Administración → General |
 | `MIMIRSYNTH_ADMIN_EMAILS` | vacío | Emails que pasan a administradores de la instancia la primera vez que entran por OIDC, **solo con un email que el proveedor marque como verificado** |
 | `MIMIRSYNTH_ACCOUNT_URL` | vacío | Página de tu proveedor de identidad donde se gestionan contraseña, llaves de acceso y doble factor; se enlaza desde Mi cuenta |
+| `MIMIRSYNTH_METRICS_TOKEN` | vacío | Activa las métricas de Prometheus en `/metrics`, que se leen con `Authorization: Bearer <token>`. Vacío: `/metrics` responde 404. Consulta [[Métricas]] |
 | `MIMIRSYNTH_OIDC_*` | — | **Solo se leen una vez**, en el primer arranque tras actualizar a la 0.5, para importar el proveedor que tuvieras como `oidc`. Después los proveedores se gestionan en Administración → Identidad y estas variables se pueden quitar |
 
 ## Motores por defecto

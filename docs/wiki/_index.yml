@@ -43,6 +43,7 @@ sidebar:
   - Import a brain
   - Incoming webhooks
   - Notifications
+  - Metrics
   - Administer users
   - Security and two-factor
   - OIDC identity
@@ -123,6 +124,7 @@ home:
     - Export a brain
     - Import a brain
     - Notifications
+    - Metrics
     - Administer users
     - Security and two-factor
     - OIDC identity

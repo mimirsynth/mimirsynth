@@ -26,7 +26,7 @@ El marco: [[Vocabulario]] · [[Ontología]] · [[Tipos de entidad]] · [[Relacio
 El contenido: [[Calidad del contenido]] · [[Fusionar duplicados]] · [[Contradicciones]] · [[Corrector de tipos]]
 
 ## Administrar la instancia
-[[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Actualización y copias de seguridad]]
+[[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Métricas]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Actualización y copias de seguridad]]
 
 ## Para agentes y desarrolladores
 [[Conectar agentes]] · [[API REST]] · [[Integración con Claude Code]] · [[Escribir buena memoria]] · [[Memoria documental]] · [[Variables de entorno]]
