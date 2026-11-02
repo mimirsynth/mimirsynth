@@ -79,10 +79,12 @@ async def lifespan(_: FastAPI):
     task = asyncio.create_task(memory.periodic_sync())
     task2 = asyncio.create_task(docsources.periodic())
     task3 = asyncio.create_task(notify.worker(VERSION))
+    task4 = asyncio.create_task(digest.periodic())  # its own loop: a slow SMTP server does not delay the alerts (#173)
     yield
     task.cancel()
     task2.cancel()
     task3.cancel()
+    task4.cancel()
     from . import usage
     usage.flush()  # the AI counters still in memory
 

@@ -178,6 +178,85 @@ def test_a_failed_email_is_tried_again(client, outbox, monkeypatch):  # noqa: F8
     assert len(_mine(outbox, "smtp-dg6@example.com")) == 1
 
 
+def test_a_failing_address_waits_longer_each_time_and_is_reported_once(client, outbox, monkeypatch, caplog):  # noqa: F811
+    """#173: no retry every round, one traceback, one notification after ALERT_AFTER failures, and all forgotten once it works."""
+    import logging
+
+    from mimirsynth import digest
+    from mimirsynth.models import Notification, User
+    from mimirsynth.store import _factory
+    at = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)
+    uid, bid = _person("bounce-dg11@example.com", "dg11", "curator", last=at - timedelta(days=2))
+    _pending(bid, 1)
+    tries = []
+    real = digest.mail.send
+
+    def bounce(to, subject, body):
+        if to == "bounce-dg11@example.com":
+            tries.append(to)
+            raise ConnectionError("550 mailbox unavailable")
+        real(to, subject, body)
+    monkeypatch.setattr(digest.mail, "send", bounce)
+    caplog.set_level(logging.WARNING, logger="mimirsynth.digest")
+    t = at
+    for wait in (timedelta(0), timedelta(minutes=10), timedelta(hours=1), timedelta(hours=6), timedelta(days=1)):
+        t += wait
+        digest.run_due(t - timedelta(minutes=1)) if wait else None    # just before its time: not tried
+        digest.run_due(t)
+    assert len(tries) == 5                                                  # 10 min, 1 h, 6 h and a day apart, never every round
+    with _factory()() as db:
+        u = db.get(User, uid)
+        assert u.digest_failures == 5 and u.digest_retry_at.replace(tzinfo=UTC) == t + timedelta(days=1)
+        [n] = db.query(Notification).filter_by(event="digest.failed", key=f"user:{uid}").all()
+        assert n.resolved_at is None and "@" not in n.body and "example.com" not in n.body and "5" in n.body   # never the address
+    traces = [r for r in caplog.records if r.name == "mimirsynth.digest" and r.exc_info]
+    assert len(traces) == 1                                                 # only the first failure carries its traceback
+    digest.run_due(t + timedelta(days=1))                                   # the sixth failure: still one notification
+    with _factory()() as db:
+        assert db.query(Notification).filter_by(event="digest.failed", key=f"user:{uid}").count() == 1
+    monkeypatch.setattr(digest.mail, "send", real)
+    digest.run_due(t + timedelta(days=2))
+    assert len(_mine(outbox, "bounce-dg11@example.com")) == 1
+    with _factory()() as db:
+        u = db.get(User, uid)
+        assert u.digest_failures == 0 and u.digest_retry_at is None
+        assert db.query(Notification).filter_by(event="digest.failed", key=f"user:{uid}").one().resolved_at is not None
+
+
+def test_a_lost_brain_is_dropped_even_when_the_email_fails(client, outbox, monkeypatch):  # noqa: F811
+    from mimirsynth import digest
+    from mimirsynth.models import Brain, DigestSubscription, Membership
+    from mimirsynth.store import _factory
+    at = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)
+    uid, bid = _person("lost-dg12@example.com", "dg12", "curator", last=at - timedelta(days=2))
+    _pending(bid, 1)
+    with _factory()() as db:
+        gone = Brain(slug="dg12b", name="DG12B", graph_name="dg12b")
+        db.add(gone); db.flush()
+        db.add(DigestSubscription(user_id=uid, brain_id=gone.id, frequency="daily", last_sent_at=at - timedelta(days=2)))
+        db.commit()
+        gone_id = gone.id
+
+    def down(to, subject, body):
+        raise ConnectionError("smtp caído")
+    monkeypatch.setattr(digest.mail, "send", down)
+    digest.run_due(at)
+    with _factory()() as db:
+        assert db.query(Membership).filter_by(user_id=uid, brain_id=gone_id).count() == 0
+        assert db.query(DigestSubscription).filter_by(user_id=uid, brain_id=gone_id).count() == 0   # removed despite the failure
+        assert db.query(DigestSubscription).filter_by(user_id=uid, brain_id=bid).one().last_sent_at.replace(tzinfo=UTC) < at   # not sent
+
+
+def test_the_summaries_run_apart_from_the_alerts():
+    """#173: a slow SMTP server must not delay the notifications loop, so the summaries have their own loop."""
+    import inspect
+
+    from mimirsynth import digest, main, notify
+    assert "digest" not in inspect.getsource(notify.worker)
+    assert "digest.periodic()" in inspect.getsource(main.lifespan)
+    assert digest.ROUND_SECONDS == 600
+
+
 def test_without_email_nothing_is_sent(client, outbox, monkeypatch):  # noqa: F811
     from mimirsynth import digest
     at = datetime(2026, 11, 4, 9, 0, tzinfo=UTC)

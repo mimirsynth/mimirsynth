@@ -53,6 +53,7 @@ Un correo periódico con lo que ha cambiado en tus brains, para cuando no abres 
 - **Si no hay nada que contar, no se envía:** un brain sin novedades y con los mismos pendientes que en su último resumen se omite, y si no queda ningún brain, no llega ningún correo.
 - **Un solo correo** reúne todos los brains que tocan en ese momento. El primero cuenta desde que te suscribiste. Si la instancia estuvo parada, al volver envía un resumen, no uno por cada día perdido.
 - Va al correo de tu cuenta, en tu idioma, y necesita el correo de la instancia ([[Correo SMTP]]). Si pierdes el acceso a un brain, su resumen desaparece.
+- **Si el correo falla** (una dirección rechazada, el servidor de correo caído), se reintenta más tarde, esperando cada vez más: 10 minutos, 1 hora, 6 horas y después una vez al día. Tras 5 fallos seguidos los administradores reciben un aviso `digest.failed` ([[Notificaciones]]), que se cierra en cuanto te llega un correo.
 
 ## Tokens de API
 Los tokens permiten a **plugins y agentes** acceder a un brain sin usar tu contraseña.

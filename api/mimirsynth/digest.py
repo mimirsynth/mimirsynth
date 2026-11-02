@@ -11,9 +11,15 @@
   person's hour, that day or that weekday) is later than its last summary, so an instance that was stopped sends one summary when it
   comes back, not one per missed day. The period starts at the last summary, at most one day or one week back. A new subscription
   starts counting when it is made.
-- Only brains the person can still read: a subscription to a brain they lost is removed. Without email (SMTP) nothing is sent and the
-  subscriptions wait; a failed email is tried again on the next round.
+- Only brains the person can still read: a subscription to a brain they lost is removed (before sending, so a failed email does not
+  undo it). Without email (SMTP) nothing is sent and the subscriptions wait.
+- **A failed email** (#173) is tried again later, waiting longer each time (RETRY: 10 minutes, 1 hour, 6 hours, then once a day),
+  and nothing is marked as sent until it goes. Only the first failure logs its traceback. After ALERT_AFTER failures in a row the
+  administrators get one `digest.failed` notification (the person's name and the count, never the address), resolved when an email
+  to that person goes through again.
+- It runs in its own loop (`periodic`), every ROUND_SECONDS, not in the notifications loop: a slow SMTP server never delays an alert.
 """
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -39,6 +45,9 @@ curator = brain_access("curator")
 FREQUENCIES = ("daily", "weekly")
 PERIOD = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
 WAITING = ("proposals", "corrections", "doc_errors", "conflicts", "stale")   # what a curator is waiting on: compared with the last summary
+RETRY = (timedelta(minutes=10), timedelta(hours=1), timedelta(hours=6), timedelta(days=1))   # waits after 1, 2, 3, 4+ failures
+ALERT_AFTER = 5
+ROUND_SECONDS = 600
 ISO = "%Y-%m-%dT%H:%M:%S.%f"   # Graphiti keeps its dates as ISO 8601 text in UTC: comparing as text is enough
 
 
@@ -179,6 +188,10 @@ def _readable(db: Session, user: User, brain: Brain) -> str | None:
     return role if allows(role, "reader") else None
 
 
+class _SendFailed(Exception):
+    """The email of a summary did not go: it is retried later, not marked as sent."""
+
+
 def run_due(at: datetime | None = None) -> int:
     """Sends the summaries that are due. Returns how many emails went out. Never raises."""
     if not mail.configured():
@@ -188,8 +201,16 @@ def run_due(at: datetime | None = None) -> int:
         with _factory()() as db:
             users = db.scalars(select(User).where(User.id.in_(select(DigestSubscription.user_id)), User.status == "active")).all()
             for user in users:
+                retry = _aware(user.digest_retry_at)
+                if retry and retry > at:   # waiting after a failed email
+                    continue
                 try:
-                    sent += _for_user(db, user, at, run)
+                    if _for_user(db, user, at, run):
+                        sent += 1
+                        _delivered(db, user)
+                except _SendFailed as e:
+                    db.rollback()
+                    _failed(db, user, at, e.__cause__)
                 except Exception:  # noqa: BLE001  (one person's summary does not stop the others)
                     db.rollback()
                     log.exception("resumen: falló el de la persona %s", user.id)
@@ -198,11 +219,50 @@ def run_due(at: datetime | None = None) -> int:
     return sent
 
 
+def _failed(db: Session, user: User, at: datetime, error: BaseException | None) -> None:
+    """One more failed email for this person: wait longer before the next try, and tell the administrators once."""
+    from . import notify
+    user.digest_failures = (user.digest_failures or 0) + 1
+    n = user.digest_failures
+    user.digest_retry_at = at + RETRY[min(n, len(RETRY)) - 1]
+    db.commit()
+    if n == 1:
+        log.warning("resumen: no se pudo enviar el de la persona %s", user.id, exc_info=error)
+    else:
+        log.warning("resumen: el de la persona %s sigue sin poder enviarse (%s fallos seguidos): %s", user.id, n,
+                    (str(error) or type(error).__name__)[:200] if error else "")
+    if n >= ALERT_AFTER:
+        notify.emit("digest.failed", "El resumen por correo de una persona falla una y otra vez",
+                    f"{user.display_name or user.name or user.id}: {n} envíos fallidos seguidos. Se reintenta una vez al día; "
+                    "revisa su dirección de correo o el servidor SMTP.", key=f"user:{user.id}")
+
+
+def _delivered(db: Session, user: User) -> None:
+    """An email went: the failures of this person are forgotten and their notification, if any, is resolved."""
+    if not user.digest_failures and not user.digest_retry_at:
+        return
+    from . import notify
+    user.digest_failures, user.digest_retry_at = 0, None
+    db.commit()
+    notify.resolve("digest.failed", key=f"user:{user.id}")
+
+
+async def periodic() -> None:
+    """The loop of the summaries, apart from the notifications loop."""
+    from . import jobs
+    if jobs.INLINE:  # tests: nothing in the background
+        return
+    await asyncio.sleep(30)
+    while True:
+        await asyncio.to_thread(run_due)
+        await asyncio.sleep(ROUND_SECONDS)
+
+
 def _for_user(db: Session, user: User, at: datetime, run: _Run) -> int:
     if not user.email:
         return 0
     subs = db.scalars(select(DigestSubscription).where(DigestSubscription.user_id == user.id)).all()
-    due, sections, starts = [], [], []
+    due, sections, starts, lost = [], [], [], False
     for sub in subs:
         slot = last_slot(at, user, sub.frequency)
         last = _aware(sub.last_sent_at)
@@ -212,6 +272,7 @@ def _for_user(db: Session, user: User, at: datetime, run: _Run) -> int:
         role = _readable(db, user, brain) if brain else None
         if not role:
             db.delete(sub)
+            lost = True
             continue
         since = max(last or slot - PERIOD[sub.frequency], slot - PERIOD[sub.frequency])
         sec = section(db, brain, user, role, since, run)
@@ -219,11 +280,16 @@ def _for_user(db: Session, user: User, at: datetime, run: _Run) -> int:
         if changed(sec, sub.last_counts):
             sections.append(sec)
             starts.append((since, sub.frequency))
+    if lost:
+        db.commit()   # before sending: a failed email must not bring back a subscription to a brain the person lost
     if sections:
         since = min(s for s, _ in starts)
         frequency = "weekly" if any(f == "weekly" for _, f in starts) else "daily"
         subject, body = render(user, sections, since, frequency, mail_language(user))
-        mail.send(user.email, subject, body)   # raises: nothing is marked and the next round tries again
+        try:
+            mail.send(user.email, subject, body)
+        except Exception as e:  # noqa: BLE001  (nothing is marked: it is tried again later)
+            raise _SendFailed() from e
     for sub, sec in due:
         sub.last_sent_at = at
         sub.last_counts = {k: (sec["waiting"] or {}).get(k) for k in WAITING}
