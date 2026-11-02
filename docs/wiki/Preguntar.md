@@ -47,6 +47,13 @@ La pestaña **Calidad** resume los últimos 30 días: cuántos recalls hubo y cu
 
 Los administradores del brain pueden marcar **Guardar el texto de las consultas**: las consultas reales llevan los prompts de las personas, así que por defecto solo se guarda una huella; con esto, el texto se guarda 30 días, y al desmarcarlo se borra ya. Las valoraciones siguen el plazo de retención del brain para **Valoraciones del recall** ([[Administrar brains y miembros]]).
 
+## Buscar en todos mis brains
+**Buscar en todos mis brains**, abajo en la barra lateral, hace la misma búsqueda a la vez en **todos los brains que puedes leer**, con los resultados agrupados por brain: hechos, fragmentos de episodios y pasajes de documentos.
+- **Qué brains:** los tuyos, cada uno con tu propio rol, o todos si administras la instancia. La federación no entra: un brain que solo presta a otro no se busca a través de él. Los brains que no puedes leer no aparecen nunca, ni siquiera en un recuento.
+- **Cada resultado se abre en su brain:** una entidad, el episodio en Diario o el documento en Conocimiento, cambiando antes a ese brain. **Abrir en Preguntar** repite la búsqueda en Preguntar, en ese brain.
+- **Rápida y sin bloqueos:** el vector de la consulta se calcula una sola vez para todos los brains, que es lo caro. Los brains se consultan de pocos en pocos y la página espera como mucho 8 segundos: un brain que no responde a tiempo o falla se marca, y el resto se muestra igualmente.
+- **No disponible para tokens de API:** siguen acotados a un brain, así que los agentes siguen preguntando a cada brain por separado.
+
 ## Si el resultado es malo
 | Síntoma | Causa probable | Qué hacer |
 |---|---|---|

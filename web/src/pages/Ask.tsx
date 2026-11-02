@@ -21,7 +21,7 @@ type Rating = "useful" | "irrelevant" | "incorrect";
 
 export default function Ask({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
-  const [q, setQ] = useState("");
+  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");  // «Open in Ask» from the search in every brain
   const [nf, setNf] = useState(8); const [nc, setNc] = useState(4);
   const [marks, setMarks] = useState<Record<string, { mark: Mark; item: Item }>>({});
   const [save, setSave] = useState<RefQuery | null>(null);

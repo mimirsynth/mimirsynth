@@ -47,6 +47,13 @@ The **Quality** tab sums up the last 30 days: how many recalls there were and ho
 
 Brain administrators can tick **Keep the text of the queries**: real queries carry people's prompts, so by default only a fingerprint is kept; with it, the text is kept for 30 days, and unticking it deletes it at once. Ratings follow the brain's retention period for **Recall ratings** ([[Brains and members]]).
 
+## Search all my brains
+**Search all my brains**, at the bottom of the side bar, runs the same search at once in **every brain you can read**, with the results grouped by brain: facts, episode fragments and document passages.
+- **Whose brains:** yours, each with your own role, or all of them if you administer the instance. Federation does not enter: a brain that only lends to another is not searched through it. Brains you cannot read never appear, not even as a count.
+- **Each result opens in its brain:** an entity, the episode in Journal or the document in Knowledge, after switching to that brain. **Open in Ask** repeats the search in Ask, in that brain.
+- **Fast and robust:** the query's vector is computed once for every brain, which is the costly part. Brains are searched a few at a time, and the page waits at most 8 seconds: a brain that does not answer in time or fails is marked, and the others are shown anyway.
+- **Not for API tokens:** they stay bound to one brain, so agents keep asking each brain on its own.
+
 ## If the result is poor
 | Symptom | Likely cause | What to do |
 |---|---|---|
