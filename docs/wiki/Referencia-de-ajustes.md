@@ -8,6 +8,7 @@ No aparecen aquí porque no son ajustes sueltos: los proveedores OIDC (cada uno 
 
 Esta página se genera a partir del código; ver también [[Visión general de la administración]].
 
+<!-- generated:start (scripts/wiki_reference.py writes this part from the code: do not edit it by hand) -->
 ## General
 
 Guía: [[Visión general de la administración]]
@@ -68,13 +69,13 @@ Guía: [[Recuerdo e ingesta]]
 | Ajuste | Clave | Por defecto | Rango o valores | Descripción |
 |---|---|---|---|---|
 | Peso de un hecho a revisar | `recall_stale_weight` | `0,6` | 0–1 | Un hecho vigente que ha superado la vida útil de su relación pesa esto en el recall (y sale marcado «sin confirmar desde …»). 1: igual que los demás. |
-| Similitud mínima de un pasaje | `doc_min_similarity` | `0.66` | 0–1 | Coseno mínimo para que un pasaje documental entre en el recall. Depende del modelo de embeddings; con nomic-embed-text, 0,66. |
+| Similitud mínima de un pasaje | `doc_min_similarity` | `0,66` | 0–1 | Coseno mínimo para que un pasaje documental entre en el recall. Depende del modelo de embeddings; con nomic-embed-text, 0,66. |
 | Pasajes documentales por recall | `doc_passages` | `2` | 0–10 | Máximo de pasajes de documentos que acompañan a los hechos en cada recall. |
-| Motor para «Responder» | `answer_engine` | vacío | | Nombre del motor LLM que redacta las respuestas con citas de [[Preguntar]]. Conviene el más capaz. Vacío: el motor LLM predeterminado. |
+| Motor para «Responder» | `answer_engine` | — | texto | Nombre del motor LLM que redacta las respuestas con citas de Preguntar. Conviene el más capaz. Vacío: el motor LLM predeterminado. |
 | Respuestas por persona y hora | `answer_per_hour` | `30` | 0–1000 | Cuántas respuestas redactadas puede pedir cada persona en cada brain por hora. Cada una es una llamada al motor. 0: sin límite. |
 | Búsquedas en todos los brains por persona y hora | `search_per_hour` | `60` | 0–1000 | Cuántas veces puede buscar cada persona en todos sus brains a la vez por hora. Cada búsqueda es un recall en cada brain. 0: sin límite. |
-| Longitud máxima de una respuesta | `answer_max_tokens` | `800` tokens | 100–4000 | Tokens que puede ocupar como mucho una respuesta redactada. |
-| Tiempo máximo de la búsqueda documental | `doc_search_timeout` | `0.6` s | 0.1–10 s | Si tarda más, el recall responde sin documentos. |
+| Longitud máxima de una respuesta | `answer_max_tokens` | `800` tokens | 100–4000 tokens | Tokens que puede ocupar como mucho una respuesta redactada. |
+| Tiempo máximo de la búsqueda documental | `doc_search_timeout` | `0,6` s | 0,1–10 s | Si tarda más, el recall responde sin documentos. |
 | Sincronización del índice de texto | `index_sync_minutes` | `10` min | 0–1440 min | Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada. |
 
 ## Ingesta y trabajos
@@ -88,11 +89,11 @@ Guía: [[Recuerdo e ingesta]]
 | Pausa entre lotes al cambiar de modelo | `reindex_pause` | `0` s | 0–600 s | Segundos de espera entre lotes para respetar el límite de tasa del proveedor. Con un 429 se espera además lo que indique Retry-After. |
 | Espera del cambio de modelo | `reindex_switch_wait` | `60` s | 1–3600 s | Segundos que el cambio de modelo de embeddings espera a que terminen las escrituras de vectores en curso (ingestas, indexaciones). Si no terminan, el cambio se aplaza y se reintenta; las escrituras nunca se cortan. |
 | Avisar de un cambio de modelo parado | `reindex_orphan_hours` | `24` h | 0–8760 h | Horas que un relleno de embeddings puede estar fallido o parado, con sus vectores sombra ocupando memoria, antes de avisar (evento «reindex.orphan»). |
-| Agrupar las alertas de un webhook | `webhook_group_minutes` | `15` min | 1–1440 min | Una alerta que se repite y se resuelve dentro de este plazo deja una sola propuesta, con su inicio, su fin y el número de avisos. Si sigue activa pasado el plazo, se propone como activa y su resolución llega aparte. Ver [[Webhooks de entrada]]. |
+| Agrupar las alertas de un webhook | `webhook_group_minutes` | `15` min | 1–1440 min | Una alerta que se repite y se resuelve dentro de este plazo deja una sola propuesta, con su inicio, su fin y el número de avisos. Si sigue activa pasado el plazo, se propone como activa y su resolución llega aparte. |
 | Conservar trabajos terminados | `jobs_keep_days` | `60` días | 1–3650 días | Pasado este plazo se borran los trabajos terminados, fallidos y cancelados. |
 | Retención: texto de las propuestas rechazadas | `retention_rejected_days` | `0` días | 0–3650 días | Pasado este plazo desde que se rechazó, una propuesta pierde su texto (queda su estado, sus autores y sus fechas). Cada brain puede fijar el suyo. 0: sin plazo. |
-| Retención: valoraciones del recall | `retention_ratings_days` | `0` días | 0–3650 días | Pasado este plazo se borran las valoraciones del recall de un brain (y los registros de las consultas que valoraban). Cada brain puede fijar el suyo. 0: sin plazo. |
 | Retención: trabajos terminados de cada brain | `retention_jobs_days` | `0` días | 0–3650 días | Pasado este plazo se borran los trabajos terminados, fallidos y cancelados de un brain, antes que con el plazo general de arriba. Cada brain puede fijar el suyo. 0: sin plazo. |
+| Retención: valoraciones del recall | `retention_ratings_days` | `0` días | 0–3650 días | Pasado este plazo se borran las valoraciones del recall de un brain (y los registros de las consultas que valoraban). Cada brain puede fijar el suyo. 0: sin plazo. |
 | Conservar reescaneos programados | `jobs_keep_scheduled_days` | `7` días | 1–365 días | Los reescaneos automáticos sin incidencias son ruido (uno cada pocos minutos): se borran antes. |
 
 ## Notificaciones
@@ -109,6 +110,8 @@ Guía: [[Notificaciones]]
 | Avisar de versiones nuevas | `notify_update_check` | `no` | `no` (No) / `yes` (Sí) | Una vez al día consulta en GitHub si hay una versión más reciente. Es la única conexión de salida que hace la instancia por su cuenta; está desactivada por defecto. |
 | Prohibir redes privadas | `notify_block_private` | `no` | `no` (No) / `yes` (Sí) | Impide que los canales apunten a direcciones privadas o locales (protege de que se use un canal para llegar a servicios internos). Déjalo en «No» si tu ntfy o Gotify están en la red local. |
 | Conservar avisos | `notify_keep_days` | `30` días | 1–3650 días | Pasado este plazo se borran los avisos y su historial de envíos. |
+<!-- generated:end -->
+
 ## Cómo se guardan
 - Un ajuste solo se guarda si **difiere** de su valor por defecto.
 - Los cambios de un ajuste quedan en la [[Auditoría]] (`settings.set`, `settings.reset`, `settings.secret`).

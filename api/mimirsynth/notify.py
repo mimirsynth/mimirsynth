@@ -34,6 +34,27 @@ EVENTS = {
     "webhook.capped": ("warning", "Un webhook de entrada ha llegado a su tope diario de propuestas"),
     "digest.failed": ("warning", "El resumen por correo de una persona falla una y otra vez"),
 }
+
+# How the wiki describes each event: when it is raised, in more detail than its label, and the guide it links to (an English page
+# title). `scripts/wiki_reference.py` writes the table of the Notifications page from this; the texts are translated in en.server.json
+# like any server text. A third element replaces the severity in that table when it is not fixed.
+EVENT_DOCS = {
+    "model.unavailable": ("El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica", ""),
+    "graph.down": ("El grafo (FalkorDB) no responde", ""),
+    "ingest.failed": ("Una propuesta aprobada no se pudo ingerir tras sus reintentos", ""),
+    "job.failed": ("Cualquier otro trabajo en segundo plano ha fallado", ""),
+    "docsource.error": ("Una fuente de documentos no se pudo sincronizar", ""),
+    "security.lockout": ("Una cuenta se ha bloqueado tras demasiados intentos fallidos", ""),
+    "reindex.orphan": ("Un cambio de modelo de embeddings lleva fallido o parado más horas de las configuradas, con sus vectores sombra ocupando memoria", "AI providers"),
+    "refquery.regressed": ("Tras un cambio de modelo de embeddings, las consultas de referencia de un brain dejan de encontrar elementos esperados o muestran falsos positivos nuevos. Si no había una ejecución anterior con la que comparar, lo dice, como información", ""),
+    "ai.budget": ("Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes; una vez por mes y nivel. Al 100 %, si así se configuró, su ingesta queda en pausa", "AI consumption", "aviso (crítico al 100 %)"),
+    "webhook.capped": ("Un webhook de entrada llegó a su tope diario de propuestas; una vez al día por webhook, con su nombre y su tope", "Incoming webhooks"),
+    "digest.failed": ("El resumen por correo de una persona ha fallado 5 veces seguidas; con su nombre y el recuento, nunca su dirección. Se cierra cuando un correo le llega", "My account"),
+    "update.available": ("Hay una versión más reciente (solo si lo activas, ver abajo)", ""),
+    "conflicts.found": ("Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día", "Vocabulary"),
+    "token.expiring": ("Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa", "Connect agents"),
+    "facts.stale": ("Un brain tiene hechos vigentes que han superado la vida útil de su relación; se cuentan una vez al día, sin texto", "Ontology"),
+}
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
 _RANK = {s: i for i, s in enumerate(ch.SEVERITIES)}
