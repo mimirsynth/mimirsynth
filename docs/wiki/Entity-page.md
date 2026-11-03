@@ -12,7 +12,7 @@ Everything the brain knows about **one entity** (a service, a host, a person…)
 - From the entity page itself: every related entity is a link.
 
 ## What it shows
-- **Header:** name, type, the names merged into it ("Also: …") and its summary.
+- **Header:** one row with the name, its type and the names merged into it, as small chips (a merged name equal to the entity's own name, apart from case or spacing, is never shown), and under it the summary. **← Facts** at the top goes back, and **Facts** is the section marked in the side bar.
 - **Facts grouped by relation.** Each group is one piece of data read as an **evolution**, oldest first: "HOSTED_ON → Eridani → Polaris → Notus". The current value is shown with its dates; the earlier ones are folded under **Show earlier (N)** and appear struck through, with the period in which they were true. A relation pointing to the entity is shown as "← RELATION". Groups with a possible contradiction come first, then those with most current values.
 - **Other relations:** generic relations such as `RELATES_TO`, which the extractor writes when no type fits, link anything, so their «evolution» says little. They are folded into one section at the end, with the number of facts; **Show** opens it.
 - **Two dates per fact:** since when it is true (*current since*, *valid … → …*) and when the brain **learned** it. They are different axes: a fact learned today can be true since last year.
@@ -28,7 +28,7 @@ If a relation is marked as **single-valued** in the [[Ontology]] and the entity 
 
 ## Curator actions
 - **Invalidate** a current fact, or **Reactivate** an earlier one, from the fact itself. They are the same actions as in [[Facts]] and can be undone from the vocabulary history.
-- **Change type**, next to the entity's type in the header: pick one of the types of the brain's [[Ontology]] (the same closed list the [[Type corrector]] uses; nothing else is accepted). The change is seen at once here and in the [[Graph]], goes to the audit log, and can be undone from the message that confirms it or from **Recent changes** in [[Entity types]]. If the type corrector had a suggestion pending for this entity, it is no longer offered, and a later analysis does not propose the entity again.
+- **Change type**: the entity's type in the header is a button with a pencil for curators: pick one of the types of the brain's [[Ontology]] (the same closed list the [[Type corrector]] uses; nothing else is accepted). The change is seen at once here and in the [[Graph]], goes to the audit log, and can be undone from the message that confirms it or from **Recent changes** in [[Entity types]]. If the type corrector had a suggestion pending for this entity, it is no longer offered, and a later analysis does not propose the entity again.
 - Links to **merge** the entity with another ([[Merge duplicates]]), review the **doubtful types** of the whole brain ([[Type corrector]], administrators) and **edit the text** of a fact ([[Facts]]).
 
 ## Lent entities

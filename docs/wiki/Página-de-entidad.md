@@ -12,7 +12,7 @@ Todo lo que el brain sabe de **una entidad** (un servicio, un host, una persona�
 - Desde la propia página: cada entidad relacionada es un enlace.
 
 ## Qué muestra
-- **Cabecera:** nombre, tipo, los nombres fusionados en ella («También: …») y su resumen.
+- **Cabecera:** una fila con el nombre, su tipo y los nombres fusionados en ella, como chips pequeños (un nombre fusionado igual al de la propia entidad, salvo mayúsculas o espacios, no se muestra nunca), y debajo el resumen. **← Hechos** arriba vuelve atrás, y **Hechos** es la sección marcada en la barra lateral.
 - **Hechos agrupados por relación.** Cada grupo es un dato que se lee como una **evolución**, de lo más antiguo a lo más reciente: «HOSTED_ON → Eridani → Polaris → Notus». El valor vigente se muestra con sus fechas; los anteriores quedan plegados en **Ver anteriores (N)** y aparecen tachados, con el periodo en que fueron ciertos. Una relación que apunta a la entidad se muestra como «← RELACIÓN». Primero van los grupos con una posible contradicción y después los que tienen más valores vigentes.
 - **Otras relaciones:** las relaciones genéricas como `RELATES_TO`, que el extractor escribe cuando ningún tipo encaja, unen cualquier cosa, así que su «evolución» dice poco. Quedan plegadas en una sección al final, con el número de hechos; **Ver** la abre.
 - **Dos fechas por hecho:** desde cuándo es cierto (*vigente desde*, *válido … → …*) y cuándo lo **aprendió** el brain. Son ejes distintos: un hecho aprendido hoy puede ser cierto desde el año pasado.
@@ -28,7 +28,7 @@ Si una relación está marcada como de **un solo valor** en la [[Ontología]] y 
 
 ## Acciones de curador
 - **Invalidar** un hecho vigente, o **Reactivar** uno anterior, desde el propio hecho. Son las mismas acciones que en [[Hechos]] y se deshacen desde el historial del vocabulario.
-- **Cambiar tipo**, junto al tipo de la entidad en la cabecera: eliges uno de los tipos de la [[Ontología]] del brain (la misma lista cerrada que usa el [[Corrector de tipos]]; no se acepta otro). El cambio se ve al momento aquí y en el [[Grafo]], queda en el registro de auditoría y se deshace desde el mensaje que lo confirma o desde **Cambios recientes** en [[Tipos de entidad]]. Si el corrector de tipos tenía una propuesta pendiente para esta entidad, deja de ofrecerse, y un análisis posterior no la vuelve a proponer.
+- **Cambiar tipo**: el tipo de la entidad en la cabecera es un botón con un lápiz para los curadores: eliges uno de los tipos de la [[Ontología]] del brain (la misma lista cerrada que usa el [[Corrector de tipos]]; no se acepta otro). El cambio se ve al momento aquí y en el [[Grafo]], queda en el registro de auditoría y se deshace desde el mensaje que lo confirma o desde **Cambios recientes** en [[Tipos de entidad]]. Si el corrector de tipos tenía una propuesta pendiente para esta entidad, deja de ofrecerse, y un análisis posterior no la vuelve a proponer.
 - Enlaces para **fusionar** la entidad con otra ([[Fusionar duplicados]]), revisar los **tipos dudosos** de todo el brain ([[Corrector de tipos]], administradores) y **editar el texto** de un hecho ([[Hechos]]).
 
 ## Entidades prestadas

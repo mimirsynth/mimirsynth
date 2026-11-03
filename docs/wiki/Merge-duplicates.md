@@ -27,6 +27,11 @@ Under **Recent merges** each operation appears. The **latest** one can be **undo
 ## Automatic merging
 On ingestion, MimirSynth already merges by itself the clear cases of alias normalisation. What you see here is what was left unresolved.
 
+## Merged names
+The name of each merged entity is kept as an alias of the one that stays, so it is still found by that name (search, entity page, the MCP tools). A name the entity already has, in any case or spacing, is not added again: merging «lyra» into «Lyra» adds no alias. Undoing a merge removes only the alias it added.
+
+Merges made before this rule could leave aliases equal to the entity's own name. The entity page does not show them, and an administrator of the instance can remove them from the graph: `python -m mimirsynth.entity_aliases` lists them in every brain (`--brain <slug>` for one), and with `--apply` removes them. Other aliases stay as they are. With Docker: `docker compose exec mimirsynth python -m mimirsynth.entity_aliases`.
+
 ## Tips
 - Choose as primary the one with **most facts** and the most canonical name.
 - Check they really are the same thing: "Server 1" and "Server 2" are **not** duplicates.

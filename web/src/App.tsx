@@ -111,6 +111,7 @@ export default function App() {
             <div key={g.section} className="ms-nav-group">
               <div className="ms-nav-section">{t(g.section)}</div>
               {g.items.filter((n) => !("curators" in n) || ["curator", "admin", "owner"].includes(cur?.role ?? "")).map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"}
+                active={n.to === "/hechos" && loc.pathname.startsWith("/entidad/") ? true : undefined}  // an entity page belongs to Facts
                 rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("trabajos en cola o en marcha")}>{active.data!.active}</Pill> : undefined} />)}
             </div>))}
         </div>

@@ -117,10 +117,12 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
 }
 
 /** Cabecera de pantalla: título igual a la entrada del menú, una línea de ayuda y, a la derecha, acciones. */
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions, meta }: { title: string; description?: ReactNode; actions?: ReactNode; meta?: ReactNode }) {
+  // `meta`: small things that belong to the title (a type, other names), on its line and wrapping under it on a phone
   return (
     <header className="ms-pagehead">
-      <div className="ms-pagehead-row"><h1 className="ms-pagehead-title">{title}</h1>{actions && <div className="ms-pagehead-actions">{actions}</div>}</div>
+      <div className="ms-pagehead-row"><div className="ms-pagehead-name"><h1 className="ms-pagehead-title">{title}</h1>{meta && <div className="ms-pagehead-meta">{meta}</div>}</div>
+        {actions && <div className="ms-pagehead-actions">{actions}</div>}</div>
       {description && <p className="ms-pagehead-help">{description}</p>}
     </header>
   );

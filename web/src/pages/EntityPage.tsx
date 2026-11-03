@@ -57,19 +57,19 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
     onSuccess: (r) => { setRetyping(false); setDone(r); refresh(); } });
   const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
   return (<>
-    <PageHeader title={e.name} actions={<Group gap="xs" align="flex-end">
+    <Group><Btn kind="link" component={Link} to="/hechos">{t("← Hechos")}</Btn></Group>
+    {/* one row: the name, its type (a curator changes it from there) and the names merged into it, as chips (issue 194) */}
+    <PageHeader title={e.name} meta={<>
+      {canEdit ? <Btn size="row" icon="edit" title={t("Cambiar tipo")} onClick={() => { retype.reset(); setRetyping(true); }}>{e.labels.length ? e.labels.join(", ") : t("(sin tipo)")}</Btn>
+        : (e.labels.length ? e.labels : [t("(sin tipo)")]).map((l) => <Pill key={l} size="sm">{l}</Pill>)}
+      {e.aliases.map((a) => <Pill key={a} size="xs" title={t("También se llama así (un nombre fusionado en esta entidad)")}>{a}</Pill>)}
+      {e.origin && <Pill size="xs" tone="alt">{t("de «{{origin}}»", { origin: e.origin })}</Pill>}
+    </>} actions={<Group gap="xs" align="flex-end">
       <TextField type="date" label={t("Cómo estaba el día")} value={asOf} onChange={(ev) => setAsOf(ev.currentTarget.value)} w={170} />
       {asOf && <Btn kind="ghost" onClick={() => setAsOf("")}>{t("Hoy")}</Btn>}
       {!origin && <Btn kind="secondary" icon="graph" component={Link} to={`/grafo?nodo=${e.uuid}`}>{t("Ver en el grafo")}</Btn>}
     </Group>} />
-    {/* type, merged names and summary go under the title, not in its description: that one is a paragraph and these are blocks */}
-    <Stack gap={4}>
-      <Group gap={4}>{(e.labels.length ? e.labels : [t("(sin tipo)")]).map((l) => <Pill key={l} size="xs">{l}</Pill>)}
-        {canEdit && <Btn kind="link" onClick={() => { retype.reset(); setRetyping(true); }}>{t("Cambiar tipo")}</Btn>}
-        {e.aliases.length > 0 && <Text size="xs" c="dimmed">{t("También: {{names}}", { names: e.aliases.join(", ") })}</Text>}
-        {e.origin && <Pill size="xs" tone="alt">{t("de «{{origin}}»", { origin: e.origin })}</Pill>}</Group>
-      {e.summary && <Text size="sm" className="ms-prose">{e.summary}</Text>}
-    </Stack>
+    {e.summary && <Text size="sm" className="ms-prose">{e.summary}</Text>}
     {done && <Notice tone="success">{done.summary}. <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
     <MutationError error={undo.error} />
     <TypeDialog graph={graph} opened={retyping} name={e.name} current={e.labels} onClose={() => setRetyping(false)} onPick={(type) => retype.mutate(type)}

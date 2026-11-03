@@ -417,6 +417,22 @@ def merge_entities(body: MergeIn, ctx: BrainCtx = Depends(admin_of_brain)):
     return {"ok": True, "snapshot": snap, "merged": len(entries)}
 
 
+def name_key(s) -> str:
+    """How two names of an entity are compared: without case and with spaces collapsed («Lyra», «lyra » and «LYRA» are one)."""
+    return " ".join(str(s or "").split()).lower()
+
+
+def other_names(name: str, aliases) -> list[str]:
+    """An entity's aliases worth showing: not its own name and each one once, in its first spelling (#194). Older merges wrote the
+    name of a duplicate called the same as the keeper as an alias of itself; this hides those until they are cleaned."""
+    seen, out = {name_key(name)}, []
+    for a in aliases or []:
+        if isinstance(a, str) and a.strip() and name_key(a) not in seen:
+            seen.add(name_key(a))
+            out.append(a)
+    return out
+
+
 def _merge_all(g, keeper: dict, dups: list[dict], entries: list[dict]) -> None:
     for d in dups:
         moved = {}
@@ -429,9 +445,13 @@ def _merge_all(g, keeper: dict, dups: list[dict], entries: list[dict]) -> None:
                 if ids:
                     g.query(f"MATCH (k:Entity {{uuid:$k}}), (d:Entity {{uuid:$d}}), {pat} WHERE b.uuid <> $k CREATE {new} SET r2 = properties(r) DELETE r", p)
                     moved[f"{t}:{direction}"] = ids
-        g.query("MATCH (d:Entity {uuid:$d}), (k:Entity {uuid:$k}) REMOVE d:Entity SET d:Merged, d.merged_into=$k, d.merged_at=$at "
-                "SET k.aliases = coalesce(k.aliases, []) + [$name]", {"d": d["uuid"], "k": keeper["uuid"], "at": datetime.now(timezone.utc).isoformat(), "name": d["name"]})
-        entries.append({"uuid": d["uuid"], "name": d["name"], "moved": moved})
+        cur = rows(g.query("MATCH (k:Entity {uuid:$k}) RETURN k.name AS name, coalesce(k.aliases, []) AS aliases", {"k": keeper["uuid"]}))[0]
+        known = {name_key(cur["name"]), *(name_key(a) for a in cur["aliases"] if isinstance(a, str))}
+        add = name_key(d["name"]) not in known  # only a name the keeper does not have yet, in any case or spacing (#194)
+        g.query("MATCH (d:Entity {uuid:$d}), (k:Entity {uuid:$k}) REMOVE d:Entity SET d:Merged, d.merged_into=$k, d.merged_at=$at"
+                + (" SET k.aliases = coalesce(k.aliases, []) + [$name]" if add else ""),
+                {"d": d["uuid"], "k": keeper["uuid"], "at": datetime.now(timezone.utc).isoformat(), "name": d["name"]})
+        entries.append({"uuid": d["uuid"], "name": d["name"], "moved": moved, "alias_added": add})
 
 
 def _undo_merge(ctx: BrainCtx, d: dict) -> None:
@@ -445,7 +465,8 @@ def _undo_merge(ctx: BrainCtx, d: dict) -> None:
             else:
                 g.query(f"MATCH (d:Merged {{uuid:$d}}), (k:Entity {{uuid:$k}}), (b)-[r:{t}]->(k) WHERE r.uuid IN $u CREATE (b)-[r2:{t}]->(d) SET r2 = properties(r) DELETE r", p)
         g.query("MATCH (d:Merged {uuid:$d}) REMOVE d:Merged SET d:Entity REMOVE d.merged_into, d.merged_at", {"d": e["uuid"]})
-        g.query("MATCH (k:Entity {uuid:$k}) SET k.aliases = [x IN coalesce(k.aliases, []) WHERE x <> $n]", {"k": d["keeper"]["uuid"], "n": e["name"]})
+        if e.get("alias_added", True):  # merges recorded before #194 always added it
+            g.query("MATCH (k:Entity {uuid:$k}) SET k.aliases = [x IN coalesce(k.aliases, []) WHERE x <> $n]", {"k": d["keeper"]["uuid"], "n": e["name"]})
 
 
 @router.post("/duplicates/ignore", status_code=201)
