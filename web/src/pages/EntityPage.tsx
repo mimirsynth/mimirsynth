@@ -19,6 +19,9 @@ type EPage = {
   episodes: { total: number; items: { uuid: string; name: string; valid_at: string | null; created_at: string | null; source: string | null }[] };
 };
 const day = (iso?: string | null) => (iso ? iso.slice(0, 10) : "?");
+/** A relation name as words: `HOSTED_ON` and `HostedOn` read «hosted on». The raw name stays as the tooltip. */
+const humanRelation = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_+/g, " ").trim().toLowerCase();
+const MAX_HEAD = 3;  // values named in a group's heading; the rest are counted
 
 /** Everything known about one entity and how it changed. Facts are grouped by relation and read as an evolution, oldest
  *  first; earlier values are folded so that an entity with many facts stays readable. The timeline is an ordered list, not a chart. */
@@ -79,14 +82,14 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
     {d.facts.truncated && <Notice tone="warn">{t("Se muestran los {{shown}} hechos más recientes de {{total}}.", { shown: d.facts.shown, total: d.facts.total })}</Notice>}
     <SplitView main={<FillArea><Stack gap="sm">
       {d.groups.length === 0 && <EmptyState>{t("Esta entidad no tiene hechos.")}</EmptyState>}
-      {specific.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} graph={graph} canEdit={canEdit} link={link} />)}
+      {specific.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} name={e.name} graph={graph} canEdit={canEdit} link={link} />)}
       {other.length > 0 && <Stack gap="xs">
         <Group gap="xs">
           <Text size="sm" fw={700}>{t("Otras relaciones ({{count}} hechos)", { count: otherFacts })}</Text>
           <Btn kind="link" aria-expanded={showOther} onClick={() => setShowOther((x) => !x)}>{showOther ? t("Ocultar") : t("Ver")}</Btn>
         </Group>
         <Text size="xs" c="dimmed">{t("Relaciones genéricas, como RELATES_TO: el extractor las escribe cuando ningún tipo encaja y pueden unir cualquier cosa, así que no se leen como una evolución.")}</Text>
-        {showOther && other.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} graph={graph} canEdit={canEdit} link={link} />)}
+        {showOther && other.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} name={e.name} graph={graph} canEdit={canEdit} link={link} />)}
       </Stack>}
     </Stack></FillArea>} aside={<Panel withBorder p="sm" h="100%"><FillArea><Stack gap="sm">
       <Text size="sm" fw={700}>{t("Relacionadas ({{count}})", { count: d.neighbors.length })}</Text>
@@ -117,7 +120,20 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
 }
 
 /** One relation as an evolution: the current values, and the earlier ones folded under «N anteriores». */
-function RelationGroup({ g, graph, canEdit, link }: { g: EGroup; graph: string; canEdit: boolean; link: (o: Other) => string }) {
+/** The heading of a relation, as a sentence in the same «subject → relation → object» order for both directions (issue 194): the page's
+ *  entity is plain text, on its side, and the current values on the other side are links. */
+function RelationHead({ g, name, link }: { g: EGroup; name: string; link: (o: Other) => string }) {
+  const { t } = useTranslation();
+  const others = [...new Map(g.current.map((f) => [f.other.uuid, f.other])).values()];
+  const shown = others.slice(0, MAX_HEAD);
+  const side = others.length ? <>{shown.map((o, i) => <span key={o.uuid}>{i > 0 && ", "}<Link to={link(o)}>{o.name}</Link></span>)}
+    {others.length > MAX_HEAD && ` ${t("y {{count}} más", { count: others.length - MAX_HEAD })}`}</> : <span>—</span>;
+  const self = <span className="ms-relhead-self">{name}</span>;
+  const rel = <span className="ms-relhead-rel" title={g.relation}>{humanRelation(g.relation)}</span>;
+  return <Text size="sm" className="ms-relhead">{g.direction === "out" ? <>{self} → {rel} → {side}</> : <>{side} → {rel} → {self}</>}</Text>;
+}
+
+function RelationGroup({ g, name, graph, canEdit, link }: { g: EGroup; name: string; graph: string; canEdit: boolean; link: (o: Other) => string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const values = [...g.current].map((f) => f.other.name);
@@ -125,7 +141,7 @@ function RelationGroup({ g, graph, canEdit, link }: { g: EGroup; graph: string; 
     <Panel withBorder p="sm"><Stack gap="xs">
       <Group gap="xs" justify="space-between">
         <Group gap="xs">
-          <Text size="sm" fw={700} className="ms-data">{g.direction === "out" ? `${g.relation} →` : `← ${g.relation}`}</Text>
+          <RelationHead g={g} name={name} link={link} />
           {g.functional && <Pill size="xs">{t("Un solo valor a la vez")}</Pill>}
           {g.previous.length > 0 && !g.generic && <Text size="xs" c="dimmed">{[...g.previous.map((f) => f.other.name), ...values].join(" → ")}</Text>}
         </Group>
@@ -149,8 +165,8 @@ function FactItem({ f, graph, canEdit, link }: { f: EFact; graph: string; canEdi
     onSuccess: () => qc.invalidateQueries({ queryKey: ["entity", graph] }) });
   return (
     <li className="ms-tl-item" data-event={old ? "invalidated" : "learned"}>
-      <Group gap="xs" justify="space-between">
-        <Stack gap={0}>
+      <Group gap="xs" justify="space-between" wrap="nowrap" align="flex-start">
+        <Stack gap={0} className="ms-tl-body">
           <Group gap={6}><Link to={link(f.other)} className="ms-nolink"><Pill size="xs">{f.other.name}</Pill></Link>
             <Text size="sm" td={old ? "line-through" : undefined} c={old ? "dimmed" : undefined}>{f.fact}</Text></Group>
           <Text size="xs" c="dimmed">

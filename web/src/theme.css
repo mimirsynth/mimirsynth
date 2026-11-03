@@ -191,6 +191,10 @@ h1, h2, h3, h4, .mantine-Title-root { font-family: var(--ms-display); font-weigh
 .ms-tl-list { list-style: none; margin: 0; }  /* an ordered list drawn as a timeline (entity page) */
 .ms-tl-item::before { content: ""; position: absolute; left: -22px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ms-accent); border: 2px solid var(--ms-surface); }
 .ms-tl-item[data-event="invalidated"]::before { background: var(--ms-invalidado); }
+.ms-tl-body { flex: 1; min-width: 0; }  /* the text of a fact wraps and leaves room for its action, also on a phone */
+.ms-relhead { font-weight: 600; }
+.ms-relhead-self { font-weight: 700; }
+.ms-relhead-rel { color: var(--ms-muted); font-weight: 500; }
 
 /* Barra lateral por secciones */
 .ms-nav-group { margin-bottom: 10px; }
@@ -325,6 +329,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-split { display: flex; gap: 8px; flex: 1; min-height: 0; }
 .ms-split-main { flex: 1; min-width: 0; display: flex; }
 .ms-split-main > .ms-canvas { flex: 1; min-width: 0; }
+.ms-split-main > .ms-fill { min-width: 0; width: 100%; }  /* on a phone the fill stops growing with its content (wide text, a row of actions) */
 .ms-split-aside { width: 300px; flex-shrink: 0; min-height: 0; display: flex; flex-direction: column; }
 @media (max-width: 1000px) {
   .ms-split { flex-direction: column; overflow: auto; }
