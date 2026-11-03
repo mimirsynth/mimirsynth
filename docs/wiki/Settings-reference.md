@@ -8,6 +8,7 @@ Not listed here because they are not single settings: the OIDC providers (each w
 
 This page is generated from the code; see also [[Administration overview]].
 
+<!-- generated:start (scripts/wiki_reference.py writes this part from the code: do not edit it by hand) -->
 ## General
 
 Guide: [[Administration overview]]
@@ -70,10 +71,10 @@ Guide: [[Recall and ingestion]]
 | Weight of a fact to review | `recall_stale_weight` | `0.6` | 0–1 | A current fact past its relation's shelf life weighs this much in the recall (and is marked «not confirmed since …»). 1: the same as the others. |
 | Minimum similarity of a passage | `doc_min_similarity` | `0.66` | 0–1 | Minimum cosine for a document passage to enter the recall. It depends on the embedding model; with nomic-embed-text, 0.66. |
 | Document passages per recall | `doc_passages` | `2` | 0–10 | Maximum number of document passages that accompany the facts in each recall. |
-| Engine for «Answer» | `answer_engine` | empty | | Name of the LLM engine that writes the cited answers of [[Ask]]. The most capable one is best. Empty: the default LLM engine. |
+| Engine for «Answer» | `answer_engine` | — | text | Name of the LLM engine that writes the cited answers of Ask. The most capable one is best. Empty: the default LLM engine. |
 | Answers per person and hour | `answer_per_hour` | `30` | 0–1000 | How many written answers each person may ask for in each brain per hour. Each one is a call to the engine. 0: no limit. |
 | Searches in all brains per person and hour | `search_per_hour` | `60` | 0–1000 | How many times each person may search all their brains at once per hour. Each search is a recall in each brain. 0: no limit. |
-| Longest answer | `answer_max_tokens` | `800` tokens | 100–4000 | The most tokens a written answer may take. |
+| Longest answer | `answer_max_tokens` | `800` tokens | 100–4000 tokens | The most tokens a written answer may take. |
 | Maximum time of the document search | `doc_search_timeout` | `0.6` s | 0.1–10 s | If it takes longer, the recall answers without documents. |
 | Text index synchronisation | `index_sync_minutes` | `10` min | 0–1440 min | How many minutes between copies of the episode text into the index. 0 = disabled. |
 
@@ -88,11 +89,11 @@ Guide: [[Recall and ingestion]]
 | Pause between batches when changing model | `reindex_pause` | `0` s | 0–600 s | Seconds to wait between batches to respect the provider's rate limit. On a 429 it also waits for whatever Retry-After says. |
 | Model change wait | `reindex_switch_wait` | `60` s | 1–3600 s | Seconds the embedding model change waits for in-progress vector writes (ingestions, indexing) to finish. If they do not, the change is postponed and retried; writes are never cut off. |
 | Alert about a stalled model change | `reindex_orphan_hours` | `24` h | 0–8760 h | Hours an embedding fill can stay failed or stalled, with its shadow vectors taking up memory, before alerting (event “reindex.orphan”). |
-| Group the alerts of a webhook | `webhook_group_minutes` | `15` min | 1–1440 min | An alert that repeats and resolves within this period leaves a single proposal, with its start, its end and the number of notices. If it is still active past the period, it is proposed as active and its resolution comes separately. See [[Incoming webhooks]]. |
+| Group the alerts of a webhook | `webhook_group_minutes` | `15` min | 1–1440 min | An alert that repeats and resolves within this period leaves a single proposal, with its start, its end and the number of notices. If it is still active past the period, it is proposed as active and its resolution comes separately. |
 | Keep finished jobs | `jobs_keep_days` | `60` days | 1–3650 days | After this period finished, failed and cancelled jobs are deleted. |
 | Retention: text of rejected proposals | `retention_rejected_days` | `0` days | 0–3650 days | After this period since it was rejected, a proposal loses its text (its status, authors and dates remain). Each brain can set its own. 0: no period. |
-| Retention: recall ratings | `retention_ratings_days` | `0` days | 0–3650 days | After this period a brain's recall ratings are deleted (and the logs of the queries they rated). Each brain can set its own. 0: no period. |
 | Retention: finished jobs of each brain | `retention_jobs_days` | `0` days | 0–3650 days | After this period a brain's finished, failed and cancelled jobs are deleted, sooner than with the general period above. Each brain can set its own. 0: no period. |
+| Retention: recall ratings | `retention_ratings_days` | `0` days | 0–3650 days | After this period a brain's recall ratings are deleted (and the logs of the queries they rated). Each brain can set its own. 0: no period. |
 | Keep scheduled rescans | `jobs_keep_scheduled_days` | `7` days | 1–365 days | Automatic rescans with no issues are noise (one every few minutes): they are deleted sooner. |
 
 ## Notifications
@@ -109,6 +110,8 @@ Guide: [[Notifications]]
 | Notify about new versions | `notify_update_check` | `no` | `no` (No) / `yes` (Yes) | Once a day it asks GitHub whether a newer version exists. It is the only outbound connection the instance makes on its own; off by default. |
 | Forbid private networks | `notify_block_private` | `no` | `no` (No) / `yes` (Yes) | Stops channels from pointing at private or local addresses (protects against a channel being used to reach internal services). Leave it on «No» if your ntfy or Gotify is on the local network. |
 | Keep notifications | `notify_keep_days` | `30` days | 1–3650 days | After this time notifications and their delivery history are deleted. |
+<!-- generated:end -->
+
 ## How they are stored
 - A setting is only stored if it **differs** from its default value.
 - Changes to a setting are recorded in the [[Audit log]] (`settings.set`, `settings.reset`, `settings.secret`).

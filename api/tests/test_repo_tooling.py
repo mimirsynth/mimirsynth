@@ -73,3 +73,42 @@ def test_the_wiki_navigation_is_generated_and_complete():
     """_Sidebar.md and the lists of Home.md and Inicio.md match _index.yml, and every page is in it. Fix: python scripts/wiki_index.py"""
     wi = _script("wiki_index")
     assert wi.main(["--check"]) == 0
+
+
+def test_the_wiki_reference_tables_are_generated_from_the_code():
+    """Notifications and Settings reference match notify.EVENTS / EVENT_DOCS and appsettings.REGISTRY (#184). Fix: python scripts/wiki_reference.py"""
+    assert _script("wiki_reference").main(["--check"]) == 0
+
+
+def test_the_wiki_reference_writer(tmp_path, monkeypatch, capsys):
+    from mimirsynth.appsettings import Def
+    wr = _script("wiki_reference")
+    w = wr.Writer({"Se cayó": "It fell", "Cuándo cae": "When it falls", "Corte": "Outage", "Tamaño": "Size", "Cuánto": "How much", "MB": "MB"},
+                  lambda page: {"Outage page": "Página de cortes"}[page])
+    events = {"svc.down": ("critical", "Se cayó"), "svc.slow": ("info", "Lento")}
+    docs = {"svc.down": ("Cuándo cae", "Outage page")}
+    assert wr.notifications(events, docs, "en", w) == "| Event | Severity | When |\n|---|---|---|\n| `svc.down` | critical | When it falls ([[Outage page]]) |"
+    assert wr.notifications(events, docs, "es", w).endswith("| `svc.down` | crítico | Cuándo cae ([[Página de cortes]]) |")
+    assert "the event svc.slow has no description for the wiki (notify.EVENT_DOCS)" in w.problems
+    reg = [Def("size_mb", "g", "Tamaño", "Cuánto", "float", "MB", 0.5, 10), Def("bare", "g", "Corte", "", "str")]
+    table = wr.settings(reg, {"g": "Corte"}, {"size_mb": 2.5, "bare": ""}, "es", w)
+    assert "| Tamaño | `size_mb` | `2,5` MB | 0,5–10 MB | Cuánto |" in table and "| Corte | `bare` | — | texto |  |" in table
+    assert "the setting bare has no description (appsettings.REGISTRY)" in w.problems
+    wr.settings([Def("x", "g", "Sin traducir", "Ayuda", "int")], {"g": "Corte"}, {"x": 1}, "en", w)
+    assert any("no English translation" in p and "Sin traducir" in p for p in w.problems)
+
+    # a page whose generated part was edited by hand is out of date: --check fails, and writing puts it back
+    for name in ("Notifications.md", "Notificaciones.md", "Settings-reference.md", "Referencia-de-ajustes.md"):
+        (tmp_path / name).write_bytes((wr.WIKI / name).read_bytes())
+    page = tmp_path / "Notifications.md"
+    good = page.read_bytes()
+    page.write_bytes(good.replace(b"`graph.down` | critical", b"`graph.down` | info"))
+    monkeypatch.setattr(wr, "WIKI", tmp_path)
+    assert wr.main(["--check"]) == 1 and "Out of date: Notifications.md" in capsys.readouterr().out
+    assert wr.main([]) == 0 and page.read_bytes() == good
+    page.write_bytes(good.replace(b"<!-- generated:end -->", b""))
+    try:
+        wr.main(["--check"])
+        raise AssertionError("a page without its end marker must be refused")
+    except SystemExit as e:
+        assert "generated markers" in str(e)

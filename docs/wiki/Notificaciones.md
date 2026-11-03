@@ -16,6 +16,7 @@ Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un avi
 - Filtra **Todas** o **Sin leer**, y **Marcar todo como leído**.
 
 ## Eventos
+<!-- generated:start (scripts/wiki_reference.py writes this part from the code: do not edit it by hand) -->
 | Evento | Severidad | Cuándo |
 |---|---|---|
 | `model.unavailable` | crítico | El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica |
@@ -26,13 +27,14 @@ Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un avi
 | `security.lockout` | aviso | Una cuenta se ha bloqueado tras demasiados intentos fallidos |
 | `reindex.orphan` | aviso | Un cambio de modelo de embeddings lleva fallido o parado más horas de las configuradas, con sus vectores sombra ocupando memoria ([[Proveedores de IA]]) |
 | `refquery.regressed` | aviso | Tras un cambio de modelo de embeddings, las consultas de referencia de un brain dejan de encontrar elementos esperados o muestran falsos positivos nuevos. Si no había una ejecución anterior con la que comparar, lo dice, como información |
-| `facts.stale` | información | Un brain tiene hechos vigentes que han superado la vida útil de su relación; se cuentan una vez al día, sin texto ([[Ontología]]) |
+| `ai.budget` | aviso (crítico al 100 %) | Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes; una vez por mes y nivel. Al 100 %, si así se configuró, su ingesta queda en pausa ([[Consumo de IA]]) |
 | `webhook.capped` | aviso | Un webhook de entrada llegó a su tope diario de propuestas; una vez al día por webhook, con su nombre y su tope ([[Webhooks de entrada]]) |
 | `digest.failed` | aviso | El resumen por correo de una persona ha fallado 5 veces seguidas; con su nombre y el recuento, nunca su dirección. Se cierra cuando un correo le llega ([[Mi cuenta]]) |
-| `ai.budget` | aviso (crítico al 100 %) | Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes; una vez por mes y nivel. Al 100 %, si así se configuró, su ingesta queda en pausa ([[Consumo de IA]]) |
-| `token.expiring` | información | Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa ([[Conectar agentes]]) |
-| `conflicts.found` | información | Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día ([[Vocabulario]]) |
 | `update.available` | información | Hay una versión más reciente (solo si lo activas, ver abajo) |
+| `conflicts.found` | información | Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día ([[Vocabulario]]) |
+| `token.expiring` | información | Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa ([[Conectar agentes]]) |
+| `facts.stale` | información | Un brain tiene hechos vigentes que han superado la vida útil de su relación; se cuentan una vez al día, sin texto ([[Ontología]]) |
+<!-- generated:end -->
 
 ## Canales
 **Administración → Notificaciones → Canales** (administrador de la instancia). **Añadir canal**, con un **Nombre** y un **Tipo**:

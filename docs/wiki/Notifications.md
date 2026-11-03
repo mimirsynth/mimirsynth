@@ -16,6 +16,7 @@ What changed in a brain (new facts, proposals waiting…) is not an alert: each 
 - Filter **All** or **Unread**, and **Mark all as read**.
 
 ## Events
+<!-- generated:start (scripts/wiki_reference.py writes this part from the code: do not edit it by hand) -->
 | Event | Severity | When |
 |---|---|---|
 | `model.unavailable` | critical | The default LLM, embedding or decider engine does not answer the periodic check |
@@ -26,13 +27,14 @@ What changed in a brain (new facts, proposals waiting…) is not an alert: each 
 | `security.lockout` | warning | An account was locked after too many failed sign-ins |
 | `reindex.orphan` | warning | An embedding model change has been failed or stalled for longer than the configured hours, with its shadow vectors taking up memory ([[AI providers]]) |
 | `refquery.regressed` | warning | After an embedding model change, a brain's reference queries stop finding expected items or show new false positives. If there was no earlier run to compare with, it says so, as information |
-| `facts.stale` | info | A brain has current facts past their relation's shelf life; counted once a day, without text ([[Ontology]]) |
+| `ai.budget` | warning (critical at 100 %) | A brain has spent 80 % or 100 % of its monthly AI budget; once per month and level. At 100 %, if so configured, its ingestion is paused ([[AI consumption]]) |
 | `webhook.capped` | warning | An incoming webhook reached its daily cap of proposals; once a day per webhook, with its name and cap ([[Incoming webhooks]]) |
 | `digest.failed` | warning | A person's email summary failed 5 times in a row; with their name and the count, never their address. It is resolved when an email to them goes through ([[My account]]) |
-| `ai.budget` | warning (critical at 100 %) | A brain has spent 80 % or 100 % of its monthly AI budget; once per month and level. At 100 %, if so configured, its ingestion is paused ([[AI consumption]]) |
-| `token.expiring` | info | An API token expires within 7 days; announced once per token, with its name and prefix, never the token. A rotated token is not announced ([[Connect agents]]) |
-| `conflicts.found` | info | A brain has current facts that contradict each other in a single-valued relation; checked once a day ([[Vocabulary]]) |
 | `update.available` | info | A newer release exists (only if you turn it on, see below) |
+| `conflicts.found` | info | A brain has current facts that contradict each other in a single-valued relation; checked once a day ([[Vocabulary]]) |
+| `token.expiring` | info | An API token expires within 7 days; announced once per token, with its name and prefix, never the token. A rotated token is not announced ([[Connect agents]]) |
+| `facts.stale` | info | A brain has current facts past their relation's shelf life; counted once a day, without text ([[Ontology]]) |
+<!-- generated:end -->
 
 ## Channels
 **Administration → Notifications → Channels** (instance administrator). **Add channel**, give it a **Name** and a **Type**:

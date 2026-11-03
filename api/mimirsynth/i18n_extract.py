@@ -113,6 +113,13 @@ def collect() -> set[str]:
                     for k, v in zip(n.keys, n.values):
                         if isinstance(k, ast.Constant) and k.value in ("title", "description") and isinstance(v, ast.Constant) and isinstance(v.value, str):
                             keys.add(v.value)
+        if f.name == "notify.py":  # how the wiki describes each event (EVENT_DOCS): its text and, if any, its severity
+            for n in tree.body:
+                if isinstance(n, ast.Assign) and any(getattr(t, "id", "") == "EVENT_DOCS" for t in n.targets) and isinstance(n.value, ast.Dict):
+                    for v in n.value.values:
+                        for i, e in enumerate(v.elts if isinstance(v, ast.Tuple) else []):
+                            if i != 1 and isinstance(e, ast.Constant) and isinstance(e.value, str) and e.value:
+                                keys.add(e.value)
         if f.name == "passwords.py":
             for n in ast.walk(tree):
                 if isinstance(n, ast.Return) and n.value is not None:
