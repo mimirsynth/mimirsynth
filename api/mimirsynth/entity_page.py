@@ -5,6 +5,7 @@ Facts are grouped by direction and canonical relation, oldest first, so each gro
 keeps its learning date (`created_at`), because the two are different axes. A functional relation (#113) with more than one current
 value is flagged instead of hidden. A lent entity (federation) is read with `origin` and is read-only. Generic relations
 (`RELATES_TO` and the like) are marked `generic` and go last: their «evolution» says little, so the page shows them apart."""
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -23,6 +24,19 @@ MAX_EPISODES = 20
 
 def _norm(s) -> str:
     return " ".join(str(s or "").split()).lower()
+
+
+def _line(s) -> str:
+    """A line of a summary or a fact's sentence, compared without its bullet, spacing, case or final full stop."""
+    return _norm(re.sub(r"^[\s\-•*·]+", "", str(s or ""))).rstrip(".;")
+
+
+def repeats_facts(summary: str | None, facts: list[str]) -> bool:
+    """Whether the entity's summary only repeats its own facts (issue 194): at least half of its lines are the sentence of one of them.
+    Graphiti often writes the summary as the list of the entity's facts, which the page already shows right below."""
+    lines = [x for x in (_line(s) for s in (summary or "").splitlines()) if x]
+    known = {_line(f) for f in facts if f}
+    return bool(lines) and sum(x in known for x in lines) * 2 >= len(lines)
 
 
 def _source(ctx: BrainCtx, origin: str):
@@ -81,6 +95,7 @@ def entity_page(uuid: str, as_of: str = Query("", max_length=40), origin: str = 
         # a single-valued relation with two different current values: possible contradiction (#113), shown rather than hidden
         g["conflict"] = g["functional"] and g["direction"] == "out" and len({_norm(x["other"]["name"]) for x in g["current"]}) > 1
         out_groups.append(g)
+    ent["summary_repeats"] = repeats_facts(ent["summary"], [f["fact"] for f in facts])  # the page hides it then
     out_groups.sort(key=lambda g: (g["generic"], not g["conflict"], -len(g["current"]), -len(g["previous"]), g["direction"] != "out", g["relation"]))
     episodes = rows(G.query("MATCH (e:Episodic)-[:MENTIONS]->(n:Entity {uuid:$u}) RETURN e.uuid AS uuid, e.name AS name, e.valid_at AS valid_at, "
                             "e.created_at AS created_at, e.source_description AS source ORDER BY coalesce(e.valid_at, e.created_at) DESC LIMIT $n",

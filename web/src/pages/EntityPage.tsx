@@ -11,7 +11,7 @@ type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };
 type EGroup = { relation: string; direction: "out" | "in"; functional: boolean; generic?: boolean; conflict: boolean; current: EFact[]; previous: EFact[] };
 type EPage = {
-  entity: { uuid: string; name: string; labels: string[]; aliases: string[]; summary: string | null; origin: string };
+  entity: { uuid: string; name: string; labels: string[]; aliases: string[]; summary: string | null; summary_repeats?: boolean; origin: string };
   read_only: boolean; as_of: string | null;
   facts: { total: number; shown: number; not_yet: number; truncated: boolean };
   groups: EGroup[];
@@ -49,6 +49,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
   const canEdit = isCurator && !asOf;  // looking at a past day is for reading: invalidating from there would be confusing
   const link = (o: Other) => `/entidad/${o.uuid}${origin ? `?origen=${origin}` : ""}`;
   const [showOther, setShowOther] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
   const specific = d.groups.filter((g) => !g.generic);
   const other = d.groups.filter((g) => g.generic);
   const otherFacts = other.reduce((n, g) => n + g.current.length + g.previous.length, 0);
@@ -72,7 +73,12 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
       {asOf && <Btn kind="ghost" onClick={() => setAsOf("")}>{t("Hoy")}</Btn>}
       {!origin && <Btn kind="secondary" icon="graph" component={Link} to={`/grafo?nodo=${e.uuid}`}>{t("Ver en el grafo")}</Btn>}
     </Group>} />
-    {e.summary && <Text size="sm" className="ms-prose">{e.summary}</Text>}
+    {/* the summary, folded so a long paragraph never pushes the relations down; hidden when it only repeats the facts (issue 194) */}
+    {e.summary && !e.summary_repeats && <Stack gap={4}>
+      <Group gap="xs"><Text size="sm" fw={700}>{t("Resumen")}</Text>
+        <Btn kind="link" aria-expanded={showSummary} onClick={() => setShowSummary((x) => !x)}>{showSummary ? t("Ocultar") : t("Ver")}</Btn></Group>
+      {showSummary && <Text size="sm" className="ms-prose">{e.summary}</Text>}
+    </Stack>}
     {done && <Notice tone="success">{done.summary}. <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
     <MutationError error={undo.error} />
     <TypeDialog graph={graph} opened={retyping} name={e.name} current={e.labels} onClose={() => setRetyping(false)} onPick={(type) => retype.mutate(type)}

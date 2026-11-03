@@ -33,6 +33,7 @@ def graphs(monkeypatch):
                                      ("g3", "nas", "RelatesTo", "ups", "2026-04-03T00:00:00Z", None)]:
         g.query("MATCH (x:Entity {uuid:$a}), (y:Entity {uuid:$b}) CREATE (x)-[:RELATES_TO {uuid:$u, name:$r, fact:$u + ' fact', valid_at:$v, "
                 "created_at:$v, invalid_at:$i, expired_at:$i, episodes:['e1']}]->(y)", {"u": u, "a": a, "b": b, "r": rel, "v": valid, "i": inv})
+    g.query("MATCH (n:Entity {uuid:'job'}) SET n.summary = $s", {"s": "- j1 fact.\nRuns at night"})  # half of it is one of its facts
     g.query("MATCH (n:Entity {uuid:'nas'}) CREATE (:Episodic {uuid:'e1', name:'Lab inventory', valid_at:'2026-01-01T00:00:00Z', source_description:'notes'})-[:MENTIONS]->(n)")
     c.select_graph(LENT).query("CREATE (:Entity:Host {uuid:'lent', name:'lent host'})-[:RELATES_TO {uuid:'g1', name:'RUNS', fact:'lent host runs X', "
                                "created_at:'2026-01-01T00:00:00Z'}]->(:Entity {uuid:'x', name:'X'})")
@@ -49,6 +50,8 @@ def test_entity_page(client, graphs):  # noqa: F811
     r = client.get("/api/brains/ep/entities/nas").json()
     assert r["entity"]["name"] == "nas01" and r["entity"]["labels"] == ["Host"] and r["entity"]["aliases"] == ["nas-01"] and not r["read_only"]
     assert r["facts"] == {"total": 8, "shown": 8, "not_yet": 0, "truncated": False}
+    assert r["entity"]["summary_repeats"] is False                                            # a sentence of its own
+    assert client.get("/api/brains/ep/entities/job").json()["entity"]["summary_repeats"] is True   # half of it is one of its facts
     assert r["groups"][-1]["relation"] == "RELATES_TO" and r["groups"][-1]["generic"] and len(r["groups"][-1]["current"]) == 3   # last, even with most facts
     assert not any(g["generic"] for g in r["groups"][:-1])
     groups = {(g["direction"], g["relation"]): g for g in r["groups"]}
@@ -84,3 +87,14 @@ def test_entity_page(client, graphs):  # noqa: F811
     # find by name or merged name, exact match first
     assert [e["uuid"] for e in client.get("/api/brains/ep/entities", params={"q": "nas-01"}).json()] == ["nas"]
     assert client.get("/api/brains/ep/entities", params={"q": "room"}).json()[0]["name"].startswith("Room")
+
+
+def test_a_summary_that_only_repeats_the_facts():
+    """The entity page hides a summary when at least half of its lines are the sentences of the entity's facts (issue 194)."""
+    from mimirsynth.entity_page import repeats_facts
+    facts = ["Lyra runs Pangolin", "Lyra is hosted on Hetzner."]
+    assert repeats_facts("- Lyra runs Pangolin.\n• lyra is HOSTED on hetzner", facts)          # bullets, case and full stops aside
+    assert repeats_facts("Lyra runs Pangolin\nA VPS in Falkenstein", facts)                      # one of two lines: half
+    assert not repeats_facts("Lyra runs Pangolin\nA VPS in Falkenstein\nBought in 2025", facts)  # one of three
+    assert not repeats_facts("Lyra is the cloud VPS that runs the reverse proxy.", facts)
+    assert not repeats_facts("", facts) and not repeats_facts(None, facts) and not repeats_facts("Lyra runs Pangolin", [])
