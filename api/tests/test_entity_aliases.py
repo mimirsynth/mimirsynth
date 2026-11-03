@@ -83,7 +83,7 @@ def test_cleanup_from_content_quality(client, g):  # noqa: F811
     base = "/api/brains/eal2/vocab"
 
     pv = client.get(f"{base}/entity-aliases").json()   # the dry run writes nothing
-    assert pv["entities"] == 2 and pv["aliases"] == 4
+    assert pv["entities"] == 2 and pv["aliases"] == 5   # 3 on Lyra, 2 on Vaultwarden
     assert {i["uuid"]: (i["aliases"], i["dropped"]) for i in pv["items"]} == {
         "k": (["Lyra VPS"], ["Lyra", "lyra vps", "Lyra VPS"]), "old": (["Vaultwarden v1.30"], ["Vaultwarden", "vaultwarden"])}
     assert _aliases(g, "k") == ["Lyra", "Lyra VPS", "lyra vps", "Lyra VPS"]
@@ -93,10 +93,10 @@ def test_cleanup_from_content_quality(client, g):  # noqa: F811
     assert _aliases(g, "k") == ["Lyra VPS"] and _aliases(g, "old") == ["Vaultwarden v1.30"]   # first spelling kept
     assert any(x.startswith(f"_snap_{GRAPH}_") and x.endswith("_alias") for x in fclient().list_graphs())
     op = client.get(f"{base}/types").json()["ops"][0]
-    assert op["kind"] == "entity.aliases" and op["summary"] == "Limpiados 4 alias repetidos en 2 entidades"
+    assert op["kind"] == "entity.aliases" and op["summary"] == "Limpiados 5 alias repetidos en 2 entidades"
     with _factory()() as db:
         a = db.scalars(select(Audit).where(Audit.action == "vocab.entity.aliases")).all()[-1]
-        assert a.detail["aliases"] == 4 and a.detail["entities"] == 2
+        assert a.detail["aliases"] == 5 and a.detail["entities"] == 2
 
     # nothing left: the action says so and writes nothing
     assert client.get(f"{base}/entity-aliases").json() == {"entities": 0, "aliases": 0, "items": []}
