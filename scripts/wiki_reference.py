@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The reference tables of the wiki are written from the code (#184), in English and Spanish, between «generated» markers: the
-notification events (`notify.EVENTS` and `notify.EVENT_DOCS`) on Notifications and the instance settings (`appsettings.REGISTRY`) on
-Settings reference. The rest of each page (introduction, explanations, examples) stays outside the markers and is edited by hand.
+notification events (`notify.EVENTS` and `notify.EVENT_DOCS`) on Notifications, the instance settings (`appsettings.REGISTRY`) on
+Settings reference, and every route of the app by area and role (FastAPI) on REST API. The rest of each page (introduction,
+explanations, notes on particular routes, examples) stays outside the markers and is edited by hand.
 
 The Spanish text is the one in the code and the English one comes from the translation catalogues, so a new event or setting needs its
 translation once, not once per page. An entry without a description or a translation is reported and the check fails.
@@ -14,6 +15,7 @@ Run it with the API's interpreter, which can import `mimirsynth`:
 import argparse
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -27,9 +29,45 @@ SEVERITY = {"critical": ("critical", "crítico"), "warning": ("warning", "aviso"
 GUIDES = {"general": "Administration overview", "security": "Security and two-factor", "mail": "SMTP email", "identity": "OIDC identity",
           "docs": "Folders and limits", "recall": "Recall and ingestion", "ingest": "Recall and ingestion", "notifications": "Notifications"}
 WORDS = {"en": {"Event": "Event", "Severity": "Severity", "When": "When", "Setting": "Setting", "Key": "Key", "Default": "Default",
-                "Range or values": "Range or values", "Description": "Description", "Guide": "Guide", "text": "text", "url": "URL"},
+                "Range or values": "Range or values", "Description": "Description", "Guide": "Guide", "text": "text", "url": "URL",
+                "Area": "Area", "Routes": "Routes", "Role": "Role", "Access": "Access"},
          "es": {"Event": "Evento", "Severity": "Severidad", "When": "Cuándo", "Setting": "Ajuste", "Key": "Clave", "Default": "Por defecto",
-                "Range or values": "Rango o valores", "Description": "Descripción", "Guide": "Guía", "text": "texto", "url": "URL"}}
+                "Range or values": "Rango o valores", "Description": "Descripción", "Guide": "Guía", "text": "texto", "url": "URL",
+                "Area": "Área", "Routes": "Rutas", "Role": "Rol", "Access": "Acceso"}}
+
+# REST API: every route under /api, from FastAPI, by area and by the role its dependencies require (the minimum: some routes check
+# more inside, and the hand-written notes of the page say so). An area is found by the longest path prefix that matches; a route
+# with no area, or a brain route with no role, is reported, so a new one gets a deliberate place in the page.
+BRAIN = "/api/brains/{slug}"
+ROLES = {"public": ("public", "pública"), "reader": ("reader", "lector"), "contributor": ("contributor", "colaborador"),
+         "curator": ("curator", "curador"), "admin": ("administrator", "administrador"), "owner": ("owner", "propietario"),
+         "session": ("signed in", "con sesión"), "instance": ("instance administrator", "administrador de la instancia"),
+         "hook": ("the webhook's secret", "el secreto del webhook")}
+# Routes whose access is not a role (the incoming webhook answers to its own secret), and routes left out (the MCP endpoint only
+# answers POST; GET and DELETE exist to say so with a 405).
+SPECIAL = {("POST", BRAIN + "/hooks/{key}"): "hook"}
+SKIP = {("GET", BRAIN + "/mcp"), ("DELETE", BRAIN + "/mcp")}
+METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; "" is the brain itself)
+    ("Recall", "Recall", ["/recall", "/answer", "/mcp"]), ("Text index", "Índice de texto", ["/index"]),
+    ("Overview", "Resumen", ["/overview"]), ("Episodes", "Episodios", ["/episodes"]), ("Facts", "Hechos", ["/facts", "/timeline", "/entities"]),
+    ("Graph and query", "Grafo y consulta", ["/graph", "/query"]), ("Proposals", "Propuestas", ["/proposals"]), ("Documents", "Documentos", ["/docs"]),
+    ("Vocabulary", "Vocabulario", ["/vocabulary", "/vocab", "/ontology", "/retype"]), ("Needs your attention", "Necesita tu atención", ["/attention"]),
+    ("What changed", "Lo que ha cambiado", ["/changes"]), ("Facts to review", "Hechos a revisar", ["/review"]),
+    ("Contradictions", "Contradicciones", ["/conflicts"]), ("Reference queries", "Consultas de referencia", ["/refqueries"]),
+    ("Federation", "Federación", ["/grants"]), ("Jobs", "Trabajos", ["/jobs"]), ("Members", "Miembros", ["/members"]), ("Tokens", "Tokens", ["/tokens"]),
+    ("The brain itself", "El propio brain", ["", "/delete", "/secrets"]), ("AI consumption", "Consumo de IA", ["/ai-usage", "/ai-budget"]),
+    ("Incoming webhooks", "Webhooks de entrada", ["/webhooks", "/hooks"]), ("Retention", "Retención", ["/retention"]), ("Export", "Exportar", ["/exports"]),
+]
+INSTANCE_AREAS = [  # path prefixes after /api
+    ("Access", "Acceso", ["/auth"]), ("My account", "Mi cuenta", ["/me", "/users/{uid}/avatar"]), ("Search all brains", "Buscar en todos los brains", ["/search"]),
+    ("Notifications", "Notificaciones", ["/notifications"]), ("Brains", "Brains", ["/brains"]), ("AI consumption", "Consumo de IA", ["/ai-usage"]),
+    ("Import a brain", "Importar un brain", ["/brain-imports"]),
+    ("Administration", "Administración", ["/admin", "/users", "/audit", "/settings", "/oidc-providers", "/llm-engines", "/embedding-engines",
+                                          "/decision-engines", "/doc-roots", "/ai-status"]),
+    ("Embedding model change", "Cambio de modelo de embeddings", ["/embedding-engines/reindex", "/embedding-engines/{eid}/reindex"]),
+    ("Public", "Públicas", ["/health", "/config"]),
+]
 
 
 def _script(name: str):
@@ -118,6 +156,91 @@ def settings(registry: list, groups: dict, defaults: dict, lang: str, w: Writer)
     return "\n".join(out).rstrip("\n")
 
 
+def api_routes(app) -> list[tuple[str, str, str]]:
+    """(method, path, access) of every documented route of the app, in the order they are declared."""
+    from fastapi.routing import APIRoute
+    flat = []
+    for r in app.routes:
+        sub = getattr(r, "original_router", None)  # a router included in the app
+        flat += [x for x in sub.routes if isinstance(x, APIRoute)] if sub is not None else ([r] if isinstance(r, APIRoute) else [])
+
+    def access(route) -> str:
+        found = []
+
+        def walk(dep):
+            for d in dep.dependencies:
+                name = getattr(d.call, "__qualname__", "")
+                if name == "brain_access.<locals>.dep":
+                    found.append(d.call.__closure__[0].cell_contents)  # brain_access(minimum)
+                elif name == "require_admin":
+                    found.append("instance")
+                elif name == "current_user":
+                    found.append("session")
+                walk(d)
+        walk(route.dependant)
+        for level in ("owner", "admin", "curator", "contributor", "reader", "instance", "session"):
+            if level in found:
+                return level
+        return "public"
+
+    out = []
+    for r in flat:
+        if not r.include_in_schema or not r.path.startswith("/api"):
+            continue
+        path = re.sub(r"\{(\w+):\w+\}", r"{\1}", r.path)  # {doc_id:int} → {doc_id}
+        for m in sorted(r.methods - {"HEAD", "OPTIONS"}):
+            if (m, path) not in SKIP:
+                out.append((m, path, SPECIAL.get((m, path), access(r))))
+    return out
+
+
+def _area(rel: str, areas: list) -> int | None:
+    best, size = None, -1
+    for i, (_en, _es, prefixes) in enumerate(areas):
+        for p in prefixes:
+            if (rel == p or (p and rel.startswith(p + "/"))) and len(p) > size:
+                best, size = i, len(p)
+    return best
+
+
+def routes_table(routes: list[tuple[str, str, str]], brain: bool, lang: str, w: Writer) -> str:
+    """One row per area and access level, with the routes as `GET/POST /path` in declaration order."""
+    areas = BRAIN_AREAS if brain else INSTANCE_AREAS
+    order = list(ROLES)
+    rows: dict[tuple[int, str], dict[str, list[str]]] = {}
+    for method, path, level in routes:
+        if path.startswith(BRAIN) != brain:
+            continue
+        rel = path[len(BRAIN):] if brain else path[len("/api"):]
+        i = _area(rel, areas)
+        if i is None:
+            w.problems.append(f"the route {method} {path} has no area in the wiki reference (BRAIN_AREAS / INSTANCE_AREAS in scripts/wiki_reference.py)")
+            continue
+        if brain and level in ("public", "session", "instance"):
+            w.problems.append(f"the brain route {method} {path} needs no brain role: say who may call it in SPECIAL (scripts/wiki_reference.py)")
+            continue
+        rows.setdefault((i, level), {}).setdefault(rel or path, []).append(method)
+    w_ = WORDS[lang]
+    out = [f"| {w_['Area']} | {w_['Routes']} | {w_['Role' if brain else 'Access']} |", "|---|---|---|"]
+    last = None
+    for (i, level), paths in sorted(rows.items(), key=lambda kv: (kv[0][0], order.index(kv[0][1]))):
+        name = f"**{areas[i][lang == 'es']}**" if i != last else ""
+        last = i
+        cell = " · ".join(f"`{'/'.join(sorted(set(ms), key=METHODS.index))} {p}`" for p, ms in paths.items())
+        out.append(f"| {name} | {cell} | {ROLES[level][lang == 'es']} |".replace("|  |", "| |"))
+    return "\n".join(out)
+
+
+def rest(routes: list[tuple[str, str, str]], lang: str, w: Writer) -> str:
+    if lang == "es":
+        return ("## Rutas por brain\nTodas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden sus dependencias; unas pocas rutas "
+                "comprueban algo más, ver las notas de abajo.\n\n" + routes_table(routes, True, lang, w)
+                + "\n\n## Rutas de cuenta y de instancia\nCuelgan de `/api/…`.\n\n" + routes_table(routes, False, lang, w))
+    return ("## Per-brain routes\nAll hang off `/api/brains/{slug}/…`. The role is the **minimum** their dependencies require; a few routes "
+            "check more, see the notes below.\n\n" + routes_table(routes, True, lang, w)
+            + "\n\n## Account and instance routes\nUnder `/api/…`.\n\n" + routes_table(routes, False, lang, w))
+
+
 def replace_block(text: str, block: str, name: str) -> str:
     """The page with its generated part replaced; the part goes between the markers, which must be there once."""
     if text.count(START) != 1 or text.count(END) != 1:
@@ -131,8 +254,10 @@ def expected(w: Writer) -> dict[str, str]:
     sys.path.insert(0, str(ROOT / "api"))
     from mimirsynth import appsettings, notify
     from mimirsynth.config import Settings
+    from mimirsynth.main import app
     defaults = {k: f.default for k, f in Settings.model_fields.items()}
-    pages = {"Notifications.md": ("en", lambda lang: notifications(notify.EVENTS, notify.EVENT_DOCS, lang, w)),
+    routes = api_routes(app)
+    pages = {"REST-API.md": ("en", lambda lang: rest(routes, lang, w)), "API-REST.md": ("es", lambda lang: rest(routes, lang, w)),"Notifications.md": ("en", lambda lang: notifications(notify.EVENTS, notify.EVENT_DOCS, lang, w)),
              "Notificaciones.md": ("es", lambda lang: notifications(notify.EVENTS, notify.EVENT_DOCS, lang, w)),
              "Settings-reference.md": ("en", lambda lang: settings(appsettings.REGISTRY, appsettings.GROUPS, defaults, lang, w)),
              "Referencia-de-ajustes.md": ("es", lambda lang: settings(appsettings.REGISTRY, appsettings.GROUPS, defaults, lang, w))}

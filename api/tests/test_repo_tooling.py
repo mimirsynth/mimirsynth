@@ -98,7 +98,7 @@ def test_the_wiki_reference_writer(tmp_path, monkeypatch, capsys):
     assert any("no English translation" in p and "Sin traducir" in p for p in w.problems)
 
     # a page whose generated part was edited by hand is out of date: --check fails, and writing puts it back
-    for name in ("Notifications.md", "Notificaciones.md", "Settings-reference.md", "Referencia-de-ajustes.md"):
+    for name in ("Notifications.md", "Notificaciones.md", "Settings-reference.md", "Referencia-de-ajustes.md", "REST-API.md", "API-REST.md"):
         (tmp_path / name).write_bytes((wr.WIKI / name).read_bytes())
     page = tmp_path / "Notifications.md"
     good = page.read_bytes()
@@ -112,3 +112,27 @@ def test_the_wiki_reference_writer(tmp_path, monkeypatch, capsys):
         raise AssertionError("a page without its end marker must be refused")
     except SystemExit as e:
         assert "generated markers" in str(e)
+
+
+def test_the_rest_reference_routes_table():
+    """The REST API tables (#184): routes by area and minimum role, methods merged per path, and every route given an area."""
+    wr = _script("wiki_reference")
+    w = wr.Writer({}, lambda page: page)
+    b = wr.BRAIN
+    routes = [("GET", b + "/facts", "reader"), ("DELETE", b + "/facts/{uuid}", "curator"), ("PATCH", b + "/facts/{uuid}", "curator"),
+              ("GET", b + "/timeline", "reader"), ("PATCH", b, "admin"), ("POST", b + "/hooks/{key}", "hook"),
+              ("GET", "/api/me", "session"), ("POST", "/api/auth/login", "public"), ("GET", "/api/health", "public")]
+    assert wr.routes_table(routes, True, "en", w).split("\n")[2:] == [
+        "| **Facts** | `GET /facts` · `GET /timeline` | reader |", "| | `PATCH/DELETE /facts/{uuid}` | curator |",
+        "| **The brain itself** | `PATCH /api/brains/{slug}` | administrator |", "| **Incoming webhooks** | `POST /hooks/{key}` | the webhook's secret |"]
+    assert wr.routes_table(routes, False, "es", w).split("\n")[2:] == [
+        "| **Acceso** | `POST /auth/login` | pública |", "| **Mi cuenta** | `GET /me` | con sesión |", "| **Públicas** | `GET /health` | pública |"]
+    assert w.problems == []
+    wr.routes_table([("GET", b + "/brand-new", "reader"), ("GET", b + "/facts/open", "public")], True, "en", w)
+    assert any("GET /api/brains/{slug}/brand-new has no area" in p for p in w.problems)
+    assert any("brain route GET /api/brains/{slug}/facts/open needs no brain role" in p for p in w.problems)
+
+    from mimirsynth.main import app
+    got = {(m, p): a for m, p, a in wr.api_routes(app)}
+    assert got[("POST", b + "/recall")] == "reader" and got[("POST", "/api/brains")] == "instance" and got[("GET", "/api/config")] == "public"
+    assert got[("GET", b + "/docs/{doc_id}")] == "reader" and ("GET", b + "/mcp") not in got     # converters dropped; 405-only routes left out
