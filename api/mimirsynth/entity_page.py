@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .conflicts import functional_relations, generic
 from .db import fact_status, graph, parse_ts, rows
 from .deps import BrainCtx, reader
+from .entity_types import other_names
 from .graphapi import FACT_RETURN
 from .ontology import get_ontology
 from .vocab import alias_map, resolve
@@ -46,7 +47,7 @@ def entity_page(uuid: str, as_of: str = Query("", max_length=40), origin: str = 
     if not found:
         raise HTTPException(404, "entidad no encontrada")
     ent = found[0]
-    ent["aliases"] = [a for a in (ent["aliases"] or []) if isinstance(a, str)]
+    ent["aliases"] = other_names(ent["name"], ent["aliases"])  # never the entity's own name (#194)
     total = G.query("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE a.uuid = $u OR b.uuid = $u RETURN count(r)", {"u": uuid}).result_set[0][0]
     facts = rows(G.query(f"MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE a.uuid = $u OR b.uuid = $u RETURN {FACT_RETURN}, "
                          "[l IN labels(a) WHERE l <> 'Entity'] AS source_labels, [l IN labels(b) WHERE l <> 'Entity'] AS target_labels "

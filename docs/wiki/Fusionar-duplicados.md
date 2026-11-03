@@ -27,6 +27,11 @@ En **Fusiones recientes** aparece cada operación. La **última** se puede **des
 ## Fusión automática
 Al ingerir, MimirSynth ya fusiona por su cuenta los casos claros de normalización por alias. Lo que ves aquí es lo que quedó sin resolver.
 
+## Nombres fusionados
+El nombre de cada entidad fusionada se guarda como alias de la que se queda, así se sigue encontrando por ese nombre (búsqueda, página de entidad, herramientas MCP). Un nombre que la entidad ya tiene, con cualquier mayúscula o espaciado, no se vuelve a añadir: fusionar «lyra» en «Lyra» no añade ningún alias. Deshacer una fusión quita solo el alias que añadió.
+
+Las fusiones hechas antes de esta regla pudieron dejar alias iguales al nombre de la propia entidad. La página de entidad no los muestra, y el administrador de la instancia puede quitarlos del grafo: `python -m mimirsynth.entity_aliases` los lista en todos los brains (`--brain <slug>` para uno), y con `--apply` los quita. Los demás alias se quedan como están. Con Docker: `docker compose exec mimirsynth python -m mimirsynth.entity_aliases`.
+
 ## Consejos
 - Elige como principal la que tiene **más hechos** y el nombre más canónico.
 - Revisa que sean realmente la misma cosa: «Servidor 1» y «Servidor 2» **no** son duplicados.
