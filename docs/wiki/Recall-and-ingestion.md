@@ -41,6 +41,8 @@ It copies the text of the episodes from FalkorDB to PostgreSQL, chunked, with ve
 | **Keep finished jobs** | 60 days | 1–3650 | After this period finished, failed and cancelled jobs are deleted |
 | **Keep scheduled rescans** | 7 days | 1–365 | Automatic rescans with no issues are noise (one every few minutes): they are deleted sooner |
 
+Each entity the ingestion touches gets its **summary** rewritten by the brain's LLM, which merges what the episode adds and leaves the summary as it was when nothing durable is new. graphiti-core would otherwise append the new fact sentences to the old summary without asking the model, until it passed 2,000 characters, which is why many summaries read as a list of facts. It costs one call per batch of entities touched, counted in [[AI consumption]] as ingestion.
+
 Purging runs on start and every hour. More on the queue in [[Jobs]]. The embedding model change itself is explained in [[AI providers]].
 
 > The **concurrency** of LLM calls during an ingestion is set with an environment variable at startup (it is not changed live). See [[Environment variables]].

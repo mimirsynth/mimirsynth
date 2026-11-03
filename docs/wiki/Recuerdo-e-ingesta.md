@@ -41,6 +41,8 @@ Copia el texto de los episodios de FalkorDB a PostgreSQL, troceado, con vectores
 | **Conservar trabajos terminados** | 60 días | 1–3650 | Pasado este plazo se borran los trabajos terminados, fallidos y cancelados |
 | **Conservar reescaneos programados** | 7 días | 1–365 | Los reescaneos automáticos **sin incidencias** son ruido (uno cada pocos minutos): se borran antes |
 
+A cada entidad que toca la ingesta, el LLM del brain le reescribe el **resumen**: incorpora lo que aporta el episodio y lo deja como estaba si no hay nada duradero nuevo. Sin esto, graphiti-core añadiría las frases de los hechos nuevos al resumen anterior sin preguntar al modelo hasta pasar de 2.000 caracteres, y por eso muchos resúmenes se leen como una lista de hechos. Cuesta una llamada por cada lote de entidades tocadas, que cuenta en el [[Consumo de IA]] como ingesta.
+
 La purga corre al arrancar y cada hora. Más sobre la cola en [[Trabajos]]. El cambio de modelo de embeddings en sí se explica en [[Proveedores de IA]].
 
 > La **concurrencia** de las llamadas al LLM durante una ingesta se fija con una variable de entorno al arrancar (no se cambia en caliente). Ver [[Variables de entorno]].

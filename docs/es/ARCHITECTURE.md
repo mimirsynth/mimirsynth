@@ -54,7 +54,7 @@ Lo que aporta un colaborador o un agente no entra directo al grafo. Crea una **p
 
 1. Un **decisor** (modelo de decisión cerrada, con umbral) puede aprobar automáticamente lo claramente factual. Nunca rechaza por su cuenta.
 2. Lo dudoso espera a un **curador**, que aprueba o rechaza. Si propone un curador, queda aprobada.
-3. Al aprobarse, se **ingiere** con Graphiti (extracción de entidades y hechos con el LLM del brain) mediante un trabajo en cola, con reintentos y progreso.
+3. Al aprobarse, se **ingiere** con Graphiti (extracción de entidades y hechos con el LLM del brain) mediante un trabajo en cola, con reintentos y progreso. Los resúmenes de las entidades que toca también los escribe el LLM (`ingest.llm_summaries`: el `add_episode` de graphiti-core añadiría en su lugar las frases de los hechos tal cual, ver #201).
 
 ### Secretos
 

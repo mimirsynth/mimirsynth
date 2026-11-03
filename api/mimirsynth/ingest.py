@@ -13,6 +13,32 @@ os.environ.setdefault("SEMAPHORE_LIMIT", str(settings.ingest_concurrency))  # an
 log = logging.getLogger("mimirsynth.ingest")
 
 
+def llm_summaries() -> bool:
+    """Entity summaries written by the LLM at every ingestion, never «old summary + raw facts» (#201).
+
+    graphiti-core's `add_episode` calls `extract_attributes_from_nodes` with `skip_fact_appending=False`, so an entity's summary is its
+    old summary with the new fact sentences appended, without asking the LLM, until it grows past 2 × MAX_SUMMARY_CHARS; only then is
+    it rewritten. With `skip_fact_appending=True` every touched entity goes through the LLM with graphiti's episode-based prompt, which
+    merges what is new and leaves the summary unchanged when nothing durable is. `add_episode` does not expose the flag, so the name
+    `graphiti.py` imported is wrapped here, from our own code, once per process. Returns False (and logs) if a graphiti-core upgrade
+    moved or renamed it, so the change shows instead of failing ingestion."""
+    import inspect
+    import graphiti_core.graphiti as gg
+    orig = getattr(gg, "extract_attributes_from_nodes", None)
+    if getattr(orig, "_mimirsynth_llm_summaries", False):
+        return True
+    if orig is None or "skip_fact_appending" not in inspect.signature(orig).parameters:
+        log.warning("graphiti-core no longer has extract_attributes_from_nodes(skip_fact_appending=…): summaries append raw facts again")
+        return False
+
+    async def wrapped(*args, **kwargs):
+        kwargs["skip_fact_appending"] = True
+        return await orig(*args, **kwargs)
+    wrapped._mimirsynth_llm_summaries = True
+    gg.extract_attributes_from_nodes = wrapped
+    return True
+
+
 def _engine() -> dict | None:
     """Motor por defecto de la base de datos; si no hay, el configurado por variables de entorno."""
     from . import llm
@@ -51,6 +77,7 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
     eng = _engine()
     if not eng:
         raise RuntimeError("no hay motor LLM configurado")
+    llm_summaries()
     import httpx
     from openai import AsyncOpenAI
 
