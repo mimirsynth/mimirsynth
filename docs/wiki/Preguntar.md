@@ -47,13 +47,14 @@ La pestaña **Calidad** resume los últimos 30 días: cuántos recalls hubo y cu
 
 Los administradores del brain pueden marcar **Guardar el texto de las consultas**: las consultas reales llevan los prompts de las personas, así que por defecto solo se guarda una huella; con esto, el texto se guarda 30 días, y al desmarcarlo se borra ya. Las valoraciones siguen el plazo de retención del brain para **Valoraciones del recall** ([[Administrar brains y miembros]]).
 
-## Buscar en todos mis brains
-**Buscar en todos mis brains**, abajo en la barra lateral, hace la misma búsqueda a la vez en **todos los brains que puedes leer**, con los resultados agrupados por brain: hechos, fragmentos de episodios y pasajes de documentos.
+## Alcance: este brain o todos mis brains
+**Alcance → Todos mis brains** hace la misma búsqueda a la vez en **todos los brains que puedes leer**, con los resultados agrupados por brain: hechos, fragmentos de episodios y pasajes de documentos. **Este brain** (lo de siempre) es la búsqueda descrita arriba. El navegador recuerda la última elección; con un solo brain no hay nada que elegir y el selector no aparece.
+- **Lo que no se ofrece entre brains:** el modo **Responder**, las **valoraciones** y **Guardar como consulta de referencia**. Necesitan el recall de un solo brain (una valoración apunta a un `recall_id` y una consulta de referencia es de un brain), así que con «Todos mis brains» solo se muestra el contexto de cada brain, con una nota que lo explica.
 - **Qué brains:** los tuyos, cada uno con tu propio rol, o todos si administras la instancia. La federación no entra: un brain que solo presta a otro no se busca a través de él. Los brains que no puedes leer no aparecen nunca, ni siquiera en un recuento.
-- **Cada resultado se abre en su brain:** una entidad, el episodio en Diario o el documento en Conocimiento, cambiando antes a ese brain. **Abrir en Preguntar** repite la búsqueda en Preguntar, en ese brain.
+- **Cada resultado se abre en su brain:** una entidad, el episodio en Diario o el documento en Conocimiento, cambiando antes a ese brain. **Abrir en Preguntar** cambia a ese brain con el alcance de vuelta en «Este brain» y la pregunta ya escrita.
 - **Rápida y sin bloqueos:** el vector de la consulta se calcula una sola vez para todos los brains, que es lo caro. Los brains se consultan de pocos en pocos y la página espera como mucho 8 segundos: un brain que no responde a tiempo o falla se marca, y el resto se muestra igualmente.
 - **No disponible para tokens de API:** siguen acotados a un brain, así que los agentes siguen preguntando a cada brain por separado.
-- **Límites:** cada persona puede buscar en todos sus brains `search_per_hour` veces por hora (60 por defecto, [[Referencia de ajustes]]), y la instancia hace pocas búsquedas de este tipo a la vez: pasado cualquiera de los dos límites responde «demasiadas», y mientras tanto puedes buscar en un brain desde Preguntar.
+- **Límites:** cada persona puede buscar en todos sus brains `search_per_hour` veces por hora (60 por defecto, [[Referencia de ajustes]]), y la instancia hace pocas búsquedas de este tipo a la vez: pasado cualquiera de los dos límites responde «demasiadas», y mientras tanto puedes buscar en un brain con «Este brain».
 - **Consumo de IA:** el vector de la consulta cuenta en el brain que tienes abierto (o en el primero consultado), como un recall. Si ese brain ha agotado su presupuesto de IA con pausa, paga el siguiente; si lo han agotado todos los tuyos, la búsqueda espera al mes que viene. El resto de brains reutiliza el vector y no cuesta nada.
 
 ## Si el resultado es malo

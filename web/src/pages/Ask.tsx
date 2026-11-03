@@ -3,12 +3,13 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, NumberField, Pill, Segments, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { useState } from "react";
-import { fmt, get, send } from "../api";
+import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Brain, fmt, get, send } from "../api";
 import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries";
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
+import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score: number; origin?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
@@ -18,10 +19,27 @@ type Passage = { document_id: number; chunk_idx: number; title: string; text: st
 type Res = { recall_id?: string; query: string; facts: Fact[]; chunks: Chunk[]; documents?: Passage[]; documents_state?: string; context: string; index: boolean; ms: Record<string, number> };
 type Mark = "expect" | "avoid";
 type Rating = "useful" | "irrelevant" | "incorrect";
+type Scope = "brain" | "all";
+const SCOPE_KEY = "mimirsynth.askScope";  // the last scope chosen, per browser; a convenience, Ask works the same without it
+const storedScope = (): Scope => { try { return localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "brain"; } catch { return "brain"; } };
 
 export default function Ask({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
-  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");  // «Open in Ask» from the search in every brain
+  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");  // «Open in Ask» from «All my brains»
+  // Scope (issue 186): this brain, or the same search in every brain the person can read. A link may set it (`?alcance=`); the choice
+  // is then remembered in the browser. With a single brain there is nothing to choose.
+  const [params, setParams] = useSearchParams();
+  const brains = useQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains") });
+  const several = (brains.data?.length ?? 0) > 1;
+  const asked = params.get("alcance");
+  const [chosen, setChosen] = useState<Scope>(() => (asked === "all" || asked === "brain" ? asked : storedScope()));
+  const scope: Scope = several ? chosen : "brain";
+  const setScope = (v: Scope) => {
+    setChosen(v);
+    try { localStorage.setItem(SCOPE_KEY, v); } catch { /* sin almacenamiento */ }
+    const n = new URLSearchParams(params); n.delete("alcance"); setParams(n, { replace: true });
+  };
+  useEffect(() => { if (asked === "all" || asked === "brain") setScope(asked); }, [asked]);  // eslint-disable-line react-hooks/exhaustive-deps
   const [nf, setNf] = useState(8); const [nc, setNc] = useState(4);
   const [marks, setMarks] = useState<Record<string, { mark: Mark; item: Item }>>({});
   const [save, setSave] = useState<RefQuery | null>(null);
@@ -31,6 +49,10 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const [rated, setRated] = useState<Record<string, Rating>>({});
   const [rateMsg, setRateMsg] = useState("");
   const run = useMutation({ mutationFn: () => send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }), onSuccess: () => { setMarks({}); setRated({}); setRateMsg(""); } });
+  // The open brain pays for the query's embedding in the AI consumption (issue 176).
+  const searchAll = useMutation({ mutationFn: () => send<AllBrainsResult>("POST", "search", { query: q, facts: nf, chunks: nc, brain: graph }) });
+  const search = () => { if (!q.trim()) return; if (scope === "all") searchAll.mutate(); else run.mutate(); };
+  useEffect(() => { run.reset(); }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
   // Valorar lo que devolvió el recall (útil, irrelevante, incorrecto): alimenta la pestaña Calidad.
   const rate = useMutation({
     mutationFn: (a: { key: string; kind: string; id: string; rating: Rating }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${run.data?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating }),
@@ -40,6 +62,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       <Btn key={v} size="row" kind={rated[key] === v ? (v === "useful" ? "primary" : "danger") : "ghost"} onClick={() => rate.mutate({ key, kind, id, rating: v })}>
         {v === "useful" ? t("Útil") : v === "irrelevant" ? t("Irrelevante") : t("Incorrecto")}</Btn>))}
   </Group>;
+  const view = scope === "all" ? "contexto" : mode;  // across brains there is no written answer: it needs one brain's recall
   const sync = useMutation({ mutationFn: () => send<any>("POST", `brains/${graph}/index/sync`), onSuccess: () => status.refetch() });
   const canSync = ["curator", "admin", "owner"].includes(role);
   const r = run.data;
@@ -64,20 +87,27 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         {sync.data && <Text size="xs" c="dimmed">{sync.data.reindexed} {t("episodios reindexados")}</Text>}
       </Group>
       <TextArea autosize minRows={2} placeholder={t("¿Dónde está Nextcloud ahora?")} value={q} onChange={(e) => setQ(e.currentTarget.value)}
-        onKeyDown={(e) => { if (mode === "contexto" && e.key === "Enter" && (e.ctrlKey || e.metaKey) && q) run.mutate(); }} />
-      <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
-        data={[{ value: "responder", label: t("Responder") }, { value: "contexto", label: t("Contexto") }]} />
+        onKeyDown={(e) => { if (view === "contexto" && e.key === "Enter" && (e.ctrlKey || e.metaKey) && q) search(); }} />
+      <Group gap="md" align="flex-end">
+        {several && <Segments label={t("Alcance")} value={scope} onChange={(v) => setScope(v as Scope)}
+          data={[{ value: "brain", label: t("Este brain") }, { value: "all", label: t("Todos mis brains") }]} />}
+        {scope === "brain" && <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
+          data={[{ value: "responder", label: t("Responder") }, { value: "contexto", label: t("Contexto") }]} />}
+      </Group>
+      {scope === "all" && <Text size="xs" c="dimmed">{t("La misma búsqueda en todos los brains que puedes leer, con tu rol en cada uno y sin federación. La respuesta redactada, las valoraciones y guardar como consulta de referencia solo están en «Este brain»: los resultados mezclan brains distintos.")}</Text>}
       <Group align="flex-end">
         <NumberField size="xs" label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} w={80} />
         <NumberField size="xs" label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={100} />
-        {mode === "contexto" && <Btn kind="primary" disabled={!q} loading={run.isPending} onClick={() => run.mutate()}>{t("Buscar (Ctrl+Enter)")}</Btn>}
-        {mode === "contexto" && r && <Text size="xs" c="dimmed">{r.ms.total} {t("ms (embedding")} {r.ms.embed} {t("· hechos")} {r.ms.facts} {t("· fragmentos")} {r.ms.chunks})</Text>}
-        {mode === "contexto" && r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
+        {view === "contexto" && <Btn kind="primary" disabled={!q} loading={run.isPending || searchAll.isPending} onClick={search}>{t("Buscar (Ctrl+Enter)")}</Btn>}
+        {view === "contexto" && scope === "brain" && r && <Text size="xs" c="dimmed">{r.ms.total} {t("ms (embedding")} {r.ms.embed} {t("· hechos")} {r.ms.facts} {t("· fragmentos")} {r.ms.chunks})</Text>}
+        {view === "contexto" && scope === "brain" && r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
       </Group>
-      {mode === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} />}
-      {mode === "contexto" && <MutationError error={run.error ?? rate.error} />}
-      {mode === "contexto" && rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
-      {mode === "contexto" && r && (
+      {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} />}
+      {scope === "all" && <MutationError error={searchAll.error} />}
+      {scope === "all" && searchAll.data && <AskAllBrains r={searchAll.data} />}
+      {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error} />}
+      {view === "contexto" && scope === "brain" && rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
+      {view === "contexto" && scope === "brain" && r && (
         <Group align="flex-start" wrap="nowrap" gap="md">
           <Stack className="ms-ask-main" gap="xs">
             <Title order={5}>{t("Hechos (")}{r.facts.length})</Title>
