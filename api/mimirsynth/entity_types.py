@@ -207,6 +207,13 @@ def revert_op(oid: int, ctx: BrainCtx = Depends(curator_of_brain)):
         ctx.db.commit()
         audit(ctx.db, ctx.user, "vocab.revert", ctx.brain, summary=op.summary)
         return {"ok": True}
+    if op.kind == "entity.aliases":
+        from .entity_aliases import undo
+        restored = undo(ctx.brain.graph_name, d)
+        op.status = "reverted"
+        ctx.db.commit()
+        audit(ctx.db, ctx.user, "vocab.revert", ctx.brain, summary=op.summary, entities=restored, skipped=len(d.get("entries", [])) - restored)
+        return {"ok": True, "restored": restored}
     if op.kind == "entity.merge":
         _undo_merge(ctx, d)
         op.status = "reverted"
@@ -390,11 +397,16 @@ def merge_preview(body: MergeIn, ctx: BrainCtx = Depends(reader)):
 
 
 def _snapshot(ctx: BrainCtx) -> str:
-    """Copia de seguridad del grafo antes de fusionar (nombre con «_»: no aparece en la lista de grafos). Conserva las últimas SNAP_KEEP."""
-    name = f"_snap_{ctx.brain.graph_name}_{datetime.now(timezone.utc):%Y%m%d%H%M%S}"
+    return snapshot_graph(ctx.brain.graph_name)
+
+
+def snapshot_graph(graph_name: str, tag: str = "") -> str:
+    """Copia de seguridad del grafo antes de fusionar o limpiar (nombre con «_»: no aparece en la lista de grafos). Conserva las
+    últimas SNAP_KEEP."""
+    name = f"_snap_{graph_name}_{datetime.now(timezone.utc):%Y%m%d%H%M%S}{f'_{tag}' if tag else ''}"
     c = client()
-    c.select_graph(ctx.brain.graph_name).copy(name)
-    snaps = sorted(x for x in c.list_graphs() if x.startswith(f"_snap_{ctx.brain.graph_name}_"))
+    c.select_graph(graph_name).copy(name)
+    snaps = sorted(x for x in c.list_graphs() if x.startswith(f"_snap_{graph_name}_"))
     for old in snaps[:-SNAP_KEEP]:
         c.select_graph(old).delete()
     return name

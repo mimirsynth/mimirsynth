@@ -20,6 +20,7 @@ Una línea debajo apunta a lo que sigue en otro sitio:
 | [[Contradicciones]] | Hechos vigentes que no pueden ser ciertos a la vez: el mismo sujeto con dos destinos en una relación de un solo valor. Quédate con el que sigue siendo cierto, o di que no es una contradicción. | Curador y superiores |
 | **Tipos dudosos** ([[Corrector de tipos]]) | Entidades sin tipo o con uno comodín: el decisor propone un tipo de la ontología y un administrador lo aplica o lo descarta. Cada cambio se deshace por separado. | Administrador |
 | **A revisar** | Hechos vigentes que han superado la vida útil de su relación. **Confirma** los que siguen siendo ciertos (renueva la fecha sin tocar el grafo) o **invalida** los demás. | Curador y superiores |
+| **Alias repetidos** | Nombres fusionados que solo repiten el nombre de la entidad (sin contar mayúsculas ni espacios) u otro alias, que dejaron fusiones antiguas. La lista dice qué se quita y qué se queda, y no escribe nada; **Limpiar** guarda antes una copia del grafo y después los quita como trabajo en segundo plano. El cambio queda en **Cambios recientes** y se deshace desde ahí o desde **Limpiezas anteriores**; una entidad que cambió después de la limpieza se deja como está. | Administrador |
 
 Cada pestaña empieza diciendo para qué sirve y qué pasa al actuar, y enlaza de vuelta con el sitio de [[Vocabulario]] donde está su interruptor: [[Ontología]] para las relaciones de un solo valor y la vida útil, y **Alias** para los alias de relación, junto a los nombres de las entidades fusionadas.
 

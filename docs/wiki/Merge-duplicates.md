@@ -30,7 +30,7 @@ On ingestion, MimirSynth already merges by itself the clear cases of alias norma
 ## Merged names
 The name of each merged entity is kept as an alias of the one that stays, so it is still found by that name (search, entity page, the MCP tools). A name the entity already has, in any case or spacing, is not added again: merging «lyra» into «Lyra» adds no alias. Undoing a merge removes only the alias it added.
 
-Merges made before this rule could leave aliases equal to the entity's own name. The entity page does not show them, and an administrator of the instance can remove them from the graph: `python -m mimirsynth.entity_aliases` lists them in every brain (`--brain <slug>` for one), and with `--apply` removes them. Other aliases stay as they are. With Docker: `docker compose exec mimirsynth python -m mimirsynth.entity_aliases`.
+Merges made before this rule could leave aliases equal to the entity's own name, or the same alias twice. The entity page does not show them, and a brain administrator removes them from the graph in [[Content quality]] → **Repeated aliases**. Other aliases stay as they are, in their first spelling. The command `python -m mimirsynth.entity_aliases` does the same from a shell (it lists them in every brain, `--brain <slug>` for one, and `--apply` removes them), without the copy of the graph or the history; with Docker, `docker compose exec mimirsynth python -m mimirsynth.entity_aliases`.
 
 ## Tips
 - Choose as primary the one with **most facts** and the most canonical name.
