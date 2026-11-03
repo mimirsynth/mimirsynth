@@ -6,6 +6,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Btn, DataState, EmptyState, FillArea, MutationError, Notice, Page, PageHeader, Panel, Pill, SplitView, TextField } from "../ui";
 import { fmt, get, send } from "../api";
 import { TypeDialog } from "./TypePicker";
+import EntityMiniGraph, { humanRelation } from "./EntityMiniGraph";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };
@@ -19,8 +20,6 @@ type EPage = {
   episodes: { total: number; items: { uuid: string; name: string; valid_at: string | null; created_at: string | null; source: string | null }[] };
 };
 const day = (iso?: string | null) => (iso ? iso.slice(0, 10) : "?");
-/** A relation name as words: `HOSTED_ON` and `HostedOn` read «hosted on». The raw name stays as the tooltip. */
-const humanRelation = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_+/g, " ").trim().toLowerCase();
 const MAX_HEAD = 3;  // values named in a group's heading; the rest are counted
 
 /** Everything known about one entity and how it changed. Facts are grouped by relation and read as an evolution, oldest
@@ -71,7 +70,6 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
     </>} actions={<Group gap="xs" align="flex-end">
       <TextField type="date" label={t("Cómo estaba el día")} value={asOf} onChange={(ev) => setAsOf(ev.currentTarget.value)} w={170} />
       {asOf && <Btn kind="ghost" onClick={() => setAsOf("")}>{t("Hoy")}</Btn>}
-      {!origin && <Btn kind="secondary" icon="graph" component={Link} to={`/grafo?nodo=${e.uuid}`}>{t("Ver en el grafo")}</Btn>}
     </Group>} />
     {/* the summary, folded so a long paragraph never pushes the relations down; hidden when it only repeats the facts (issue 194) */}
     {e.summary && !e.summary_repeats && <Stack gap={4}>
@@ -98,9 +96,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
         {showOther && other.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} name={e.name} graph={graph} canEdit={canEdit} link={link} />)}
       </Stack>}
     </Stack></FillArea>} aside={<Panel withBorder p="sm" h="100%"><FillArea><Stack gap="sm">
-      <Text size="sm" fw={700}>{t("Relacionadas ({{count}})", { count: d.neighbors.length })}</Text>
-      <Group gap={4}>{d.neighbors.slice(0, 40).map((n) => (
-        <Link key={n.uuid} to={link(n)} className="ms-nolink"><Pill size="xs">{n.name}</Pill></Link>))}</Group>
+      <EntityMiniGraph entity={e} groups={d.groups} neighbors={d.neighbors} link={link} expand={origin ? undefined : `/grafo?nodo=${e.uuid}`} />
       {d.episodes.total > 0 && <Text size="sm" fw={700}>{t("Episodios que la mencionan ({{count}})", { count: d.episodes.total })}</Text>}
       {d.episodes.items.map((ep) => (
         <Stack key={ep.uuid} gap={0}>
