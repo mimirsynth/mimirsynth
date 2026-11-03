@@ -2,17 +2,22 @@
 
 # Administration overview
 
-The gear icon in the side bar opens **Administration**. Sections are in a list on the left, grouped (on mobile, on top), and each one is a card with its title and description. The active section is in the address (`?seccion=…`), so you can link to it.
+The gear icon in the side bar opens **Administration**. Sections are in a list on the left (on mobile, on top), grouped under a heading and set apart by a rule; the group of the section you are in is highlighted. Each section is a card with its title and description. The active section is in the address (`?seccion=…`), so you can link to it.
 
 ## What each person sees
-- **Anyone** sees **Brain access** for the active brain: its name and role, what other brains lend it ([[Federation]]) and its API tokens.
+- **Anyone** sees the **Brain** group for the active brain: its name and role, its members, its API tokens and what other brains lend it ([[Federation]]).
 - **Administrators of a brain** also manage its members, what it lends to other brains and its [[Secrets]] policy, and can edit it.
 - **The instance administrator** sees every section.
 
 ## Map of sections
 | Group | Section | Purpose | Page |
 |---|---|---|---|
-| **Brain** | Brain access | Create/edit/delete brains, members, federation, secrets and tokens | [[Brains and members]], [[Federation]], [[Secrets]] |
+| **Brain** | Active brain | Create/edit/delete/import brains | [[Brains and members]], [[Import a brain]] |
+| | Members, API tokens | Who has access, and the brain's tokens | [[Brains and members]], [[Connect agents]] |
+| | Federation | Lend and receive reading | [[Federation]] |
+| | Secrets | What to do with a credential in a proposal or document | [[Secrets]] |
+| | Incoming webhooks | Events of your tools as episodic memory | [[Incoming webhooks]] |
+| | AI consumption, Retention, Export | The brain's spending, what is kept, and a copy of it | [[AI consumption]], [[Brains and members]], [[Export a brain]] |
 | **Accounts** | Users | Sign-ups, invitations, roles, locks | [[Administer users]] |
 | | Security | Passwords, lockout, mandatory two-factor | [[Security and two-factor]] |
 | | Identity | Sign-in with one or several external providers | [[OIDC identity]] |

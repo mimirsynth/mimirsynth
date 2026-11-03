@@ -18,7 +18,7 @@ Una concesión va de un brain **de origen** (el que presta) a un brain **de dest
 **Nunca se comparten:** embeddings, resúmenes de entidades, miembros, tokens, propuestas, la ontología ni nada que no sea el contenido que devuelve una consulta. Nunca se presta la escritura: `remember` siempre escribe en el brain al que pertenece su token.
 
 ## Prestar un brain
-En **Administración → Acceso al brain → Federación**, con el brain de origen activo. Tienes que ser **administrador del brain de origen** y tener acceso al de destino (un brain que no puedes ver no se ofrece).
+En **Administración → Brain → Federación**, con el brain de origen activo. Tienes que ser **administrador del brain de origen** y tener acceso al de destino (un brain que no puedes ver no se ofrece).
 1. **Prestar a:** elige el brain de destino. Un brain que ya tiene una concesión de este no aparece: cambia o revoca la existente.
 2. **Qué presta:** el alcance.
 3. **Días de vigencia** (opcional, 1–3650): vacío = **sin caducidad**.

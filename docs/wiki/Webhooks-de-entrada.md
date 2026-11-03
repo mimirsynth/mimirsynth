@@ -2,7 +2,7 @@
 
 # Webhooks de entrada
 
-Lo que pasa en la infraestructura (una alerta, un despliegue, un pipeline, una copia fallida) es justo la memoria episódica que luego se busca: «¿qué pasó con X la semana pasada?», «¿cuándo se actualizó Y?». Un **webhook de entrada** deja que una herramienta mande esos eventos a un brain, donde entran como **propuestas** redactadas como «qué pasó y cuándo». Los administradores del brain los gestionan en Administración → Acceso al brain → **Webhooks de entrada**.
+Lo que pasa en la infraestructura (una alerta, un despliegue, un pipeline, una copia fallida) es justo la memoria episódica que luego se busca: «¿qué pasó con X la semana pasada?», «¿cuándo se actualizó Y?». Un **webhook de entrada** deja que una herramienta mande esos eventos a un brain, donde entran como **propuestas** redactadas como «qué pasó y cuándo». Los administradores del brain los gestionan en Administración → Brain → **Webhooks de entrada**.
 
 ## Plantillas
 Cada webhook tiene una plantilla que lee el JSON de su emisor:

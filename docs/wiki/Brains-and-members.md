@@ -2,7 +2,18 @@
 
 # Brains and members
 
-The **Brain access** section of administration. It has five cards: the **active brain**, its **members**, **federation**, **secrets** (brain administrators only) and its **API tokens**. The active brain is the one you choose in the side bar selector.
+The **Brain** group of administration: one entry per topic of the active brain (the one you choose in the side bar selector), each in its own card:
+
+| Entry | What it holds | Who sees it |
+|---|---|---|
+| **Active brain** | Name, slug and graph; **Edit**, **Delete**, **Create brain** and **Import a brain** | Anyone (creating and importing: the instance administrator) |
+| **Members** | Who has access and with which role | Anyone with a role in the brain |
+| **API tokens** | The brain's tokens | Anyone with a role in the brain |
+| **Federation** | What it lends and what it receives | Anyone with a role in the brain (lending: its administrators) |
+| **Secrets**, **Incoming webhooks**, **AI consumption**, **Export** | See below | Brain administrators |
+| **Retention** | See below | The brain's owner |
+
+Each entry has its own address (`?seccion=members`, `?seccion=federation`…). Links to the old single page (`/admin`, `?seccion=brains`) open **Active brain**.
 
 ## Creating a brain
 Only the **instance administrator**. **Create brain** button:

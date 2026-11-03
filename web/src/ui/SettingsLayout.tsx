@@ -1,17 +1,30 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 /** Pantalla de ajustes: navegación de secciones a la izquierda y, a la derecha, la sección elegida. En pantalla estrecha la navegación pasa arriba. */
 export function SettingsLayout({ nav, children }: { nav: ReactNode; children: ReactNode }) {
   return <div className="ms-settings"><div className="ms-settings-nav">{nav}</div><div className="ms-settings-body">{children}</div></div>;
 }
 
-/** Navegación vertical de secciones (una opción activa). */
-export function SubNav({ value, onChange, items, label }: { value: string; onChange: (v: string) => void; items: ({ value: string; label: string } | { heading: string })[]; label: string }) {
+type NavEntry = { value: string; label: string };
+
+/** Vertical section navigation (one option active). A `heading` starts a group: the groups are set apart by a rule and the one
+ *  holding the active option is marked, so it is clear at a glance which section a page belongs to. */
+export function SubNav({ value, onChange, items, label }: { value: string; onChange: (v: string) => void; items: (NavEntry | { heading: string })[]; label: string }) {
+  const id = useId();
+  const groups: { heading: string; entries: NavEntry[] }[] = [];
+  for (const i of items) {
+    if ("heading" in i) groups.push({ heading: i.heading, entries: [] });
+    else if (groups.length) groups[groups.length - 1].entries.push(i);
+    else groups.push({ heading: "", entries: [i] });
+  }
   return (
     <nav className="ms-subnav" aria-label={label}>
-      {items.map((i) => "heading" in i
-        ? <div key={`h-${i.heading}`} className="ms-subnav-head">{i.heading}</div>
-        : <button key={i.value} type="button" aria-current={value === i.value ? "page" : undefined} onClick={() => onChange(i.value)}>{i.label}</button>)}
+      {groups.map((g, n) => (
+        <div key={`${n}-${g.heading}`} className="ms-subnav-group" role={g.heading ? "group" : undefined} aria-labelledby={g.heading ? `${id}-${n}` : undefined}
+          data-active={g.entries.some((e) => e.value === value) || undefined}>
+          {g.heading && <div id={`${id}-${n}`} className="ms-subnav-head">{g.heading}</div>}
+          {g.entries.map((e) => <button key={e.value} type="button" aria-current={value === e.value ? "page" : undefined} onClick={() => onChange(e.value)}>{e.label}</button>)}
+        </div>))}
     </nav>
   );
 }

@@ -220,9 +220,16 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const audit = useQuery({ queryKey: ["audit"], enabled: me.is_admin, queryFn: () => get<any[]>("audit") });
   const cur = (brains.data ?? []).find((b) => b.slug === brain);
   const [sectionParam, setSection] = useTabParam("brains", "seccion");
-  const section = me.is_admin ? sectionParam : "brains";  // el resto de secciones son solo del administrador de la instancia
+  const canAdmin = cur && ["admin", "owner"].includes(cur.role);
+  // The active brain, one entry per topic, each with the same role rules as the card it holds; «brains» is the old single page.
+  const brainNav = [{ value: "brains", label: t("Brain activo") }, ...(cur ? [
+    { value: "members", label: t("Miembros") }, { value: "tokens", label: t("Tokens de API") }, { value: "federation", label: t("Federación") },
+    ...(canAdmin ? [{ value: "secrets", label: t("Secretos") }, { value: "webhooks", label: t("Webhooks de entrada") }, { value: "brain-usage", label: t("Consumo de IA") }] : []),
+    ...(cur.role === "owner" ? [{ value: "retention", label: t("Retención") }] : []),
+    ...(canAdmin ? [{ value: "export", label: t("Exportar") }] : []),
+  ] : [])];
   const nav: ({ value: string; label: string } | { heading: string })[] = [
-    { heading: t("Brain") }, { value: "brains", label: t("Acceso al brain") },
+    { heading: t("Brain") }, ...brainNav,
     ...(me.is_admin ? [
       { heading: t("Cuentas") }, { value: "users", label: t("Usuarios") }, { value: "security", label: t("Seguridad") }, { value: "identity", label: t("Identidad") }, { value: "mail", label: t("Correo (SMTP)") },
       { heading: t("Modelos de IA") }, { value: "llm", label: t("Modelo LLM") }, { value: "embedding", label: t("Embeddings") }, { value: "decision", label: t("Decisor") }, { value: "usage", label: t("Consumo") },
@@ -230,7 +237,8 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
       { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "notifications", label: t("Notificaciones") }, { value: "metrics", label: t("Métricas") }, { value: "audit", label: t("Auditoría") },
     ] : []),
   ];
-  const canAdmin = cur && ["admin", "owner"].includes(cur.role);
+  // a link to a section this person cannot see (or to one that no longer exists) opens the first one
+  const section = nav.some((i) => "value" in i && i.value === sectionParam) ? sectionParam : "brains";
   return (
     <Page>
       <PageHeader title={t("Administración")} description={t("Acceso a cada brain y, para el administrador de la instancia, usuarios, seguridad, modelos de IA, documentos y el resto de ajustes.")} />
@@ -284,18 +292,18 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
                   </Group>) : <EmptyState>{t("No hay ningún brain seleccionado.")}</EmptyState>}
               </SettingsBody>
             </SettingsGroup>
-            {cur && <>
-              <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>
-              <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>
-              {canAdmin && <SettingsGroup title={t("Secretos")} description={t("Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave.")}><SettingsBody><Secrets brain={cur} /></SettingsBody></SettingsGroup>}
-              {canAdmin && <SettingsGroup title={t("Consumo de IA")} description={t("Lo que este brain ha gastado en motores de IA en los últimos 30 días, y su presupuesto mensual.")}><SettingsBody><BrainAiUsage brain={cur} /></SettingsBody></SettingsGroup>}
-              {cur.role === "owner" && <SettingsGroup title={t("Retención")} description={t("Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.")}><SettingsBody><BrainRetention brain={cur} /></SettingsBody></SettingsGroup>}
-              {canAdmin && <SettingsGroup title={t("Webhooks de entrada")} description={t("Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain.")}><SettingsBody><BrainWebhooks brain={cur} /></SettingsBody></SettingsGroup>}
-              {canAdmin && <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}><SettingsBody><BrainExport brain={cur} /></SettingsBody></SettingsGroup>}
-              <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>
-            </>}
             {me.is_admin && <SettingsGroup title={t("Importar un brain")} description={t("Un brain nuevo a partir de un paquete exportado.")}>
               <SettingsBody><BrainImport onOpen={(s) => { qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(s); }} /></SettingsBody></SettingsGroup>}
+          </>}
+          {cur && <>
+            {section === "members" && <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>}
+            {section === "tokens" && <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>}
+            {section === "federation" && <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>}
+            {section === "secrets" && <SettingsGroup title={t("Secretos")} description={t("Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave.")}><SettingsBody><Secrets brain={cur} /></SettingsBody></SettingsGroup>}
+            {section === "webhooks" && <SettingsGroup title={t("Webhooks de entrada")} description={t("Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain.")}><SettingsBody><BrainWebhooks brain={cur} /></SettingsBody></SettingsGroup>}
+            {section === "brain-usage" && <SettingsGroup title={t("Consumo de IA")} description={t("Lo que este brain ha gastado en motores de IA en los últimos 30 días, y su presupuesto mensual.")}><SettingsBody><BrainAiUsage brain={cur} /></SettingsBody></SettingsGroup>}
+            {section === "retention" && <SettingsGroup title={t("Retención")} description={t("Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.")}><SettingsBody><BrainRetention brain={cur} /></SettingsBody></SettingsGroup>}
+            {section === "export" && <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}><SettingsBody><BrainExport brain={cur} /></SettingsBody></SettingsGroup>}
           </>}
           {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
           {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}

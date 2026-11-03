@@ -5,7 +5,7 @@
 Crea un **brain nuevo** a partir de un paquete hecho con [[Exportar un brain]], de esta instancia o de otra. Los demás brains no se tocan.
 
 ## Cómo
-**Administración → Acceso al brain → Importar un brain.** Hace falta el **administrador de la instancia** (un token de API nunca puede importar), y queda en la [[Auditoría]].
+**Administración → Brain → Brain activo → Importar un brain.** Hace falta el **administrador de la instancia** (un token de API nunca puede importar), y queda en la [[Auditoría]].
 
 1. Pulsa **Elegir paquete** y elige el fichero `.mimirsynth.tar.gz` (o `.tar.gz.enc`). Se sube por partes, así que el límite de tamaño de un proxy no estorba.
 2. Si el paquete no está cifrado, la tarjeta enseña lo que dice su manifiesto: el brain original, cuándo y con qué versión se exportó, sus recuentos y qué pasará aquí con el grafo y los vectores.

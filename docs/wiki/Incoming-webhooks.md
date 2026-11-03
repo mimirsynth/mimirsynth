@@ -2,7 +2,7 @@
 
 # Incoming webhooks
 
-What happens in the infrastructure (an alert, a deployment, a pipeline, a failed backup) is exactly the episodic memory you look for later: «what happened to X last week?», «when was Y updated?». An **incoming webhook** lets a tool send those events to a brain, where they come in as **proposals** written as «what happened and when». Brain administrators manage them under Administration → Brain access → **Incoming webhooks**.
+What happens in the infrastructure (an alert, a deployment, a pipeline, a failed backup) is exactly the episodic memory you look for later: «what happened to X last week?», «when was Y updated?». An **incoming webhook** lets a tool send those events to a brain, where they come in as **proposals** written as «what happened and when». Brain administrators manage them under Administration → Brain → **Incoming webhooks**.
 
 ## Templates
 Each webhook has a template that reads the JSON of its emitter:

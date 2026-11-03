@@ -54,7 +54,7 @@ Open the application, enter the code and create the administrator account. Keep 
 
 ### First steps
 1. Under **Administration → LLM model** and **Embeddings**, add an engine (endpoint, key and model) and mark it as default. "Test" checks that it responds.
-2. Create a **brain** (Administration → Brain access → Create brain) and, if you like, apply an ontology package under Vocabulary → Ontology.
+2. Create a **brain** (Administration → Brain → Active brain → Create brain) and, if you like, apply an ontology package under Vocabulary → Ontology.
 3. Create an API token for your agents and connect the first one: see [AGENTS.md](AGENTS.md).
 4. Optional: SMTP email (invitations and password recovery), OIDC, mandatory two-factor and document folders. See [CONFIGURATION.md](CONFIGURATION.md).
 
@@ -86,7 +86,7 @@ Also save your `.env`.
 
 Restoring is the reverse path: start the services, restore the database (`psql`) and put the volumes back. The episode text index can be rebuilt from the graph and the document index from the originals.
 
-This copies the whole instance. A single brain can be exported to a package from Administration → Brain access → Export; see «Export a brain» in the wiki.
+This copies the whole instance. A single brain can be exported to a package from Administration → Brain → Export; see «Export a brain» in the wiki.
 
 ## Monitoring the instance
 MimirSynth alerts about the graph and the AI models itself ([NOTIFICATIONS.md](NOTIFICATIONS.md)), but **not about its own PostgreSQL**: alerts are stored in that database, so while it is down there is nowhere to keep them. Watch it from outside with any HTTP monitor (Uptime Kuma, Gatus, a `curl` in cron…) pointed at `GET /api/health`. It needs no sign-in and answers in under 3 seconds:

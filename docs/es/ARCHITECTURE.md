@@ -63,7 +63,7 @@ Antes de guardar una propuesta (de la interfaz, de la API o de `remember` por MC
 - **Seguros:** formatos inconfundibles (claves de acceso de AWS, tokens de GitHub, GitLab, Slack, npm o Hugging Face, claves de API de Google, Stripe, SendGrid o de proveedores de IA, tokens de bots de Telegram, claves privadas PEM, JWT, cabeceras `Authorization` y contraseñas dentro de una URL).
 - **Posibles:** un valor de aspecto aleatorio asignado a una palabra como `password`, `secret` o `token`. Solo se marcan: la entropía por sí sola confundiría sumas, UUID e identificadores de contenedor, que son contenido normal en documentación técnica.
 
-Cada brain elige qué hacer en Administración → Acceso al brain → Secretos:
+Cada brain elige qué hacer en Administración → Brain → Secretos:
 
 | Modo | Secretos seguros | Secretos posibles |
 |---|---|---|

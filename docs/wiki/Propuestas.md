@@ -43,7 +43,7 @@ Una **corrección** es una propuesta que no añade memoria: pide **invalidar un 
 - **Reactivar el hecho**, en la propia corrección, lo deja como estaba. El sustituto ya ingerido no se toca.
 
 ## Secretos en las propuestas
-Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `remember` del MCP), su título y su contenido pasan por el **detector de secretos**: claves de nube y de proveedores de IA, tokens, claves privadas, JWT, cabeceras `Authorization`, contraseñas en URLs… Algunos hallazgos son **seguros**; un valor de aspecto aleatorio asignado a `password`, `secret` o `token` es solo **posible**. Lo que pasa depende de la política del brain (Administración → Acceso al brain → **Secretos**):
+Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `remember` del MCP), su título y su contenido pasan por el **detector de secretos**: claves de nube y de proveedores de IA, tokens, claves privadas, JWT, cabeceras `Authorization`, contraseñas en URLs… Algunos hallazgos son **seguros**; un valor de aspecto aleatorio asignado a `password`, `secret` o `token` es solo **posible**. Lo que pasa depende de la política del brain (Administración → Brain → **Secretos**):
 
 | Política | Secretos seguros | Secretos posibles |
 |---|---|---|

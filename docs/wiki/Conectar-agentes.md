@@ -110,7 +110,7 @@ Con token de **colaborador** la propuesta queda **pendiente**; con **curador**, 
 `GET /api/brains/<slug>/docs/search?q=…` busca por significado. `GET …/docs/<id>/context?chunk=<n>` devuelve más contexto de un pasaje y `…/docs/<id>/file` el original. Ver [[Memoria documental]].
 
 ## Recall federado
-Un administrador de un brain puede **prestar su lectura** a otro brain (Administración → Acceso al brain → **Federación**). El recall del brain que recibe, por HTTP y por MCP, busca entonces también en lo prestado, lo fusiona con su propia memoria y marca cada elemento prestado con su origen (`· de «slug»` en el contexto, un campo `origin` en el JSON). El agente no necesita otro token: sigue usando el del brain que recibe. El préstamo es solo de lectura, en un sentido y de un salto; `remember` siempre escribe en el brain del token. Pasa `federated: false` para obtener solo la memoria propia del brain. Detalles en [Federación entre brains](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/FEDERATION.md).
+Un administrador de un brain puede **prestar su lectura** a otro brain (Administración → Brain → **Federación**). El recall del brain que recibe, por HTTP y por MCP, busca entonces también en lo prestado, lo fusiona con su propia memoria y marca cada elemento prestado con su origen (`· de «slug»` en el contexto, un campo `origin` en el JSON). El agente no necesita otro token: sigue usando el del brain que recibe. El préstamo es solo de lectura, en un sentido y de un salto; `remember` siempre escribe en el brain del token. Pasa `federated: false` para obtener solo la memoria propia del brain. Detalles en [Federación entre brains](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/FEDERATION.md).
 
 ## Idioma de las respuestas
 Los mensajes de error, las descripciones e instrucciones de las herramientas del MCP y los encabezados del contexto del recall (`## Hechos vigentes`…) llegan en el idioma de quien llama, elegido por este orden:
@@ -121,7 +121,7 @@ Los mensajes de error, las descripciones e instrucciones de las herramientas del
 La memoria guardada (hechos, episodios, documentos) se devuelve tal como se escribió; no se traduce. Si tu cliente compara textos de error, envía `Accept-Language` o, mejor, compara el código de estado.
 
 ## Secretos
-**No envíes contraseñas, claves ni tokens:** escribe **dónde** están (por ejemplo, en qué gestor de contraseñas). Antes de guardarse, una propuesta, por HTTP o por `remember`, pasa por el detector de secretos del brain, y lo que ocurre depende de su política (Administración → Acceso al brain → **Secretos**):
+**No envíes contraseñas, claves ni tokens:** escribe **dónde** están (por ejemplo, en qué gestor de contraseñas). Antes de guardarse, una propuesta, por HTTP o por `remember`, pasa por el detector de secretos del brain, y lo que ocurre depende de su política (Administración → Brain → **Secretos**):
 - **Enmascarar** (por defecto): un secreto seguro se sustituye por `[secreto eliminado: tipo]` y el resto se guarda.
 - **Bloquear**: la propuesta se rechaza con un `422` que dice qué tipo de secreto lleva.
 - **Solo avisar**: se guarda tal cual y queda marcada.

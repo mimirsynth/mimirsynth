@@ -2,7 +2,18 @@
 
 # Administrar brains y miembros
 
-Sección **Acceso al brain** de la administración. Tiene cinco tarjetas: el **brain activo**, sus **miembros**, la **federación**, los **secretos** (solo administradores del brain) y sus **tokens de API**. El brain activo es el que eliges en el selector de la barra lateral.
+El grupo **Brain** de la administración: una entrada por cada tema del brain activo (el que eliges en el selector de la barra lateral), cada una en su tarjeta:
+
+| Entrada | Qué tiene | Quién la ve |
+|---|---|---|
+| **Brain activo** | Nombre, slug y grafo; **Editar**, **Borrar**, **Crear brain** e **Importar un brain** | Cualquiera (crear e importar: el administrador de la instancia) |
+| **Miembros** | Quién tiene acceso y con qué rol | Cualquiera con rol en el brain |
+| **Tokens de API** | Los tokens del brain | Cualquiera con rol en el brain |
+| **Federación** | Lo que presta y lo que recibe | Cualquiera con rol en el brain (prestar: sus administradores) |
+| **Secretos**, **Webhooks de entrada**, **Consumo de IA**, **Exportar** | Ver más abajo | Administradores del brain |
+| **Retención** | Ver más abajo | El propietario del brain |
+
+Cada entrada tiene su propia dirección (`?seccion=members`, `?seccion=federation`…). Los enlaces a la antigua página única (`/admin`, `?seccion=brains`) abren **Brain activo**.
 
 ## Crear un brain
 Solo el **administrador de la instancia**. Botón **Crear brain**:

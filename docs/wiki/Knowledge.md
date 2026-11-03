@@ -51,7 +51,7 @@ Clicking a document opens its panel:
 - **Delete** (brain administrators, or the person who uploaded it): removes the original, the text and the chunks; it cannot be undone. Only uploaded documents can be deleted here: documents from a folder or a wiki are removed at their origin and disappear on the next scan.
 
 ### Secrets in documents
-Before a document is chunked, the **secret detector** looks for credentials in its text (cloud and AI provider keys, tokens, private keys, passwords in URLs…). What happens depends on the brain's policy (Administration → Brain access → **Secrets**):
+Before a document is chunked, the **secret detector** looks for credentials in its text (cloud and AI provider keys, tokens, private keys, passwords in URLs…). What happens depends on the brain's policy (Administration → Brain → **Secrets**):
 - **Mask** (the default): certain secrets are replaced in the indexed text, so they never reach the chunks, the vectors or recall.
 - **Block**: the document is not indexed and stays in **Error**, saying which type of secret it contains.
 - **Only warn**: nothing is changed, the findings are only reported.

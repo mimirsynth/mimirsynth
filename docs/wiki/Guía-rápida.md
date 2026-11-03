@@ -43,7 +43,7 @@ Qué modelo de extracción: en local, un modelo *instruct* de unos **14B paráme
 > **Elige con cuidado el modelo de embeddings.** Se puede cambiar después (**Reindexar** en Administración → Embeddings), pero eso recalcula todos los vectores de todos los brains.
 
 ## 5. Crea un brain
-Pulsa **Crea tu primer brain** (o **Administración → Acceso al brain → Crear brain**), ponle nombre y, si quieres, una descripción, y aplica un **paquete de ontología** en *Vocabulario → Ontología*. Ver [[Administrar brains y miembros]].
+Pulsa **Crea tu primer brain** (o **Administración → Brain → Brain activo → Crear brain**), ponle nombre y, si quieres, una descripción, y aplica un **paquete de ontología** en *Vocabulario → Ontología*. Ver [[Administrar brains y miembros]].
 
 ## 6. Mete tu primera memoria
 Ve a **Propuestas → nueva propuesta**: escribe un título y un texto con un dato concreto, con nombres y fechas exactas («El 12 de octubre migramos la base de datos de producción al servidor db02»). Como administrador se aprueba al enviarla y empieza a ingerirse (verás el progreso en **Trabajos**). Cuando termine, mira **Hechos**, **Diario** y **Grafo**.

@@ -5,7 +5,7 @@
 Los agentes hablan con MimirSynth por HTTP con un **token de API**. Cada token vale para **un solo brain** y su rol nunca supera el de quien lo creó (máximo curador y nunca administra la instancia).
 
 ## Crear un token
-En Mi cuenta → Tokens de API (o Administración → Acceso al brain) elige el brain, un nombre y un rol:
+En Mi cuenta → Tokens de API (o Administración → Brain → Tokens de API) elige el brain, un nombre y un rol:
 
 | Rol | Puede |
 |---|---|

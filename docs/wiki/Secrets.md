@@ -17,7 +17,7 @@ Findings are of two kinds:
 - **Possible:** a random-looking value assigned to a word such as `password`, `secret`, `token` or `api_key`. These are **only flagged**, never changed: randomness alone would also catch checksums, UUIDs and container IDs, which are normal in technical notes.
 
 ## What to do with a secret
-Each brain chooses it in **Administration → Brain access → Secrets** (brain administrators):
+Each brain chooses it in **Administration → Brain → Secrets** (brain administrators):
 
 | Mode | Certain secrets | Possible secrets |
 |---|---|---|

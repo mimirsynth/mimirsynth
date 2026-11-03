@@ -39,7 +39,7 @@ Un documento cuyo texto extraído coincide con el de otro ya indexado en el brai
 - Los documentos indexados antes de que existiera esta comprobación se revisan con **Buscar duplicados** en [[Conocimiento]] (administradores del brain). No se borra nada del origen.
 
 ## Secretos en los documentos
-Antes de trocear, el detector de secretos busca credenciales: claves de nube y de proveedores de IA, tokens de GitHub, GitLab, Slack, npm y Hugging Face, claves privadas PEM, JWT, cabeceras `Authorization`, contraseñas en URLs… Un valor de aspecto aleatorio asignado a `password`, `secret` o `token` cuenta solo como secreto **posible** y únicamente se marca. La política del brain (Administración → Acceso al brain → **Secretos**) decide qué pasa con los seguros:
+Antes de trocear, el detector de secretos busca credenciales: claves de nube y de proveedores de IA, tokens de GitHub, GitLab, Slack, npm y Hugging Face, claves privadas PEM, JWT, cabeceras `Authorization`, contraseñas en URLs… Un valor de aspecto aleatorio asignado a `password`, `secret` o `token` cuenta solo como secreto **posible** y únicamente se marca. La política del brain (Administración → Brain → **Secretos**) decide qué pasa con los seguros:
 - **Enmascarar** (por defecto): se sustituyen en el texto indexado, así que nunca llegan a los trozos, a los vectores ni a los agentes.
 - **Bloquear**: el documento no se indexa y muestra un error.
 - **Solo avisar**: no se cambia nada.

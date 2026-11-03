@@ -33,4 +33,4 @@ Pasa `federated: false` a `recall` para obtener solo la memoria propia del brain
 
 ## Gestionar las concesiones
 
-Administración → Acceso al brain → Federación muestra a quién presta este brain (con alcance, vigencia, último uso y un botón Revocar) y quién le presta a él. La API REST está en `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).
+Administración → Brain → Federación muestra a quién presta este brain (con alcance, vigencia, último uso y un botón Revocar) y quién le presta a él. La API REST está en `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).
