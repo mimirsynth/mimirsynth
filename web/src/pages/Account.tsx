@@ -27,7 +27,8 @@ const ACTION: Record<string, string> = {
   "vocab.entity.merge": T("Entidades fusionadas"), "vocab.type.create": T("Tipo de entidad creado"), "vocab.type.edit": T("Tipo de entidad editado"), "vocab.type.delete": T("Tipo de entidad quitado"),
   "vocab.type.rename": T("Tipo de entidad renombrado"), "vocab.type.merge": T("Tipos de entidad fusionados"), "vocab.relation.create": T("Tipo de relación creado"), "vocab.relation.edit": T("Tipo de relación editado"),
   "vocab.relation.delete": T("Tipo de relación quitado"), "vocab.map.set": T("Regla del mapa cambiada"), "vocab.instructions.edit": T("Instrucciones de extracción editadas"),
-  "vocab.fact.edit": T("Hecho editado"), "vocab.fact.invalidate": T("Hecho invalidado"), "vocab.fact.reactivate": T("Hecho reactivado"), "vocab.fact.delete": T("Hecho borrado"),
+  "vocab.entity.summary": T("Resumen de entidad reescrito"), "summary.approve": T("Resumen propuesto aprobado"), "summary.reject": T("Resumen propuesto rechazado"),
+  "summary.scan": T("Revisión de resúmenes lanzada"), "vocab.fact.edit": T("Hecho editado"), "vocab.fact.invalidate": T("Hecho invalidado"), "vocab.fact.reactivate": T("Hecho reactivado"), "vocab.fact.delete": T("Hecho borrado"),
 };
 const what = (a: Act) => { const s = typeof a.detail?.summary === "string" ? a.detail.summary : ""; return (tr(ACTION[a.action] ?? a.action)) + (s ? ` — ${s}` : ""); };
 

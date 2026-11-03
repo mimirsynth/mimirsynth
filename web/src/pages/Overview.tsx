@@ -23,6 +23,7 @@ const ATTENTION: { key: keyof Attention; label: string; to: string }[] = [
   { key: "conflicts", label: T("Posibles contradicciones"), to: "/calidad?tab=conflicts" },
   { key: "stale", label: T("Hechos a revisar, pasados de su vida útil"), to: "/calidad?tab=stale" },
   { key: "retype", label: T("Tipos dudosos con un cambio propuesto"), to: "/calidad?tab=corrector" },
+  { key: "summaries", label: T("Resúmenes de entidades propuestos por aprobar"), to: "/calidad?tab=summaries" },
   { key: "refqueries", label: T("Consultas de referencia que empeoraron en la última ejecución"), to: "/preguntar?tab=referencia" },
 ];
 

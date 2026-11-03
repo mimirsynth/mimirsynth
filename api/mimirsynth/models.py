@@ -391,6 +391,27 @@ class RetypeSuggestion(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class SummarySuggestion(Base):
+    """A better summary proposed for an entity whose summary is poor (#201), for a curator to edit, approve or reject. `current` is the
+    summary it was written from: if the entity's summary changed since, the suggestion is outdated and is not applied."""
+    __tablename__ = "summary_suggestions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    entity_uuid: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(500))
+    facts: Mapped[int] = mapped_column(Integer, default=0)  # the entity's current facts when it was written
+    reason: Mapped[str] = mapped_column(String(16), default="")  # long | lines | repeats | stale
+    current: Mapped[str] = mapped_column(Text, default="")
+    proposed: Mapped[str] = mapped_column(Text, default="")  # as the engine wrote it, after the secret detector
+    applied: Mapped[str] = mapped_column(Text, default="")  # the text that went to the graph (the proposed one, or the curator's edit)
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | same | applied | rejected | reverted | outdated
+    secret_findings: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    edited_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    op_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the vocabulary history operation that applied it
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
 class Job(Base):
     """Trabajo en segundo plano (ingesta, indexación, reescaneo…). Registro central: estado, progreso, salida y reintentos."""
     __tablename__ = "jobs"

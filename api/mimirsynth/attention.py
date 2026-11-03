@@ -2,7 +2,7 @@
 and the summary of Content quality.
 
 Each counter is the one its own page already computes (proposals, corrections, duplicate groups, possible contradictions, facts to
-review, type corrections and the last run of the reference queries). They are kept CACHE_SECONDS per brain, so opening the home
+review, type corrections, proposed entity summaries and the last run of the reference queries). They are kept CACHE_SECONDS per brain, so opening the home
 screen does not scan the graph each time; a counter that fails comes back as `null` instead of breaking the rest. Only curators and
 above can ask, and the type corrections are only given to administrators, the only ones who can apply them.
 
@@ -64,6 +64,11 @@ def _retype(ctx: BrainCtx) -> int:
     return pending_count(ctx.db, ctx.brain.id)
 
 
+def _summaries(ctx: BrainCtx) -> int:
+    from .summary_review import pending_count
+    return pending_count(ctx.db, ctx.brain.id)
+
+
 def _refqueries(ctx: BrainCtx) -> int:
     """Reference queries that got worse in the last run with the settings in force (a simulation with other parameters does not count)."""
     last = next((r for r in ctx.db.scalars(select(RefRun).where(RefRun.brain_id == ctx.brain.id, RefRun.status == "done")
@@ -74,7 +79,7 @@ def _refqueries(ctx: BrainCtx) -> int:
     return len({x["id"] for x in [*d.get("lost", []), *d.get("new_false_positives", [])]}) or 1
 
 
-COUNTERS = {"duplicates": _duplicates, "conflicts": _conflicts, "stale": _stale, "retype": _retype, "refqueries": _refqueries}
+COUNTERS = {"duplicates": _duplicates, "conflicts": _conflicts, "stale": _stale, "retype": _retype, "summaries": _summaries, "refqueries": _refqueries}
 
 
 def _brain_lock(brain_id: int) -> threading.Lock:

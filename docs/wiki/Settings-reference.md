@@ -84,6 +84,7 @@ Guide: [[Recall and ingestion]]
 
 | Setting | Key | Default | Range or values | Description |
 |---|---|---|---|---|
+| Engine for reviewing summaries | `summary_engine` | — | text | Name of the LLM engine that rewrites the poor entity summaries in Content quality → Summaries. Empty: the default LLM engine. |
 | Ingestion retries | `ingest_retries` | `4` | 1–20 | Attempts when the model answers with a rate limit or a transient error. |
 | Batch size when changing the embedding model | `reindex_batch` | `64` texts | 1–512 texts | Texts per batch when recomputing the vectors with another model. Smaller spreads the load on the provider better. |
 | Pause between batches when changing model | `reindex_pause` | `0` s | 0–600 s | Seconds to wait between batches to respect the provider's rate limit. On a 429 it also waits for whatever Retry-After says. |

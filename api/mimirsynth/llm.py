@@ -1,4 +1,5 @@
 """Administración de motores LLM (solo administrador de la instancia). Las claves nunca se devuelven por la API."""
+import logging
 import time
 
 import httpx
@@ -11,6 +12,8 @@ from .deps import audit, require_admin
 from .models import LlmEngine, User
 from .secretbox import seal, unseal
 from .store import get_db
+
+log = logging.getLogger("mimirsynth.llm")
 
 router = APIRouter(prefix="/api/llm-engines")
 
@@ -36,6 +39,17 @@ def default_engine(db: Session) -> LlmEngine | None:
 def resolve(db: Session) -> dict | None:
     e = default_engine(db)
     return {"base_url": e.base_url, "api_key": unseal(e.api_key_enc), "model": e.model, "small_model": e.small_model or e.model} if e else None
+
+
+def named(db: Session, name: str | None, what: str) -> dict | None:
+    """The engine a setting names (`answer_engine`, `summary_engine`), or the default LLM engine when it is empty, missing or off."""
+    name = (name or "").strip()
+    if name:
+        e = db.scalar(select(LlmEngine).where(LlmEngine.name == name, LlmEngine.enabled.is_(True)))
+        if e:
+            return {"base_url": e.base_url, "api_key": unseal(e.api_key_enc), "model": e.model}
+        log.warning("el motor de %s «%s» no existe o está desactivado: se usa el predeterminado", what, name)
+    return resolve(db)
 
 
 class ModelsIn(BaseModel):

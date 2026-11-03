@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { get } from "../api";
 import { Btn, DataState, EmptyState, Page, PageHeader, StatCard, StatGrid, Tabs, useTabParam } from "../ui";
 import Retype from "./Retype";
+import SummaryReview from "./SummaryReview";
 import VocabConflicts from "./VocabConflicts";
 import VocabDuplicates from "./VocabDuplicates";
 import VocabStale from "./VocabStale";
@@ -13,7 +14,7 @@ import VocabAliasCleanup from "./VocabAliasCleanup";
 
 /** What waits for a person's decision in the brain (`null`: it could not be counted). `retype` only comes to administrators. */
 export type Attention = { proposals: number | null; corrections: number | null; duplicates: number | null; conflicts: number | null;
-  stale: number | null; retype?: number | null; refqueries: number | null };
+  stale: number | null; retype?: number | null; summaries?: number | null; refqueries: number | null };
 type Dup = { key: string; members: { uuid: string; name: string; labels: string[]; degree: number }[] };
 type Vocab = { ignored_duplicates?: string[]; duplicates: Dup[] };
 
@@ -53,6 +54,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
         <StatCard label={t("Posibles contradicciones")} value={a?.conflicts ?? "—"} hint={t("grupos por decidir")} />
         {isAdmin && <StatCard label={t("Tipos dudosos")} value={a?.retype ?? "—"} hint={t("cambios de tipo por aprobar")} />}
         <StatCard label={t("Hechos a revisar")} value={a?.stale ?? "—"} hint={t("pasados de su vida útil")} />
+        <StatCard label={t("Resúmenes")} value={a?.summaries ?? "—"} hint={t("propuestos por aprobar")} />
       </StatGrid>
       <Text size="xs" c="dimmed">
         {t("Para leer y explorar la memoria:")} <Btn kind="link" component={Link} to="/hechos">{t("Hechos")}</Btn>.{" "}
@@ -66,6 +68,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
           {isAdmin && <Tabs.Tab value="corrector">{t("Tipos dudosos")}{count(a?.retype)}</Tabs.Tab>}
           <Tabs.Tab value="stale">{t("A revisar")}{count(a?.stale)}</Tabs.Tab>
           {isAdmin && <Tabs.Tab value="alias">{t("Alias repetidos")}</Tabs.Tab>}
+          <Tabs.Tab value="summaries">{t("Resúmenes")}{count(a?.summaries)}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="dup" pt="sm">
           {vocab.data ? <VocabDuplicates graph={graph} groups={vocab.data.duplicates} ignored={vocab.data.ignored_duplicates ?? []} isAdmin={isAdmin} />
@@ -75,6 +78,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
         {isAdmin && <Tabs.Panel value="corrector" pt="sm"><Retype graph={graph} role={role} /></Tabs.Panel>}
         <Tabs.Panel value="stale" pt="sm"><VocabStale graph={graph} /></Tabs.Panel>
         {isAdmin && <Tabs.Panel value="alias" pt="sm"><VocabAliasCleanup graph={graph} /></Tabs.Panel>}
+        <Tabs.Panel value="summaries" pt="sm"><SummaryReview graph={graph} role={role} /></Tabs.Panel>
       </Tabs>
     </Page>
   );
