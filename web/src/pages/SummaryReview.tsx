@@ -102,7 +102,7 @@ export default function SummaryReview({ graph, role }: { graph: string; role: st
               </Stack>
               <Stack gap={2}>
                 <Text size="xs" c="dimmed" fw={700}>{status === "applied" ? t("Aprobado") : t("Propuesto")}</Text>
-                {pending ? <TextArea aria-label={t("Resumen propuesto para {{name}}", { name: i.name })} autosize minRows={3} maxRows={10} maxLength={4000}
+                {pending ? <TextArea aria-label={t("Resumen propuesto para {{name}}", { name: i.name })} autosize minRows={3} maxRows={10} maxLength={1000}
                   value={texts[i.id] ?? i.proposed} onChange={(e) => setTexts({ ...texts, [i.id]: e.currentTarget.value })} />
                   : <Text size="sm" className="ms-prose">{status === "applied" ? i.applied : i.proposed}</Text>}
               </Stack>

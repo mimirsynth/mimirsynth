@@ -67,10 +67,14 @@ def _date(v) -> str:
     return d.strftime("%Y-%m-%d") if d else "?"
 
 
+def unclosable(text: str) -> str:
+    """Text from the memory that goes into a prompt as data: without `<` and `>` it cannot close the block it sits in."""
+    return (text or "").replace("<", "‹").replace(">", "›")
+
+
 def _clean(text: str) -> str:
     """A piece of evidence as data: one line per item, cut, and unable to close the evidence block."""
-    t = " ".join((text or "").split())[:TEXT]
-    return t.replace("<", "‹").replace(">", "›")
+    return unclosable(" ".join((text or "").split())[:TEXT])
 
 
 def evidence(out: dict) -> tuple[list[dict], str]:

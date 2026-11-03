@@ -83,7 +83,9 @@ def _skip(last: SummarySuggestion | None, summary: str, facts: int) -> bool:
 
 
 def candidates(graph_name: str, last: dict[str, SummarySuggestion], limit: int) -> list[dict]:
-    """The entities to review, the most connected first; the uuid breaks ties so two runs in a row keep the order."""
+    """The entities to review, the most connected first; the uuid breaks ties so two runs in a row keep the order.
+    It reads every entity with a summary and its current facts in one query: fine for a few thousand entities. For a much larger
+    brain, page it by uuid, or move the selection into the query."""
     q = ("MATCH (n:Entity) WHERE coalesce(n.summary, '') <> '' "
          "OPTIONAL MATCH (n)-[r:RELATES_TO]-(:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
          "RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels, n.summary AS summary, collect(r.fact) AS facts")
@@ -105,11 +107,12 @@ def _episodes(graph_name: str, uuid: str) -> list[str]:
 
 
 def messages(e: dict, episodes: list[str]) -> list[dict]:
-    """The prompt for one entity. Everything that comes from the memory goes inside the <entity> block, as data."""
-    kind = ", ".join(e.get("labels") or []) or "-"
-    facts = "\n".join(f"- {f[:300]}" for f in e["facts"][:MAX_FACTS]) or "-"
-    eps = "\n".join(f"- {x}" for x in episodes) or "-"
-    data = (f"<entity>\nName: {e['name']}\nType: {kind}\n\nCurrent summary (it may be a raw list of facts; rewrite it):\n{(e['summary'] or '')[:2000]}\n\n"
+    """The prompt for one entity. Everything that comes from the memory goes inside the <entity> block, as data, and cannot close it."""
+    from .answer import unclosable as u
+    kind = u(", ".join(e.get("labels") or [])) or "-"
+    facts = "\n".join(f"- {u(f[:300])}" for f in e["facts"][:MAX_FACTS]) or "-"
+    eps = "\n".join(f"- {u(x)}" for x in episodes) or "-"
+    data = (f"<entity>\nName: {u(e['name'])}\nType: {kind}\n\nCurrent summary (it may be a raw list of facts; rewrite it):\n{u((e['summary'] or '')[:2000])}\n\n"
             f"Current facts:\n{facts}\n\nExcerpts of episodes that mention it:\n{eps}\n</entity>")
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": data + "\n\nWrite the summary of this entity."}]
 
@@ -218,7 +221,7 @@ class IdsIn(BaseModel):
 
 
 class ApproveIn(BaseModel):
-    text: str | None = Field(None, max_length=4000, description="the curator's edit of the proposed text; empty: the proposed text as it is")
+    text: str | None = Field(None, max_length=4000, description=f"the curator's edit of the proposed text, at most {MAX_CHARS} characters; empty: the proposed text as it is")
 
 
 def _out(s: SummarySuggestion) -> dict:
@@ -321,6 +324,8 @@ def approve_one(sid: int, body: ApproveIn, request: Request, ctx: BrainCtx = Dep
     s = found[0]
     text = s.proposed
     edit = " ".join((body.text or "").split())
+    if len(edit) > MAX_CHARS:   # what graphiti-core keeps of a summary, as for the proposals
+        raise HTTPException(422, tr("El resumen puede tener como mucho {{max}} caracteres; este tiene {{n}}.", lang, max=MAX_CHARS, n=len(edit)))
     if edit and edit != " ".join(s.proposed.split()):
         try:
             text, in_edit = secretguard.guard(ctx.brain, edit)
