@@ -11,7 +11,7 @@ WEB = Path(i18n_extract.CATALOG).parent
 
 
 def test_server_catalog_is_complete_and_consistent():
-    cat = json.loads((WEB / "en.server.json").read_text(encoding="utf-8"))
+    cat = i18n_extract.read_catalog(WEB / "en.server.json")
     keys = i18n_extract.collect()
     assert sorted(k for k in keys if k not in cat) == [], "faltan traducciones: python -m mimirsynth.i18n_extract --missing"
     assert sorted(k for k in cat if k not in keys) == [], "sobran claves en en.server.json"
@@ -21,7 +21,7 @@ def test_server_catalog_is_complete_and_consistent():
 
 
 def test_ui_catalog_keeps_placeholders():
-    cat = json.loads((WEB / "en.json").read_text(encoding="utf-8"))
+    cat = i18n_extract.read_catalog(WEB / "en.json")
     for k, v in cat.items():
         assert v.strip(), k
         assert sorted(re.findall(r"\{\{(\w+)\}\}", k)) == sorted(re.findall(r"\{\{(\w+)\}\}", v)), k
@@ -114,3 +114,14 @@ def test_recall_context_headings_follow_the_caller():
     assert "- Plex corría en Notus (valid 2025-01-01 → invalidated 2026-01-01)" in en and "## Documents" in en and "[doc 1, chunk 2]" in en
     es = build_context(facts, [], 6000, passages)
     assert "## Hechos vigentes\n- Plex corre en Antares (desde 2026-01-01) · de «otro»" in es and "[doc 1, trozo 2]" in es
+
+
+def test_catalog_fragments_are_read_with_the_catalog(tmp_path):
+    """A pull request adds its texts in `en.server/*.json` instead of editing `en.server.json` (#183); the API reads both."""
+    (tmp_path / "en.server.json").write_text(json.dumps({"hola": "hello"}), encoding="utf-8")
+    (tmp_path / "en.server").mkdir()
+    (tmp_path / "en.server" / "webhooks.json").write_text(json.dumps({"adiós": "bye"}), encoding="utf-8")
+    (tmp_path / "en.server" / "README.md").write_text("# notes", encoding="utf-8")
+    assert i18n_extract.read_catalog(tmp_path / "en.server.json") == {"hola": "hello", "adiós": "bye"}
+    (tmp_path / "solo.json").write_text(json.dumps({"x": "y"}), encoding="utf-8")
+    assert i18n_extract.read_catalog(tmp_path / "solo.json") == {"x": "y"}      # no folder: just the catalogue

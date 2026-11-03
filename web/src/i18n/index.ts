@@ -3,6 +3,12 @@ import { initReactI18next } from "react-i18next";
 import en from "./en.json";
 import enServer from "./en.server.json";
 
+// Texts added since the last release live in fragments (en/*.json, en.server/*.json) until the version PR consolidates them.
+type Catalog = Record<string, string>;
+const parts = (files: Record<string, Catalog>): Catalog => Object.assign({}, ...Object.values(files));
+const enParts = parts(import.meta.glob<Catalog>("./en/*.json", { eager: true, import: "default" }));
+const enServerParts = parts(import.meta.glob<Catalog>("./en.server/*.json", { eager: true, import: "default" }));
+
 /** Idiomas con traducción. El idioma de origen es el español: las claves de los catálogos son los propios textos en español. */
 export const LANGUAGES = [
   { code: "es", label: "Español" },
@@ -36,7 +42,7 @@ export function setLanguage(lang: Lang): void {
 }
 
 void i18n.use(initReactI18next).init({
-  resources: { en: { translation: { ...en, ...enServer } } },
+  resources: { en: { translation: { ...en, ...enParts, ...enServer, ...enServerParts } } },
   lng: detectLanguage() ?? "es",
   fallbackLng: false,          // sin traducción se muestra la clave, que es el texto en español
   keySeparator: false,         // las claves son frases: no hay jerarquía ni espacios de nombres

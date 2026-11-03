@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "check:ui": "node scripts/check-ui.mjs",
     "prebuild": "node scripts/check-ui.mjs && node scripts/i18n.mjs",
-    "i18n": "node scripts/i18n.mjs"
+    "i18n": "node scripts/i18n.mjs",
+    "test": "node --test \"scripts/*.test.mjs\""
   },
   "dependencies": {
     "@mantine/core": "^9.7.4",
