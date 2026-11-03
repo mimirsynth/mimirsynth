@@ -20,6 +20,7 @@ A line below points to what stays elsewhere:
 | [[Contradictions]] | Current facts that cannot both be true: the same subject with two targets in a single-valued relation. Keep the one that is still true, or say it is not a contradiction. | Curator and above |
 | **Doubtful types** ([[Type corrector]]) | Entities left without a type or with a catch-all one: the decider proposes a type from the ontology, and an administrator applies or discards it. Each change is undone on its own. | Administrator |
 | **To review** | Current facts past their relation's shelf life. **Confirm** the ones still true (renews the date without touching the graph) or **invalidate** the others. | Curator and above |
+| **Repeated aliases** | Merged names that only repeat the entity's own name (ignoring case and spacing) or another alias, left by older merges. The list says what goes and what stays, and writes nothing; **Clean** saves a copy of the graph first, then removes them as a background job. The change is in **Recent changes** and is undone from there or from **Earlier cleanups**; an entity that changed since the cleanup is left as it is. | Administrator |
 
 Each tab starts by saying what it is for and what happens when you act, and each one links back to the place in [[Vocabulary]] where its switch lives: [[Ontology]] for single-valued relations and shelf lives, and **Aliases** for the relation aliases next to the merged entity names.
 
