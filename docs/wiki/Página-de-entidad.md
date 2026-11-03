@@ -28,7 +28,8 @@ Si una relación está marcada como de **un solo valor** en la [[Ontología]] y 
 
 ## Acciones de curador
 - **Invalidar** un hecho vigente, o **Reactivar** uno anterior, desde el propio hecho. Son las mismas acciones que en [[Hechos]] y se deshacen desde el historial del vocabulario.
-- Enlaces para **fusionar** la entidad con otra ([[Fusionar duplicados]]), **cambiar su tipo** ([[Corrector de tipos]], administradores) y **editar el texto** de un hecho ([[Hechos]]).
+- **Cambiar tipo**, junto al tipo de la entidad en la cabecera: eliges uno de los tipos de la [[Ontología]] del brain (la misma lista cerrada que usa el [[Corrector de tipos]]; no se acepta otro). El cambio se ve al momento aquí y en el [[Grafo]], queda en el registro de auditoría y se deshace desde el mensaje que lo confirma o desde **Cambios recientes** en [[Tipos de entidad]]. Si el corrector de tipos tenía una propuesta pendiente para esta entidad, deja de ofrecerse, y un análisis posterior no la vuelve a proponer.
+- Enlaces para **fusionar** la entidad con otra ([[Fusionar duplicados]]), revisar los **tipos dudosos** de todo el brain ([[Corrector de tipos]], administradores) y **editar el texto** de un hecho ([[Hechos]]).
 
 ## Entidades prestadas
 Con la [[Federación]], una entidad de un brain que presta su grafo se abre con su origen («de «slug»») y es **de solo lectura**.

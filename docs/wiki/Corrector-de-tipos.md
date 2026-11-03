@@ -35,11 +35,14 @@ Algunos nombres se apartan como **Dudosas** sin preguntar al decisor: los de cin
 3. En **Propuestos**, ajusta **Confianza mínima** con el deslizador (0,5–0,99) para ver solo las propuestas más seguras. Una nota indica cuántas quedan ocultas por debajo del umbral, con **Ver todas**.
 4. **Selecciona** las que quieras (hay «seleccionar todo») o actúa sobre todo lo que muestra el filtro:
    - **Aplicar seleccionadas** / **Aplicar todas las visibles**: una confirmación muestra un resumen por tipo propuesto antes de cambiar nada.
+   - **Aplicar como…** en una fila: la aplica con otro tipo de la ontología distinto del propuesto, cuando el decisor acierta en la clase pero no en el tipo.
    - **Rechazar seleccionadas** / **Rechazar todas las visibles** (esta última pide confirmación). En **Dudosas**, **Descartar seleccionadas**.
 
    Solo se aplican o rechazan las filas que muestra el filtro: las ocultas por el umbral de confianza no se tocan nunca.
 5. Un mensaje informa del resultado, incluido cuántos cambios **no encajaban en la ontología actual** (por ejemplo, un tipo quitado después del análisis) y no se aplicaron.
 6. Si te equivocas, cada cambio aplicado tiene su propio **Deshacer** en **Aplicados**.
+
+Un curador también puede corregir **una entidad** sin el corrector, con **Cambiar tipo** en su [[Página de entidad]]. Su propuesta, si la tenía, deja entonces de estar pendiente.
 
 ## Consejos
 - Empieza con lotes pequeños (50–100) y confianza alta (0,9) para fiarte del criterio del decisor; baja el umbral poco a poco.

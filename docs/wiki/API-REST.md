@@ -21,6 +21,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Resumen** | `GET /overview` · `GET /overview/activity` | lector |
 | **Episodios** | `GET /episodes` · `GET /episodes/sources` · `GET /episodes/{uuid}` | lector |
 | **Hechos** | `GET /facts` · `GET /facts/relations` · `GET /timeline` · `GET /entities?q=` · `GET /entities/{uuid}` | lector |
+| | `PUT /entities/{uuid}/type` (`{"type": …}`, un tipo de la ontología del brain; se deshace desde el historial del vocabulario) | curador |
 | | `PATCH /facts/{uuid}` · `POST …/invalidate` · `POST …/reactivate` · `DELETE …` | curador |
 | **Grafo y consulta** | `GET /graph` (`group_by` opcional) · `POST /query` (Cypher de solo lectura) | lector |
 | **Propuestas** | `GET /proposals` (paginado) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` · `POST /proposals/corrections` | colaborador |

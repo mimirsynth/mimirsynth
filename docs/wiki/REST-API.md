@@ -21,6 +21,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Overview** | `GET /overview` · `GET /overview/activity` | reader |
 | **Episodes** | `GET /episodes` · `GET /episodes/sources` · `GET /episodes/{uuid}` | reader |
 | **Facts** | `GET /facts` · `GET /facts/relations` · `GET /timeline` · `GET /entities?q=` · `GET /entities/{uuid}` | reader |
+| | `PUT /entities/{uuid}/type` (`{"type": …}`, a type of the brain's ontology; undone from the vocabulary history) | curator |
 | | `PATCH /facts/{uuid}` · `POST …/invalidate` · `POST …/reactivate` · `DELETE …` | curator |
 | **Graph and query** | `GET /graph` (optional `group_by`) · `POST /query` (read-only Cypher) | reader |
 | **Proposals** | `GET /proposals` (paginated) · `GET /proposals/counts` · `GET /proposals/{id}` · `POST /proposals` · `POST /proposals/corrections` | contributor |

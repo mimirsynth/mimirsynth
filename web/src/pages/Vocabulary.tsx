@@ -104,7 +104,7 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
           <Toggle my="xs" label={t("Solo cola larga (≤2 hechos)")} checked={tail} onChange={(e) => setTail(e.currentTarget.checked)} />
           <RelationsTable rows={rels} isAdmin={isAdmin} onUnify={(n) => { setFrom(n); setTo(""); }} />
         </Tabs.Panel>
-        <Tabs.Panel value="ent" pt="sm"><VocabTypes graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
+        <Tabs.Panel value="ent" pt="sm"><VocabTypes graph={graph} isAdmin={isAdmin} isCurator={isAdmin || role === "curator"} /></Tabs.Panel>
         <Tabs.Panel value="onto" pt="sm"><VocabOntology graph={graph} role={role} /></Tabs.Panel>
         <Tabs.Panel value="ali" pt="sm">
           <FillArea><Stack gap="sm">

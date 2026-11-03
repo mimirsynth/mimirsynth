@@ -35,11 +35,14 @@ Some names are set aside as **Doubtful** without asking the decider: names of fi
 3. In **Proposed**, adjust **Minimum confidence** with the slider (0.5–0.99) to see only the surest proposals. A note says how many are hidden below the threshold, with **View all**.
 4. **Select** the ones you want (there is "select all") or work on everything the filter shows:
    - **Apply selected** / **Apply all visible**: a confirmation shows a summary by proposed type before changing anything.
+   - **Apply as…** on a row: applies it with another type of the ontology than the one proposed, when the decider got the kind right but not the type.
    - **Reject selected** / **Reject all visible** (the latter asks for confirmation). In **Doubtful**, **Dismiss selected**.
 
    Only the rows the filter shows are applied or rejected: rows hidden by the confidence threshold are never touched.
 5. A message reports the result, including how many changes **did not fit the current ontology** (for example, a type removed since the analysis) and were not applied.
 6. If you make a mistake, every applied change has its own **Undo** in **Applied**.
+
+A curator can also fix **one entity** without the corrector, with **Change type** on its [[Entity page]]. Its suggestion, if it had one, is then no longer pending.
 
 ## Tips
 - Start with small batches (50–100) and high confidence (0.9) to trust the decider's judgement; lower the threshold gradually.
