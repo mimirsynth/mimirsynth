@@ -8,6 +8,17 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-03
+### Added
+- Change the type of one entity by hand from its page (curators), with undo from Recent changes; a pending type-corrector suggestion for it is superseded. (#181)
+- «Apply as…» in the type corrector applies a pending suggestion with another type of the ontology. (#181)
+- Editing a wiki source shows the documents indexed per collection; an added collection is scanned at once, and removing one takes its documents out of the index after confirming how many. (#188)
+
+### Changed
+- The Administration side menu sets its groups apart and highlights the group of the active section. (#182)
+- «Brain access» in Administration is now the Brain group, with one entry per topic (Active brain, Members, API tokens, Federation, Secrets, Incoming webhooks, AI consumption, Retention, Export); old links open Active brain. (#182)
+- «Search all my brains» is now the «All my brains» scope of Ask instead of a page of its own; the written answer, ratings and saving as a reference query stay in «This brain». (#191)
+
 ## [0.11.0] - 2026-11-02
 ### Added
 - **Content quality, and «Needs your attention»** (#164). A new **Content quality** page under Curation, for curators and above, gathers the work on what the graph already holds: **Duplicates**, **Contradictions**, **Doubtful types** (the type corrector, administrators only) and **To review**, with a summary at the top of what waits for a decision in each and the same counts in the tab labels. The **Overview** shows curators a **Needs your attention** block: proposals and corrections waiting, duplicate groups, possible contradictions, facts to review, doubtful types and reference queries that got worse, each line linking to the right tool (Proposals opens already filtered), hidden at zero, and «Nothing needs your attention» when everything is clear. The counters come from `GET /api/brains/{slug}/attention`, which reuses what each page computes and keeps it for a minute; any change made in the brain drops it, so the block shows it at once, and requests that arrive with the cache empty share one computation (`?fresh=true` recalculates).
