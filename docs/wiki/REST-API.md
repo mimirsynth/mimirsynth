@@ -29,6 +29,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** needed.
 | **Documents** | `GET /docs` · `GET /docs/search` · `GET /docs/{id}` · `…/text` · `…/file` · `…/context` · `…/entities` · `GET /docs/mentions` · `GET /docs/sources` | reader |
 | | `POST /docs/uploads` (+ parts and `complete`) · `POST /docs/{id}/promote` | contributor |
 | | `DELETE /docs/{id}` · `POST /docs/{id}/reindex` · `POST /docs/duplicates` · sources (`/docs/sources`, scan, wikis) | administrator |
+| | `GET /docs/sources/{id}/wiki/collections` (available, `selected`, and indexed `documents` per collection) · `PATCH /docs/sources/{id}` with `collection_ids` (adding starts a scan and returns its `job`; removing answers `409` with the number of documents until `confirm_removed` repeats it, and then takes only those out of the index) | instance administrator |
 | **Vocabulary** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /ontology` | reader |
 | | aliases, types, relations, move/merge, duplicates, ontology, corrector (`/retype`) | administrator |
 | | `POST /vocab/ops/{id}/revert` | curator |

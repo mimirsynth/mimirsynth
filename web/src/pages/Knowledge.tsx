@@ -96,15 +96,25 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const adapters = useQuery({ queryKey: ["wiki-adapters", graph], enabled: isAdmin && instanceAdmin, queryFn: () => get<{ adapters: Adapter[] }>("docs/wiki/adapters", { graph }) });
   const ad = adapters.data?.adapters.find((a) => a.id === wiki?.adapter);
   const srcCols = useQuery({ queryKey: ["wiki-src-cols", graph, editSrc?.s.id], enabled: !!editSrc && editSrc.s.kind === "wiki" && instanceAdmin, retry: false, staleTime: 0,
-    queryFn: () => get<{ collections: { id: string; name: string; description: string }[]; selected: string[] }>(`docs/sources/${editSrc!.s.id}/wiki/collections`, { graph }) });
+    queryFn: () => get<{ collections: { id: string; name: string; description: string }[]; selected: string[]; documents: Record<string, number> }>(`docs/sources/${editSrc!.s.id}/wiki/collections`, { graph }) });
   const connect = useMutation({ mutationFn: (w: NonNullable<typeof wiki>) => send<{ collections: { id: string; name: string; description: string }[] }>("POST", "docs/wiki/collections", { adapter: w.adapter, values: w.values }, { graph }),
     onSuccess: (r) => setWiki((w) => (w ? { ...w, cols: r.collections, picked: r.collections.map((c) => c.id) } : w)) });
   const addWiki = useMutation({ mutationFn: (w: NonNullable<typeof wiki>) => send("POST", "docs/sources/wiki", { adapter: w.adapter, values: w.values, name: w.name, collection_ids: w.picked, sync_interval: w.interval === "" ? null : w.interval }, { graph }),
     onSuccess: () => { setWiki(null); refreshSrc(); } });
-  const saveSrc = useMutation({ mutationFn: (e: NonNullable<typeof editSrc>) => send("PATCH", `docs/sources/${e.s.id}`, {
+  const saveSrc = useMutation({ mutationFn: ({ confirm, ...e }: NonNullable<typeof editSrc> & { confirm?: number }) => send("PATCH", `docs/sources/${e.s.id}`, {
       name: e.name.trim(), ...(e.interval === "" ? { clear_interval: true } : { sync_interval: Number(e.interval) }), ...(e.s.kind === "directory" ? { subpath: e.subpath } : {}),
-      ...(e.s.kind === "wiki" && Object.values(e.values).some((v) => v.trim()) ? { values: e.values } : {}), ...(e.s.kind === "wiki" && e.picked ? { collection_ids: e.picked } : {}) }, { graph }),
-    onSuccess: () => { setEditSrc(null); refreshSrc(); } });
+      ...(e.s.kind === "wiki" && Object.values(e.values).some((v) => v.trim()) ? { values: e.values } : {}), ...(e.s.kind === "wiki" && e.picked ? { collection_ids: e.picked, confirm_removed: confirm } : {}) }, { graph }),
+    onSuccess: () => { setEditSrc(null); setDropAsk(null); refreshSrc(); } });
+  // collections taken out of a wiki source: their documents leave the index when saving, so the count is confirmed first
+  const [dropAsk, setDropAsk] = useState<{ e: NonNullable<typeof editSrc>; n: number; names: string[] } | null>(null);
+  const save = (e: NonNullable<typeof editSrc>) => {
+    const d = srcCols.data;
+    const before = d ? (d.selected.length ? d.selected : d.collections.map((c) => c.id)) : [];
+    const out = e.picked && d ? before.filter((id) => !e.picked!.includes(id)) : [];
+    const n = out.reduce((sum, id) => sum + (d?.documents[id] ?? 0), 0);
+    if (n > 0) setDropAsk({ e, n, names: out.map((id) => d?.collections.find((c) => c.id === id)?.name ?? id) });
+    else saveSrc.mutate(e);
+  };
   const scanSrc = useMutation({ mutationFn: (id: number) => send("POST", `docs/sources/${id}/scan`, undefined, { graph }), onSuccess: refreshSrc });
   const toggleSrc = useMutation({ mutationFn: (s: Source) => send("PATCH", `docs/sources/${s.id}`, { enabled: !s.enabled }, { graph }), onSuccess: refreshSrc });
   const removeSrc = useMutation({ mutationFn: (s: Source) => send("DELETE", `docs/sources/${s.id}`, undefined, { graph }), onSuccess: () => { setDelSrc(null); refreshSrc(); } });
@@ -345,17 +355,18 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               return (
                 <Stack gap={4}>
                   <Text size="sm" fw={600}>{label}</Text>
-                  <Text size="xs" c="dimmed">{t("Cuáles se indexan. Las que quites dejan de indexarse y sus páginas se retiran en el próximo escaneo.")}</Text>
+                  <Text size="xs" c="dimmed">{t("Cuáles se indexan. Una que añadas se escanea al guardar; las que quites salen del índice con sus documentos al guardar, después de confirmarlo. Las páginas de la wiki no se tocan.")}</Text>
                   {srcCols.isLoading && <Text size="xs" c="dimmed">{t("Conectando con la wiki…")}</Text>}
                   {srcCols.error && <Notice tone="warn">{(srcCols.error as Error).message}</Notice>}
                   {srcCols.data?.collections.map((c) => (
-                    <Check key={c.id} label={c.name} description={c.description || undefined} checked={current.includes(c.id)}
+                    <Check key={c.id} label={c.name} checked={current.includes(c.id)}
+                      description={[c.description, srcCols.data?.documents[c.id] ? t("{{count}} documentos indexados", { count: srcCols.data.documents[c.id] }) : ""].filter(Boolean).join(" · ") || undefined}
                       onChange={(e) => setEditSrc({ ...editSrc, picked: e.currentTarget.checked ? [...current, c.id] : current.filter((x) => x !== c.id) })} />))}
                   {editSrc.picked && editSrc.picked.length === 0 && <Notice tone="warn">{t("Elige al menos una.")}</Notice>}
                 </Stack>);
             })()}
             <MutationError error={saveSrc.error} />
-            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5) || (!!editSrc.picked && editSrc.picked.length === 0)} onClick={() => saveSrc.mutate(editSrc)}>{t("Guardar")}</Btn></Group>
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5) || (!!editSrc.picked && editSrc.picked.length === 0)} onClick={() => save(editSrc)}>{t("Guardar")}</Btn></Group>
           </Stack>)}
       </Modal>
       <Modal opened={!!wiki} onClose={() => setWiki(null)} title={t("Añadir wiki")}>
@@ -395,6 +406,9 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               {!promote.data && <Btn kind="primary" icon="plus" loading={promote.isPending} disabled={!promo.text.trim()} onClick={() => promote.mutate(promo)}>{t("Enviar propuesta")}</Btn>}</Group>
           </Stack>)}
       </Modal>
+      <ConfirmDialog opened={!!dropAsk} onClose={() => setDropAsk(null)} title={t("Quitar colecciones")} action={t("Quitar y guardar")} subject={dropAsk?.names.join(", ")}
+        warning={t("Se retiran del índice {{count}} documentos de estas colecciones. Las páginas de la wiki no se tocan, y volver a marcarlas las indexa de nuevo.", { count: dropAsk?.n })}
+        onConfirm={() => saveSrc.mutateAsync({ ...dropAsk!.e, confirm: dropAsk!.n })} />
       <ConfirmDialog opened={!!delSrc} onClose={() => setDelSrc(null)} title={t("Quitar fuente")} action={t("Quitar fuente")} subject={delSrc?.name}
         warning={t("Se quitan la fuente y sus {{documents}} documentos del índice. Los ficheros de la carpeta o las páginas de la wiki no se tocan.", { documents: delSrc?.documents })}
         onConfirm={() => removeSrc.mutateAsync(delSrc!)} />

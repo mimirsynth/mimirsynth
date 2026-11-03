@@ -39,7 +39,8 @@ class SourcePatch(BaseModel):
     enabled: bool | None = None
     sync_interval: int | None = Field(None, ge=5, le=60 * 24 * 30)
     clear_interval: bool = False
-    collection_ids: list[str] | None = None  # wiki
+    collection_ids: list[str] | None = Field(None, max_length=500)  # wiki; empty = every collection
+    confirm_removed: int | None = None  # wiki: the documents that dropping collections removes from the index, as the form showed them
     values: dict[str, str] | None = None  # wiki: campos de conexión a cambiar (un secreto vacío conserva el guardado)
 
 
@@ -85,19 +86,21 @@ def patch_source(sid: int, body: SourcePatch, request: Request, ctx: BrainCtx = 
         s.name = body.name.strip()
     if body.subpath is not None and s.kind == "directory":
         s.config = _checked(s.config["root"], body.subpath)
+    change: dict = {}
     if s.kind == "wiki" and (body.collection_ids is not None or body.values):
         _need_instance_admin(ctx, request)
         cfg = dict(s.config or {})
-        if body.collection_ids is not None:
-            cfg["collection_ids"] = body.collection_ids
         if body.values:  # solo se cambian los campos enviados; los secretos vacíos conservan el guardado
             new = wiki_config(cfg["adapter"], {k: v for k, v in body.values.items() if v.strip()}, cfg.get("collection_ids", []))
             cfg["settings"] = {**cfg.get("settings", {}), **new["settings"]}
             cfg["secrets"] = {**cfg.get("secrets", {}), **new["secrets"]}
             try:
-                wikis.make(cfg["adapter"], wiki_values(cfg)).collections()
+                cfg["collection_names"] = _names(cfg, wikis.make(cfg["adapter"], wiki_values(cfg)).collections())
             except wikis.WikiError as e:
                 raise HTTPException(400, str(e))
+        if body.collection_ids is not None:
+            change = _collections_change(ctx, s, cfg, list(dict.fromkeys(body.collection_ids)), body.confirm_removed)
+            cfg["collection_ids"] = change["ids"]
         s.config = cfg
     if body.enabled is not None:
         s.enabled = body.enabled
@@ -105,9 +108,59 @@ def patch_source(sid: int, body: SourcePatch, request: Request, ctx: BrainCtx = 
         s.sync_interval = None
     elif body.sync_interval is not None:
         s.sync_interval = body.sync_interval
+    gone = [d.id for d in change.get("drop", [])]
+    for d in change.get("drop", []):  # only the pages of the collections taken out; the originals in the wiki are never touched
+        docindex.delete_document(d.id)
+        docstore.remove_document(d.brain_id, d.source_id, d.id)
+        ctx.db.delete(d)
     ctx.db.commit()
-    audit(ctx.db, ctx.user, "docsource.update", ctx.brain, id=s.id)
-    return {"ok": True}
+    for doc_id in gone:  # duplicates in other sources whose original was one of these
+        docs.promote_duplicates(doc_id)
+    names = (s.config or {}).get("collection_names") or {}
+    detail = {"collections_added": [names.get(c, c) for c in change["added"]], "collections_removed": [names.get(c, c) for c in change["removed"]],
+              "documents_removed": len(gone)} if change.get("changed") else {}
+    audit(ctx.db, ctx.user, "docsource.update", ctx.brain, id=s.id, **detail)
+    job = _submit_scan(s, ctx.user.id, manual=False) if change.get("scan") else None  # a failed scan removes nothing, as any rescan
+    return {"ok": True, "documents_removed": len(gone), "job": job}
+
+
+def _names(cfg: dict, collections: list[dict]) -> dict[str, str]:
+    """The names of the wiki's collections as last seen, to find the collection of pages indexed before their id was stored."""
+    return {**(cfg.get("collection_names") or {}), **{c["id"]: c["name"] for c in collections}}
+
+
+def _collection_of(d: Document, names: dict[str, str]) -> str | None:
+    """The collection a wiki page came from: its stored id or, for an older page, the one collection with its name. None: not known."""
+    meta = d.meta or {}
+    if meta.get("collection_id"):
+        return meta["collection_id"]
+    ids = [i for i, n in names.items() if n and n == meta.get("collection")]
+    return ids[0] if len(ids) == 1 else None
+
+
+def _per_collection(db, s: DocSource, names: dict[str, str]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for d in db.scalars(select(Document).where(Document.source_id == s.id)):
+        c = _collection_of(d, names)
+        if c is not None:
+            out[c] = out.get(c, 0) + 1
+    return out
+
+
+def _collections_change(ctx: BrainCtx, s: DocSource, cfg: dict, new: list[str], confirmed: int | None) -> dict:
+    """What changing the selection does (empty = every collection). Adding asks for a scan. Removing drops the pages of the removed
+    collections, only those whose collection is known, once the administrator has confirmed how many."""
+    old = cfg.get("collection_ids") or []
+    names = cfg.get("collection_names") or {}
+    if not new:  # every collection: nothing is removed, and the ones not indexed yet come with a scan
+        return {"ids": [], "added": [], "removed": [], "drop": [], "scan": bool(old), "changed": bool(old)}
+    added = [c for c in new if c not in old] if old else []
+    removed = [c for c in (old or list(names)) if c not in new]
+    drop = [d for d in ctx.db.scalars(select(Document).where(Document.source_id == s.id)) if _collection_of(d, names) not in (None, *new)]
+    n = len(drop)
+    if drop and confirmed != n:
+        raise HTTPException(409, f"quitar esas colecciones retira {n} documentos del índice: confírmalo")
+    return {"ids": new, "added": added, "removed": removed, "drop": drop, "scan": bool(added), "changed": bool(added or removed or drop)}
 
 
 @router.delete("/sources/{sid:int}")
@@ -198,19 +251,23 @@ def source_wiki_collections(sid: int, request: Request, ctx: BrainCtx = Depends(
         raise HTTPException(409, "la fuente no es una wiki")
     cfg = s.config or {}
     try:
-        return {"collections": wikis.make(cfg.get("adapter", ""), wiki_values(cfg)).collections(), "selected": cfg.get("collection_ids") or []}
+        cols = wikis.make(cfg.get("adapter", ""), wiki_values(cfg)).collections()
     except wikis.WikiError as e:
         raise HTTPException(400, str(e))
+    s.config = {**cfg, "collection_names": _names(cfg, cols)}  # so a save right after can tell which pages a collection holds
+    ctx.db.commit()
+    return {"collections": cols, "selected": cfg.get("collection_ids") or [], "documents": _per_collection(ctx.db, s, s.config["collection_names"])}
 
 
 @router.post("/sources/wiki", status_code=201)
 def create_wiki(body: WikiIn, request: Request, ctx: BrainCtx = Depends(admin_of_brain)):
     _need_instance_admin(ctx, request)
     try:
-        wikis.make(body.adapter, body.values).collections()  # valida la conexión antes de guardar
+        cols = wikis.make(body.adapter, body.values).collections()  # valida la conexión antes de guardar
     except wikis.WikiError as e:
         raise HTTPException(400, str(e))
     cfg = wiki_config(body.adapter, body.values, body.collection_ids)
+    cfg["collection_names"] = {c["id"]: c["name"] for c in cols}
     s = DocSource(brain_id=ctx.brain.id, kind="wiki", name=body.name.strip(), config=cfg, sync_interval=body.sync_interval, created_by=ctx.user.id)
     ctx.db.add(s)
     ctx.db.commit()
@@ -381,6 +438,9 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
     if not pages and existing and not manual:
         raise RuntimeError("la wiki no devolvió ninguna página pero la fuente tenía documentos: ¿clave o colecciones cambiadas? No se ha borrado nada. Pulsa «Escanear» si es a propósito")
     ctx.note(f"{len(pages)} páginas en la wiki")
+    seen_names = {pg.collection_id: pg.collection for pg in pages if pg.collection_id}
+    if seen_names:
+        s.config = {**cfg, "collection_names": {**(cfg.get("collection_names") or {}), **seen_names}}
     added = changed = unchanged = removed = errors = 0
     to_index: list[int] = []
     seen: set[str] = set()
@@ -392,6 +452,8 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         stamp = pg.updated_at
         if d and d.source_updated_at and d.source_updated_at.replace(tzinfo=d.source_updated_at.tzinfo or stamp.tzinfo) == stamp and d.title == pg.title[:500]:
             unchanged += 1
+            if pg.collection_id and (d.meta or {}).get("collection_id") != pg.collection_id:  # pages indexed before the id was stored
+                d.meta = {**(d.meta or {}), "collection": pg.collection, "collection_id": pg.collection_id}
             if manual and d.status in ("error", "pending"):
                 to_index.append(d.id)
             continue
@@ -403,7 +465,7 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         if not body:
             unchanged += 1  # página vacía: no hay nada que indexar
             continue
-        meta = {"collection": pg.collection, "title_auto": False}
+        meta = {"collection": pg.collection, "collection_id": pg.collection_id, "title_auto": False}
         if d and d.sha256 == sha:  # solo cambió la fecha o el título no afecta al texto
             d.source_updated_at, d.meta, d.url = stamp, meta, pg.url
             unchanged += 1

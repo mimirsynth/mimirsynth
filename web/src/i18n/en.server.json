@@ -505,6 +505,7 @@
  "posible secreto asignado": "possible assigned secret",
  "propuesta no encontrada": "proposal not found",
  "proveedor desconocido": "unknown provider",
+ "quitar esas colecciones retira {{n}} documentos del índice: confírmalo": "removing those collections takes {{n}} documents out of the index: confirm it",
  "raíz no encontrada": "root not found",
  "recall falló: {{e}}": "recall failed: {{e}}",
  "recall no encontrado o ya no se puede valorar": "recall not found, or it can no longer be rated",

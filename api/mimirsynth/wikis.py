@@ -34,6 +34,7 @@ class WikiDoc:
     url: str
     collection: str
     format: str = "markdown"  # markdown | html (el contenido tal como lo da la wiki; el extractor ya sabe leer ambos)
+    collection_id: str = ""  # the id of `collection`: what a source's selection holds, so removing a collection drops exactly its pages
 
     def read(self) -> str:
         return self.content() if callable(self.content) else self.content
@@ -144,7 +145,7 @@ class Outline(Adapter):
                     if d.get("archivedAt") or d.get("deletedAt") or d.get("publishedAt") is None:
                         continue
                     yield WikiDoc(id=d["id"], title=(d.get("title") or "Sin título").strip(), content=d.get("text") or "", updated_at=_stamp(d["updatedAt"]),
-                                  url=f"{self.base}{d.get('url', '')}", collection=names.get(cid, ""))
+                                  url=f"{self.base}{d.get('url', '')}", collection=names.get(cid, ""), collection_id=cid)
                 if len(data) < self.PAGE:
                     break
                 offset += self.PAGE
@@ -223,7 +224,7 @@ class Confluence(Adapter):
                     if not when:
                         continue
                     yield WikiDoc(id=str(d["id"]), title=(d.get("title") or "Sin título").strip(), content=((d.get("body") or {}).get("storage") or {}).get("value") or "",
-                                  updated_at=_stamp(when), url=f"{links.get('base') or self.base}{(d.get('_links') or {}).get('webui', '')}", collection=names.get(key, key), format="html")
+                                  updated_at=_stamp(when), url=f"{links.get('base') or self.base}{(d.get('_links') or {}).get('webui', '')}", collection=names.get(key, key), format="html", collection_id=key)
                 if not res or not links.get("next"):
                     break
                 start += len(res)
@@ -300,7 +301,7 @@ class Notion(Adapter):
                 continue
             title = next((_rich(v.get("title")) for v in (p.get("properties") or {}).values() if v.get("type") == "title"), "") or "Sin título"
             yield WikiDoc(id=self._id(p["id"]), title=title.strip(), content=lambda pid=p["id"]: self._markdown(pid), updated_at=_stamp(p["last_edited_time"]),
-                          url=p.get("url", ""), collection=names.get(coll, ""))
+                          url=p.get("url", ""), collection=names.get(coll, ""), collection_id=coll)
 
     def _children(self, block_id: str) -> Iterator[dict]:
         cursor = None

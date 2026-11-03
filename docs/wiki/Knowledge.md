@@ -92,11 +92,15 @@ Connect a wiki through its API, **read-only**, and its pages are indexed with a 
 
 > The Confluence and Notion adapters follow each API's documented format and are covered by tests, but **have not yet been validated against a live instance**. If you use one, check the result of the first scan and report any problem. Docmost is not supported yet.
 
-On each sync only what changed is reindexed: pages are compared by modification date, and only new or changed ones are **downloaded** (this matters for Notion, where each page costs one request). Deleted or archived pages, and those in collections you untick, are removed. If the wiki fails halfway (expired key, outage, rate limit), the scan **stops without deleting anything**.
+On each sync only what changed is reindexed: pages are compared by modification date, and only new or changed ones are **downloaded** (this matters for Notion, where each page costs one request). Deleted or archived pages are removed (those of a collection you untick leave the index when you save it, see **Edit** below). If the wiki fails halfway (expired key, outage, rate limit), the scan **stops without deleting anything**.
 
 ### Actions on a source
 - **Scan**: now.
-- **Edit**: name and interval; the subfolder of a folder. For a wiki, an instance administrator can also change **which collections are indexed** (the list is fetched with the stored credentials; at least one) and replace the key (empty = keep the stored one; a new one is checked before saving).
+- **Edit**: name and interval; the subfolder of a folder. For a wiki, an instance administrator can also change **which collections are indexed** and replace the key (empty = keep the stored one; a new one is checked before saving). The list of collections is fetched with the stored credentials and shows how many documents each one has indexed; at least one stays ticked.
+  - A collection you **add** is scanned as soon as you save, as a job with its progress.
+  - A collection you **remove** takes its documents out of the index when you save, and only those. First a confirmation says how many. The pages in the wiki are never touched, and ticking the collection again indexes them again.
+  - If the wiki cannot be reached, the form still opens and saves the other fields, and a scan that fails removes nothing.
+  - The change goes to the audit log with the collections added and removed and the documents taken out.
 - **Pause** / **Resume**: stops and restarts scheduled scans.
 - **Remove**: deletes the source and its indexed documents; the files of a folder and the pages of a wiki are not touched.
 
