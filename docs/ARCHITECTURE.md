@@ -54,7 +54,7 @@ What a contributor or an agent adds does not go straight into the graph. It crea
 
 1. A **decider** (closed-decision model with a threshold) can automatically approve what is clearly factual. It never rejects on its own.
 2. Anything doubtful waits for a **curator**, who approves or rejects. If a curator proposes, it is approved.
-3. Once approved, it is **ingested** with Graphiti (extraction of entities and facts with the brain's LLM) through a queued job, with retries and progress.
+3. Once approved, it is **ingested** with Graphiti (extraction of entities and facts with the brain's LLM) through a queued job, with retries and progress. The summaries of the entities it touches are written by the LLM too (`ingest.llm_summaries`: graphiti-core's `add_episode` would append the raw fact sentences instead, see #201).
 
 ### Secrets
 
