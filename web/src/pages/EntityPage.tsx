@@ -3,7 +3,7 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { Btn, DataState, EmptyState, FillArea, MutationError, Notice, Page, PageHeader, Panel, Pill, SplitView, TextField } from "../ui";
+import { Btn, DataState, EmptyState, EntityChip, FillArea, MutationError, Notice, Page, PageHeader, Panel, Pill, TextField } from "../ui";
 import { fmt, get, send } from "../api";
 import { TypeDialog } from "./TypePicker";
 import EntityMiniGraph, { humanRelation } from "./EntityMiniGraph";
@@ -48,7 +48,6 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
   const canEdit = isCurator && !asOf;  // looking at a past day is for reading: invalidating from there would be confusing
   const link = (o: Other) => `/entidad/${o.uuid}${origin ? `?origen=${origin}` : ""}`;
   const [showOther, setShowOther] = useState(false);
-  const [showSummary, setShowSummary] = useState(false);
   const specific = d.groups.filter((g) => !g.generic);
   const other = d.groups.filter((g) => g.generic);
   const otherFacts = other.reduce((n, g) => n + g.current.length + g.previous.length, 0);
@@ -59,83 +58,100 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
   const retype = useMutation({ mutationFn: (type: string) => send<{ op: number; summary: string }>("PUT", `entities/${e.uuid}/type`, { type }, { graph }),
     onSuccess: (r) => { setRetyping(false); setDone(r); refresh(); } });
   const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
+  const [fullSummary, setFullSummary] = useState(false);
+  const summary = e.summary && !e.summary_repeats ? e.summary : "";  // a summary that only repeats the facts is not shown (issue 194)
   return (<>
-    <Group><Btn kind="link" component={Link} to="/hechos">{t("← Hechos")}</Btn></Group>
-    {/* one row: the name, its type (a curator changes it from there) and the names merged into it, as chips (issue 194) */}
-    <PageHeader title={e.name} meta={<>
-      {canEdit ? <Btn size="row" icon="edit" title={t("Cambiar tipo")} onClick={() => { retype.reset(); setRetyping(true); }}>{e.labels.length ? e.labels.join(", ") : t("(sin tipo)")}</Btn>
-        : (e.labels.length ? e.labels : [t("(sin tipo)")]).map((l) => <Pill key={l} size="sm">{l}</Pill>)}
-      {e.aliases.map((a) => <Pill key={a} size="xs" title={t("También se llama así (un nombre fusionado en esta entidad)")}>{a}</Pill>)}
-      {e.origin && <Pill size="xs" tone="alt">{t("de «{{origin}}»", { origin: e.origin })}</Pill>}
-    </>} actions={<Group gap="xs" align="flex-end">
-      <TextField type="date" label={t("Cómo estaba el día")} value={asOf} onChange={(ev) => setAsOf(ev.currentTarget.value)} w={170} />
-      {asOf && <Btn kind="ghost" onClick={() => setAsOf("")}>{t("Hoy")}</Btn>}
-    </Group>} />
-    {/* the summary, folded so a long paragraph never pushes the relations down; hidden when it only repeats the facts (issue 194) */}
-    {e.summary && !e.summary_repeats && <Stack gap={4}>
-      <Group gap="xs"><Text size="sm" fw={700}>{t("Resumen")}</Text>
-        <Btn kind="link" aria-expanded={showSummary} onClick={() => setShowSummary((x) => !x)}>{showSummary ? t("Ocultar") : t("Ver")}</Btn></Group>
-      {showSummary && <Text size="sm" className="ms-prose">{e.summary}</Text>}
-    </Stack>}
-    {done && <Notice tone="success">{done.summary}. <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
-    <MutationError error={undo.error} />
-    <TypeDialog graph={graph} opened={retyping} name={e.name} current={e.labels} onClose={() => setRetyping(false)} onPick={(type) => retype.mutate(type)}
-      pending={retype.isPending} error={retype.error} />
-    {d.read_only &&<Notice>{t("Entidad prestada por «{{origin}}»: solo lectura.", { origin: e.origin })}</Notice>}
-    {asOf && <Notice>{t("Lo vigente el {{date}}, según las fechas de validez.", { date: asOf })}{d.facts.not_yet ? " " + t("{{count}} hechos aún no eran ciertos ese día y no se muestran.", { count: d.facts.not_yet }) : ""}</Notice>}
-    {d.facts.truncated && <Notice tone="warn">{t("Se muestran los {{shown}} hechos más recientes de {{total}}.", { shown: d.facts.shown, total: d.facts.total })}</Notice>}
-    <SplitView main={<FillArea><Stack gap="sm">
-      {d.groups.length === 0 && <EmptyState>{t("Esta entidad no tiene hechos.")}</EmptyState>}
-      {specific.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} name={e.name} graph={graph} canEdit={canEdit} link={link} />)}
-      {other.length > 0 && <Stack gap="xs">
-        <Group gap="xs">
-          <Text size="sm" fw={700}>{t("Otras relaciones ({{count}} hechos)", { count: otherFacts })}</Text>
-          <Btn kind="link" aria-expanded={showOther} onClick={() => setShowOther((x) => !x)}>{showOther ? t("Ocultar") : t("Ver")}</Btn>
-        </Group>
-        <Text size="xs" c="dimmed">{t("Relaciones genéricas, como RELATES_TO: el extractor las escribe cuando ningún tipo encaja y pueden unir cualquier cosa, así que no se leen como una evolución.")}</Text>
-        {showOther && other.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} name={e.name} graph={graph} canEdit={canEdit} link={link} />)}
-      </Stack>}
-    </Stack></FillArea>} aside={<Panel withBorder p="sm" h="100%"><FillArea><Stack gap="sm">
-      <EntityMiniGraph entity={e} groups={d.groups} neighbors={d.neighbors} link={link} expand={origin ? undefined : `/grafo?nodo=${e.uuid}`} />
-      {d.episodes.total > 0 && <Text size="sm" fw={700}>{t("Episodios que la mencionan ({{count}})", { count: d.episodes.total })}</Text>}
-      {d.episodes.items.map((ep) => (
-        <Stack key={ep.uuid} gap={0}>
-          {origin ? <Text size="xs">{ep.name}</Text> : <Text size="xs" component={Link} to={`/diario?episodio=${ep.uuid}`}>{ep.name}</Text>}
-          <Text size="xs" c="dimmed">{fmt(ep.valid_at ?? ep.created_at)}{ep.source ? ` · ${ep.source}` : ""}</Text>
-        </Stack>))}
-      {!origin && docs.length > 0 && <>
-        <Text size="sm" fw={700}>{t("Documentos que la mencionan ({{count}})", { count: docs.length })}</Text>
-        {docs.map((x) => (
-          <Stack key={x.document_id} gap={0}>
-            <Text size="xs" component={Link} to={`/conocimiento?doc=${x.document_id}`}>{x.title}{x.chunks > 1 ? t(" · {{chunks}} pasajes", { chunks: x.chunks }) : ""}</Text>
-            <Text size="xs" c="dimmed" lineClamp={2}>…{x.snippet}…</Text>
-          </Stack>))}
-      </>}
-      {isCurator && <>
-        <Text size="sm" fw={700}>{t("Curación")}</Text>
-        <Text size="xs" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Text>
-        {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Revisar los tipos dudosos (Calidad del contenido → Tipos dudosos)")}</Text>}
-        <Text size="xs" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Text>
-      </>}
-    </Stack></FillArea></Panel>} />
+    {/* the way back and the day to read stay at the top (issue 200) */}
+    <Group justify="space-between" align="flex-end">
+      <Btn kind="link" component={Link} to="/hechos">{t("← Hechos")}</Btn>
+      <Group gap="xs" align="flex-end">
+        <TextField type="date" label={t("Cómo estaba el día")} value={asOf} onChange={(ev) => setAsOf(ev.currentTarget.value)} w={170} />
+        {asOf && <Btn kind="ghost" onClick={() => setAsOf("")}>{t("Hoy")}</Btn>}
+      </Group>
+    </Group>
+    <FillArea><Stack gap="sm">
+      {/* the essentials in one card: the name, its type and other names, and the summary on the left; the graph on the right */}
+      <Panel withBorder p="md" className="ms-entity-card">
+        <div className="ms-entity-card-head">
+          <PageHeader title={e.name} meta={<>
+            {canEdit ? <Btn size="row" icon="edit" title={t("Cambiar tipo")} onClick={() => { retype.reset(); setRetyping(true); }}>{e.labels.length ? e.labels.join(", ") : t("(sin tipo)")}</Btn>
+              : (e.labels.length ? e.labels : [t("(sin tipo)")]).map((l) => <Pill key={l} size="sm">{l}</Pill>)}
+            {e.aliases.map((a) => <Pill key={a} size="xs" title={t("También se llama así (un nombre fusionado en esta entidad)")}>{a}</Pill>)}
+            {e.origin && <Pill size="xs" tone="alt">{t("de «{{origin}}»", { origin: e.origin })}</Pill>}
+          </>} />
+        </div>
+        <div className="ms-entity-card-graph">
+          <EntityMiniGraph entity={e} groups={d.groups} neighbors={d.neighbors} link={link} expand={origin ? undefined : `/grafo?nodo=${e.uuid}`} />
+        </div>
+        {summary && <Stack gap={2} className="ms-entity-card-summary">
+          <Text size="sm" className="ms-prose" lineClamp={fullSummary ? undefined : 6}>{summary}</Text>
+          {summary.length > 300 && <Group><Btn kind="link" aria-expanded={fullSummary} onClick={() => setFullSummary((x) => !x)}>{fullSummary ? t("Ver menos") : t("Ver más")}</Btn></Group>}
+        </Stack>}
+      </Panel>
+      {done && <Notice tone="success">{done.summary}. <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
+      <MutationError error={undo.error} />
+      <TypeDialog graph={graph} opened={retyping} name={e.name} current={e.labels} onClose={() => setRetyping(false)} onPick={(type) => retype.mutate(type)}
+        pending={retype.isPending} error={retype.error} />
+      {d.read_only && <Notice>{t("Entidad prestada por «{{origin}}»: solo lectura.", { origin: e.origin })}</Notice>}
+      {asOf && <Notice>{t("Lo vigente el {{date}}, según las fechas de validez.", { date: asOf })}{d.facts.not_yet ? " " + t("{{count}} hechos aún no eran ciertos ese día y no se muestran.", { count: d.facts.not_yet }) : ""}</Notice>}
+      {d.facts.truncated && <Notice tone="warn">{t("Se muestran los {{shown}} hechos más recientes de {{total}}.", { shown: d.facts.shown, total: d.facts.total })}</Notice>}
+      {/* the facts on the left and what mentions the entity on the right, about 70 / 30; one column on a phone */}
+      <div className="ms-entity-cols">
+        <Stack gap="sm">
+          {d.groups.length === 0 && <EmptyState>{t("Esta entidad no tiene hechos.")}</EmptyState>}
+          {specific.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} self={e} graph={graph} canEdit={canEdit} link={link} />)}
+          {other.length > 0 && <Stack gap="xs">
+            <Group gap="xs">
+              <Text size="sm" fw={700}>{t("Otras relaciones ({{count}} hechos)", { count: otherFacts })}</Text>
+              <Btn kind="link" aria-expanded={showOther} onClick={() => setShowOther((x) => !x)}>{showOther ? t("Ocultar") : t("Ver")}</Btn>
+            </Group>
+            <Text size="xs" c="dimmed">{t("Relaciones genéricas, como RELATES_TO: el extractor las escribe cuando ningún tipo encaja y pueden unir cualquier cosa, así que no se leen como una evolución.")}</Text>
+            {showOther && other.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} self={e} graph={graph} canEdit={canEdit} link={link} />)}
+          </Stack>}
+        </Stack>
+        <Panel withBorder p="sm"><Stack gap="sm">
+          <Text size="sm" fw={700}>{t("Episodios que la mencionan ({{count}})", { count: d.episodes.total })}</Text>
+          {d.episodes.total === 0 && <Text size="xs" c="dimmed">{t("Ningún episodio la menciona.")}</Text>}
+          {d.episodes.items.map((ep) => (
+            <Stack key={ep.uuid} gap={0}>
+              {origin ? <Text size="xs">{ep.name}</Text> : <Text size="xs" component={Link} to={`/diario?episodio=${ep.uuid}`}>{ep.name}</Text>}
+              <Text size="xs" c="dimmed">{fmt(ep.valid_at ?? ep.created_at)}{ep.source ? ` · ${ep.source}` : ""}</Text>
+            </Stack>))}
+          {!origin && docs.length > 0 && <>
+            <Text size="sm" fw={700}>{t("Documentos que la mencionan ({{count}})", { count: docs.length })}</Text>
+            {docs.map((x) => (
+              <Stack key={x.document_id} gap={0}>
+                <Text size="xs" component={Link} to={`/conocimiento?doc=${x.document_id}`}>{x.title}{x.chunks > 1 ? t(" · {{chunks}} pasajes", { chunks: x.chunks }) : ""}</Text>
+                <Text size="xs" c="dimmed" lineClamp={2}>…{x.snippet}…</Text>
+              </Stack>))}
+          </>}
+          {isCurator && <>
+            <Text size="sm" fw={700}>{t("Curación")}</Text>
+            <Text size="xs" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Text>
+            {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Revisar los tipos dudosos (Calidad del contenido → Tipos dudosos)")}</Text>}
+            <Text size="xs" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Text>
+          </>}
+        </Stack></Panel>
+      </div>
+    </Stack></FillArea>
   </>);
 }
 
 /** One relation as an evolution: the current values, and the earlier ones folded under «N anteriores». */
 /** The heading of a relation, as a sentence in the same «subject → relation → object» order for both directions (issue 194): the page's
  *  entity is plain text, on its side, and the current values on the other side are links. */
-function RelationHead({ g, name, link }: { g: EGroup; name: string; link: (o: Other) => string }) {
+function RelationHead({ g, self, link }: { g: EGroup; self: Other; link: (o: Other) => string }) {
   const { t } = useTranslation();
   const others = [...new Map(g.current.map((f) => [f.other.uuid, f.other])).values()];
   const shown = others.slice(0, MAX_HEAD);
-  const side = others.length ? <>{shown.map((o, i) => <span key={o.uuid}>{i > 0 && ", "}<Link to={link(o)}>{o.name}</Link></span>)}
+  const side = others.length ? <>{shown.map((o, i) => <span key={o.uuid}>{i > 0 && " "}<EntityChip name={o.name} type={o.labels[0]} to={link(o)} /></span>)}
     {others.length > MAX_HEAD && ` ${t("y {{count}} más", { count: others.length - MAX_HEAD })}`}</> : <span>—</span>;
-  const self = <span className="ms-relhead-self">{name}</span>;
+  const me = <EntityChip name={self.name} type={self.labels[0]} current />;  // the page's own entity: not a link
   const rel = <span className="ms-relhead-rel" title={g.relation}>{humanRelation(g.relation)}</span>;
-  return <Text size="sm" className="ms-relhead">{g.direction === "out" ? <>{self} → {rel} → {side}</> : <>{side} → {rel} → {self}</>}</Text>;
+  return <Text size="sm" className="ms-relhead">{g.direction === "out" ? <>{me} → {rel} → {side}</> : <>{side} → {rel} → {me}</>}</Text>;
 }
 
-function RelationGroup({ g, name, graph, canEdit, link }: { g: EGroup; name: string; graph: string; canEdit: boolean; link: (o: Other) => string }) {
+function RelationGroup({ g, self, graph, canEdit, link }: { g: EGroup; self: Other; graph: string; canEdit: boolean; link: (o: Other) => string }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const values = [...g.current].map((f) => f.other.name);
@@ -143,7 +159,7 @@ function RelationGroup({ g, name, graph, canEdit, link }: { g: EGroup; name: str
     <Panel withBorder p="sm"><Stack gap="xs">
       <Group gap="xs" justify="space-between">
         <Group gap="xs">
-          <RelationHead g={g} name={name} link={link} />
+          <RelationHead g={g} self={self} link={link} />
           {g.functional && <Pill size="xs">{t("Un solo valor a la vez")}</Pill>}
           {g.previous.length > 0 && !g.generic && <Text size="xs" c="dimmed">{[...g.previous.map((f) => f.other.name), ...values].join(" → ")}</Text>}
         </Group>
@@ -169,7 +185,7 @@ function FactItem({ f, graph, canEdit, link }: { f: EFact; graph: string; canEdi
     <li className="ms-tl-item" data-event={old ? "invalidated" : "learned"}>
       <Group gap="xs" justify="space-between" wrap="nowrap" align="flex-start">
         <Stack gap={0} className="ms-tl-body">
-          <Group gap={6}><Link to={link(f.other)} className="ms-nolink"><Pill size="xs">{f.other.name}</Pill></Link>
+          <Group gap={6}><EntityChip name={f.other.name} type={f.other.labels[0]} to={link(f.other)} />
             <Text size="sm" td={old ? "line-through" : undefined} c={old ? "dimmed" : undefined}>{f.fact}</Text></Group>
           <Text size="xs" c="dimmed">
             {old ? t("Válido {{from}} → {{to}}", { from: day(f.valid_at ?? f.created_at), to: day(f.invalid_at) }) : t("Vigente desde {{from}}", { from: day(f.valid_at ?? f.created_at) })}

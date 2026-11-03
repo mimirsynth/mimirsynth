@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { T } from "../i18n";
 import { langHeaders } from "../api";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, ClearFilters, ColHead, DataTable, FillArea, GraphCanvas, Notice, readEffects, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, NODE_PALETTE, CANVAS, type CanvasLink, type CanvasNode } from "../ui";
+import { Btn, ClearFilters, ColHead, DataTable, FillArea, GraphCanvas, Notice, readEffects, Page, PageHeader, Pill, SelectField, Tabs, TextArea, useTableView, typeColor, CANVAS, type CanvasLink, type CanvasNode } from "../ui";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -17,7 +17,6 @@ const EXAMPLES: [string, string][] = [
   [T("Episodios recientes"), "MATCH (e:Episodic) RETURN e.name AS nombre, e.created_at AS creado ORDER BY e.created_at DESC LIMIT 20"],
   [T("Hechos por tipo de relación"), "MATCH ()-[r:RELATES_TO]->() RETURN r.name AS relacion, count(*) AS n ORDER BY n DESC"],
 ];
-const PALETTE = NODE_PALETTE;
 const cell = (v: any) => (v && typeof v === "object" ? (v._type === "node" ? `(${v.properties?.name ?? v.id}:${(v.labels ?? []).join(":")})` : v._type === "edge" ? `[${v.relation}]` : JSON.stringify(v).slice(0, 120)) : String(v ?? ""));
 
 /** The uuid of an entity node in a result cell, to link it to its entity page. */
@@ -62,7 +61,7 @@ export default function Query({ graph }: { graph: string }) {
   // resultado -> lienzo del grafo (el mismo de la pantalla Grafo, en 2D y con disposición de fuerza)
   const graphData = useMemo(() => {
     if (!res) return { nodes: [] as CanvasNode[], links: [] as CanvasLink[] };
-    const colors = new Map<string, string>(); const col = (l: string) => { if (!colors.has(l)) colors.set(l, PALETTE[colors.size % PALETTE.length]); return colors.get(l)!; };
+    const col = (l: string) => typeColor(l);
     const lab = (n: QNode) => n.labels.filter((l) => l !== "Entity")[0] ?? n.labels[0] ?? t("Nodo");
     const name = (n: QNode) => String(n.properties.name ?? n.properties.fact ?? n.id);
     return {

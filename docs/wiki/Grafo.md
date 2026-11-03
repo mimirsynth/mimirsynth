@@ -49,7 +49,7 @@ Cargar la procedencia añade algo de tiempo en brains muy grandes.
 - A partir de 60 nodos visibles, un **minimapa** muestra el grafo entero y la vista actual; pulsa en él para centrar la vista ahí.
 
 ## Leyenda
-Además de **Orígenes**, la leyenda enumera los **Tipos** (los colores de los nodos) y las **Relaciones**, cada uno con su recuento. Pulsa un elemento para **ocultarlo o mostrarlo** sin mover el resto del grafo. La leyenda se puede plegar.
+Además de **Orígenes**, la leyenda enumera los **Tipos** (los colores de los nodos) y las **Relaciones**, cada uno con su recuento. Un tipo tiene el mismo color aquí, en la [[Consulta Cypher]] y en la [[Página de entidad]], sea cual sea el orden en que aparecen los tipos. Pulsa un elemento para **ocultarlo o mostrarlo** sin mover el resto del grafo. La leyenda se puede plegar.
 
 ## Efectos gráficos
 La opción **Efectos gráficos** se guarda **en este navegador, por dispositivo** (no en tu cuenta), porque lo que cuenta es la tarjeta gráfica del equipo. La pantalla [[Consulta Cypher]] sigue la misma opción.

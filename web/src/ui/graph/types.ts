@@ -3,8 +3,9 @@ import type { Layout } from "./layouts";
 
 /** `groups`: claves de los halos (orígenes) a los que pertenece el nodo; `ring`: respaldado por 2 o más orígenes. */
 export type RNode = { id: string; color: string; size: number; caption: string; visible: boolean; groups?: string[]; ring?: boolean; tooltip?: string };
-/** `strong`: hecho respaldado por 2 o más orígenes (se dibuja más grueso, o más brillante en 3D). */
-export type RLink = { id: string; source: string; target: string; label: string; color: string; dashed: boolean; visible: boolean; strong?: boolean };
+/** `strong`: hecho respaldado por 2 o más orígenes (se dibuja más grueso, o más brillante en 3D). `quiet`: su etiqueta solo se dibuja
+ *  con uno de sus extremos señalado o seleccionado (en un grafo pequeño y denso, para que las etiquetas no se pisen). */
+export type RLink = { id: string; source: string; target: string; label: string; color: string; dashed: boolean; visible: boolean; strong?: boolean; quiet?: boolean };
 /** Halo de un origen: envuelve a sus nodos y los atrae hacia su ancla. El orden es el de la leyenda. */
 export type RHalo = { key: string; name: string; color: string };
 /** Efectos gráficos: «full» con todo; «reduced» sin entrada animada, partículas ni minimapa y con menos textos (los halos se quedan). */

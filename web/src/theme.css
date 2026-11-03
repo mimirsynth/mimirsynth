@@ -54,6 +54,12 @@ h1, h2, h3, h4, .mantine-Title-root { font-family: var(--ms-display); font-weigh
 /* ===== Componentes de la aplicación (web/src/ui) ===== */
 /* Pill: única forma de etiqueta */
 .ms-pill { border-radius: var(--ms-radius); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; border: 1px solid var(--ms-chip-line); background: var(--ms-chip-bg); color: var(--ms-chip-fg); }
+/* an entity, coloured by its type (EntityChip): the colour is a dot and the edge, the text keeps the theme's contrast */
+.ms-entchip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 1px 7px; border-radius: var(--ms-radius); border: 1px solid var(--ms-chip-line); border-left: 3px solid var(--ms-type); background: var(--ms-chip-bg); color: var(--ms-ink); font-size: 12px; font-weight: 600; line-height: 1.5; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+a.ms-entchip:hover { border-color: var(--ms-type); }
+a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 1px; }
+.ms-entchip[data-current] { font-weight: 700; }
+.ms-entchip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ms-type); flex-shrink: 0; }
 .ms-pill[data-strong] { background: var(--ms-accent); color: var(--ms-on-accent); border-color: var(--ms-accent); }
 :root[data-mantine-color-scheme="light"] .ms-pill[data-tone="success"] { background: #d3ecdf; color: #17603a; border-color: #8cc9a8; }
 :root[data-mantine-color-scheme="light"] .ms-pill[data-tone="warn"] { background: #f6e4b8; color: #6f4a0c; border-color: #dbb35e; }
@@ -329,14 +335,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-split { display: flex; gap: 8px; flex: 1; min-height: 0; }
 .ms-split-main { flex: 1; min-width: 0; display: flex; }
 .ms-split-main > .ms-canvas { flex: 1; min-width: 0; }
-.ms-split-main > .ms-fill { min-width: 0; width: 100%; }  /* on a phone the fill stops growing with its content (wide text, a row of actions) */
 .ms-split-aside { width: 300px; flex-shrink: 0; min-height: 0; display: flex; flex-direction: column; }
 @media (max-width: 1000px) {
   .ms-split { flex-direction: column; overflow: auto; }
   .ms-split-main { flex: none; height: 420px; }
   .ms-split-aside { width: auto; height: 260px; flex-shrink: 0; }
-  /* a page of text in the main area (the entity page) is as tall as its content, and its side panel follows it */
-  .ms-split:has(> .ms-split-main > .ms-fill) .ms-split-main, .ms-split:has(> .ms-split-main > .ms-fill) .ms-split-aside { height: auto; }
 }
 .ms-legend-box { position: absolute; top: 8px; left: 8px; max-width: 240px; max-height: calc(100% - 16px); overflow-x: hidden; overflow-y: auto; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); opacity: 0.95; font-size: 12px; color: var(--ms-ink); }
 .ms-legend-head { display: flex; justify-content: space-between; gap: 8px; padding: 0; font: inherit; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ms-muted); background: none; border: 0; cursor: pointer; }
@@ -388,6 +391,18 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-ask-main { flex: 1; min-width: 0; }
 .ms-ask-side { width: 420px; flex-shrink: 0; }
 .ms-graph-canvas { position: absolute; inset: 0; }
+/* entity page (issue 200): a top card in two columns (head and summary | graph), then facts and episodes about 70 / 30 */
+.ms-entity-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "head graph" "summary graph"; grid-template-rows: auto 1fr; gap: 8px 20px; align-items: start; }
+.ms-entity-card-head { grid-area: head; }
+.ms-entity-card-summary { grid-area: summary; }
+.ms-entity-card-graph { grid-area: graph; min-width: 0; }
+.ms-entity-card .ms-minigraph { height: 320px; }
+.ms-entity-cols { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 12px; align-items: start; }
+@media (max-width: 48em) {
+  .ms-entity-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "graph" "summary"; }
+  .ms-entity-card .ms-minigraph { height: 240px; }
+  .ms-entity-cols { grid-template-columns: minmax(0, 1fr); }
+}
 .ms-minigraph { position: relative; height: 280px; border-radius: var(--ms-radius); overflow: hidden; background: #101113; }  /* the canvas background (palette CANVAS), also in the light theme */
 @media (max-width: 48em) { .ms-minigraph { height: 200px; } }
 /* visible to screen readers only (the links behind a canvas, for instance) */

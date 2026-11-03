@@ -1,13 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { Btn, Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, NODE_PALETTE, HALO_PALETTE, CANVAS, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
+import { Btn, Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, HALO_PALETTE, CANVAS, typeColor, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt, get, GLink, GNode, GraphData, Grouping, Overview } from "../api";
 import { T } from "../i18n";
 
-const PALETTE = NODE_PALETTE;
 const DAY = 86_400_000;
 const download = (name: string, type: string, data: string) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type })); a.download = name; a.click(); };
 const id = (x: any) => (typeof x === "object" ? x.uuid ?? x.id : x);
@@ -61,8 +60,7 @@ export default function GraphPage({ graph }: { graph: string }) {
   }, [viewKey]);
   const gc = useRef<GraphCanvasHandle>(null);
   const force = layout === "force";  // los halos solo tienen sentido en la disposición de fuerza (2D y 3D)
-  const colorOf = useRef(new Map<string, string>());
-  const color = (l?: string) => { const k = l ?? t("(sin tipo)"); if (!colorOf.current.has(k)) colorOf.current.set(k, PALETTE[colorOf.current.size % PALETTE.length]); return colorOf.current.get(k)!; };
+  const color = (l?: string) => typeColor(l);  // the same colour per type on every screen, not by order of appearance
 
   const [now] = useState(() => Date.now());  // fijo: si cambiara en cada render, as_of también, y el grafo se pediría sin fin
   const t0 = ov.data?.first_episode_at ? new Date(ov.data.first_episode_at).getTime() : now - 90 * DAY;
