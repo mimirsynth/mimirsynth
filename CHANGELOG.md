@@ -8,6 +8,19 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-03
+### Added
+- The entity page shows a small graph of the entity and its closest neighbours, coloured by type with the relation on each edge; a click opens a neighbour, and Expand opens the Graph with the entity selected. (#198)
+
+### Changed
+- The entity page header is one row with the type and the merged names as chips, and Facts is marked in the side bar with a way back. (#195)
+- On the entity page, each relation reads as a sentence, «A → relation → B», with the entity on its side in both directions, and fact cards no longer overflow on a phone. (#196)
+- On the entity page the summary is folded, and not shown when it only repeats the entity's own facts (`entity.summary_repeats` in `GET /entities/{uuid}`). (#197)
+
+### Fixed
+- Merging duplicates no longer adds an alias equal to the entity's own name; the entity page hides the ones older merges wrote, and `python -m mimirsynth.entity_aliases` removes them. (#195)
+- On a phone the entity page's side panel no longer covers the list of facts. (#198)
+
 ## [0.12.0] - 2026-11-03
 ### Added
 - Change the type of one entity by hand from its page (curators), with undo from Recent changes; a pending type-corrector suggestion for it is superseded. (#181)
