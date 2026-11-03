@@ -527,7 +527,7 @@ export class ForceRenderer implements GraphRenderer {
     // etiqueta del tipo de relación sobre cada arista, a lo largo de ella y siempre legible (nunca boca abajo).
     // Con foco, solo las suyas; si en pantalla hay más del tope, solo las de lo seleccionado o señalado.
     const mid = (l: SLink): [number, number] => { const [cx, cy] = control(l); return [(l.source.x! + 2 * cx + l.target.x!) / 4, (l.source.y! + 2 * cy + l.target.y!) / 4]; };
-    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && (touches(l) || (l.lit ?? 1) > 0.02) && onScreen(...mid(l), 50)) : [];
+    let labelled = t.k >= LABEL_ZOOM ? links.filter((l) => l.label && (l.quiet ? !!focusId && touches(l) : touches(l) || (l.lit ?? 1) > 0.02) && onScreen(...mid(l), 50)) : [];
     if (labelled.length > cap) labelled = labelled.filter((l) => l.id === this.selectedLink || (focusId && touches(l))).slice(0, cap);
     if (selLink && !labelled.includes(selLink)) labelled.push(selLink);
     if (labelled.length) {

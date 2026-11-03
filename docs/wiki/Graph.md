@@ -49,7 +49,7 @@ Loading provenance adds some time in very large brains.
 - Above 60 visible nodes a **minimap** shows the whole graph and the current view; click it to centre the view there.
 
 ## Legend
-Besides **Origins**, the legend lists **Types** (the node colours) and **Relations**, each with its count. Click an item to **hide or show** it without moving the rest of the graph. The legend can be collapsed.
+Besides **Origins**, the legend lists **Types** (the node colours) and **Relations**, each with its count. A type has the same colour here, in [[Cypher query]] and on the [[Entity page]], whatever order the types appear in. Click an item to **hide or show** it without moving the rest of the graph. The legend can be collapsed.
 
 ## Graphic effects
 The **Graphic effects** choice is stored **in this browser, per device** (not in your account), because what matters is the device's graphics card. The [[Cypher query]] screen follows the same choice.

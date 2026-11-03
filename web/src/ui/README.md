@@ -4,6 +4,7 @@ Las pantallas no usan los primitivos de Mantine para estos elementos: usan siemp
 
 | Elemento | Componente | Notas |
 |---|---|---|
+| Entidad | `EntityChip` | Una entidad nombrada: chip con el color de su tipo (punto y borde) y su nombre tal como se escribe; el tipo va en la ayuda emergente y en el nombre accesible. Con `to` es un enlace; `current` (la entidad de la propia página) va sin enlace. El color sale de `typeColor(tipo)` (`palette.ts`), el mismo en Grafo, Consulta, el minigrafo y los chips. |
 | Etiqueta | `Pill` | Siempre píldora. Tonos: neutral, success, warn, danger, alt (`tone` o `color` heredado). `strong` la rellena con el acento; `circle` es un contador. |
 | Botón | `Btn` | Por defecto SECUNDARIO (borde). `kind="primary"` (hidromiel) solo para la acción principal de una zona, como mucho una; `kind="ghost"` (sin borde: Cancelar, quitar filtros); `kind="danger"`; `kind="link"`. `size="row"` (28 px) solo en acciones de fila de tabla o tarjeta; en todo lo demás, 36 px como los campos. Con `icon` opcional. |
 | Tabla | `DataTable` | Rayado, resalte y filetes fijos; solo se elige el tamaño de letra. |
