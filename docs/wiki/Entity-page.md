@@ -28,7 +28,8 @@ If a relation is marked as **single-valued** in the [[Ontology]] and the entity 
 
 ## Curator actions
 - **Invalidate** a current fact, or **Reactivate** an earlier one, from the fact itself. They are the same actions as in [[Facts]] and can be undone from the vocabulary history.
-- Links to **merge** the entity with another ([[Merge duplicates]]), **change its type** ([[Type corrector]], administrators) and **edit the text** of a fact ([[Facts]]).
+- **Change type**, next to the entity's type in the header: pick one of the types of the brain's [[Ontology]] (the same closed list the [[Type corrector]] uses; nothing else is accepted). The change is seen at once here and in the [[Graph]], goes to the audit log, and can be undone from the message that confirms it or from **Recent changes** in [[Entity types]]. If the type corrector had a suggestion pending for this entity, it is no longer offered, and a later analysis does not propose the entity again.
+- Links to **merge** the entity with another ([[Merge duplicates]]), review the **doubtful types** of the whole brain ([[Type corrector]], administrators) and **edit the text** of a fact ([[Facts]]).
 
 ## Lent entities
 With [[Federation]], an entity of a brain that lends its graph opens with its origin ("from «slug»") and is **read-only**.

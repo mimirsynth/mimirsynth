@@ -174,12 +174,17 @@ def move_type(name: str, body: MoveIn, ctx: BrainCtx = Depends(admin_of_brain)):
     return {"ok": True, "entities": len(all_ids)}
 
 
+def curated(kind: str) -> bool:
+    """Changes a curator makes (and so may undo): fact edits and the type of one entity. The rest is the brain administrator's."""
+    return kind.startswith("fact.") or kind == "entity.retype"
+
+
 @router.post("/ops/{oid}/revert")
 def revert_op(oid: int, ctx: BrainCtx = Depends(curator_of_brain)):
     op = ctx.db.get(VocabOp, oid)
     if not op or op.brain_id != ctx.brain.id:
         raise HTTPException(404, "cambio no encontrado")
-    if not op.kind.startswith("fact.") and not allows(ctx.role, "admin"):
+    if not curated(op.kind) and not allows(ctx.role, "admin"):
         raise HTTPException(403, "solo un administrador del brain puede deshacer cambios de vocabulario")
     if op.status != "applied":
         raise HTTPException(409, "ese cambio ya está revertido")
@@ -188,6 +193,13 @@ def revert_op(oid: int, ctx: BrainCtx = Depends(curator_of_brain)):
     if later:
         raise HTTPException(409, "hay cambios posteriores: deshaz primero el más reciente")
     d = op.detail
+    if op.kind == "entity.retype":
+        from .retype import undo_entity_type
+        undo_entity_type(ctx, d)
+        op.status = "reverted"
+        ctx.db.commit()
+        audit(ctx.db, ctx.user, "vocab.revert", ctx.brain, summary=op.summary)
+        return {"ok": True}
     if op.kind.startswith("fact."):
         from .facts_admin import undo
         undo(ctx, op.kind, d)

@@ -26,7 +26,7 @@ Antes de aplicar ves una **vista previa** con cuántas entidades se verán afect
 **Quitar** saca el tipo de la ontología: deja de guiar la extracción y el corrector. **Las entidades que ya tienen ese tipo no cambian**: pasan a mostrarse «fuera de la ontología». Las reglas del mapa que usan el tipo se eliminan.
 
 ## Historial y deshacer
-Debajo de la tabla, **Cambios recientes** lista los 15 últimos cambios de vocabulario del brain: los hechos aquí, las ediciones de la ontología, las fusiones de entidades y los hechos invalidados al resolver [[Contradicciones]]. El **último** tiene un botón **Deshacer** (administradores del brain; mientras no se haga otro cambio después); los revertidos se marcan como «deshecho».
+Debajo de la tabla, **Cambios recientes** lista los 15 últimos cambios de vocabulario del brain: los hechos aquí, las ediciones de la ontología, las fusiones de entidades y los hechos invalidados al resolver [[Contradicciones]]. El **último** tiene un botón **Deshacer** (administradores del brain, y también curadores si es una edición de un hecho o el tipo de una entidad cambiado desde su [[Página de entidad]]; mientras no se haga otro cambio después); los revertidos se marcan como «deshecho».
 
 ## Buenas prácticas
 - Pocos tipos y bien descritos funcionan mejor que muchos solapados.

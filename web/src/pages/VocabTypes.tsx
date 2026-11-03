@@ -45,7 +45,10 @@ function TypesTable({ rows, isAdmin, open }: { rows: TypeItem[]; isAdmin: boolea
   );
 }
 
-export default function VocabTypes({ graph, isAdmin }: { graph: string; isAdmin: boolean }) {
+/** Changes a curator makes, and so may undo: fact edits and the type of one entity (the server checks the same). */
+const curated = (kind: string) => kind.startsWith("fact.") || kind === "entity.retype";
+
+export default function VocabTypes({ graph, isAdmin, isCurator }: { graph: string; isAdmin: boolean; isCurator: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["vocab-types", graph], queryFn: () => get<Types>("vocab/types", { graph }) });
@@ -93,7 +96,7 @@ export default function VocabTypes({ graph, isAdmin }: { graph: string; isAdmin:
               <DataTable.Tr key={o.id}>
                 <DataTable.Td w={140}>{fmt(o.created_at)}</DataTable.Td>
                 <DataTable.Td>{o.summary}</DataTable.Td>
-                <DataTable.Td w={140}>{o.status === "reverted" ? <Pill size="xs">{t("deshecho")}</Pill> : isAdmin && o.id === last?.id
+                <DataTable.Td w={140}>{o.status === "reverted" ? <Pill size="xs">{t("deshecho")}</Pill> : (isAdmin || (isCurator && curated(o.kind))) && o.id === last?.id
                   ? <Btn size="row" icon="undo" loading={revert.isPending} onClick={() => revert.mutate(o.id)}>{t("Deshacer")}</Btn> : null}</DataTable.Td>
               </DataTable.Tr>))}</DataTable.Tbody></DataTable>
             {err && !dlg && <Notice tone="danger">{err.message}</Notice>}

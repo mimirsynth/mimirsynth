@@ -26,7 +26,7 @@ Before applying, you see a **preview** with how many entities will be affected. 
 **Remove** takes the type out of the ontology: it stops guiding extraction and the corrector. **Entities that already have that type do not change**: they are shown as "outside the ontology". The map rules that use the type are removed.
 
 ## History and undo
-Below the table, **Recent changes** lists the 15 latest vocabulary changes of the brain: those made here, ontology edits, entity merges and the facts invalidated when resolving [[Contradictions]]. The **latest** one has an **Undo** button (brain administrators; as long as no other change has been made afterwards); reverted ones are marked "undone".
+Below the table, **Recent changes** lists the 15 latest vocabulary changes of the brain: those made here, ontology edits, entity merges and the facts invalidated when resolving [[Contradictions]]. The **latest** one has an **Undo** button (brain administrators, and also curators when it is a fact edit or the type of one entity changed from its [[Entity page]]; as long as no other change has been made afterwards); reverted ones are marked "undone".
 
 ## Good practices
 - A few well-described types work better than many overlapping ones.

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Btn, DataState, EmptyState, FillArea, MutationError, Notice, Page, PageHeader, Panel, Pill, SplitView, TextField } from "../ui";
 import { fmt, get, send } from "../api";
+import { TypeDialog } from "./TypePicker";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };
@@ -48,6 +49,13 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
   const specific = d.groups.filter((g) => !g.generic);
   const other = d.groups.filter((g) => g.generic);
   const otherFacts = other.reduce((n, g) => n + g.current.length + g.previous.length, 0);
+  const qc = useQueryClient();
+  const [retyping, setRetyping] = useState(false);
+  const [done, setDone] = useState<{ op: number; summary: string } | null>(null);
+  const refresh = () => ["entity", "graph", "vocab-types", "retype"].forEach((k) => qc.invalidateQueries({ queryKey: [k, graph] }));
+  const retype = useMutation({ mutationFn: (type: string) => send<{ op: number; summary: string }>("PUT", `entities/${e.uuid}/type`, { type }, { graph }),
+    onSuccess: (r) => { setRetyping(false); setDone(r); refresh(); } });
+  const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
   return (<>
     <PageHeader title={e.name} actions={<Group gap="xs" align="flex-end">
       <TextField type="date" label={t("Cómo estaba el día")} value={asOf} onChange={(ev) => setAsOf(ev.currentTarget.value)} w={170} />
@@ -57,10 +65,15 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
     {/* type, merged names and summary go under the title, not in its description: that one is a paragraph and these are blocks */}
     <Stack gap={4}>
       <Group gap={4}>{(e.labels.length ? e.labels : [t("(sin tipo)")]).map((l) => <Pill key={l} size="xs">{l}</Pill>)}
+        {canEdit && <Btn kind="link" onClick={() => { retype.reset(); setRetyping(true); }}>{t("Cambiar tipo")}</Btn>}
         {e.aliases.length > 0 && <Text size="xs" c="dimmed">{t("También: {{names}}", { names: e.aliases.join(", ") })}</Text>}
         {e.origin && <Pill size="xs" tone="alt">{t("de «{{origin}}»", { origin: e.origin })}</Pill>}</Group>
       {e.summary && <Text size="sm" className="ms-prose">{e.summary}</Text>}
     </Stack>
+    {done && <Notice tone="success">{done.summary}. <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
+    <MutationError error={undo.error} />
+    <TypeDialog graph={graph} opened={retyping} name={e.name} current={e.labels} onClose={() => setRetyping(false)} onPick={(type) => retype.mutate(type)}
+      pending={retype.isPending} error={retype.error} />
     {d.read_only &&<Notice>{t("Entidad prestada por «{{origin}}»: solo lectura.", { origin: e.origin })}</Notice>}
     {asOf && <Notice>{t("Lo vigente el {{date}}, según las fechas de validez.", { date: asOf })}{d.facts.not_yet ? " " + t("{{count}} hechos aún no eran ciertos ese día y no se muestran.", { count: d.facts.not_yet }) : ""}</Notice>}
     {d.facts.truncated && <Notice tone="warn">{t("Se muestran los {{shown}} hechos más recientes de {{total}}.", { shown: d.facts.shown, total: d.facts.total })}</Notice>}
@@ -96,7 +109,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
       {isCurator && <>
         <Text size="sm" fw={700}>{t("Curación")}</Text>
         <Text size="xs" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Text>
-        {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Cambiar el tipo (Calidad del contenido → Tipos dudosos)")}</Text>}
+        {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Revisar los tipos dudosos (Calidad del contenido → Tipos dudosos)")}</Text>}
         <Text size="xs" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Text>
       </>}
     </Stack></FillArea></Panel>} />

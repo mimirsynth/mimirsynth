@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from . import decider, jobs
 from .db import graph, rows
 from .deciders_admin import default_decider
-from .deps import BrainCtx, admin_of_brain, audit
+from .deps import BrainCtx, admin_of_brain, audit, curator_of_brain
 from .models import Brain, RetypeSuggestion
 from .ontology import ALIASES, NAME, get_ontology, presets
 from .secretbox import unseal
@@ -21,6 +21,7 @@ from .store import _factory
 
 log = logging.getLogger("mimirsynth.retype")
 router = APIRouter(prefix="/api/brains/{slug}/retype")
+entity_router = APIRouter(prefix="/api/brains/{slug}/entities")  # the type of one entity, changed by hand (#179)
 # Cómo se revisa un brain cuyo paquete no dice nada (ontología a mano, paquete retirado): solo los comodines y las reglas de cualquier dominio.
 MINIMAL = {"review_first": ["Object", "Thing", "Topic"], "doubtful_rules": []}
 # Si la ontología tiene tipos para errores o procedimientos, la pregunta del decisor no los excluye.
@@ -195,6 +196,18 @@ class IdsIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=2000)
 
 
+class TypeIn(BaseModel):
+    type: str = Field(min_length=1, max_length=64)
+
+
+def _ontology_type(ctx: BrainCtx, name: str) -> str:
+    """The same closed list the corrector offers: a type of the brain's ontology, never free text."""
+    onto = get_ontology(ctx.db, ctx.brain.id) or {"entity_types": []}
+    if name not in {t["name"] for t in onto["entity_types"]}:
+        raise HTTPException(400, "ese tipo no está en la ontología del brain")
+    return name
+
+
 def _out(s: RetypeSuggestion, rules: frozenset[str]) -> dict:
     st = _eff_status(s, rules)
     return {"id": s.id, "entity_uuid": s.entity_uuid, "name": s.name, "current_type": s.current_type, "suggested_type": s.suggested_type,
@@ -278,6 +291,22 @@ def reject(body: IdsIn, ctx: BrainCtx = Depends(admin_of_brain)):
     return {"rejected": len(items)}
 
 
+@router.post("/{sid}/apply-as")
+def apply_as(sid: int, body: TypeIn, ctx: BrainCtx = Depends(admin_of_brain)):
+    """Applies a pending suggestion with another type of the ontology than the one the decider proposed; reverted like any other."""
+    new = _ontology_type(ctx, body.type)
+    s = ctx.db.get(RetypeSuggestion, sid)
+    if not s or s.brain_id != ctx.brain.id or s.status != "pending":
+        raise HTTPException(404, "no hay una propuesta pendiente con ese id")
+    if new == s.current_type:
+        raise HTTPException(409, "la entidad ya tiene ese tipo")
+    _set_label(ctx.brain.graph_name, s.entity_uuid, s.current_type, new)
+    s.suggested_type, s.previous_type, s.status, s.applied_at = new, s.current_type, "applied", datetime.now(timezone.utc)
+    ctx.db.commit()
+    audit(ctx.db, ctx.user, "retype.apply", ctx.brain, count=1, id=sid, type=new)
+    return {"applied": 1}
+
+
 @router.post("/{sid}/revert")
 def revert(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
     s = ctx.db.get(RetypeSuggestion, sid)
@@ -288,3 +317,54 @@ def revert(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
     ctx.db.commit()
     audit(ctx.db, ctx.user, "retype.revert", ctx.brain, id=sid)
     return {"ok": True}
+
+
+# --- One entity, by hand (#179) ---------------------------------------------------------------------
+# A curator picks the type from the entity page. It goes to the vocabulary history (kind `entity.retype`) with the labels it had,
+# so «Recent changes» can undo it, and it takes the entity out of the corrector: a pending suggestion is marked superseded and,
+# if there was none, a superseded row keeps the next analysis from proposing it again.
+SUPERSEDE = ("pending", "doubtful", "applied")  # an applied one could no longer be reverted safely: its label is gone
+
+
+@entity_router.put("/{uuid}/type")
+def set_entity_type(uuid: str, body: TypeIn, ctx: BrainCtx = Depends(curator_of_brain)):
+    from .entity_types import _record
+    new = _ontology_type(ctx, body.type)
+    found = rows(ctx.graph.query("MATCH (n:Entity {uuid:$u}) RETURN n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels", {"u": uuid}))
+    if not found:
+        raise HTTPException(404, "entidad no encontrada")
+    name, before = found[0]["name"] or "", found[0]["labels"]
+    if before == [new]:
+        raise HTTPException(409, "la entidad ya tiene ese tipo")
+    for old in before:
+        if old != new:
+            _set_label(ctx.brain.graph_name, uuid, old, "")
+    _set_label(ctx.brain.graph_name, uuid, "", new)
+    s = ctx.db.scalar(select(RetypeSuggestion).where(RetypeSuggestion.brain_id == ctx.brain.id, RetypeSuggestion.entity_uuid == uuid))
+    suggestion = None
+    if s is None:
+        s = RetypeSuggestion(brain_id=ctx.brain.id, entity_uuid=uuid, name=name[:500], current_type=before[0] if before else "", status="superseded")
+        ctx.db.add(s)
+        ctx.db.flush()
+        suggestion = {"id": s.id, "created": True}
+    elif s.status in SUPERSEDE:
+        suggestion = {"id": s.id, "status": s.status}
+        s.status = "superseded"
+    old = ", ".join(before) or "(sin tipo)"
+    op = _record(ctx, "entity.retype", f"Cambiado el tipo de «{name[:80]}»: {old} → {new}", uuid=uuid, name=name, before=before, after=new, suggestion=suggestion)
+    return {"ok": True, "op": op.id, "summary": op.summary, "labels": [new]}
+
+
+def undo_entity_type(ctx: BrainCtx, d: dict) -> None:
+    """Puts back the labels the entity had and the corrector suggestion as it was."""
+    if d["after"] not in d["before"]:
+        _set_label(ctx.brain.graph_name, d["uuid"], d["after"], "")
+    for old in d["before"]:
+        _set_label(ctx.brain.graph_name, d["uuid"], "", old)
+    sug = d.get("suggestion") or {}
+    s = ctx.db.get(RetypeSuggestion, sug["id"]) if sug else None
+    if s and s.brain_id == ctx.brain.id and s.status == "superseded":
+        if sug.get("created"):
+            ctx.db.delete(s)
+        else:
+            s.status = sug["status"]

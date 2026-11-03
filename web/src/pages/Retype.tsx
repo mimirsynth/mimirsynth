@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { get, send } from "../api";
+import { TypeDialog } from "./TypePicker";
 
 type Item = { id: number; name: string; current_type: string; suggested_type: string; confidence: number | null; status: string; previous_type: string; reason?: string };
 type Ov = { hidden_below_threshold: number; ontology: boolean; decider: boolean; counts: Record<string, number>; progress: { running: boolean; done: number; total: number; error: string | null }; items: Item[] };
@@ -31,6 +32,9 @@ export default function Retype({ graph, role }: { graph: string; role: string })
     onSuccess: (r, ids) => { refresh(); setDone(r.applied === ids.length ? t("{{n}} tipos aplicados. Puedes deshacerlos en la pestaña «Aplicados».", { n: r.applied }) : t("{{n}} de {{total}} aplicados; el resto no encajaba en la ontología actual. Puedes deshacerlos en «Aplicados».", { n: r.applied, total: ids.length })); } });
   const reject = useMutation({ mutationFn: (ids: number[]) => send("POST", `${base}/reject`, { ids }), onSuccess: (_r, ids) => { refresh(); setDone(t("{{n}} propuestas descartadas.", { n: ids.length })); } });
   const revert = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/revert`), onSuccess: refresh });
+  const [as, setAs] = useState<Item | null>(null);
+  const applyAs = useMutation({ mutationFn: (type: string) => send("POST", `${base}/${as?.id}/apply-as`, { type }),
+    onSuccess: (_r, type) => { refresh(); setDone(t("«{{name}}» pasa a {{type}}. Puedes deshacerlo en la pestaña «Aplicados».", { name: as?.name, type })); setAs(null); } });
   const v = useTableView(q.data?.items ?? [], RT_COLS, { key: "conf", dir: "desc" });
   if (!isAdmin) return <Text c="dimmed" size="sm">{t("Solo los administradores del brain pueden corregir tipos.")}</Text>;
   const d = q.data; const items = v.rows; const p = d?.progress;
@@ -74,19 +78,22 @@ export default function Retype({ graph, role }: { graph: string; role: string })
         {ask && <Group gap={6}>{summary(ask.ids).map(([type, n]) => <Pill key={type} tone="success">{type} · {n}</Pill>)}</Group>}
       </ConfirmDialog>
       <MutationError error={apply.error} />
+      <TypeDialog graph={graph} opened={!!as} name={as?.name ?? ""} current={as?.current_type ? [as.current_type] : []} onClose={() => setAs(null)}
+        onPick={(type) => applyAs.mutate(type)} pending={applyAs.isPending} error={applyAs.error} />
       <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
       <FillArea><DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr>{(status === "pending" || status === "doubtful") && <DataTable.Th w={30}><Check size="xs" aria-label={t("Seleccionar todo")} checked={!!allIds.length && chosen.length === allIds.length} onChange={(e) => setSel(e.currentTarget.checked ? allIds : [])} /></DataTable.Th>}
           <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Entidad")}</ColHead>
           <ColHead sort={v.sortProps("cur")} filter={v.select("cur")}>{t("Tipo actual")}</ColHead>
           {status === "doubtful" || status === "none" ? <ColHead filter={v.text("reason", t("Motivo…"))}>{t("Motivo")}</ColHead> : <><ColHead sort={v.sortProps("sug")} filter={v.select("sug")}>{t("Tipo propuesto")}</ColHead><ColHead sort={v.sortProps("conf")}>{t("Confianza")}</ColHead></>}
-          {status === "applied" && <DataTable.ActionsHead />}</DataTable.Tr></DataTable.Thead>
+          {(status === "applied" || status === "pending") && <DataTable.ActionsHead />}</DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>
           {items.map((i) => (
             <DataTable.Tr key={i.id}>
               {(status === "pending" || status === "doubtful") && <DataTable.Td><Check size="xs" aria-label={t("Seleccionar {{name}}", { name: i.name })} checked={chosen.includes(i.id)} onChange={(e) => setSel(e.currentTarget.checked ? [...sel, i.id] : sel.filter((x) => x !== i.id))} /></DataTable.Td>}
               <DataTable.Td>{i.name}</DataTable.Td><DataTable.Td><Pill>{i.current_type || t("sin tipo")}</Pill></DataTable.Td>
               {status === "doubtful" || status === "none" ? <DataTable.Td><Text size="xs" c="dimmed">{i.reason || "—"}</Text></DataTable.Td> : <><DataTable.Td><Pill tone="success">{i.suggested_type}</Pill></DataTable.Td><DataTable.Td><Pill tone={(i.confidence ?? 0) >= 0.9 ? "success" : "neutral"}>{i.confidence != null ? `${Math.round(i.confidence * 100)} %` : "—"}</Pill></DataTable.Td></>}
+              {status === "pending" && <DataTable.Td><Btn size="row" icon="edit" onClick={() => { applyAs.reset(); setAs(i); }}>{t("Aplicar como…")}</Btn></DataTable.Td>}
               {status === "applied" && <DataTable.Td><Btn size="row" loading={revert.isPending && revert.variables === i.id} onClick={() => revert.mutate(i.id)} icon="undo">{t("Deshacer")}</Btn></DataTable.Td>}
             </DataTable.Tr>))}
           {items.length === 0 && <DataTable.Tr><DataTable.Td colSpan={6}><Text c="dimmed" size="sm">{status === "pending" ? t("Nada propuesto por encima de esa confianza. Baja el umbral o lanza un análisis.") : t("Sin elementos.")}</Text></DataTable.Td></DataTable.Tr>}
