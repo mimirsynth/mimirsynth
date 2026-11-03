@@ -53,7 +53,7 @@ curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/env
 docker compose --profile bundled up -d    # descarga la imagen publicada; incluye FalkorDB (sin el perfil, apunta MIMIRSYNTH_FALKOR_HOST a uno tuyo)
 docker compose logs mimirsynth | grep -A3 "FIRST START"    # código del asistente de instalación
 ```
-Abre `http://localhost:8000`, introduce el código y crea la cuenta de administrador. Después, en **Administración**, añade los motores de IA (**Modelo LLM** y **Embeddings**, con «Probar» para comprobarlos) y crea un brain (**Acceso al brain → Crear brain**).
+Abre `http://localhost:8000`, introduce el código y crea la cuenta de administrador. Después, en **Administración**, añade los motores de IA (**Modelo LLM** y **Embeddings**, con «Probar» para comprobarlos) y crea un brain (**Brain → Brain activo → Crear brain**).
 
 ### Conecta tu primer agente
 En **Mi cuenta → Tokens de API**, crea un token para ese brain con el rol **Colaborador** (solo se muestra una vez). Con Claude Code, por MCP:

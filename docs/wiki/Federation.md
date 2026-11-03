@@ -18,7 +18,7 @@ A grant goes from a **source** brain (the one that lends) to a **target** brain 
 **Never shared:** embeddings, entity summaries, members, tokens, proposals, the ontology or anything that is not the content a query returns. Write access is never lent: `remember` always writes to the brain its token belongs to.
 
 ## Lending a brain
-In **Administration → Brain access → Federation**, with the source brain active. You must be an **administrator of the source brain** and have access to the target brain (a brain you cannot see is not offered).
+In **Administration → Brain → Federation**, with the source brain active. You must be an **administrator of the source brain** and have access to the target brain (a brain you cannot see is not offered).
 1. **Lend to:** choose the target brain. A brain that already has a grant from this one is not listed: change or revoke the existing one instead.
 2. **What is lent:** the scope.
 3. **Days valid** (optional, 1–3650): empty means **no expiry**.

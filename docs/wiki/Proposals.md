@@ -43,7 +43,7 @@ A **correction** is a proposal that does not add memory: it asks to **invalidate
 - **Reactivate the fact** in the correction puts the fact back as it was. An ingested replacement is left as it is.
 
 ## Secrets in proposals
-Before a proposal is stored (from the interface, the API or the `remember` tool over MCP), its title and content go through the **secret detector**: cloud and AI provider keys, tokens, private keys, JWTs, `Authorization` headers, passwords in URLs… Some findings are **certain**; a random-looking value assigned to `password`, `secret` or `token` is only **possible**. What happens depends on the brain's policy (Administration → Brain access → **Secrets**):
+Before a proposal is stored (from the interface, the API or the `remember` tool over MCP), its title and content go through the **secret detector**: cloud and AI provider keys, tokens, private keys, JWTs, `Authorization` headers, passwords in URLs… Some findings are **certain**; a random-looking value assigned to `password`, `secret` or `token` is only **possible**. What happens depends on the brain's policy (Administration → Brain → **Secrets**):
 
 | Policy | Certain secrets | Possible secrets |
 |---|---|---|

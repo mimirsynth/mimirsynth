@@ -5,7 +5,7 @@
 Agents talk to MimirSynth over HTTP with an **API token**. Each token is valid for **one brain** and its role never exceeds that of the person who created it (maximum curator, and it never administers the instance).
 
 ## Create a token
-Under My account → API tokens (or Administration → Brain access) choose the brain, a name and a role:
+Under My account → API tokens (or Administration → Brain → API tokens) choose the brain, a name and a role:
 
 | Role | Can |
 |---|---|

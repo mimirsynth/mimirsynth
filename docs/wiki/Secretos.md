@@ -17,7 +17,7 @@ Los hallazgos son de dos clases:
 - **Posibles:** un valor de aspecto aleatorio asignado a una palabra como `password`, `secret`, `token` o `api_key`. Estos **solo se marcan**, nunca se cambian: la aleatoriedad sola atraparía también sumas de comprobación, UUID e identificadores de contenedores, que son normales en notas técnicas.
 
 ## Qué hacer con un secreto
-Cada brain lo elige en **Administración → Acceso al brain → Secretos** (administradores del brain):
+Cada brain lo elige en **Administración → Brain → Secretos** (administradores del brain):
 
 | Modo | Secretos seguros | Secretos posibles |
 |---|---|---|

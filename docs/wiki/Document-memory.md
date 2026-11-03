@@ -39,7 +39,7 @@ A document whose extracted text matches one already indexed in the brain is mark
 - Documents indexed before this check existed are reviewed with **Find duplicates** in [[Knowledge]] (brain administrators). Nothing is deleted at the source.
 
 ## Secrets in documents
-Before chunking, the secret detector looks for credentials: cloud and AI provider keys, GitHub, GitLab, Slack, npm and Hugging Face tokens, PEM private keys, JWTs, `Authorization` headers, passwords in URLs… A random-looking value assigned to `password`, `secret` or `token` counts only as a **possible** secret and is just flagged. The brain's policy (Administration → Brain access → **Secrets**) decides what happens to the certain ones:
+Before chunking, the secret detector looks for credentials: cloud and AI provider keys, GitHub, GitLab, Slack, npm and Hugging Face tokens, PEM private keys, JWTs, `Authorization` headers, passwords in URLs… A random-looking value assigned to `password`, `secret` or `token` counts only as a **possible** secret and is just flagged. The brain's policy (Administration → Brain → **Secrets**) decides what happens to the certain ones:
 - **Mask** (default): they are replaced in the indexed text, so they never reach the chunks, the vectors or the agents.
 - **Block**: the document is not indexed and shows an error.
 - **Only warn**: nothing is changed.

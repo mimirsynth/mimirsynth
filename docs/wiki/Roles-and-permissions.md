@@ -24,7 +24,7 @@ A federation grant is **not a role**: the members of the receiving brain read wh
 - manages **users**, account security, email, OIDC, AI providers (including changing the embedding model), authorised folders and limits, notification channels, and sees the audit log (see [[Administration overview]]);
 - sees **every alert** in the [[Notifications]] bell.
 
-A person without that role only sees "Brain access" under Administration.
+A person without that role only sees the **Brain** group under Administration, with the entries their role in the active brain allows.
 
 ## API tokens
 A token belongs to a user and to **a single brain**, and can never have more role than whoever created it. The maximum is **curator**: no token administers the instance. A token stops working if its account is disabled or deleted. It only works in its own brain, even if that brain receives memory from others through federation. See [[Connect agents]].

@@ -5,7 +5,7 @@
 Creates a **new brain** from a package made with [[Export a brain]], from this instance or another one. The other brains are not touched.
 
 ## How
-**Administration → Brain access → Import a brain.** It needs the **instance administrator** (an API token can never import), and it is recorded in the [[Audit log]].
+**Administration → Brain → Active brain → Import a brain.** It needs the **instance administrator** (an API token can never import), and it is recorded in the [[Audit log]].
 
 1. Click **Choose package** and pick the `.mimirsynth.tar.gz` (or `.tar.gz.enc`) file. It is uploaded in parts, so a proxy's size limit does not get in the way.
 2. If the package is not encrypted, the card shows what its manifest says: the original brain, when and with which version it was exported, its counts, and what will happen with the graph and the vectors here.

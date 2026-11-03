@@ -43,7 +43,7 @@ Which extraction model: locally, an *instruct* model of about **14B parameters o
 > **Choose the embedding model with care.** It can be changed later (**Reindex** under Administration → Embeddings), but that recomputes every vector of every brain.
 
 ## 5. Create a brain
-Press **Create your first brain** (or **Administration → Brain access → Create brain**), give it a name and, if you like, a description, and apply an **ontology package** under *Vocabulary → Ontology*. See [[Brains and members]].
+Press **Create your first brain** (or **Administration → Brain → Active brain → Create brain**), give it a name and, if you like, a description, and apply an **ontology package** under *Vocabulary → Ontology*. See [[Brains and members]].
 
 ## 6. Add your first memory
 Go to **Proposals → new proposal**: write a title and a text with a concrete fact, with exact names and dates ("On 12 October we migrated the production database to server db02"). As administrator it is approved on submission and ingestion starts (you will see the progress under **Jobs**). When it finishes, look at **Facts**, **Journal** and **Graph**.

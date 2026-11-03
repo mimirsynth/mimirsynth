@@ -63,7 +63,7 @@ Before a proposal is stored (from the interface, the API or `remember` over MCP)
 - **Certain:** unmistakable formats (AWS access keys, GitHub, GitLab, Slack, npm or Hugging Face tokens, Google, Stripe, SendGrid or AI provider API keys, Telegram bot tokens, PEM private keys, JWTs, `Authorization` headers and passwords inside a URL).
 - **Possible:** a random-looking value assigned to a word such as `password`, `secret` or `token`. These are only flagged: entropy alone would mistake checksums, UUIDs and container IDs, which are normal content in technical documentation.
 
-Each brain chooses what to do under Administration → Brain access → Secrets:
+Each brain chooses what to do under Administration → Brain → Secrets:
 
 | Mode | Certain secrets | Possible secrets |
 |---|---|---|

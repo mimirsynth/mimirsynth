@@ -2,17 +2,22 @@
 
 # Visión general de la administración
 
-El icono del engranaje de la barra lateral abre **Administración**. Las secciones están en una lista a la izquierda, agrupadas (en móvil, arriba), y cada una es una tarjeta con su título y su descripción. La sección activa va en la dirección (`?seccion=…`), así que puedes enlazarla.
+El icono del engranaje de la barra lateral abre **Administración**. Las secciones están en una lista a la izquierda (en móvil, arriba), agrupadas bajo un encabezado y separadas por un filete; el grupo de la sección en la que estás se resalta. Cada sección es una tarjeta con su título y su descripción. La sección activa va en la dirección (`?seccion=…`), así que puedes enlazarla.
 
 ## Qué ve cada persona
-- **Cualquiera** ve **Acceso al brain** del brain activo: su nombre y su rol, qué le prestan otros brains ([[Federación]]) y sus tokens de API.
+- **Cualquiera** ve el grupo **Brain** del brain activo: su nombre y su rol, sus miembros, sus tokens de API y qué le prestan otros brains ([[Federación]]).
 - **Los administradores de un brain** gestionan además sus miembros, lo que presta a otros brains y su política de [[Secretos]], y pueden editarlo.
 - **El administrador de la instancia** ve todas las secciones.
 
 ## Mapa de secciones
 | Grupo | Sección | Para qué | Página |
 |---|---|---|---|
-| **Brain** | Acceso al brain | Crear/editar/borrar brains, miembros, federación, secretos y tokens | [[Administrar brains y miembros]], [[Federación]], [[Secretos]] |
+| **Brain** | Brain activo | Crear/editar/borrar/importar brains | [[Administrar brains y miembros]], [[Importar un brain]] |
+| | Miembros, Tokens de API | Quién tiene acceso, y los tokens del brain | [[Administrar brains y miembros]], [[Conectar agentes]] |
+| | Federación | Prestar y recibir lectura | [[Federación]] |
+| | Secretos | Qué hacer con una credencial en una propuesta o un documento | [[Secretos]] |
+| | Webhooks de entrada | Eventos de tus herramientas como memoria episódica | [[Webhooks de entrada]] |
+| | Consumo de IA, Retención, Exportar | El gasto del brain, lo que se conserva y una copia suya | [[Consumo de IA]], [[Administrar brains y miembros]], [[Exportar un brain]] |
 | **Cuentas** | Usuarios | Altas, invitaciones, roles, bloqueos | [[Administrar usuarios]] |
 | | Seguridad | Contraseñas, bloqueo, doble factor obligatorio | [[Seguridad y doble factor]] |
 | | Identidad | Inicio de sesión con uno o varios proveedores externos | [[Identidad OIDC]] |

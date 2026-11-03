@@ -22,7 +22,7 @@ Cada llamada que MimirSynth hace a un motor, en el punto donde la hace:
 De cada llamada se guardan los **tokens** (de entrada y de salida) que la respuesta da en su campo `usage`; si una respuesta no lo trae, se estima la entrada (4 caracteres por token) y la llamada se marca como estimada. También se cuentan las respuestas **429** (el proveedor limita el ritmo) y las **5xx**, y el **ritmo**: peticiones por minuto en este momento y el pico del día. Solo se guardan contadores por día, brain, motor y uso, nunca las llamadas ni su texto.
 
 ## Dónde se ve
-- **Administración → Acceso al brain → Consumo de IA** (administradores del brain): los últimos 30 días del brain, por uso y motor, y su presupuesto.
+- **Administración → Brain → Consumo de IA** (administradores del brain): los últimos 30 días del brain, por uso y motor, y su presupuesto.
 - **Administración → Modelos de IA → Consumo** (administrador de la instancia): cada motor con sus peticiones por minuto ahora, su pico, sus errores y su precio, y cada brain. Se actualiza cada 15 segundos.
 
 ## Coste estimado

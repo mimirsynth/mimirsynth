@@ -33,4 +33,4 @@ Pass `federated: false` to `recall` to get only the brain's own memory. The Quer
 
 ## Managing grants
 
-Administration → Brain access → Federation shows who this brain lends to (with scope, expiry, last use and a Revoke button) and who lends to it. The REST API is under `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).
+Administration → Brain → Federation shows who this brain lends to (with scope, expiry, last use and a Revoke button) and who lends to it. The REST API is under `/api/brains/{slug}/grants` (`GET`, `POST`, `PATCH /{id}`, `DELETE /{id}`).

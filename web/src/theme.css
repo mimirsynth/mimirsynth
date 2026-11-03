@@ -398,15 +398,18 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-settings { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
 .ms-settings-nav { position: sticky; top: 0; }
 .ms-settings-body { max-width: 1100px; display: flex; flex-direction: column; gap: 16px; }
-.ms-subnav { display: flex; flex-direction: column; gap: 2px; }
-.ms-subnav button { text-align: left; padding: 8px 12px; border-radius: var(--ms-radius); font: inherit; font-size: 14px; color: var(--ms-ink); background: none; border: 0; cursor: pointer; }
+.ms-subnav { display: flex; flex-direction: column; gap: 12px; }
+/* each group is set apart by a rule; its heading is the only uppercase line and the items are indented under it */
+.ms-subnav-group { display: flex; flex-direction: column; gap: 2px; }
+.ms-subnav-group + .ms-subnav-group { border-top: 1px solid var(--ms-line); padding-top: 12px; }
+.ms-subnav button { text-align: left; padding: 7px 12px 7px 20px; border-radius: var(--ms-radius); font: inherit; font-size: 14px; color: var(--ms-ink); background: none; border: 0; cursor: pointer; }
 .ms-subnav button:hover { background: var(--ms-hover); }
-.ms-subnav button[aria-current] { background: var(--ms-chip-bg); color: var(--ms-chip-fg); font-weight: 600; }
+.ms-subnav button[aria-current] { background: var(--ms-chip-bg); color: var(--ms-chip-fg); font-weight: 600; box-shadow: inset 3px 0 0 var(--ms-accent); }
 .ms-setgroup { border: 1px solid var(--ms-line); border-radius: var(--ms-radius-lg); background: var(--ms-raised); overflow: hidden; }
 .ms-setgroup-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 16px 20px 12px; }
 .ms-setgroup-body { padding: 4px 20px 20px; border-top: 1px solid var(--ms-line); padding-top: 16px; display: flex; flex-direction: column; gap: 12px; }
-.ms-subnav-head { margin: 14px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
-.ms-subnav-head:first-child { margin-top: 0; }
+.ms-subnav-head { margin: 0 12px 4px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-ink); }
+.ms-subnav-group[data-active] .ms-subnav-head { color: var(--ms-accent); }
 .ms-setgroup-head > :not(:first-child) { flex-shrink: 0; }
 .ms-setgroup-head h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
 .ms-setgroup-head p { margin: 6px 0 0; font-size: 13px; color: var(--ms-muted); }
@@ -417,7 +420,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 @media (max-width: 48em) {
   .ms-settings { grid-template-columns: 1fr; gap: 12px; }
   .ms-settings-nav { position: static; }
-  .ms-subnav { flex-direction: row; flex-wrap: wrap; }
+  .ms-subnav { gap: 8px; }
+  .ms-subnav-group { flex-direction: row; flex-wrap: wrap; }
+  .ms-subnav-group + .ms-subnav-group { padding-top: 8px; }
+  .ms-subnav-head { flex-basis: 100%; }
+  .ms-subnav button { padding-left: 12px; }
   .ms-setrow { grid-template-columns: 1fr; }
 }
 /* Código QR del doble factor: siempre sobre blanco para que lo lea la cámara, también en tema oscuro */

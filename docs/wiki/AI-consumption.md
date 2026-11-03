@@ -22,7 +22,7 @@ Every call MimirSynth makes to an engine, where it makes it:
 For each call it keeps the **tokens** (input and output) that the answer reports in its `usage` field; when an answer has none, the input is estimated (4 characters per token) and the call is marked as estimated. It also counts the **429** answers (the provider limits the pace) and the **5xx** ones, and the **pace**: requests per minute right now and the day's peak. Only counters per day, brain, engine and use are stored, never the calls or their text.
 
 ## Where to see it
-- **Administration → Brain access → AI consumption** (brain administrators): the last 30 days of the brain, per use and engine, and its budget.
+- **Administration → Brain → AI consumption** (brain administrators): the last 30 days of the brain, per use and engine, and its budget.
 - **Administration → AI models → Consumption** (instance administrator): every engine with its requests per minute now, its peak, its errors and its price, and every brain. It refreshes every 15 seconds.
 
 ## Estimated cost

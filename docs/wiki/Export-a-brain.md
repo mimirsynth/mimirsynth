@@ -7,7 +7,7 @@ A copy of **one brain** in a single package, without touching the others. Use it
 To bring a package into an instance, see [[Import a brain]].
 
 ## How
-**Administration → Brain access → Export.** It needs **brain administrator** (an API token can never export), and it is recorded in the [[Audit log]].
+**Administration → Brain → Export.** It needs **brain administrator** (an API token can never export), and it is recorded in the [[Audit log]].
 
 1. Choose the options:
    - **Include the vectors:** the embeddings of the search index, and those of the graph in its JSON copy. They save recomputing them when importing with the same embedding model, but the package grows a lot.

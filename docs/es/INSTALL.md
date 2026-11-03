@@ -54,7 +54,7 @@ Abre la aplicación, introduce el código y crea la cuenta de administrador. Gua
 
 ### Primeros pasos
 1. En **Administración → Modelo LLM** y **Embeddings**, añade un motor (endpoint, clave y modelo) y márcalo como predeterminado. «Probar» comprueba que responde.
-2. Crea un **brain** (Administración → Acceso al brain → Crear brain) y, si quieres, aplica un paquete de ontología en Vocabulario → Ontología.
+2. Crea un **brain** (Administración → Brain → Brain activo → Crear brain) y, si quieres, aplica un paquete de ontología en Vocabulario → Ontología.
 3. Crea un token de API para tus agentes y conecta el primero: ver [AGENTS.md](AGENTS.md).
 4. Opcional: correo SMTP (invitaciones y recuperación de contraseña), OIDC, doble factor obligatorio y carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md).
 
@@ -86,7 +86,7 @@ Guarda también tu `.env`.
 
 Restaurar es el camino inverso: arranca los servicios, restaura la base de datos (`psql`) y devuelve los volúmenes. El índice de texto se puede reconstruir desde el grafo y el de documentos desde los originales.
 
-Esto copia la instancia entera. Un solo brain se puede exportar a un paquete desde Administración → Acceso al brain → Exportar; ver «Exportar un brain» en la wiki.
+Esto copia la instancia entera. Un solo brain se puede exportar a un paquete desde Administración → Brain → Exportar; ver «Exportar un brain» en la wiki.
 
 ## Vigilar la instancia
 MimirSynth avisa por sí mismo del grafo y de los modelos de IA ([NOTIFICATIONS.md](NOTIFICATIONS.md)), pero **no de su propio PostgreSQL**: los avisos se guardan en esa base de datos, así que mientras está caída no hay dónde guardarlos. Vigílalo desde fuera con cualquier monitor HTTP (Uptime Kuma, Gatus, un `curl` en cron…) apuntado a `GET /api/health`. No pide sesión y responde en menos de 3 segundos:

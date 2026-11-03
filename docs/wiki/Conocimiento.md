@@ -51,7 +51,7 @@ Al pulsar un documento se abre su panel:
 - **Borrar** (administradores del brain, o quien lo subió): quita el original, el texto y los trozos; no se puede deshacer. Aquí solo se borran documentos subidos: los de una carpeta o una wiki se quitan en su origen y desaparecen en el siguiente escaneo.
 
 ### Secretos en los documentos
-Antes de trocear un documento, el **detector de secretos** busca credenciales en su texto (claves de nube y de proveedores de IA, tokens, claves privadas, contraseñas en URLs…). Lo que pasa depende de la política del brain (Administración → Acceso al brain → **Secretos**):
+Antes de trocear un documento, el **detector de secretos** busca credenciales en su texto (claves de nube y de proveedores de IA, tokens, claves privadas, contraseñas en URLs…). Lo que pasa depende de la política del brain (Administración → Brain → **Secretos**):
 - **Enmascarar** (por defecto): los secretos seguros se sustituyen en el texto indexado, así que nunca llegan a los trozos, a los vectores ni al recall.
 - **Bloquear**: el documento no se indexa y queda en **Error**, indicando qué tipo de secreto contiene.
 - **Solo avisar**: no se cambia nada, solo se informa de lo encontrado.

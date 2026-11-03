@@ -110,7 +110,7 @@ With a **contributor** token the proposal stays **pending**; with **curator**, *
 `GET /api/brains/<slug>/docs/search?q=…` searches by meaning. `GET …/docs/<id>/context?chunk=<n>` returns more context for a passage and `…/docs/<id>/file` the original. See [[Document memory]].
 
 ## Federated recall
-An administrator of a brain can **lend read access** to another brain (Administration → Brain access → **Federation**). The receiving brain's recall, over HTTP and over MCP, then also searches what it is lent, merges it with its own memory and marks each lent item with its origin (`· from «slug»` in the context, an `origin` field in the JSON). The agent needs no extra token: it keeps using the receiving brain's token. Lending is read-only, one way and one hop; `remember` always writes to the token's own brain. Pass `federated: false` to get only the brain's own memory. Details in [Federation between brains](https://github.com/MimirSynth/mimirsynth/blob/main/docs/FEDERATION.md).
+An administrator of a brain can **lend read access** to another brain (Administration → Brain → **Federation**). The receiving brain's recall, over HTTP and over MCP, then also searches what it is lent, merges it with its own memory and marks each lent item with its origin (`· from «slug»` in the context, an `origin` field in the JSON). The agent needs no extra token: it keeps using the receiving brain's token. Lending is read-only, one way and one hop; `remember` always writes to the token's own brain. Pass `federated: false` to get only the brain's own memory. Details in [Federation between brains](https://github.com/MimirSynth/mimirsynth/blob/main/docs/FEDERATION.md).
 
 ## Language of the answers
 Error messages, the MCP tool descriptions and instructions, and the headings of the recall context (`## Current facts`…) come in the caller's language, chosen in this order:
@@ -121,7 +121,7 @@ Error messages, the MCP tool descriptions and instructions, and the headings of 
 Stored memory (facts, episodes, documents) is returned as it was written; it is not translated. If your client compares error texts, send `Accept-Language` or, better, compare the status code.
 
 ## Secrets
-**Do not send passwords, keys or tokens:** write **where** they are kept (for example, which password manager). Before a proposal is stored, over HTTP or through `remember`, it goes through the brain's secret detector, and what happens depends on the brain's policy (Administration → Brain access → **Secrets**):
+**Do not send passwords, keys or tokens:** write **where** they are kept (for example, which password manager). Before a proposal is stored, over HTTP or through `remember`, it goes through the brain's secret detector, and what happens depends on the brain's policy (Administration → Brain → **Secrets**):
 - **Mask** (the default): a certain secret is replaced by `[secret removed: type]` and the rest is stored.
 - **Block**: the proposal is rejected with a `422` that says which type of secret it contains.
 - **Only warn**: it is stored as is and flagged.

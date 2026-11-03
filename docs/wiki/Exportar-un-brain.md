@@ -7,7 +7,7 @@ Una copia de **un solo brain** en un paquete, sin tocar los demás. Sirve para g
 Para llevar un paquete a una instancia, ver [[Importar un brain]].
 
 ## Cómo
-**Administración → Acceso al brain → Exportar.** Hace falta ser **administrador del brain** (un token de API nunca puede exportar), y queda en la [[Auditoría]].
+**Administración → Brain → Exportar.** Hace falta ser **administrador del brain** (un token de API nunca puede exportar), y queda en la [[Auditoría]].
 
 1. Elige las opciones:
    - **Incluir los vectores:** los embeddings del índice de búsqueda y los del grafo en su copia JSON. Evitan recalcularlos al importar con el mismo modelo de embeddings, pero el paquete crece mucho.

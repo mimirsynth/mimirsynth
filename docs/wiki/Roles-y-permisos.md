@@ -24,7 +24,7 @@ La **administración de la instancia** es independiente de los brains. Quien la 
 - gestiona **usuarios**, la seguridad de las cuentas, el correo, el OIDC, los proveedores de IA (incluido el cambio de modelo de embeddings), las carpetas autorizadas, los límites y los canales de notificación, y ve la auditoría (ver [[Visión general de la administración]]);
 - ve **todos los avisos** en la campana de [[Notificaciones]].
 
-Una persona sin ese rol solo ve en Administración la sección «Acceso al brain».
+Una persona sin ese rol solo ve en Administración el grupo **Brain**, con las entradas que permite su rol en el brain activo.
 
 ## Tokens de API
 Un token pertenece a un usuario y a **un solo brain**, y nunca puede tener más rol que quien lo creó. El máximo es **curador**: ningún token administra la instancia. Un token se anula si su cuenta se deshabilita o se elimina. Solo vale en su propio brain, aunque ese brain reciba memoria de otros por federación. Ver [[Conectar agentes]].
