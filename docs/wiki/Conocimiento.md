@@ -92,11 +92,15 @@ Conecta una wiki por su API, **en solo lectura**, y sus páginas se indexan con 
 
 > Los adaptadores de Confluence y Notion siguen el formato documentado de cada API y tienen tests, pero **aún no se han validado contra una instancia real**. Si usas uno, revisa el resultado del primer escaneo e informa de cualquier problema. Docmost todavía no está soportado.
 
-En cada sincronización solo se reindexa lo que cambió: las páginas se comparan por fecha de modificación y solo se **descargan** las nuevas o cambiadas (importa en Notion, donde cada página cuesta una petición). Las páginas borradas o archivadas, y las de colecciones que desmarques, se retiran. Si la wiki falla a mitad (clave caducada, caída, límite de tasa), el escaneo **se corta sin borrar nada**.
+En cada sincronización solo se reindexa lo que cambió: las páginas se comparan por fecha de modificación y solo se **descargan** las nuevas o cambiadas (importa en Notion, donde cada página cuesta una petición). Las páginas borradas o archivadas se retiran (las de una colección que desmarques salen del índice al guardar, ver **Editar** más abajo). Si la wiki falla a mitad (clave caducada, caída, límite de tasa), el escaneo **se corta sin borrar nada**.
 
 ### Acciones sobre una fuente
 - **Escanear**: ahora.
-- **Editar**: nombre e intervalo; la subcarpeta de una carpeta. En una wiki, un administrador de la instancia puede además cambiar **qué colecciones se indexan** (la lista se obtiene con las credenciales guardadas; al menos una) y sustituir la clave (vacío = conservar la guardada; una nueva se comprueba antes de guardar).
+- **Editar**: nombre e intervalo; la subcarpeta de una carpeta. En una wiki, un administrador de la instancia puede además cambiar **qué colecciones se indexan** y sustituir la clave (vacío = conservar la guardada; una nueva se comprueba antes de guardar). La lista de colecciones se obtiene con las credenciales guardadas y muestra cuántos documentos tiene indexados cada una; al menos una queda marcada.
+  - Una colección que **añades** se escanea en cuanto guardas, como un trabajo con su progreso.
+  - Una colección que **quitas** retira del índice sus documentos al guardar, y solo esos. Antes, una confirmación dice cuántos. Las páginas de la wiki no se tocan nunca, y volver a marcar la colección las indexa de nuevo.
+  - Si la wiki no responde, el formulario se abre igual y guarda los demás campos, y un escaneo que falla no borra nada.
+  - El cambio queda en la auditoría con las colecciones añadidas y quitadas y los documentos retirados.
 - **Pausar** / **Reanudar**: detiene y reanuda los escaneos programados.
 - **Quitar**: borra la fuente y sus documentos indexados; los ficheros de la carpeta y las páginas de la wiki no se tocan.
 

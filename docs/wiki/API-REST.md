@@ -29,6 +29,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** necesario.
 | **Documentos** | `GET /docs` · `GET /docs/search` · `GET /docs/{id}` · `…/text` · `…/file` · `…/context` · `…/entities` · `GET /docs/mentions` · `GET /docs/sources` | lector |
 | | `POST /docs/uploads` (+ partes y `complete`) · `POST /docs/{id}/promote` | colaborador |
 | | `DELETE /docs/{id}` · `POST /docs/{id}/reindex` · `POST /docs/duplicates` · fuentes (`/docs/sources`, escanear, wikis) | administrador |
+| | `GET /docs/sources/{id}/wiki/collections` (disponibles, `selected` y `documents` indexados por colección) · `PATCH /docs/sources/{id}` con `collection_ids` (añadir lanza un escaneo y devuelve su `job`; quitar responde `409` con el número de documentos hasta que `confirm_removed` lo repite, y entonces retira solo esos del índice) | administrador de la instancia |
 | **Vocabulario** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /ontology` | lector |
 | | alias, tipos, relaciones, mover/fusionar, duplicados, ontología, corrector (`/retype`) | administrador |
 | | `POST /vocab/ops/{id}/revert` | curador |
