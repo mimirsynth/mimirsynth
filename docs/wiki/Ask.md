@@ -47,13 +47,14 @@ The **Quality** tab sums up the last 30 days: how many recalls there were and ho
 
 Brain administrators can tick **Keep the text of the queries**: real queries carry people's prompts, so by default only a fingerprint is kept; with it, the text is kept for 30 days, and unticking it deletes it at once. Ratings follow the brain's retention period for **Recall ratings** ([[Brains and members]]).
 
-## Search all my brains
-**Search all my brains**, at the bottom of the side bar, runs the same search at once in **every brain you can read**, with the results grouped by brain: facts, episode fragments and document passages.
+## Scope: this brain or all my brains
+**Scope → All my brains** runs the same search at once in **every brain you can read**, with the results grouped by brain: facts, episode fragments and document passages. **This brain** (the default) is the search described above. The browser remembers the last choice; with a single brain there is nothing to choose and the selector is not shown.
+- **What is not offered across brains:** the **Answer** mode, the **ratings** and **Save as reference query**. They need one brain's recall (a rating points to a `recall_id`, a reference query belongs to one brain), so with «All my brains» only the context of each brain is shown, with a note saying so.
 - **Whose brains:** yours, each with your own role, or all of them if you administer the instance. Federation does not enter: a brain that only lends to another is not searched through it. Brains you cannot read never appear, not even as a count.
-- **Each result opens in its brain:** an entity, the episode in Journal or the document in Knowledge, after switching to that brain. **Open in Ask** repeats the search in Ask, in that brain.
+- **Each result opens in its brain:** an entity, the episode in Journal or the document in Knowledge, after switching to that brain. **Open in Ask** switches to that brain with the scope back on «This brain» and the question filled in.
 - **Fast and robust:** the query's vector is computed once for every brain, which is the costly part. Brains are searched a few at a time, and the page waits at most 8 seconds: a brain that does not answer in time or fails is marked, and the others are shown anyway.
 - **Not for API tokens:** they stay bound to one brain, so agents keep asking each brain on its own.
-- **Limits:** each person may search all their brains `search_per_hour` times per hour (60 by default, [[Settings reference]]), and the instance runs a few such searches at a time: past either limit it answers «too many» and you can search one brain from Ask meanwhile.
+- **Limits:** each person may search all their brains `search_per_hour` times per hour (60 by default, [[Settings reference]]), and the instance runs a few such searches at a time: past either limit it answers «too many» and you can search one brain with «This brain» meanwhile.
 - **AI consumption:** the query's vector counts in the brain you have open (or the first one searched), as a recall. If that brain has used up its AI budget with pause, the next one pays; if all of yours have, the search waits for next month. The other brains reuse the vector and cost nothing.
 
 ## If the result is poor
