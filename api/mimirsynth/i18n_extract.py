@@ -13,6 +13,16 @@ HERE = Path(__file__).parent
 CATALOG = HERE.parent.parent / "web" / "src" / "i18n" / "en.server.json"
 
 
+def read_catalog(path: Path) -> dict[str, str]:
+    """A catalogue and the fragments pull requests add in the folder of the same name (`en.server.json` + `en.server/*.json`), which
+    the version PR consolidates (`node web/scripts/i18n.mjs --consolidate`). The web check rejects a key that is in two files."""
+    out = json.loads(path.read_text(encoding="utf-8"))
+    parts = path.with_suffix("")
+    for f in sorted(parts.glob("*.json")) if parts.is_dir() else []:
+        out.update(json.loads(f.read_text(encoding="utf-8")))
+    return out
+
+
 def _base(expr: ast.AST) -> str:
     """Nombre legible del valor interpolado: la clave de un diccionario o de `get('x')`, o el último nombre de la expresión."""
     if isinstance(expr, ast.Subscript) and isinstance(expr.slice, ast.Constant) and isinstance(expr.slice.value, str):
@@ -115,7 +125,7 @@ def collect() -> set[str]:
 if __name__ == "__main__":
     keys = collect()
     if "--missing" in sys.argv:
-        have = set(json.loads(CATALOG.read_text(encoding="utf-8"))) if CATALOG.exists() else set()
+        have = set(read_catalog(CATALOG)) if CATALOG.exists() else set()
         keys = {k for k in keys if k not in have}
         print(json.dumps({k: "" for k in sorted(keys)}, ensure_ascii=False, indent=1))
     else:

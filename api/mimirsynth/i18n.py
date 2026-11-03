@@ -2,7 +2,6 @@
 El idioma de origen es el español y el catálogo inglés es el mismo que usa la interfaz (`web/src/i18n/en.server.json`; en la imagen
 Docker se copia junto a este módulo). Se elige, por orden: la cabecera `Accept-Language`, el idioma de la persona dueña de la sesión
 o del token y el idioma por defecto de la instancia. Los datos de la memoria (hechos, documentos) no se traducen."""
-import json
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -10,7 +9,7 @@ from pathlib import Path
 from starlette.requests import Request
 
 from . import appsettings
-from .i18n_extract import CATALOG
+from .i18n_extract import CATALOG, read_catalog
 
 SOURCE = "es"
 _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
@@ -20,7 +19,7 @@ _PLACEHOLDER = re.compile(r"\{\{(\w+)\}\}")
 def _catalogs() -> dict[str, dict[str, str]]:
     local = Path(__file__).with_name("en.server.json")
     path = local if local.exists() else CATALOG
-    return {"en": {k: v for k, v in json.loads(path.read_text(encoding="utf-8")).items() if v}}
+    return {"en": {k: v for k, v in read_catalog(path).items() if v}}
 
 
 def languages() -> set[str]:

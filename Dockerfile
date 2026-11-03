@@ -14,6 +14,7 @@ WORKDIR /srv
 COPY api ./api
 # The API answers in the caller's language with the same server catalogue the web uses (see mimirsynth/i18n.py).
 COPY web/src/i18n/en.server.json ./api/mimirsynth/en.server.json
+COPY web/src/i18n/en.server/ ./api/mimirsynth/en.server/
 RUN pip install --no-cache-dir "./api[pdf]"
 COPY --from=web /w/dist /srv/web
 WORKDIR /srv/api
