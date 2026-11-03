@@ -42,6 +42,7 @@
  "Abrir en Preguntar": "Open in Ask",
  "Abrir en la wiki": "Open in the wiki",
  "Abrir menú": "Open menu",
+ "Abrir {{name}}": "Open {{name}}",
  "Acceso": "Access",
  "Acceso a cada brain y, para el administrador de la instancia, usuarios, seguridad, modelos de IA, documentos y el resto de ajustes.": "Access to each brain and, for the instance administrator, users, security, AI models, documents and the rest of the settings.",
  "Acceso inicial": "Initial access",
@@ -85,6 +86,7 @@
  "Alias creado": "Alias created",
  "Alias quitado": "Alias removed",
  "Alta automática": "Automatic sign-up",
+ "Ampliar": "Expand",
  "Analizando… {{done}} de {{total}}": "Analysing… {{done}} of {{total}}",
  "Analizar": "Analyse",
  "Analizar lo ya guardado": "Scan what is already stored",
@@ -629,6 +631,7 @@
  "Grado mín.": "Min. degree",
  "Grafo": "Graph",
  "Grafo (": "Graph (",
+ "Grafo de {{name}} y {{count}} entidades relacionadas": "Graph of {{name}} and {{count}} related entities",
  "Grafo existente (opcional)": "Existing graph (optional)",
  "Grafo migrado": "Graph migrated",
  "Grafo y documentos": "Graph and documents",
@@ -1264,6 +1267,7 @@
  "Sustituir ontología": "Replace ontology",
  "Tabla (": "Table (",
  "Tamaño": "Size",
+ "También se llama así (un nombre fusionado en esta entidad)": "Also called this (a name merged into this entity)",
  "Te enviaremos un enlace por correo. Si el servidor no tiene correo configurado, pídele un enlace a un administrador.": "We will send you a link by email. If the server has no mail configured, ask an administrator for a link.",
  "Te han invitado: elige tu contraseña": "You have been invited: choose your password",
  "Te quedan": "You have",
@@ -1647,6 +1651,7 @@
  "viernes": "Friday",
  "vigente desde": "valid since",
  "vigente desde {{date}}": "current since {{date}}",
+ "y {{count}} más": "and {{count}} more",
  "ya no es cierto": "no longer true",
  "{{count}} documentos indexados": "{{count}} documents indexed",
  "{{count}} hechos aún no eran ciertos ese día y no se muestran.": "{{count}} facts were not yet true that day and are not shown.",
@@ -1717,5 +1722,6 @@
  "índice de texto desactivado (requiere PostgreSQL)": "text index disabled (requires PostgreSQL)",
  "índice: {{chunks}} fragmentos de {{episodes}} episodios": "index: {{chunks}} fragments from {{episodes}} episodes",
  "último envío": "last delivery",
- "último uso": "last used"
+ "último uso": "last used",
+ "← Hechos": "← Facts"
 }
