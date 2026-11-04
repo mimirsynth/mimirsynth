@@ -14,6 +14,7 @@ import hashlib
 import re
 
 from . import appsettings, docindex, docs, docstore, gitsource, jobs, wikis
+from .i18n import SOURCE, tr
 from .secretbox import seal, unseal
 from .deps import BrainCtx, admin_of_brain, audit
 from .models import DocSource, Document
@@ -305,15 +306,22 @@ def git_token(cfg: dict) -> str:
 
 
 def _git_checked(url: str, branch: str, include: list[str] | None, username: str, token: str) -> dict:
-    """The source's settings, validated, after checking that the repository answers with that branch and that token."""
+    """The source's settings, validated, after checking that the repository answers with that branch and that token, and that the
+    paths select at least one file (#214): if none, saving is refused with the top-level folders, so the form can be fixed."""
     try:
         url, branch, include = gitsource.check_url(url), gitsource.check_branch(branch), gitsource.check_include(include)
         gitsource.probe(url, branch, token, username)
+        seen = gitsource.preview(url, branch, include, token, username)  # None: not checked in time, the sync will say it
+        if seen is not None and not seen.picked:
+            raise ValueError(seen.empty_message())
     except ValueError as e:
         raise HTTPException(400, str(e))
     except gitsource.GitError as e:
         raise HTTPException(400, f"no se pudo conectar con el repositorio: {e}")
-    return {"url": url, "branch": branch, "include": include, "settings": {"username": username.strip()} if username.strip() else {}}
+    out = {"url": url, "branch": branch, "include": include, "settings": {"username": username.strip()} if username.strip() else {}}
+    if seen is not None:
+        out["matched"] = seen.counts
+    return out
 
 
 @router.post("/sources/git", status_code=201)
@@ -337,7 +345,7 @@ def _git_patch(cfg: dict, body: SourcePatch) -> dict:
     username = (body.username if body.username is not None else (cfg.get("settings") or {}).get("username", "")) or ""
     new = _git_checked(cfg.get("url", ""), cfg.get("branch", "") if body.branch is None else body.branch,
                        cfg.get("include") if body.include is None else body.include, username, token)
-    out = {k: v for k, v in cfg.items() if k not in ("commit", "secrets")}
+    out = {k: v for k, v in cfg.items() if k not in ("commit", "secrets", "matched")}
     out.update(new)
     if token:
         out["secrets"] = {"token": seal(token)} if (body.token or "").strip() else cfg.get("secrets", {})
@@ -358,12 +366,18 @@ def _scan_git(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
     if head.commit == cfg.get("commit") and not manual:
         ctx.note(f"sin commits nuevos ({head.commit[:12]})")
         return {"added": 0, "changed": 0, "unchanged": len(existing), "removed": 0, "indexed": 0, "errors": 0, "commit": head.commit[:12]}
-    picked = gitsource.select(gitsource.tree(d, head.commit, url), cfg.get("include") or gitsource.DEFAULT_INCLUDE)
+    found = gitsource.match(gitsource.tree(d, head.commit, url), cfg.get("include") or gitsource.DEFAULT_INCLUDE)
+    picked = found.picked
     if len(picked) > gitsource.MAX_FILES:
         raise RuntimeError(f"las rutas elegidas recogen {len(picked)} ficheros, más del límite de {gitsource.MAX_FILES}: acótalas. No se ha borrado nada")
-    if not picked and existing and not manual:
-        raise RuntimeError("el repositorio no tiene ningún fichero en las rutas elegidas pero la fuente tenía documentos: ¿rama o rutas cambiadas? "
-                           "No se ha borrado nada. Pulsa «Escanear» si es a propósito")
+    if not picked and not existing:  # nothing to do and nothing to keep: a failed sync says so, a «done» with 0 files would not (#214)
+        raise RuntimeError(found.empty_message())
+    if not picked and not manual:
+        raise RuntimeError(tr("Ningún fichero coincide con las rutas elegidas, pero la fuente tenía documentos: ¿rama o rutas cambiadas? No se ha "
+                              "borrado nada; pulsa «Escanear» si es a propósito. Carpetas de primer nivel del repositorio: {{folders}}.", SOURCE,
+                              folders=gitsource.folders(found.top)))
+    if not picked:
+        ctx.note(found.empty_message())
     ctx.note(f"commit {head.commit[:12]}: {len(picked)} ficheros en las rutas elegidas")
     need = [p for p, blob in picked.items() if p not in existing or (existing[p].meta or {}).get("blob") != blob]
     ctx.progress(0, 0, f"descargando {len(need)} ficheros nuevos o cambiados")
@@ -431,7 +445,7 @@ def _scan_git(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
             gone.append(doc.id)
             db.delete(doc)
             removed += 1
-    s.config = {**cfg, "commit": head.commit, "commit_at": head.committed_at.isoformat()}
+    s.config = {**cfg, "commit": head.commit, "commit_at": head.committed_at.isoformat(), "matched": found.counts}
     db.commit()
     for doc_id in gone:  # if one was the original of duplicates, the oldest of them is indexed instead
         docs.promote_duplicates(doc_id)

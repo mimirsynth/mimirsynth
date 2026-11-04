@@ -1,0 +1,7 @@
+{
+ "Ficheros por ruta en la última lectura:": "Files per path at the last read:",
+ "Ninguna ruta incluida coincide con un fichero del repositorio. Revisa las rutas en «Editar».": "No included path matches a file in the repository. Check the paths in «Edit».",
+ "Una por línea, desde la raíz. Una carpeta por su nombre (docs o docs/) entra entera; «*» no cruza carpetas y «**» sí. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática). Nunca entran ficheros ocultos ni de claves (.env, *.pem, *.key, id_rsa…), y todo pasa por el detector de secretos.": "One per line, from the root. A folder by its name (docs or docs/) comes in whole; «*» does not cross folders and «**» does. Only documents come in (Markdown, text, HTML, PDF and office files). Hidden files and key files (.env, *.pem, *.key, id_rsa…) never do, and everything goes through the secret detector.",
+ "Una por línea. Una carpeta por su nombre entra entera. Al guardar un cambio se vuelve a leer el repositorio: lo que quede fuera sale del índice.": "One per line. A folder by its name comes in whole. Saving a change reads the repository again: what is left out leaves the index.",
+ "sin ficheros": "no files"
+}

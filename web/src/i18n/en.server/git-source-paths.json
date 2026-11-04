@@ -1,0 +1,4 @@
+{
+ "Ningún fichero coincide con las rutas elegidas, pero la fuente tenía documentos: ¿rama o rutas cambiadas? No se ha borrado nada; pulsa «Escanear» si es a propósito. Carpetas de primer nivel del repositorio: {{folders}}.": "No file matches the chosen paths, but the source had documents: a changed branch or paths? Nothing was deleted; press «Scan» if it is on purpose. Top-level folders of the repository: {{folders}}.",
+ "Ningún fichero coincide con las rutas elegidas. Carpetas de primer nivel del repositorio: {{folders}}.": "No file matches the chosen paths. Top-level folders of the repository: {{folders}}."
+}

@@ -1,4 +1,4 @@
-import { T, locale } from "../i18n";
+import { T, locale, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +16,7 @@ type Chunk = { chunk_idx: number; heading_path: string; page: number | null; tex
 type Hit = { document_id: number; chunk: number; title: string; citation: string; text: string; similarity: number; updated_at: string };
 type Source = { id: number; kind: string; name: string; documents: number; by_status: Record<string, number>; last_sync_at: string | null; last_error: string; status: string; enabled: boolean;
   sync_interval: number | null; config: { root?: string; subpath?: string; adapter?: string; settings?: Record<string, string>; collection_ids?: string[]; secrets_set?: string[];
-    url?: string; web?: string | null; branch?: string; include?: string[]; commit?: string | null } };
+    url?: string; web?: string | null; branch?: string; include?: string[]; commit?: string | null; matched?: Record<string, number> | null } };
 type Adapter = { id: string; label: string; collection_label: string; fields: { name: string; label: string; secret: boolean; required: boolean; placeholder: string; help: string }[] };
 type Up = { key: string; name: string; size: number; done: number; state: "subiendo" | "listo" | "duplicado" | "error"; msg?: string };
 
@@ -27,6 +27,8 @@ const KIND: Record<string, string> = { upload: T("subidas"), wiki: "wiki", git: 
 // the paths a new Git source indexes, one per line in the form (the server checks them again)
 const GIT_PATHS = ["README*", "docs/**", "**/adr/**", "CHANGELOG*"];
 const lines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
+// a Git source whose paths took no file at its last sync (issue 214): it is shown as a warning, not as an empty «done»
+const noFiles = (s: Source) => s.kind === "git" && !!s.config.matched && Object.values(s.config.matched).every((n) => n === 0);
 type Repo = { name: string; url: string; branch: string; include: string; username: string; token: string; interval: number | "" };
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const PART = 32 * 1024 * 1024; // las partes son más pequeñas que el límite habitual de los proxies (~100 MB)
@@ -268,10 +270,12 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                     <DataTable.Td>{s.documents}</DataTable.Td>
                     <DataTable.Td>
                       {s.status === "scanning" ? <Pill size="xs" tone="warn">{t("escaneando")}</Pill>
-                        : s.status === "error" ? <Pill size="xs" tone="danger" title={s.last_error}>{t("error")}</Pill>
+                        : s.status === "error" ? <Pill size="xs" tone="danger" title={translateServer(s.last_error)}>{t("error")}</Pill>
                         : !s.enabled ? <Pill size="xs">{t("pausada")}</Pill>
+                        : noFiles(s) ? <Pill size="xs" tone="warn">{t("sin ficheros")}</Pill>
                         : Object.entries(s.by_status).map(([k, v]) => <Pill key={k} size="xs" tone={TONE[k] ?? "neutral"}>{`${v} ${t(LABEL[k] ?? k)}`}</Pill>)}
-                      {s.status === "error" && <Text size="xs" className="ms-text-danger" lineClamp={2}>{s.last_error}</Text>}
+                      {s.status === "error" && <Text size="xs" className="ms-text-danger" lineClamp={2}>{translateServer(s.last_error)}</Text>}
+                      {s.status === "idle" && noFiles(s) && <Text size="xs" c="dimmed" lineClamp={2}>{t("Ninguna ruta incluida coincide con un fichero del repositorio. Revisa las rutas en «Editar».")}</Text>}
                     </DataTable.Td>
                     <DataTable.Td>{s.kind !== "upload" ? fmt(s.last_sync_at) : "—"}</DataTable.Td>
                     <DataTable.Td>{isAdmin && s.kind !== "upload" && (
@@ -370,8 +374,10 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             {editSrc.s.kind === "directory" && <TextField label={t("Subcarpeta")} description={t("Dentro de la raíz «{{root}}». Cambiarla reindexa lo que quede fuera o dentro en el próximo escaneo.", { root: editSrc.s.config.root })} value={editSrc.subpath} onChange={(e) => setEditSrc({ ...editSrc, subpath: e.currentTarget.value })} />}
             {editSrc.s.kind === "git" && instanceAdmin && <>
               <TextField label={t("Rama")} description={t("Vacío = la rama principal del repositorio.")} value={editSrc.branch} onChange={(e) => setEditSrc({ ...editSrc, branch: e.currentTarget.value })} />
-              <TextArea label={t("Rutas incluidas")} description={t("Una por línea. Al guardar un cambio se vuelve a leer el repositorio: lo que quede fuera sale del índice.")} autosize minRows={3}
+              <TextArea label={t("Rutas incluidas")} description={t("Una por línea. Una carpeta por su nombre entra entera. Al guardar un cambio se vuelve a leer el repositorio: lo que quede fuera sale del índice.")} autosize minRows={3}
                 value={editSrc.include} onChange={(e) => setEditSrc({ ...editSrc, include: e.currentTarget.value })} />
+              {editSrc.s.config.matched && Object.keys(editSrc.s.config.matched).length > 0 && (
+                <Text size="xs" c="dimmed">{t("Ficheros por ruta en la última lectura:")} <span className="ms-data">{Object.entries(editSrc.s.config.matched).map(([p, n]) => `${p} ${n}`).join(" · ")}</span></Text>)}
               <TextField label={t("Usuario (opcional)")} value={editSrc.username} onChange={(e) => setEditSrc({ ...editSrc, username: e.currentTarget.value })} />
               <PasswordField label={t("Token de solo lectura (opcional)")} description={t("Vacío = conservar el guardado. Si escribes uno nuevo se comprueba la conexión antes de guardar.")} value={editSrc.token}
                 disabled={editSrc.clearToken} onChange={(e) => setEditSrc({ ...editSrc, token: e.currentTarget.value })} />
@@ -408,7 +414,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               value={repo.url} onChange={(e) => setRepo({ ...repo, url: e.currentTarget.value })} />
             <TextField label={t("Rama (opcional)")} description={t("Vacío = la rama principal del repositorio.")} value={repo.branch} onChange={(e) => setRepo({ ...repo, branch: e.currentTarget.value })} />
             <TextArea label={t("Rutas incluidas")} autosize minRows={4} value={repo.include} onChange={(e) => setRepo({ ...repo, include: e.currentTarget.value })}
-              description={t("Una por línea, desde la raíz: «*» no cruza carpetas y «**» sí. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática). Nunca entran ficheros ocultos ni de claves (.env, *.pem, *.key, id_rsa…), y todo pasa por el detector de secretos.")} />
+              description={t("Una por línea, desde la raíz. Una carpeta por su nombre (docs o docs/) entra entera; «*» no cruza carpetas y «**» sí. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática). Nunca entran ficheros ocultos ni de claves (.env, *.pem, *.key, id_rsa…), y todo pasa por el detector de secretos.")} />
             <TextField label={t("Usuario (opcional)")} description={t("Solo si tu forja lo pide junto al token (Bitbucket, Gitea). Si no, se deja vacío.")} value={repo.username} onChange={(e) => setRepo({ ...repo, username: e.currentTarget.value })} />
             <PasswordField label={t("Token de solo lectura (opcional)")} description={t("Para un repositorio privado. Se guarda cifrado, no se vuelve a mostrar y solo se envía por https.")} value={repo.token}
               onChange={(e) => setRepo({ ...repo, token: e.currentTarget.value })} />

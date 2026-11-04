@@ -73,6 +73,27 @@ def test_choosing_files_by_path():
     assert gitsource.select(entries, inc) == {"docs/a.md": "b1", "docs/run.txt": "b4"}   # no links, no submodules, only document types
 
 
+def test_a_folder_name_takes_everything_inside_it():
+    """#214: `Fullstack` and `Fullstack/` are `Fullstack/**`, as in .gitignore; a pattern with a wildcard keeps its meaning."""
+    import unicodedata
+    for inc in (["Fullstack"], gitsource.check_include(["Fullstack/"]), gitsource.check_include(["./Fullstack//"])):
+        assert gitsource.included("Fullstack/a.md", inc) and gitsource.included("Fullstack/x/y/b.md", inc), inc
+        assert not gitsource.included("Fullstack2/a.md", inc) and not gitsource.included("other/Fullstack/a.md", inc)
+    assert gitsource.included("docs/guide/a.md", ["docs/guide"]) and gitsource.included("NOTES.md", ["NOTES.md"])
+    assert not gitsource.included("docs/sub/a.md", ["docs/*"]) and gitsource.included("docs/a.md", ["docs/*"])      # a wildcard: as before
+    # accents: the same name typed composed or committed decomposed matches; a name without the accent does not
+    nfd = unicodedata.normalize("NFD", "Artículos/uno.md")
+    assert gitsource.included(nfd, ["Artículos"]) and gitsource.included("Artículos/uno.md", [unicodedata.normalize("NFD", "artículos")])
+    assert not gitsource.included("Artículos/uno.md", ["Articulos"])
+    entries = [("100644", "b1", "Fullstack/a.md"), ("100644", "b2", "Fullstack/b/c.md"), ("100644", "b3", "Artículos/uno.md"),
+               ("100644", "b4", "media/x.png"), ("100644", "b5", ".github/x.md"), ("100644", "b6", "README.md")]
+    m = gitsource.match(entries, ["Fullstack", "Articulos", "**/*.md"])
+    assert m.counts == {"Fullstack": 2, "Articulos": 0, "**/*.md": 4} and sorted(m.picked) == ["Artículos/uno.md", "Fullstack/a.md", "Fullstack/b/c.md", "README.md"]
+    assert m.top == ["Artículos", "Fullstack", "media"]                           # hidden folders are not offered
+    none = gitsource.match(entries, ["Articulos"])
+    assert not none.picked and none.empty_message().endswith("Carpetas de primer nivel del repositorio: Artículos, Fullstack, media.")
+
+
 def test_a_pattern_cannot_stall_the_process():
     """Repeated `**` and `*` against a long path: a regex would backtrack for minutes (the reviewer's case took 0.84 s with four)."""
     import time
@@ -196,6 +217,50 @@ def test_git_source_lifecycle(client, fake_index, origin):  # noqa: F811
 
     assert client.delete(f"{base}/sources/{sid}").json() == {"ok": True, "documents_removed": 1}
     assert not clone.exists()                                                     # the local clone goes with the source
+
+
+def test_paths_that_select_nothing_are_explained(client, fake_index, origin, monkeypatch):  # noqa: F811
+    """#214: saving refuses paths that select no file and names the top-level folders; a sync that finds none fails saying the same,
+    instead of a «done» with 0 files; the count of each path is kept for the form."""
+    _commit(origin, {"Fullstack/react/hooks.md": "# Hooks\n\nuseEffect y useMemo.\n", "Artículos/uno.md": "# Uno\n\nUn artículo.\n",
+                     "media/logo.txt": "logo\n"}, "carpetas")
+    slug = _brain(client)
+    base = f"/api/brains/{slug}/docs"
+    url = origin.as_uri()
+    r = client.post(f"{base}/sources/git", json={"name": "Notas", "url": url, "include": ["Articulos", "Chuletas"]})
+    assert r.status_code == 400 and r.json()["detail"] == ("Ningún fichero coincide con las rutas elegidas. Carpetas de primer nivel del repositorio: "
+                                                           "Artículos, docs, Fullstack, media, notes, src.")
+    r = client.post(f"{base}/sources/git", json={"name": "Notas", "url": url, "include": ["Articulos"]}, headers={"Accept-Language": "en"})
+    assert r.json()["detail"].startswith("No file matches the chosen paths.") and r.json()["detail"].endswith("Artículos, docs, Fullstack, media, notes, src.")
+    assert not client.get(f"{base}/sources").json()["sources"] or all(s["kind"] != "git" for s in client.get(f"{base}/sources").json()["sources"])
+
+    r = client.post(f"{base}/sources/git", json={"name": "Notas", "url": url, "include": ["Artículos", "Fullstack/", "Chuletas"]})
+    assert r.status_code == 201, r.text
+    sid = r.json()["id"]
+    assert sorted(_docs(client, slug)) == ["Artículos/uno.md", "Fullstack/react/hooks.md"]
+    src = next(s for s in client.get(f"{base}/sources").json()["sources"] if s["id"] == sid)
+    assert src["config"]["include"] == ["Artículos", "Fullstack", "Chuletas"] and src["config"]["matched"] == {"Artículos": 1, "Fullstack": 1, "Chuletas": 0}
+    # the paths now select nothing: a scheduled sync fails and deletes nothing; a manual one empties the index and says why
+    _commit(origin, {"Fullstack/react/hooks.md": None, "Artículos/uno.md": None}, "fuera")
+    from mimirsynth import docsources
+    with _factory()() as db:
+        jid = docsources._submit_scan(db.get(DocSource, sid), None, manual=False)
+    assert client.get(f"/api/brains/{slug}/jobs/{jid}").json()["status"] == "failed" and len(_docs(client, slug)) == 2
+    src = next(s for s in client.get(f"{base}/sources").json()["sources"] if s["id"] == sid)
+    assert src["status"] == "error" and "No se ha borrado nada" in src["last_error"] and src["last_error"].endswith("docs, media, notes, src.")
+    r = client.post(f"{base}/sources/{sid}/scan")
+    job = client.get(f"/api/brains/{slug}/jobs/{r.json()['job']}").json()
+    assert job["status"] == "done" and not _docs(client, slug) and any(x["msg"].startswith("Ningún fichero coincide") for x in job["log"])
+    src = next(s for s in client.get(f"{base}/sources").json()["sources"] if s["id"] == sid)
+    assert src["config"]["matched"] == {"Artículos": 0, "Fullstack": 0, "Chuletas": 0}
+
+    # if the check when saving could not finish, the source is saved and its first sync fails explaining it
+    monkeypatch.setattr(gitsource, "preview", lambda *a, **k: None)
+    r = client.post(f"{base}/sources/git", json={"name": "Otra", "url": url, "include": ["Chuletas"]})
+    assert r.status_code == 201
+    assert client.get(f"/api/brains/{slug}/jobs/{r.json()['job']}").json()["status"] == "failed"
+    src = next(s for s in client.get(f"{base}/sources").json()["sources"] if s["id"] == r.json()["id"])
+    assert src["status"] == "error" and src["last_error"].startswith("Ningún fichero coincide con las rutas elegidas.")
 
 
 def _ids(sid: int) -> tuple[int, int]:
