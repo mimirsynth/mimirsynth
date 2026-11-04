@@ -43,7 +43,7 @@ The same note can arrive twice: from two folders, from a folder and a wiki, or u
 Clicking a document opens its panel:
 - State, size and number of chunks; file name, hash (sha256) and upload date.
 - **Secrets detected**, if the secret detector found credentials when indexing (see below).
-- **Download original**, **View full text** (up to the first megabyte) and, for wikis, **Open in the wiki**.
+- **Download original**, **View full text** (up to the first megabyte) and, for wikis, **Open in the wiki**; for repositories, **Open in the repository**, which shows the file at the indexed commit.
 - **Mentioned entities**: the graph entities whose name appears in the text. Each one opens the [[Graph]] focused on it.
 - **Relations**: the graph facts that connect those entities («A —relation→ B», with the fact and the date it holds from). Only current facts by default; **Include facts that are no longer true** adds the invalidated ones, marked «no longer true». **Show more** loads more.
 - The list of **chunks** (`#0`, `#1`…), each with its section and a button to **promote it to memory**.
@@ -67,7 +67,7 @@ A relevant passage of a document can become **graph knowledge**:
 The document does not change; the proposal carries the provenance (document and section).
 
 ## Sources tab
-A **source** is where documents come from. There are three types: **Uploads** (the automatic source of the files you upload), **Folder** and **Wiki**. Each source shows its type, origin, its documents by state, its state and its last sync, with actions depending on your role.
+A **source** is where documents come from. There are four types: **Uploads** (the automatic source of the files you upload), **Folder**, **Wiki** and **Repository**. Each source shows its type, origin, its documents by state, its state and its last sync, with actions depending on your role.
 
 ### Folders (brain administrator)
 A folder is a server directory, mounted **read-only**, whose files are indexed without copying them.
@@ -94,6 +94,17 @@ Connect a wiki through its API, **read-only**, and its pages are indexed with a 
 
 On each sync only what changed is reindexed: pages are compared by modification date, and only new or changed ones are **downloaded** (this matters for Notion, where each page costs one request). Deleted or archived pages are removed (those of a collection you untick leave the index when you save it, see **Edit** below). If the wiki fails halfway (expired key, outage, rate limit), the scan **stops without deleting anything**.
 
+### Git repositories (instance administrator)
+Index the documents of a repository, **read-only**, synced by commit.
+1. **Add repository.**
+2. The **Repository address** to clone over https (for example `https://github.com/team/project.git`), without a user or password in it.
+3. The **Branch**, or empty for the repository's main branch.
+4. The **Included paths**, one per line, from the root: `*` does not cross folders and `**` does. By default `README*`, `docs/**`, `**/adr/**` and `CHANGELOG*`. Only documents come in (Markdown, text, HTML, PDF and office files); hidden files and key files (`.env`, `*.pem`, `*.key`, `id_rsa`…) never do.
+5. For a private repository, a **read-only token** (and a **User**, only if your forge asks for it: Bitbucket, Gitea). It is stored **encrypted**, not shown again and only sent over https.
+6. **Connect and scan**: the repository and the branch are checked before saving, and the first sync starts as a job.
+
+Each sync only reads something when there is a new commit, and then only downloads the files that are new or changed. Each document cites the repository, the path and the commit. If the repository cannot be reached, the scan **stops without deleting anything**. Mounting a clone as a folder still works if you prefer it.
+
 ### Actions on a source
 - **Scan**: now.
 - **Edit**: name and interval; the subfolder of a folder. For a wiki, an instance administrator can also change **which collections are indexed** and replace the key (empty = keep the stored one; a new one is checked before saving). The list of collections is fetched with the stored credentials and shows how many documents each one has indexed; at least one stays ticked.
@@ -101,8 +112,9 @@ On each sync only what changed is reindexed: pages are compared by modification 
   - A collection you **remove** takes its documents out of the index when you save, and only those. First a confirmation says how many. The pages in the wiki are never touched, and ticking the collection again indexes them again.
   - If the wiki cannot be reached, the form still opens and saves the other fields, and a scan that fails removes nothing.
   - The change goes to the audit log with the collections added and removed and the documents taken out.
+- **Edit** a repository: an instance administrator can change the branch, the paths, the user and the token (empty = keep the stored one; «Remove the stored token» drops it). A change is checked against the repository and starts a sync that reads the whole tree again: files left outside the paths leave the index.
 - **Pause** / **Resume**: stops and restarts scheduled scans.
-- **Remove**: deletes the source and its indexed documents; the files of a folder and the pages of a wiki are not touched.
+- **Remove**: deletes the source and its indexed documents (and a repository's local clone); the files of a folder, the pages of a wiki and the repository itself are not touched.
 
 ## How it shows up in recall
 If a passage is really relevant (sufficient similarity), [[Ask]] and the API include up to **2 cited passages** in a "Documents" section, capped in size and time. Repeated text counts once, so the passages are always **different** ones. It can be disabled per request. See [[Recall and ingestion]].

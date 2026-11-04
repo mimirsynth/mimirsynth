@@ -13,7 +13,7 @@ from sqlalchemy import select
 import hashlib
 import re
 
-from . import appsettings, docindex, docs, docstore, jobs, wikis
+from . import appsettings, docindex, docs, docstore, gitsource, jobs, wikis
 from .secretbox import seal, unseal
 from .deps import BrainCtx, admin_of_brain, audit
 from .models import DocSource, Document
@@ -42,6 +42,11 @@ class SourcePatch(BaseModel):
     collection_ids: list[str] | None = Field(None, max_length=500)  # wiki; empty = every collection
     confirm_removed: int | None = None  # wiki: the documents that dropping collections removes from the index, as the form showed them
     values: dict[str, str] | None = None  # wiki: campos de conexión a cambiar (un secreto vacío conserva el guardado)
+    branch: str | None = Field(None, max_length=200)  # git: empty = the repository's default branch
+    include: list[str] | None = Field(None, max_length=gitsource.MAX_PATTERNS)  # git
+    username: str | None = Field(None, max_length=100)  # git
+    token: str | None = Field(None, max_length=1000)  # git: empty keeps the stored one
+    clear_token: bool = False  # git
 
 
 def _src(ctx: BrainCtx, sid: int) -> DocSource:
@@ -80,13 +85,15 @@ def create_source(body: SourceIn, ctx: BrainCtx = Depends(admin_of_brain)):
 @router.patch("/sources/{sid:int}")
 def patch_source(sid: int, body: SourcePatch, request: Request, ctx: BrainCtx = Depends(admin_of_brain)):
     s = _src(ctx, sid)
-    if s.kind not in ("directory", "wiki"):
+    if s.kind not in ("directory", "wiki", "git"):
         raise HTTPException(409, "la fuente de subidas no se edita")
     if body.name is not None:
         s.name = body.name.strip()
     if body.subpath is not None and s.kind == "directory":
         s.config = _checked(s.config["root"], body.subpath)
     change: dict = {}
+    if s.kind != "git" and (body.branch is not None or body.include is not None or body.token or body.clear_token):
+        raise HTTPException(409, "esos campos son de una fuente Git")
     if s.kind == "wiki" and (body.collection_ids is not None or body.values):
         _need_instance_admin(ctx, request)
         cfg = dict(s.config or {})
@@ -102,6 +109,10 @@ def patch_source(sid: int, body: SourcePatch, request: Request, ctx: BrainCtx = 
             change = _collections_change(ctx, s, cfg, list(dict.fromkeys(body.collection_ids)), body.confirm_removed)
             cfg["collection_ids"] = change["ids"]
         s.config = cfg
+    if s.kind == "git" and (body.branch is not None or body.include is not None or body.username is not None or body.token or body.clear_token):
+        _need_instance_admin(ctx, request)
+        s.config = _git_patch(s.config or {}, body)
+        change = {"scan": True}
     if body.enabled is not None:
         s.enabled = body.enabled
     if body.clear_interval:
@@ -176,6 +187,8 @@ def delete_source(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
         ctx.db.delete(d)
     ctx.db.delete(s)
     ctx.db.commit()
+    if s.kind == "git":
+        gitsource.remove(s.brain_id, s.id)  # the local clone; the repository itself is never touched
     n = len(gone)
     audit(ctx.db, ctx.user, "docsource.delete", ctx.brain, id=sid, documents=n)
     for doc_id in gone:  # duplicados en otras fuentes cuyo original estaba en esta
@@ -186,14 +199,14 @@ def delete_source(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
 @router.post("/sources/{sid:int}/scan", status_code=202)
 def scan_now(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
     s = _src(ctx, sid)
-    if s.kind not in ("directory", "wiki"):
+    if s.kind not in ("directory", "wiki", "git"):
         raise HTTPException(409, "las subidas no se reescanean")
     audit(ctx.db, ctx.user, "docsource.scan", ctx.brain, id=s.id)
     return {"job": _submit_scan(s, ctx.user.id, manual=True)}
 
 
 def _submit_scan(s: DocSource, user_id: int | None, manual: bool) -> int:
-    what = "wiki" if s.kind == "wiki" else "carpeta"
+    what = {"wiki": "wiki", "git": "repositorio"}.get(s.kind, "carpeta")
     return jobs.submit("doc.scan", s.brain_id, {"source_id": s.id, "manual": manual}, f"Sincronizar {what} «{s.name}»", user_id, dedupe_key=f"doc.scan:{s.id}")
 
 
@@ -275,6 +288,158 @@ def create_wiki(body: WikiIn, request: Request, ctx: BrainCtx = Depends(admin_of
     return {"id": s.id, "job": _submit_scan(s, ctx.user.id, manual=True)}
 
 
+# --- git (#118) -------------------------------------------------------------------------------
+
+class GitIn(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    url: str = Field(min_length=8, max_length=500)
+    branch: str = Field("", max_length=200)  # empty = the repository's default branch
+    include: list[str] | None = Field(None, max_length=gitsource.MAX_PATTERNS)  # None = the default paths
+    username: str = Field("", max_length=100)
+    token: str = Field("", max_length=1000)  # read-only; sealed like every stored secret
+    sync_interval: int | None = Field(None, ge=5, le=60 * 24 * 30)
+
+
+def git_token(cfg: dict) -> str:
+    return unseal((cfg.get("secrets") or {}).get("token", ""))
+
+
+def _git_checked(url: str, branch: str, include: list[str] | None, username: str, token: str) -> dict:
+    """The source's settings, validated, after checking that the repository answers with that branch and that token."""
+    try:
+        url, branch, include = gitsource.check_url(url), gitsource.check_branch(branch), gitsource.check_include(include)
+        gitsource.probe(url, branch, token, username)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except gitsource.GitError as e:
+        raise HTTPException(400, f"no se pudo conectar con el repositorio: {e}")
+    return {"url": url, "branch": branch, "include": include, "settings": {"username": username.strip()} if username.strip() else {}}
+
+
+@router.post("/sources/git", status_code=201)
+def create_git(body: GitIn, request: Request, ctx: BrainCtx = Depends(admin_of_brain)):
+    """A Git repository as a source (#118). The server connects to the address it is given: instance administrator only."""
+    _need_instance_admin(ctx, request)
+    cfg = _git_checked(body.url, body.branch, body.include, body.username, body.token.strip())
+    if body.token.strip():
+        cfg["secrets"] = {"token": seal(body.token.strip())}
+    s = DocSource(brain_id=ctx.brain.id, kind="git", name=body.name.strip(), config=cfg, sync_interval=body.sync_interval, created_by=ctx.user.id)
+    ctx.db.add(s)
+    ctx.db.commit()
+    audit(ctx.db, ctx.user, "docsource.create", ctx.brain, id=s.id, kind="git", url=cfg["url"], branch=cfg["branch"], token=bool(body.token.strip()))
+    return {"id": s.id, "job": _submit_scan(s, ctx.user.id, manual=True)}
+
+
+def _git_patch(cfg: dict, body: SourcePatch) -> dict:
+    """New branch, paths or credentials, checked against the repository. The next sync reads the whole tree again (it forgets the
+    commit it last saw), so a path taken out leaves the index and one added comes in."""
+    token = "" if body.clear_token else (body.token or "").strip() or git_token(cfg)
+    username = (body.username if body.username is not None else (cfg.get("settings") or {}).get("username", "")) or ""
+    new = _git_checked(cfg.get("url", ""), cfg.get("branch", "") if body.branch is None else body.branch,
+                       cfg.get("include") if body.include is None else body.include, username, token)
+    out = {k: v for k, v in cfg.items() if k not in ("commit", "secrets")}
+    out.update(new)
+    if token:
+        out["secrets"] = {"token": seal(token)} if (body.token or "").strip() else cfg.get("secrets", {})
+    return out
+
+
+def _scan_git(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
+    """Sync of a Git repository by commit: with no new commit nothing is read; otherwise only new or changed files (by their blob)
+    are downloaded and indexed, and the ones gone from the chosen paths leave the index. If git fails, nothing is deleted."""
+    cfg = s.config or {}
+    url, branch, token, username = cfg.get("url", ""), cfg.get("branch", ""), git_token(cfg), (cfg.get("settings") or {}).get("username", "")
+    ctx.progress(0, 0, "actualizando el repositorio")
+    try:
+        d, head = gitsource.fetch(s.brain_id, s.id, url, branch, token, username)
+    except (gitsource.GitError, ValueError) as e:
+        raise RuntimeError(f"no se pudo actualizar el repositorio: {str(e).rstrip('.')}. No se ha borrado nada")
+    existing = {x.external_id: x for x in db.scalars(select(Document).where(Document.source_id == s.id))}
+    if head.commit == cfg.get("commit") and not manual:
+        ctx.note(f"sin commits nuevos ({head.commit[:12]})")
+        return {"added": 0, "changed": 0, "unchanged": len(existing), "removed": 0, "indexed": 0, "errors": 0, "commit": head.commit[:12]}
+    picked = gitsource.select(gitsource.tree(d, head.commit, url), cfg.get("include") or gitsource.DEFAULT_INCLUDE)
+    if len(picked) > gitsource.MAX_FILES:
+        raise RuntimeError(f"las rutas elegidas recogen {len(picked)} ficheros, más del límite de {gitsource.MAX_FILES}: acótalas. No se ha borrado nada")
+    if not picked and existing and not manual:
+        raise RuntimeError("el repositorio no tiene ningún fichero en las rutas elegidas pero la fuente tenía documentos: ¿rama o rutas cambiadas? "
+                           "No se ha borrado nada. Pulsa «Escanear» si es a propósito")
+    ctx.note(f"commit {head.commit[:12]}: {len(picked)} ficheros en las rutas elegidas")
+    need = [p for p, blob in picked.items() if p not in existing or (existing[p].meta or {}).get("blob") != blob]
+    ctx.progress(0, 0, f"descargando {len(need)} ficheros nuevos o cambiados")
+    try:
+        gitsource.checkout(d, head.commit, need, url, token, username)
+    except gitsource.GitError as e:
+        raise RuntimeError(f"no se pudieron descargar los ficheros: {str(e).rstrip('.')}. No se ha borrado nada")
+    limit = appsettings.get("doc_max_mb") * 1024 * 1024
+    sizes = {p: (d / p).stat().st_size for p in need if (d / p).is_file()}
+    if sum(n for n in sizes.values() if n <= limit) > gitsource.MAX_TOTAL_MB * 1024 * 1024:
+        raise RuntimeError(f"los ficheros nuevos o cambiados pasan de {gitsource.MAX_TOTAL_MB} MB: acota las rutas. No se ha borrado nada")
+    added = changed = unchanged = removed = errors = skipped = 0
+    to_index: list[int] = []
+    seen: set[str] = set()
+    for i, (path, blob) in enumerate(picked.items(), 1):
+        ctx.check()
+        ctx.progress(i, len(picked), f"comparando: {path[:120]}")
+        doc = existing.get(path)
+        if doc and (doc.meta or {}).get("blob") == blob:
+            seen.add(path)
+            unchanged += 1
+            if manual and doc.status in ("error", "pending"):
+                to_index.append(doc.id)
+            continue
+        if not 0 < sizes.get(path, 0) <= limit:
+            skipped += 1  # empty, too large or not on disk: left out (and out of the index if it was in)
+            continue
+        try:
+            data = gitsource.read(d, path)
+        except (OSError, ValueError) as e:
+            errors += 1
+            ctx.note(f"{path}: no se pudo leer ({str(e)[:100]})")
+            continue
+        seen.add(path)
+        sha = hashlib.sha256(data).hexdigest()
+        ext = docstore.ext_of(path)
+        meta = {"repo": gitsource.web_base(url) or url, "branch": branch or None, "commit": head.commit, "blob": blob, "path": path, "title_auto": False}
+        link = gitsource.web_link(url, head.commit, path) or ""
+        if doc:
+            old_dir = docstore.doc_dir(doc.brain_id, doc.source_id, doc.id)
+            for f in list(old_dir.glob("*")) if old_dir.is_dir() else []:
+                f.unlink(missing_ok=True)
+            doc.url, doc.size, doc.sha256, doc.source_updated_at, doc.meta, doc.status, doc.error = link, len(data), sha, head.committed_at, meta, "pending", ""
+            changed += 1
+        else:
+            doc = Document(brain_id=s.brain_id, source_id=s.id, external_id=path, title=path[:500], filename=os.path.basename(path), url=link, size=len(data),
+                           sha256=sha, mime=docs._mime(ext), status="pending", source_updated_at=head.committed_at, created_by=s.created_by, meta=meta)
+            db.add(doc)
+            db.flush()
+            added += 1
+        dest = docstore.doc_dir(doc.brain_id, doc.source_id, doc.id)
+        dest.mkdir(parents=True, exist_ok=True)
+        snap = dest / f"{sha}{ext}"
+        snap.write_bytes(data)  # the file at that commit: the «original» that is downloaded and that the chunks point to
+        doc.storage_ref = docstore.rel(snap)
+        to_index.append(doc.id)
+        if i % 25 == 0:
+            db.commit()
+    gone: list[int] = []
+    for path, doc in existing.items():
+        if path not in seen:
+            ctx.check()
+            docindex.delete_document(doc.id)
+            docstore.remove_document(doc.brain_id, doc.source_id, doc.id)
+            gone.append(doc.id)
+            db.delete(doc)
+            removed += 1
+    s.config = {**cfg, "commit": head.commit, "commit_at": head.committed_at.isoformat()}
+    db.commit()
+    for doc_id in gone:  # if one was the original of duplicates, the oldest of them is indexed instead
+        docs.promote_duplicates(doc_id)
+    ctx.note(f"nuevos {added}, cambiados {changed}, sin cambios {unchanged}, eliminados {removed}" + (f", fuera por tamaño {skipped}" if skipped else ""))
+    done, errors = _index_all(db, ctx, to_index, errors)
+    return {"added": added, "changed": changed, "unchanged": unchanged, "removed": removed, "indexed": done, "errors": errors, "commit": head.commit[:12]}
+
+
 # --- reescaneo --------------------------------------------------------------------------------
 
 def _walk(base) -> list[tuple[str, os.stat_result]]:
@@ -314,7 +479,7 @@ def scan_source(ctx: "jobs.JobCtx", p: dict) -> dict:
         s.status = "scanning"
         db.commit()
         try:
-            res = _scan_wiki(db, s, ctx, manual) if s.kind == "wiki" else _scan(db, s, ctx, manual)
+            res = _scan_wiki(db, s, ctx, manual) if s.kind == "wiki" else _scan_git(db, s, ctx, manual) if s.kind == "git" else _scan(db, s, ctx, manual)
             s.status, s.last_error = "idle", ""
             from . import notify
             notify.resolve("docsource.error", f"source:{s.id}")
@@ -517,7 +682,7 @@ def due_sources(now: datetime | None = None) -> list[tuple[int, int]]:
     now = now or datetime.now(timezone.utc)
     out = []
     with _factory()() as db:
-        for s in db.scalars(select(DocSource).where(DocSource.kind.in_(("directory", "wiki")), DocSource.enabled.is_(True), DocSource.sync_interval.is_not(None))):
+        for s in db.scalars(select(DocSource).where(DocSource.kind.in_(("directory", "wiki", "git")), DocSource.enabled.is_(True), DocSource.sync_interval.is_not(None))):
             last = s.last_sync_at.replace(tzinfo=s.last_sync_at.tzinfo or timezone.utc) if s.last_sync_at else None
             if s.status != "scanning" and (last is None or now - last >= timedelta(minutes=s.sync_interval)):
                 out.append((s.id, s.brain_id))

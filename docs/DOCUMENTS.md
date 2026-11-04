@@ -2,7 +2,7 @@
 
 # Document memory (design)
 
-Status: **implemented** (uploads, folders and wikis; phases D1 to D5, see «Phases»). This page started as the design of the document memory and still records the decisions taken and the alternatives discarded; where the implementation ended up differing from the first design, the text describes what the code does today and says so.
+Status: **implemented** (uploads, folders, wikis and Git repositories; phases D1 to D5, see «Phases»). This page started as the design of the document memory and still records the decisions taken and the alternatives discarded; where the implementation ended up differing from the first design, the text describes what the code does today and says so.
 
 ## What it is and what it is not
 
@@ -18,22 +18,23 @@ Principles:
 
 ## Sources
 
-A source is a connector that can **list** documents (with a stable identifier and a change marker) and **fetch their content**. There are three kinds:
+A source is a connector that can **list** documents (with a stable identifier and a change marker) and **fetch their content**. There are four kinds:
 
 | Kind | What it is | Configuration |
 |---|---|---|
 | **Wiki through its API** | Any wiki with a read API. Outline, Confluence and Notion are implemented (see «Wikis»); the connector is an adapter with a small interface, so others can be added without touching the rest | Depends on the adapter (usually a URL and a token, with the secrets encrypted with `secretbox`) plus the collections to index |
 | **Folder of files** | A folder mounted **read-only** with `.md`, `.markdown`, `.txt`, `.rst`, `.log`, `.html`, `.htm`, `.pdf`, `.docx`, `.pptx`, `.xlsx` and `.odt` files, in subfolders. Originals are **referenced where they are**, not copied | An authorised root and a subfolder inside it (see «Folders and job queue») |
+| **Git repository** | The documents of a repository (README, `docs/`, ADRs, changelog), synced by commit (see «Git repositories») | The address, the branch (empty = the default one), the paths to include and, for a private repository, a read-only token (encrypted with `secretbox`) |
 | **Upload from the UI** | Files dragged into the browser, of any size (chunked upload) | None; each brain has one «Uploads» source and the original goes to the file store |
 
-Possible later, without changing the design: a Git repository, crawling a URL, object storage.
+Possible later, without changing the design: crawling a URL, object storage.
 
 ## Data model
 
 Control plane (PostgreSQL, Alembic migrations):
 
-- `doc_sources`: `id`, `brain_id`, `kind` (`wiki` | `directory` | `upload`), `name` (unique per brain), `config` (JSON; secrets encrypted), `enabled` (a source can be paused), `sync_interval` (minutes, empty = manual only), `status`, `last_sync_at`, `last_error`, `created_by`.
-- `documents`: `id`, `brain_id`, `source_id`, `external_id` (the relative path in a folder, the page id in a wiki), `title`, `filename`, `url`, `mime`, `size`, `sha256`, `norm_hash` (fingerprint of the extracted text, used to detect duplicates), `storage_ref` (where the original is, see «File store»), `text_ref` (the normalised text the chunks point into), `source_updated_at`, `status` (`pending` | `indexing` | `active` | `duplicate` | `error`), `error`, `chunks`, `meta` (collection, detected secrets, the original of a duplicate…), `first_seen_at`, `last_seen_at`. Unique on `(source_id, external_id)`.
+- `doc_sources`: `id`, `brain_id`, `kind` (`wiki` | `directory` | `git` | `upload`), `name` (unique per brain), `config` (JSON; secrets encrypted), `enabled` (a source can be paused), `sync_interval` (minutes, empty = manual only), `status`, `last_sync_at`, `last_error`, `created_by`.
+- `documents`: `id`, `brain_id`, `source_id`, `external_id` (the relative path in a folder or a repository, the page id in a wiki), `title`, `filename`, `url`, `mime`, `size`, `sha256`, `norm_hash` (fingerprint of the extracted text, used to detect duplicates), `storage_ref` (where the original is, see «File store»), `text_ref` (the normalised text the chunks point into), `source_updated_at`, `status` (`pending` | `indexing` | `active` | `duplicate` | `error`), `error`, `chunks`, `meta` (collection, detected secrets, the original of a duplicate…), `first_seen_at`, `last_seen_at`. Unique on `(source_id, external_id)`.
 - Background work goes to the general `jobs` table (see «Folders and job queue»). *The `doc_jobs` table of the first design was never created.*
 
 Index (like `episode_chunks`: pgvector tables created by the index module, with the same embedding dimension):
@@ -48,7 +49,7 @@ Originals live on a **stack volume** mounted by the application (`MIMIRSYNTH_DOC
 
 ```
 <store>/<brain>/<source>/<document>/
-    <sha256>.<ext>        the original file (uploads) or the page snapshot (wikis), immutable
+    <sha256>.<ext>        the original file (uploads) or the snapshot (wiki page, file of a repository at a commit), immutable
     <sha256>.norm.txt     the normalised text that char_start/char_end point into
 ```
 
@@ -98,7 +99,7 @@ It is idempotent and resumable: if it fails half-way, the next run carries on. I
 | Delete an uploaded document | whoever uploaded it, or a brain administrator |
 | Cancel or retry a job | curator |
 | Add, edit, pause, scan or remove sources; reindex a document; find duplicates | brain administrator |
-| Register folder roots; connect a wiki or change its connection and collections | instance administrator (not with an API token) |
+| Register folder roots; connect a wiki or change its connection and collections; connect a Git repository or change its branch, paths or token | instance administrator (not with an API token) |
 
 Only uploaded documents can be deleted one by one: a folder or wiki document would come back on the next scan, so it is removed at its origin or by removing the source. Everything is audited (which source, who, how many documents). Removing a source asks for confirmation and deletes its documents and chunks from the index; the files in the folder and the pages in the wiki are untouched.
 
@@ -108,6 +109,7 @@ Only uploaded documents can be deleted one by one: a folder or wiki document wou
 
 - **Folder:** the instance administrator registers the roots under Administration → Folders, always under the read-only bind `/sources`; a brain administrator only picks a root and a subfolder inside it. Never an arbitrary path, and symbolic links that leave the folder are not followed.
 - **Wiki:** only instance administrators set the URL and the credentials, since the server makes requests to the address it is given. Private networks are allowed (normal for self-hosting). *The switch to forbid them that the first design mentioned does not exist.*
+- **Git repository:** the same rule as a wiki (instance administrators only), and git runs fenced in: only `https` and `http`, no user or password in the address, the token only over https and in a header passed in the environment, without the system's or the user's git configuration, without hooks, links, submodules or Git LFS. See «Git repositories».
 - **Uploads:** size limit; only the supported extensions are accepted, and a text file whose content turns out to be binary is rejected at extraction; HTML is reduced to text. The original is only returned to someone with read permission on the brain, with `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`; nothing is executed or served as a page.
 - **Secrets:** encrypted with the same `secretbox` as the engine keys; never returned by the API (it only says which ones are set).
 - **Credentials inside a document:** before chunking, the secret detector masks anything shaped like a credential in the indexed text, or leaves the document unindexed (in `error`) if the brain blocks them. The original is not modified. See «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -184,6 +186,18 @@ Contract rules: read-only; stateless; `updated_at` is the page's last modificati
 - **Obsidian:** needs no adapter. A vault is a folder of Markdown: use it as a folder source. The extractor understands its conventions: it strips the YAML frontmatter (using its `title:`), keeps the text of `[[links]]` and `[[target|alias]]`, and drops `![[embeds]]`, `%%comments%%` and `^block` marks, also with Windows line endings. `.obsidian/` is ignored because it is hidden.
 - **Confluence (Cloud and Data Center) and Notion:** written against each API's documented format and covered by tests with simulated responses; **not yet validated against a live instance**. Confluence uses the REST v1 API (`/rest/api`): Cloud with email + API token, Data Center with a personal access token and no email; collections are spaces and pages come as HTML (`body.storage`). Notion has no spaces: the collections are the databases shared with the integration plus «Loose pages»; each page's blocks are converted to Markdown and its content is only fetched when the modification date changed.
 - **Docmost:** not written; its public API is not documented in a stable way. It will be added when it is, or when a test instance is available.
+
+## Git repositories
+
+A `git` source (#118) indexes the documents of a repository: by default the `README*` and `CHANGELOG*` at its root, everything under `docs/` and any `adr/` folder. Mounting a clone as a folder and pulling it from cron still works; this source adds what that cannot: sync by commit, a citation that points to the file at the indexed commit, and a read-only token kept by the instance instead of in a cron job.
+
+- **Connection:** the address (https, or http without a token), the branch (empty = the repository's default branch), the paths and, for a private repository, a read-only token (with a user, for the forges that ask for one: Bitbucket, Gitea). The repository is checked with `git ls-remote` before saving. Only the instance administrator connects it or changes its branch, paths or token; a brain administrator can rename it, change its interval, pause it or remove it.
+- **What is read:** a shallow, blobless clone (`--depth 1 --filter=blob:none --no-checkout`) kept in the store at `<store>/<brain>/<source>/_git`. The tree is listed **without sizes** (asking for a size downloads the content) and the files are chosen by path; then only the chosen files that are **new or changed** (by their blob) are downloaded, with a sparse checkout of exactly those paths. Measured on this project's own repository: 138 documents, a 1.8 MB clone.
+- **Choosing the files:** the paths are patterns from the root where `*` stays inside one folder and `**` crosses folders. Only the document types the index reads come in; hidden files and folders and the names that hold credentials by nature (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `credentials*`, `*.tfstate*`…) never do, whatever the patterns say; links and submodules are skipped. Everything still goes through the secret detector when it is indexed.
+- **Sync by commit:** with no new commit, a scheduled scan reads nothing. Otherwise the unchanged files keep their document, the changed ones are reindexed, and the ones gone from the paths leave the index. Each document keeps the repository, the path, the commit and the blob, and its link points to the file at that commit in the forge (GitHub, GitLab, Bitbucket, Gitea, Forgejo and Codeberg are recognised from the address; any other gets the GitHub form).
+- **Limits:** at most 2,000 files selected and 200 MB downloaded in one sync (otherwise the scan fails and asks to narrow the paths); a file above the maximum document size is left out.
+- **Protection:** if git fails (address, token, network), or the paths select too many files, the scan fails and deletes nothing. If the paths select nothing while the source has documents, a scheduled scan fails too; only a manual one empties the index. Changing the branch or the paths makes the next scan read the whole tree again. Removing the source deletes its clone; the repository itself is never touched.
+- **Container image:** it includes `git`.
 
 ## Bridges with the graph
 

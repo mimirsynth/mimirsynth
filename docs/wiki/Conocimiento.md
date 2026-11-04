@@ -43,7 +43,7 @@ La misma nota puede llegar dos veces: desde dos carpetas, desde una carpeta y un
 Al pulsar un documento se abre su panel:
 - Estado, tamaño y número de trozos; nombre de fichero, hash (sha256) y fecha de subida.
 - **Secretos detectados**, si el detector de secretos encontró credenciales al indexar (ver abajo).
-- **Descargar original**, **Ver texto completo** (hasta el primer megabyte) y, en wikis, **Abrir en la wiki**.
+- **Descargar original**, **Ver texto completo** (hasta el primer megabyte) y, en wikis, **Abrir en la wiki**; en repositorios, **Abrir en el repositorio**, que muestra el fichero en el commit indexado.
 - **Entidades mencionadas**: las entidades del grafo cuyo nombre aparece en el texto. Cada una abre el [[Grafo]] centrado en ella.
 - **Relaciones**: los hechos del grafo que unen a esas entidades («A —relación→ B», con el hecho y la fecha desde la que vale). Por defecto, solo los vigentes; **Incluir hechos que dejaron de ser ciertos** añade los invalidados, marcados «ya no es cierto». **Mostrar más** carga más.
 - La lista de **trozos** (`#0`, `#1`…), cada uno con su sección y un botón para **promoverlo a memoria**.
@@ -67,7 +67,7 @@ Un pasaje relevante de un documento puede convertirse en **conocimiento del graf
 El documento no cambia; la propuesta lleva la procedencia (documento y sección).
 
 ## Pestaña Fuentes
-Una **fuente** es de dónde salen los documentos. Hay tres tipos: **Subidas** (la fuente automática de los ficheros que subes), **Carpeta** y **Wiki**. Cada fuente muestra su tipo, su origen, sus documentos por estado, su estado y su última sincronización, con acciones según tu rol.
+Una **fuente** es de dónde salen los documentos. Hay cuatro tipos: **Subidas** (la fuente automática de los ficheros que subes), **Carpeta**, **Wiki** y **Repositorio**. Cada fuente muestra su tipo, su origen, sus documentos por estado, su estado y su última sincronización, con acciones según tu rol.
 
 ### Carpetas (administrador del brain)
 Una carpeta es un directorio del servidor, montado **en solo lectura**, cuyos ficheros se indexan sin copiarlos.
@@ -94,6 +94,17 @@ Conecta una wiki por su API, **en solo lectura**, y sus páginas se indexan con 
 
 En cada sincronización solo se reindexa lo que cambió: las páginas se comparan por fecha de modificación y solo se **descargan** las nuevas o cambiadas (importa en Notion, donde cada página cuesta una petición). Las páginas borradas o archivadas se retiran (las de una colección que desmarques salen del índice al guardar, ver **Editar** más abajo). Si la wiki falla a mitad (clave caducada, caída, límite de tasa), el escaneo **se corta sin borrar nada**.
 
+### Repositorios Git (administrador de la instancia)
+Indexa los documentos de un repositorio, **en solo lectura**, sincronizados por commit.
+1. **Añadir repositorio.**
+2. La **Dirección del repositorio** para clonar por https (por ejemplo `https://github.com/equipo/proyecto.git`), sin usuario ni contraseña en ella.
+3. La **Rama**, o vacía para la rama principal del repositorio.
+4. Las **Rutas incluidas**, una por línea, desde la raíz: `*` no cruza carpetas y `**` sí. Por defecto `README*`, `docs/**`, `**/adr/**` y `CHANGELOG*`. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática); los ficheros ocultos y los de claves (`.env`, `*.pem`, `*.key`, `id_rsa`…) no entran nunca.
+5. Para un repositorio privado, un **token de solo lectura** (y un **Usuario**, solo si tu forja lo pide: Bitbucket, Gitea). Se guarda **cifrado**, no se vuelve a mostrar y solo se envía por https.
+6. **Conectar y escanear**: se comprueban el repositorio y la rama antes de guardar, y la primera sincronización arranca como un trabajo.
+
+Cada sincronización solo lee algo cuando hay un commit nuevo, y entonces solo descarga los ficheros nuevos o cambiados. Cada documento cita el repositorio, la ruta y el commit. Si el repositorio no responde, el escaneo **se corta sin borrar nada**. Montar un clon como carpeta sigue sirviendo si lo prefieres.
+
 ### Acciones sobre una fuente
 - **Escanear**: ahora.
 - **Editar**: nombre e intervalo; la subcarpeta de una carpeta. En una wiki, un administrador de la instancia puede además cambiar **qué colecciones se indexan** y sustituir la clave (vacío = conservar la guardada; una nueva se comprueba antes de guardar). La lista de colecciones se obtiene con las credenciales guardadas y muestra cuántos documentos tiene indexados cada una; al menos una queda marcada.
@@ -101,8 +112,9 @@ En cada sincronización solo se reindexa lo que cambió: las páginas se compara
   - Una colección que **quitas** retira del índice sus documentos al guardar, y solo esos. Antes, una confirmación dice cuántos. Las páginas de la wiki no se tocan nunca, y volver a marcar la colección las indexa de nuevo.
   - Si la wiki no responde, el formulario se abre igual y guarda los demás campos, y un escaneo que falla no borra nada.
   - El cambio queda en la auditoría con las colecciones añadidas y quitadas y los documentos retirados.
+- **Editar** un repositorio: un administrador de la instancia puede cambiar la rama, las rutas, el usuario y el token (vacío = conservar el guardado; «Quitar el token guardado» lo elimina). Un cambio se comprueba contra el repositorio y lanza una sincronización que vuelve a leer todo el árbol: los ficheros que quedan fuera de las rutas salen del índice.
 - **Pausar** / **Reanudar**: detiene y reanuda los escaneos programados.
-- **Quitar**: borra la fuente y sus documentos indexados; los ficheros de la carpeta y las páginas de la wiki no se tocan.
+- **Quitar**: borra la fuente y sus documentos indexados (y el clon local de un repositorio); los ficheros de la carpeta, las páginas de la wiki y el propio repositorio no se tocan.
 
 ## Cómo aparece en el recall
 Si un pasaje es realmente relevante (similitud suficiente), [[Preguntar]] y la API incluyen hasta **2 pasajes** citados en una sección «Documentos», con un tope de tamaño y de tiempo. Un texto repetido cuenta una sola vez, así que los pasajes son siempre **distintos**. Se puede desactivar por petición. Ver [[Recuerdo e ingesta]].
