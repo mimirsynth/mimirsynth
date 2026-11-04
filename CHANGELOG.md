@@ -8,11 +8,12 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
-## [0.12.1] - 2026-11-04
+## [0.12.2] - 2026-11-04
 ### Added
 - The entity page shows a small graph of the entity and its closest neighbours, coloured by type with the relation on each edge; a click opens a neighbour, and Expand opens the Graph with the entity selected. (#198)
 - Content quality has a «Repeated aliases» tab where a brain administrator previews and cleans the aliases that repeat an entity's own name, after a copy of the graph, with undo from Recent changes. (#203)
 - Content quality → Summaries: the engine proposes a short summary for the entities whose summary is a list of their facts, and a curator edits it, approves it (it replaces the entity's summary) or rejects it; every approval can be undone. (#206)
+- Git repositories as a document source: README, `docs/`, ADRs and changelog of a repository are indexed and synced by commit from a shallow clone that downloads only the chosen files, each document cites the repository, path and commit with a link to the file at that commit, key and hidden files never come in, and a private repository uses a read-only token stored encrypted. (#212)
 
 ### Changed
 - The entity page header is one row with the type and the merged names as chips, and Facts is marked in the side bar with a way back. (#195)
@@ -25,6 +26,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - On a phone the entity page's side panel no longer covers the list of facts. (#198)
 - Entity summaries are written by the LLM at every ingestion, merging what is new, instead of being the old summary with the new fact sentences appended. (#205)
 - The entity page fills the card with the entity's key figures when there is no summary to show, and lets curators ask for one; the type is the same coloured chip as in the facts; the chain of values under a relation is shown only when it reads as an evolution; facts and episodes use one list style; Invalidate and Reactivate are visible buttons. (#209)
+- An instance started with another `MIMIRSYNTH_SESSION_SECRET` than the one that sealed its stored secrets now says so — a line in the log at start, a notice in Administration listing what cannot be read, and `"secrets": "unreadable"` in `/api/health` — and answers with a clear error instead of a bare 500; at the two-factor step a recovery code still works. (#211)
 
 ## [0.12.0] - 2026-11-03
 ### Added
