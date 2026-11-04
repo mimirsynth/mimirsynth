@@ -127,6 +127,15 @@ def test_two_factor_with_an_unreadable_seed(client, local, monkeypatch, right_se
         r = c2.post("/api/auth/mfa", json={"code": "000000"}, headers={"Accept-Language": "en"})
         assert r.status_code == 503 and "recovery code" in r.json()["detail"]
         assert c2.post("/api/auth/mfa", json={"code": codes[0]}).status_code == 200  # a recovery code is only hashed: it still works
+        # the confirmations of a signed-in account (disable, new recovery codes) get the same 503, by design not counted as a failed
+        # sign-in: they already need a session and the password
+        for path in ("disable", "recovery"):
+            r = c2.post(f"/api/me/2fa/{path}", json={"password": PW, "code": "000000"})
+            assert r.status_code == 503 and "código de recuperación" in r.json()["detail"], (path, r.text)
+        with _factory()() as db:
+            u = db.query(User).filter_by(email="root@example.com").one()
+            assert u.totp_enabled and u.failed_attempts == 0
+        assert c2.post("/api/me/2fa/recovery", json={"password": PW, "code": codes[1]}).status_code == 200  # with a recovery code it works
         assert c2.get("/api/me").status_code == 200
     finally:
         monkeypatch.setattr(settings, "session_secret", RIGHT)

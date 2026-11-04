@@ -95,7 +95,7 @@ MimirSynth raises alerts about the graph and the AI models itself (the bell and 
 | No answer or connection error | The application is down |
 | `"secrets": "unreadable"` in the body (with any status) | The application works, but `MIMIRSYNTH_SESSION_SECRET` is not the one that sealed the stored secrets: see [[Upgrade and backups]] |
 
-Alert on any status other than `200`; to tell the cases apart, look at `db` and `graph` in the body. Each check waits at most 2 seconds, and the cause of a failure goes to the container log (`docker compose logs mimirsynth`), never to the response. If the monitor runs on another machine, use the public address behind the reverse proxy (`https://memory.example.com/api/health`). The container's Docker health check uses the same endpoint, so `docker ps` shows it as `unhealthy` in both cases.
+Alert on any status other than `200`; to tell the cases apart, look at `db` and `graph` in the body. Each check waits at most 2 seconds, and the cause of a failure goes to the container log (`docker compose logs mimirsynth`), never to the response. If the monitor runs on another machine, use the public address behind the reverse proxy (`https://memory.example.com/api/health`). The container's Docker health check uses the same endpoint, so `docker ps` shows it as `unhealthy` in both cases. Being public, it also reports one configuration problem, with no detail (no kinds, no counts): `"secrets": "unreadable"` when `MIMIRSYNTH_SESSION_SECRET` cannot open the stored secrets. That field does not change the status.
 
 To see how it is doing (recall time, jobs waiting, proposals, AI engine errors), turn on the Prometheus metrics at `/metrics` under Administration → Metrics: see [[Metrics]].
 
