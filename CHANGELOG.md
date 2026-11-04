@@ -27,6 +27,8 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - Entity summaries are written by the LLM at every ingestion, merging what is new, instead of being the old summary with the new fact sentences appended. (#205)
 - The entity page fills the card with the entity's key figures when there is no summary to show, and lets curators ask for one; the type is the same coloured chip as in the facts; the chain of values under a relation is shown only when it reads as an evolution; facts and episodes use one list style; Invalidate and Reactivate are visible buttons. (#209)
 - An instance started with another `MIMIRSYNTH_SESSION_SECRET` than the one that sealed its stored secrets now says so — a line in the log at start, a notice in Administration listing what cannot be read, and `"secrets": "unreadable"` in `/api/health` — and answers with a clear error instead of a bare 500; at the two-factor step a recovery code still works. (#211)
+- A Git source path that names a folder (`docs` or `docs/`) now takes everything inside it, accented names match however they were typed or committed, and paths that select no file are refused when saving and fail the sync with the repository's top-level folders instead of finishing with 0 files; the edit form shows how many files each path took. (#216)
+- On the entity page the Facts and Episodes columns are framed the same way, each heading inside its card, with the relation groups as lighter blocks instead of cards inside a card. (#217)
 
 ## [0.12.0] - 2026-11-03
 ### Added

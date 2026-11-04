@@ -170,6 +170,8 @@
  "Máximo de pasajes de documentos; 0 = sin documentos.": "Maximum document passages; 0 = no documents.",
  "Necesario para enviar invitaciones y enlaces de recuperación por correo. Sin él, los enlaces se copian desde Administración.": "Needed to send invitations and recovery links by email. Without it, links are copied from Administration.",
  "Ninguno": "None",
+ "Ningún fichero coincide con las rutas elegidas, pero la fuente tenía documentos: ¿rama o rutas cambiadas? No se ha borrado nada; pulsa «Escanear» si es a propósito. Carpetas de primer nivel del repositorio: {{folders}}.": "No file matches the chosen paths, but the source had documents: a changed branch or paths? Nothing was deleted; press «Scan» if it is on purpose. Top-level folders of the repository: {{folders}}.",
+ "Ningún fichero coincide con las rutas elegidas. Carpetas de primer nivel del repositorio: {{folders}}.": "No file matches the chosen paths. Top-level folders of the repository: {{folders}}.",
  "No": "No",
  "No existe el documento {{id}} en ese brain.": "Document {{id}} does not exist in that brain.",
  "No hay cambios en ese intervalo.": "There are no changes in that range.",
