@@ -52,7 +52,7 @@ It is normal at the start. Define an [[Ontology]], unify with [[Relations and al
 
 **Does my data leave the server?** The texts of proposals are sent to the configured **LLM** to extract facts, and the texts to index go to the **embedding** model. With local models, nothing leaves. The secret detector masks or blocks credentials in proposals and documents before they are stored or indexed, but do not rely on it: keep secrets out of memory and store only where they are.
 
-**What if I lose `MIMIRSYNTH_SESSION_SECRET`?** The secrets stored encrypted in the database can no longer be decrypted and must be entered again: provider keys, SMTP password, OIDC secrets, wiki keys and notification channel secrets. The authenticator-app secrets of two-factor are encrypted with it too, so those codes stop being accepted. Sessions are invalidated. The rest of the data is unaffected.
+**What if I lose `MIMIRSYNTH_SESSION_SECRET`?** The secrets stored encrypted in the database can no longer be decrypted and must be entered again: provider keys, SMTP password, OIDC secrets, wiki keys and notification channel secrets. The authenticator-app secrets of two-factor are encrypted with it too, so those codes stop being accepted (a recovery code or a passkey still works). Sessions are invalidated. The rest of the data is unaffected. The instance notices it and lists what cannot be read at the top of Administration until it is entered again: see [[Upgrade and backups]].
 
 ## Operation
 **How do I upgrade?** [[Upgrade and backups]].

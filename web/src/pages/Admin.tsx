@@ -20,6 +20,7 @@ import { BrainAiUsage, InstanceAiUsage } from "./AiUsage";
 import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
 import AdminMetrics from "./AdminMetrics";
+import SealedNotice from "./SealedNotice";
 
 type AuditRow = { ts: string; action: string; detail: unknown };
 const AUDIT_COLS = { ts: { get: (a: AuditRow) => a.ts }, action: { get: (a: AuditRow) => a.action, exact: true }, detail: { get: (a: AuditRow) => JSON.stringify(a.detail ?? "") } };
@@ -110,7 +111,8 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   const def = (list.data ?? []).find((e) => e.is_default);
   const otherModel = (e: Engine) => emb && e.enabled && !e.is_default && (!def || def.model !== e.model || def.dim !== e.dim);
   const test = useMutation({ mutationFn: (id: number) => send<{ ok: boolean; ms: number; error?: string; reply?: string }>("POST", `${path}/${id}/test`),
-    onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok ? `OK · ${r.ms} ms · «${r.reply}»` : t("Error: {{error}}", { error: r.error }) })) });
+    onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok ? `OK · ${r.ms} ms · «${r.reply}»` : t("Error: {{error}}", { error: r.error }) })),
+    onError: (err, id) => setTests((prev) => ({ ...prev, [id]: t("Error: {{error}}", { error: (err as Error).message }) })) });
   const [models, setModels] = useState<string[]>([]); const [mErr, setMErr] = useState("");
   const loadModels = useMutation({ mutationFn: (f: EngineForm) => send<{ models: string[]; error: string | null }>("POST", "llm-engines/models", { base_url: f.base_url, api_key: f.api_key || undefined, engine_id: f.id }),
     onSuccess: (r) => { setModels(r.models); setMErr(r.error ?? ""); } });
@@ -242,6 +244,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   return (
     <Page>
       <PageHeader title={t("Administración")} description={t("Acceso a cada brain y, para el administrador de la instancia, usuarios, seguridad, modelos de IA, documentos y el resto de ajustes.")} />
+      {me.is_admin && <SealedNotice />}
       {me.auth_mode === "off" && <Pill tone="warn" size="md">{t("Modo prototipo: sin autenticación (todos son administradores)")}</Pill>}
       <Modal opened={open} onClose={() => setOpen(false)} title={t("Crear brain")} centered>
         <Stack gap="xs">

@@ -52,7 +52,7 @@ Es normal al principio. Define una [[Ontología]], unifica con [[Relaciones y al
 
 **¿Mis datos salen del servidor?** Los textos de las propuestas se envían al **LLM** configurado para extraer los hechos, y los textos a indexar al modelo de **embeddings**. Con modelos locales, nada sale. El detector de secretos enmascara o bloquea credenciales en propuestas y documentos antes de guardarlos o indexarlos, pero no te fíes solo de él: no guardes secretos en la memoria, guarda solo dónde están.
 
-**¿Qué pasa si pierdo `MIMIRSYNTH_SESSION_SECRET`?** Los secretos guardados cifrados en la base de datos dejan de descifrarse y hay que reintroducirlos: claves de proveedores, contraseña SMTP, secretos OIDC, claves de wikis y secretos de los canales de notificación. Los secretos del doble factor por aplicación de autenticación también se cifran con él, así que esos códigos dejan de aceptarse. Las sesiones se invalidan. El resto de datos no se ve afectado.
+**¿Qué pasa si pierdo `MIMIRSYNTH_SESSION_SECRET`?** Los secretos guardados cifrados en la base de datos dejan de descifrarse y hay que reintroducirlos: claves de proveedores, contraseña SMTP, secretos OIDC, claves de wikis y secretos de los canales de notificación. Los secretos del doble factor por aplicación de autenticación también se cifran con él, así que esos códigos dejan de aceptarse (un código de recuperación o una llave de acceso siguen valiendo). Las sesiones se invalidan. El resto de datos no se ve afectado. La instancia lo detecta y muestra arriba en Administración lo que no se puede leer, hasta que se vuelve a introducir: ver [[Actualización y copias de seguridad]].
 
 ## Operación
 **¿Cómo actualizo?** [[Actualización y copias de seguridad]].

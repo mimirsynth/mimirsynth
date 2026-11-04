@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from . import appsettings, mail
+from . import appsettings, mail, sealcheck
 from .deps import audit, require_admin
 from .models import User
+from .secretbox import SealedSecretError
 from .store import get_db
 
 router = APIRouter(prefix="/api/settings")
@@ -50,9 +51,19 @@ def test_smtp(body: MailTest, user: User = Depends(require_admin)):
         raise HTTPException(422, "indica al menos el servidor SMTP y el remitente")
     try:
         mail.send(body.to.strip(), "Prueba de correo de MimirSynth", "Si lees esto, el envío de correo funciona.")
+    except SealedSecretError:
+        raise  # the stored SMTP password cannot be read: the app's own clear answer (#193)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(422, f"no se pudo enviar: {e}")
     return {"ok": True}
+
+
+@router.get("/sealed")
+def sealed(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Whether the stored secrets can be read with this instance's MIMIRSYNTH_SESSION_SECRET (#193): the sealed values that cannot,
+    counted by kind (never the values). Checked again on every call, so the notice goes once the secrets are entered again."""
+    bad = sealcheck.check(db)
+    return {"ok": not bad, "unreadable": bad, "total": sum(bad.values())}
 
 
 @router.put("/secret/{key}")

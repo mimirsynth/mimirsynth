@@ -2,9 +2,17 @@
 import base64
 import hashlib
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 
 from .config import settings
+
+
+class SealedSecretError(Exception):
+    """A sealed value cannot be read: the instance runs with another MIMIRSYNTH_SESSION_SECRET than the one that sealed it (#193).
+    The app answers it with a clear 503 (main.py); the message never carries the value or its ciphertext."""
+
+    def __init__(self) -> None:
+        super().__init__("a stored secret cannot be read: MIMIRSYNTH_SESSION_SECRET is not the one that sealed it")
 
 
 def _f() -> Fernet:
@@ -16,4 +24,9 @@ def seal(value: str) -> str:
 
 
 def unseal(token: str) -> str:
-    return _f().decrypt(token.encode()).decode() if token else ""
+    if not token:
+        return ""
+    try:
+        return _f().decrypt(token.encode()).decode()
+    except InvalidToken:
+        raise SealedSecretError() from None

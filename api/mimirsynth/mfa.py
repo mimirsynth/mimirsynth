@@ -21,10 +21,16 @@ def recovery_left(db: Session, u: User) -> int:
 
 
 def check_second_factor(db: Session, u: User, code: str) -> bool:
-    """Acepta un código TOTP vigente (una sola vez) o uno de recuperación (que se consume)."""
+    """Acepta un código TOTP vigente (una sola vez) o uno de recuperación (que se consume).
+    A seed sealed under another MIMIRSYNTH_SESSION_SECRET cannot be read (#193): a recovery code still works, since it is only hashed, and
+    otherwise the person is told why instead of «wrong code»."""
     code = code.strip()
+    sealed_lost = False
     if u.totp_enabled and u.totp_secret:
-        step = totp.verify(secretbox.unseal(u.totp_secret), code, u.totp_last_step)
+        try:
+            step = totp.verify(secretbox.unseal(u.totp_secret), code, u.totp_last_step)
+        except secretbox.SealedSecretError:
+            step, sealed_lost = None, True
         if step is not None:
             u.totp_last_step = step
             db.commit()
@@ -34,6 +40,9 @@ def check_second_factor(db: Session, u: User, code: str) -> bool:
         rc.used_at = now()
         db.commit()
         return True
+    if sealed_lost:
+        raise HTTPException(503, "No se puede comprobar el código de la app: el secreto del doble factor no se puede leer porque la clave secreta "
+                                 "de la instancia ha cambiado. Usa un código de recuperación o una llave de acceso, o avisa a un administrador.")
     return False
 
 

@@ -50,7 +50,7 @@ An instance with no administrators prints an **installation code** in its log:
 ```bash
 docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
-Open the application, enter the code and create the administrator account. Keep `MIMIRSYNTH_SESSION_SECRET` safe: if you lose or change it, the stored secrets (provider keys, SMTP password, OIDC secret) can no longer be decrypted and must be entered again.
+Open the application, enter the code and create the administrator account. Keep `MIMIRSYNTH_SESSION_SECRET` safe: it encrypts the stored secrets (provider keys, SMTP password, OIDC secret, two-factor seeds…), so a restore on another host or a copy of the database for a test stack needs the **same** value. With another one the application still starts, but says so: one line in its log, a notice at the top of Administration and `"secrets": "unreadable"` in `/api/health`; whatever needs those secrets answers with a clear error. Put the right value back and restart. If it is lost, enter those secrets again and remove two-factor from the affected accounts (Administration → Users); the notice goes once nothing is left unread.
 
 ### First steps
 1. Under **Administration → LLM model** and **Embeddings**, add an engine (endpoint, key and model) and mark it as default. "Test" checks that it responds.
@@ -97,6 +97,7 @@ MimirSynth alerts about the graph and the AI models itself ([NOTIFICATIONS.md](N
 | `503` with `"db": false` | The application is alive but cannot reach PostgreSQL |
 | `503` with `"graph": false` | The application is alive but FalkorDB does not answer |
 | No answer or connection error | The application is down |
+| `"secrets": "unreadable"` in the body (with any status) | The application works, but `MIMIRSYNTH_SESSION_SECRET` is not the one that sealed the stored secrets: see the first-start wizard above |
 
 Alert on any status other than `200`; to tell the cases apart, check `db` and `graph` in the body. Each check waits at most 2 seconds, and the cause of a failure goes to the container log (`docker compose logs mimirsynth`), never to the response. If the monitor runs on another machine, use the public address behind the reverse proxy (`https://memory.example.com/api/health`). The container's Docker health check uses the same endpoint, so `docker ps` shows it as `unhealthy` in both cases.
 

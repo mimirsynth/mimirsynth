@@ -11,7 +11,7 @@ from . import notify_channels as ch
 from .deps import audit, current_user, require_admin
 from .models import Membership, Notification, NotifyChannel, NotifyDelivery, NotifyRead, User, now
 from .roles import rank
-from .secretbox import seal
+from .secretbox import SealedSecretError, seal
 from .store import get_db
 
 router = APIRouter(prefix="/api/notifications")
@@ -184,6 +184,8 @@ def test_channel(cid: int, admin: User = Depends(require_admin), db: Session = D
     m = ch.Message(event="test", severity="info", title="Prueba de notificaciones", body="Si ves esto, el canal funciona.", instance="MimirSynth")
     try:
         notify.deliver(db, c, m)
+    except SealedSecretError:
+        raise  # its secret cannot be read: the app's own clear answer (#193)
     except Exception as e:  # noqa: BLE001
         audit(db, admin, "notify.channel.test", None, name=c.name, ok=False)
         return {"ok": False, "error": (str(e) or e.__class__.__name__)[:300]}

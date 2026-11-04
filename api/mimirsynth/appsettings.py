@@ -206,4 +206,5 @@ def listing() -> list[dict]:
 
 
 def secret_state() -> dict:
-    return {k: {"set": bool(get_secret(k)), "changed": _overrides().get(k) is not None} for k in SECRET_KEYS}
+    # whether a value is there, without opening it: a page of settings must load even when it cannot be read (#193)
+    return {k: {"set": bool(_overrides().get(k) or default(k)), "changed": _overrides().get(k) is not None} for k in SECRET_KEYS}

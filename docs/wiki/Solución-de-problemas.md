@@ -9,6 +9,7 @@ Primero, mira el estado: `docker compose ps`, `docker compose logs mimirsynth --
 |---|---|
 | `define POSTGRES_PASSWORD` / `define MIMIRSYNTH_SESSION_SECRET` | Faltan en `.env`. Defínelas |
 | La aplicación se detiene al arrancar con un error sobre `MIMIRSYNTH_SESSION_SECRET` | Con login activo no se admite el secreto por defecto: pon uno aleatorio |
+| «La clave secreta de la instancia no abre los secretos guardados» en Administración, o «No se puede leer un secreto guardado» en una acción | `MIMIRSYNTH_SESSION_SECRET` no es la clave con la que se cifró la base de datos (una copia restaurada en otro servidor, una copia para pruebas, un `.env` editado). Vuelve a poner la correcta y reinicia; si se ha perdido, ver [[Actualización y copias de seguridad]] |
 | Aparecen brains con nombres raros en el primer arranque | Un comentario al final de línea en `MIMIRSYNTH_BOOTSTRAP_GRAPHS` en `.env`. Quita comentarios de línea ([[Variables de entorno]]) |
 | Una variable de `.env` no tiene efecto | El compose oficial solo pasa las variables que enumera en `environment:`. Añádela ahí ([[Variables de entorno]]) |
 | `bind: address already in use` | El puerto 8000 está ocupado: cambia `MIMIRSYNTH_PORT` |

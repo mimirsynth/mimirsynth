@@ -45,7 +45,7 @@ Tres cosas, que deben ser coherentes entre sí (tómalas en el mismo momento); `
 | **Volumen `docstore`** | los originales de los documentos subidos | copia del volumen (p. ej. `docker run --rm -v mimirsynth_docstore:/d -v $PWD:/b busybox tar czf /b/docstore.tgz -C /d .`) |
 | **FalkorDB** (`graphdata`) | el conocimiento (episodios, entidades, hechos) | copia del volumen, o un volcado RDB con `redis-cli` |
 
-Guarda además tu **`.env`**, y en particular `MIMIRSYNTH_SESSION_SECRET`: sin él no se pueden descifrar las claves de los proveedores, la contraseña SMTP, los secretos OIDC ni los de los canales de notificación guardados en la base de datos (tendrías que volver a introducirlos).
+Guarda además tu **`.env`**, y en particular `MIMIRSYNTH_SESSION_SECRET`: sin él no se pueden descifrar las claves de los proveedores, la contraseña SMTP, los secretos OIDC, las semillas del doble factor ni los secretos de los canales de notificación guardados en la base de datos (tendrías que volver a introducirlos). Una restauración, o una copia de la base de datos para una instalación de pruebas, necesita ese mismo valor.
 
 Los nombres de los volúmenes llevan el prefijo del proyecto de Compose (normalmente el nombre de la carpeta); míralos con `docker volume ls`.
 
@@ -62,6 +62,15 @@ Esto copia la instancia entera. Para guardar **un solo brain** aparte, o llevarl
 3. Restaura el volcado: `docker compose exec -T postgres psql -U mimirsynth mimirsynth < mimirsynth.sql` (desde una copia de `update.sh`: `gunzip -c backup/mimirsynth.sql.gz | docker compose exec -T postgres psql -U mimirsynth mimirsynth`).
 4. Devuelve los volúmenes `docstore` y `graphdata` (`update.sh` los deja como `docstore.tar.gz` y `falkordb-dump.rdb`).
 5. Arranca todo: `docker compose --profile bundled up -d`.
+
+### Con otro `MIMIRSYNTH_SESSION_SECRET`
+Si la instancia arranca con otra clave que la que cifró la base de datos, arranca igual, pero lo dice:
+- **en su log**, una línea: «MIMIRSYNTH_SESSION_SECRET does not match the one that sealed the stored secrets», con cuántos valores no se pueden leer, por tipo (nunca los valores);
+- **arriba en Administración**, para los administradores de la instancia, un aviso con lo que no se puede leer;
+- **en `/api/health`**, el campo `"secrets": "unreadable"`, sin cambiar el código: reiniciar el contenedor no devolvería la clave;
+- **en cada acción que necesita uno de esos secretos** (probar un motor, enviar un correo, entrar con la app de autenticación…), un error claro en lugar de uno interno. En el paso del doble factor sigue valiendo un código de recuperación o una llave de acceso.
+
+Vuelve a poner el valor correcto en `.env` y reinicia. Si se ha perdido, introduce de nuevo esos secretos (motores, SMTP, proveedores de identidad, canales de notificación, webhooks, fuentes de documentos) y quita el doble factor de las cuentas afectadas en Administración → Usuarios; el aviso desaparece en cuanto no queda nada sin leer.
 
 ## Buenas prácticas
 - Automatiza la copia (cron o el planificador de tu sistema) y **prueba una restauración** de vez en cuando.

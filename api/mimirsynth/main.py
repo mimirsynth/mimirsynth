@@ -13,10 +13,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, metrics
-from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck
 from .config import settings
 from .db import list_graphs
 from .models import Brain, User
+from .secretbox import SealedSecretError
 from .store import _factory, engine, init_db
 
 
@@ -69,6 +70,11 @@ async def lifespan(_: FastAPI):
     _retire_local_admin()
     with _factory()() as db:
         auth.ensure_setup_token(db)
+    try:  # a database sealed under another MIMIRSYNTH_SESSION_SECRET: say it in the log, and keep starting (#193)
+        with _factory()() as db:
+            sealcheck.at_start(db)
+    except Exception:  # noqa: BLE001  (the check must not keep the instance from starting)
+        logging.getLogger("mimirsynth").exception("could not check whether the stored secrets can be read")
     try:
         jobs.recover()
         jobs.prune()
@@ -105,6 +111,15 @@ async def localized_errors(request, exc: StarletteHTTPException):
     if isinstance(exc.detail, str):
         exc.detail = i18n.translate(exc.detail, i18n.language(request))
     return await http_exception_handler(request, exc)
+
+
+@app.exception_handler(SealedSecretError)
+async def sealed_secret_error(request, exc: SealedSecretError):
+    """A stored secret that the current MIMIRSYNTH_SESSION_SECRET cannot open: a clear, translated 503 instead of a bare 500 (#193)."""
+    logging.getLogger("mimirsynth").warning("%s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse({"detail": i18n.tr("No se puede leer un secreto guardado: la clave secreta de la instancia (MIMIRSYNTH_SESSION_SECRET) "
+                                           "no es la que lo cifró. Un administrador tiene los detalles en Administración.", i18n.language(request))},
+                        status_code=503)
 
 
 app.add_middleware(
@@ -192,6 +207,8 @@ async def health():
     las notificaciones no pueden avisar de la caída de PostgreSQL porque se guardan en él. Es pública: sin detalles del error."""
     (db_ok, _), (graph_ok, graphs) = await asyncio.gather(_probe("PostgreSQL", _db_ping), _probe("FalkorDB", list_graphs))
     body = {"ok": db_ok and graph_ok, "db": db_ok, "graph": graph_ok, "graphs": len(graphs) if graph_ok else None}
+    if sealcheck.unreadable():  # only when it happens, and without failing: a restart loop would not bring the secret back (#193)
+        body["secrets"] = "unreadable"
     return JSONResponse(body, status_code=200 if body["ok"] else 503)
 
 
