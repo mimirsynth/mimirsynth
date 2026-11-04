@@ -145,6 +145,25 @@ def ask(eng: dict, msgs: list[dict]) -> str:
     return r.json()["choices"][0]["message"].get("content") or ""
 
 
+ONE = ("MATCH (n:Entity {uuid:$u}) OPTIONAL MATCH (n)-[r:RELATES_TO]-(:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
+       "RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels, coalesce(n.summary, '') AS summary, collect(r.fact) AS facts")
+
+
+def write(db, brain: Brain, eng: dict, graph_name: str, c: dict) -> SummarySuggestion:
+    """One call to the engine for one entity, and its suggestion stored: pending, or `same` when the engine kept the summary as it was.
+    Raises secretguard.Blocked when the text carries secrets the brain blocks, and ValueError when the engine wrote nothing."""
+    text = clean(ask(eng, messages(c, _episodes(graph_name, c["uuid"]))))
+    if not text:
+        raise ValueError("el motor no devolvió ningún texto")
+    text, found = secretguard.guard(brain, text)
+    same = " ".join(text.split()) == " ".join((c["summary"] or "").split())
+    s = SummarySuggestion(brain_id=brain.id, entity_uuid=c["uuid"], name=c["name"][:500], facts=len(c["facts"]), reason=c["reason"],
+                          current=c["summary"] or "", proposed=text, status="same" if same else "pending", secret_findings=found or None)
+    db.add(s)
+    db.commit()
+    return s
+
+
 def _latest(db, brain_id: int) -> dict[str, SummarySuggestion]:
     out: dict[str, SummarySuggestion] = {}
     for s in db.scalars(select(SummarySuggestion).where(SummarySuggestion.brain_id == brain_id).order_by(SummarySuggestion.id)):
@@ -172,21 +191,14 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> dict:
                     job.note("el brain ha agotado su presupuesto de IA de este mes: el análisis se detiene")
                 break
             try:
-                text = clean(ask(eng, messages(c, _episodes(graph_name, c["uuid"]))))
-                if not text:
-                    raise ValueError("el motor no devolvió ningún texto")
                 try:
-                    text, found = secretguard.guard(brain, text)
+                    s = write(db, brain, eng, graph_name, c)
                 except secretguard.Blocked as b:
                     done["blocked"] += 1
                     if job:
                         job.note(f"«{c['name'][:60]}»: el texto propuesto lleva secretos ({b}) y no se guarda")
                     continue
-                same = " ".join(text.split()) == " ".join((c["summary"] or "").split())
-                db.add(SummarySuggestion(brain_id=brain_id, entity_uuid=c["uuid"], name=c["name"][:500], facts=len(c["facts"]), reason=c["reason"],
-                                         current=c["summary"] or "", proposed=text, status="same" if same else "pending", secret_findings=found or None))
-                db.commit()
-                done["same" if same else "proposed"] += 1
+                done["same" if s.status == "same" else "proposed"] += 1
             except Exception as e:  # noqa: BLE001
                 log.warning("summary %s: %s", c["name"], e)
                 db.rollback()
@@ -265,6 +277,38 @@ def start_scan(body: ScanIn, request: Request, ctx: BrainCtx = Depends(admin_of_
         _PROGRESS[ctx.brain.id]["running"] = False
         raise
     return {"started": True, "job": jid}
+
+
+@router.post("/entity/{uuid}", status_code=201)
+def propose_one(uuid: str, request: Request, ctx: BrainCtx = Depends(curator_of_brain)):
+    """A curator asks, from the entity page, for a better summary of one entity (issue 208): one call to the summary engine, now, also
+    when the entity has no summary. A pending proposal for it is returned as it is, without a new call."""
+    lang = language(request)
+    pending = ctx.db.scalar(select(SummarySuggestion).where(SummarySuggestion.brain_id == ctx.brain.id, SummarySuggestion.entity_uuid == uuid,
+                                                            SummarySuggestion.status == "pending").order_by(SummarySuggestion.id.desc()))
+    if pending:
+        return {"item": _out(pending), "created": False}
+    found = rows(ctx.graph.query(ONE, {"u": uuid}))
+    if not found or not found[0]["uuid"]:
+        raise HTTPException(404, tr("No hay ninguna entidad con el uuid {{uuid}} en este brain.", lang, uuid=uuid))
+    eng = engine()
+    if eng is None:
+        raise HTTPException(409, tr("No hay ningún motor LLM configurado (Administración → Proveedores IA).", lang))
+    if usage.paused(ctx.brain.id):
+        raise HTTPException(409, tr("El brain ha agotado su presupuesto de IA de este mes.", lang))
+    e = found[0]
+    facts = [f for f in e["facts"] if f]
+    c = {**e, "facts": facts, "reason": poor(e["summary"], facts) or "requested"}
+    try:
+        with usage.scope(ctx.brain.id, "summaries"):
+            s = write(ctx.db, ctx.brain, eng, ctx.brain.graph_name, c)
+    except secretguard.Blocked as b:
+        raise HTTPException(422, tr("El texto propuesto lleva secretos ({{labels}}) y no se guarda.", lang, labels=str(b)))
+    except (httpx.HTTPError, ValueError, KeyError) as err:
+        log.warning("summary %s: %s", e["name"], err)
+        raise HTTPException(502, tr("El motor no ha podido escribir el resumen: {{error}}", lang, error=str(err)[:200]))
+    audit(ctx.db, ctx.user, "summary.propose", ctx.brain, id=s.id, uuid=uuid, status=s.status)
+    return {"item": _out(s), "created": True}
 
 
 def _apply(ctx: BrainCtx, items: list[tuple[SummarySuggestion, str]]) -> tuple[int, int, int | None]:

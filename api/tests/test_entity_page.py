@@ -63,6 +63,12 @@ def test_entity_page(client, graphs):  # noqa: F811
     assert r["episodes"]["total"] == 1 and r["episodes"]["items"][0]["name"] == "Lab inventory"
     assert {n["name"] for n in r["neighbors"]} == {"Room A", "Room B", "Room C", "UPS", "nightly backup"} and r["neighbors"][-1]["name"] == "Room A"
     assert next(n for n in r["neighbors"] if n["uuid"] == "a")["current"] == 0
+    # the key figures of the top card (issue 208)
+    assert r["stats"] == {"current": 7, "earlier": 1, "first": "2026-01-01T00:00:00+00:00", "last": "2026-09-01T00:00:00+00:00",
+                          "neighbors_by_type": [{"type": "Place", "count": 3}, {"type": "", "count": 1}, {"type": "Job", "count": 1}],
+                          "type_description": ""}
+    assert client.post("/api/brains/ep/vocab/types", json={"name": "Host", "description": "A machine on the network"}).status_code == 201
+    assert client.get("/api/brains/ep/entities/nas").json()["stats"]["type_description"] == "A machine on the network"
 
     # a single-valued relation with two current values is flagged, and shown first
     assert client.post("/api/brains/ep/vocab/relations", json={"name": "LocatedAt", "description": "Is in a place", "functional": True}).status_code == 201

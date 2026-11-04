@@ -400,7 +400,7 @@ class SummarySuggestion(Base):
     entity_uuid: Mapped[str] = mapped_column(String(64), index=True)
     name: Mapped[str] = mapped_column(String(500))
     facts: Mapped[int] = mapped_column(Integer, default=0)  # the entity's current facts when it was written
-    reason: Mapped[str] = mapped_column(String(16), default="")  # long | lines | repeats | stale
+    reason: Mapped[str] = mapped_column(String(16), default="")  # long | lines | repeats | stale | requested (one entity, from its page)
     current: Mapped[str] = mapped_column(Text, default="")
     proposed: Mapped[str] = mapped_column(Text, default="")  # as the engine wrote it, after the secret detector
     applied: Mapped[str] = mapped_column(Text, default="")  # the text that went to the graph (the proposed one, or the curator's edit)

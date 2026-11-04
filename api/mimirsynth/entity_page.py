@@ -102,12 +102,31 @@ def entity_page(uuid: str, as_of: str = Query("", max_length=40), origin: str = 
                             {"u": uuid, "n": MAX_EPISODES}))
     n_episodes = G.query("MATCH (e:Episodic)-[:MENTIONS]->(n:Entity {uuid:$u}) RETURN count(e)", {"u": uuid}).result_set[0][0]
     return {
+        "stats": _stats(ctx, ent, out_groups, neighbors, lent),
         "entity": {**ent, "origin": lent}, "read_only": bool(lent), "as_of": at.isoformat() if at else None,
         "facts": {"total": total, "shown": len(facts) - hidden, "not_yet": hidden, "truncated": total > len(facts)},
         "groups": out_groups,
         "neighbors": sorted(neighbors.values(), key=lambda n: (-n["current"], -n["facts"], n["name"] or "")),
         "episodes": {"total": n_episodes, "items": episodes},
     }
+
+
+def _stats(ctx: BrainCtx, ent: dict, groups: list[dict], neighbors: dict[str, dict], lent: str) -> dict:
+    """Key figures for the top card when there is no summary to show (issue 208): current and earlier facts, the first and last date
+    of its facts, its neighbours counted by type, and the description of its type in the brain's ontology."""
+    dates = [d for g in groups for f in g["current"] + g["previous"] if (d := parse_ts(f["valid_at"] or f["created_at"]))]
+    by_type: dict[str, int] = {}
+    for nb in neighbors.values():
+        t = (nb["labels"] or [""])[0]
+        by_type[t] = by_type.get(t, 0) + 1
+    description = ""
+    if ent["labels"] and not lent:   # a lent entity's type belongs to the other brain's ontology
+        onto = get_ontology(ctx.db, ctx.brain.id) or {}
+        description = next((t.get("description", "") for t in onto.get("entity_types", []) if t["name"] == ent["labels"][0]), "")
+    return {"current": sum(len(g["current"]) for g in groups), "earlier": sum(len(g["previous"]) for g in groups),
+            "first": min(dates).isoformat() if dates else None, "last": max(dates).isoformat() if dates else None,
+            "neighbors_by_type": [{"type": t, "count": n} for t, n in sorted(by_type.items(), key=lambda x: (-x[1], x[0]))],
+            "type_description": description}
 
 
 @router.get("")
