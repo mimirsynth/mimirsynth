@@ -1,6 +1,0 @@
-{
- "El brain ha agotado su presupuesto de IA de este mes.": "The brain has spent its AI budget for this month.",
- "El motor no ha podido escribir el resumen: {{error}}": "The engine could not write the summary: {{error}}",
- "El texto propuesto lleva secretos ({{labels}}) y no se guarda.": "The proposed text contains secrets ({{labels}}) and is not saved.",
- "No hay ninguna entidad con el uuid {{uuid}} en este brain.": "There is no entity with the uuid {{uuid}} in this brain."
-}

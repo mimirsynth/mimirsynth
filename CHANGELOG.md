@@ -24,6 +24,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - Merging duplicates no longer adds an alias equal to the entity's own name; the entity page hides the ones older merges wrote, and `python -m mimirsynth.entity_aliases` removes them. (#195)
 - On a phone the entity page's side panel no longer covers the list of facts. (#198)
 - Entity summaries are written by the LLM at every ingestion, merging what is new, instead of being the old summary with the new fact sentences appended. (#205)
+- The entity page fills the card with the entity's key figures when there is no summary to show, and lets curators ask for one; the type is the same coloured chip as in the facts; the chain of values under a relation is shown only when it reads as an evolution; facts and episodes use one list style; Invalidate and Reactivate are visible buttons. (#209)
 
 ## [0.12.0] - 2026-11-03
 ### Added
