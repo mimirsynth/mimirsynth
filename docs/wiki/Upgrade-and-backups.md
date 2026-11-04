@@ -45,7 +45,7 @@ Three things, which must be consistent with each other (take them at the same mo
 | **`docstore` volume** | originals of the uploaded documents | copy of the volume (e.g. `docker run --rm -v mimirsynth_docstore:/d -v $PWD:/b busybox tar czf /b/docstore.tgz -C /d .`) |
 | **FalkorDB** (`graphdata`) | the knowledge (episodes, entities, facts) | copy of the volume, or an RDB dump with `redis-cli` |
 
-Also save your **`.env`**, and in particular `MIMIRSYNTH_SESSION_SECRET`: without it the provider keys, the SMTP password, the OIDC secrets and the notification channel secrets stored in the database cannot be decrypted (you would have to enter them again).
+Also save your **`.env`**, and in particular `MIMIRSYNTH_SESSION_SECRET`: without it the provider keys, the SMTP password, the OIDC secrets, the two-factor seeds and the notification channel secrets stored in the database cannot be decrypted (you would have to enter them again). A restore, or a copy of the database for a test stack, needs that same value.
 
 Volume names carry the Compose project prefix (normally the folder name); see them with `docker volume ls`.
 
@@ -62,6 +62,15 @@ This copies the whole instance. To keep **one brain** apart, or to take it to an
 3. Restore the dump: `docker compose exec -T postgres psql -U mimirsynth mimirsynth < mimirsynth.sql` (from an `update.sh` backup: `gunzip -c backup/mimirsynth.sql.gz | docker compose exec -T postgres psql -U mimirsynth mimirsynth`).
 4. Put the `docstore` and `graphdata` volumes back (`update.sh` leaves them as `docstore.tar.gz` and `falkordb-dump.rdb`).
 5. Start everything: `docker compose --profile bundled up -d`.
+
+### With another `MIMIRSYNTH_SESSION_SECRET`
+If the instance starts with another secret than the one that sealed the database, it still starts, but it says so:
+- **in its log**, one line: «MIMIRSYNTH_SESSION_SECRET does not match the one that sealed the stored secrets», with how many values cannot be read, by kind (never the values);
+- **at the top of Administration**, for instance administrators, a notice listing what cannot be read;
+- **in `/api/health`**, the field `"secrets": "unreadable"`, without changing the status: restarting the container would not bring the secret back;
+- **on each action that needs one of those secrets** (testing an engine, sending an email, signing in with the authenticator app…), a clear error instead of an internal one. At the two-factor step a recovery code or a passkey still works.
+
+Put the right value back in `.env` and restart. If it is lost, enter those secrets again (engines, SMTP, identity providers, notification channels, webhooks, document sources) and remove two-factor from the affected accounts in Administration → Users; the notice goes as soon as nothing is left unread.
 
 ## Good practices
 - Automate the backup (cron or your system's scheduler) and **test a restore** from time to time.

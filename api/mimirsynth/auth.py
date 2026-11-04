@@ -149,14 +149,18 @@ def login_mfa(body: MfaIn, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(401, "la verificación ha caducado; vuelve a introducir tu contraseña")
     if u.locked_until and (u.locked_until if u.locked_until.tzinfo else u.locked_until.replace(tzinfo=timezone.utc)) > datetime.now(timezone.utc):
         raise HTTPException(401, "cuenta bloqueada temporalmente")
-    if not mfa.check_second_factor(db, u, body.code):
+    try:
+        ok, sealed_lost = mfa.check_second_factor(db, u, body.code), None
+    except HTTPException as e:  # the seed cannot be read (#193): still a failed attempt, answered with why
+        ok, sealed_lost = False, e
+    if not ok:
         u.failed_attempts += 1  # los fallos del segundo factor cuentan para el bloqueo igual que los de la contraseña
         if u.failed_attempts >= int(appsettings.get("login_max_attempts")):
             u.locked_until, u.failed_attempts = now() + timedelta(minutes=int(appsettings.get("lockout_minutes"))), 0
             audit(db, u, "login.locked")
             request.session.clear()
         db.commit()
-        raise HTTPException(401, "código incorrecto")
+        raise sealed_lost or HTTPException(401, "código incorrecto")
     u.failed_attempts, u.locked_until, u.last_login = 0, None, now()
     db.commit()
     audit(db, u, "login", method="password+2fa")

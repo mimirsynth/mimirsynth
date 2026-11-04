@@ -50,7 +50,7 @@ Una instancia sin administradores imprime un **código de instalación** en su r
 ```bash
 docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
-Abre la aplicación, introduce el código y crea la cuenta de administrador. Guarda `MIMIRSYNTH_SESSION_SECRET`: si lo pierdes o lo cambias, los secretos guardados (claves de los proveedores, contraseña SMTP, secreto OIDC) dejan de poder descifrarse y hay que volver a introducirlos.
+Abre la aplicación, introduce el código y crea la cuenta de administrador. Guarda `MIMIRSYNTH_SESSION_SECRET`: cifra los secretos guardados (claves de los proveedores, contraseña SMTP, secreto OIDC, semillas del doble factor…), así que restaurar una copia en otro servidor o copiar la base de datos a una instalación de pruebas exige el **mismo** valor. Con otro la aplicación arranca igual, pero lo dice: una línea en su log, un aviso arriba en Administración y `"secrets": "unreadable"` en `/api/health`; lo que necesita esos secretos responde con un error claro. Vuelve a poner el valor correcto y reinicia. Si se ha perdido, introduce de nuevo esos secretos y quita el doble factor de las cuentas afectadas (Administración → Usuarios); el aviso desaparece cuando ya no queda nada sin leer.
 
 ### Primeros pasos
 1. En **Administración → Modelo LLM** y **Embeddings**, añade un motor (endpoint, clave y modelo) y márcalo como predeterminado. «Probar» comprueba que responde.
@@ -97,8 +97,9 @@ MimirSynth avisa por sí mismo del grafo y de los modelos de IA ([NOTIFICATIONS.
 | `503` con `"db": false` | La aplicación está viva pero no llega a PostgreSQL |
 | `503` con `"graph": false` | La aplicación está viva pero FalkorDB no responde |
 | Sin respuesta o error de conexión | La aplicación está caída |
+| `"secrets": "unreadable"` en el cuerpo (con cualquier código) | La aplicación funciona, pero `MIMIRSYNTH_SESSION_SECRET` no es la clave que cifró los secretos guardados: ver el asistente de primer arranque, más arriba |
 
-Avisa ante cualquier código distinto de `200`; para distinguir los casos, mira `db` y `graph` en el cuerpo. Cada comprobación espera como mucho 2 segundos, y la causa de un fallo va al log del contenedor (`docker compose logs mimirsynth`), nunca a la respuesta. Si el monitor está en otra máquina, usa la dirección pública detrás del proxy inverso (`https://memoria.example.com/api/health`). La comprobación de salud de Docker del contenedor usa el mismo endpoint, así que `docker ps` lo marca como `unhealthy` en ambos casos.
+Avisa ante cualquier código distinto de `200`; para distinguir los casos, mira `db` y `graph` en el cuerpo. Cada comprobación espera como mucho 2 segundos, y la causa de un fallo va al log del contenedor (`docker compose logs mimirsynth`), nunca a la respuesta. Si el monitor está en otra máquina, usa la dirección pública detrás del proxy inverso (`https://memoria.example.com/api/health`). La comprobación de salud de Docker del contenedor usa el mismo endpoint, así que `docker ps` lo marca como `unhealthy` en ambos casos. Al ser pública, también informa de un problema de configuración, sin detalles (ni tipos ni cuántos): `"secrets": "unreadable"` cuando `MIMIRSYNTH_SESSION_SECRET` no abre los secretos guardados. Ese campo no cambia el código de respuesta.
 
 Para ver cómo va (tiempo del recall, trabajos en cola, propuestas, errores de los motores de IA), activa las métricas de Prometheus en `/metrics` desde Administración → Métricas: consulta «Métricas» en la wiki.
 

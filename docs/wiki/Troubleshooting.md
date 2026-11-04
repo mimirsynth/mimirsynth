@@ -9,6 +9,7 @@ First, look at the state: `docker compose ps`, `docker compose logs mimirsynth -
 |---|---|
 | `define POSTGRES_PASSWORD` / `define MIMIRSYNTH_SESSION_SECRET` | They are missing from `.env`. Set them |
 | The application stops on start with an error about `MIMIRSYNTH_SESSION_SECRET` | With sign-in on, the default secret is not accepted: set a random one |
+| «The instance's secret key does not open the stored secrets» in Administration, or «A stored secret cannot be read» on an action | `MIMIRSYNTH_SESSION_SECRET` is not the one the database was sealed with (a restore on another host, a copy for a test stack, an edited `.env`). Put the right one back and restart; if it is lost, see [[Upgrade and backups]] |
 | Brains with odd names appear on first start | A trailing comment on the `MIMIRSYNTH_BOOTSTRAP_GRAPHS` line in `.env`. Remove line-end comments ([[Environment variables]]) |
 | A variable in `.env` has no effect | The official compose only forwards the variables it lists under `environment:`. Add it there ([[Environment variables]]) |
 | `bind: address already in use` | Port 8000 is taken: change `MIMIRSYNTH_PORT` |

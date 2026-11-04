@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from . import decider
 from .deps import audit, require_admin
 from .models import DecisionEngine, User
-from .secretbox import seal, unseal
+from .secretbox import SealedSecretError, seal, unseal
 from .store import get_db
 
 log = logging.getLogger("mimirsynth.decider")
@@ -103,6 +103,8 @@ def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depend
         r = decider.decide(e.base_url, e.model, unseal(e.api_key_enc), "Entidad: 'Nextcloud'", "¿Qué tipo de entidad es?",
                            ["Persona", "Servicio de software", "Dispositivo físico", "Ubicación"])
         return {"ok": True, "ms": int((time.time() - t0) * 1000), "reply": f"{r['letter']} ({r['prob']}) {r['probs']}"}
+    except SealedSecretError:
+        raise  # its key cannot be read: the app's own clear answer (#193)
     except Exception as ex:  # noqa: BLE001
         return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(ex)[:200]}
 

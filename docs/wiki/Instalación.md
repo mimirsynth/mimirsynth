@@ -93,8 +93,9 @@ MimirSynth avisa por sí mismo del grafo y de los modelos de IA (la campana y lo
 | `503` con `"db": false` | La aplicación está viva pero no llega a PostgreSQL |
 | `503` con `"graph": false` | La aplicación está viva pero FalkorDB no responde |
 | Sin respuesta o error de conexión | La aplicación está caída |
+| `"secrets": "unreadable"` en el cuerpo (con cualquier código) | La aplicación funciona, pero `MIMIRSYNTH_SESSION_SECRET` no es la clave que cifró los secretos guardados: ver [[Actualización y copias de seguridad]] |
 
-Avisa ante cualquier código distinto de `200`; para distinguir los casos, mira `db` y `graph` en el cuerpo. Cada comprobación espera como mucho 2 segundos, y la causa de un fallo va al log del contenedor (`docker compose logs mimirsynth`), nunca a la respuesta. Si el monitor está en otra máquina, usa la dirección pública detrás del proxy inverso (`https://memoria.example.com/api/health`). La comprobación de salud de Docker del contenedor usa el mismo endpoint, así que `docker ps` lo marca como `unhealthy` en ambos casos.
+Avisa ante cualquier código distinto de `200`; para distinguir los casos, mira `db` y `graph` en el cuerpo. Cada comprobación espera como mucho 2 segundos, y la causa de un fallo va al log del contenedor (`docker compose logs mimirsynth`), nunca a la respuesta. Si el monitor está en otra máquina, usa la dirección pública detrás del proxy inverso (`https://memoria.example.com/api/health`). La comprobación de salud de Docker del contenedor usa el mismo endpoint, así que `docker ps` lo marca como `unhealthy` en ambos casos. Al ser pública, también informa de un problema de configuración, sin detalles (ni tipos ni cuántos): `"secrets": "unreadable"` cuando `MIMIRSYNTH_SESSION_SECRET` no abre los secretos guardados. Ese campo no cambia el código de respuesta.
 
 Para ver cómo va (tiempo del recall, trabajos en cola, propuestas, errores de los motores de IA), activa las métricas de Prometheus en `/metrics` desde Administración → Métricas: consulta [[Métricas]].
 
