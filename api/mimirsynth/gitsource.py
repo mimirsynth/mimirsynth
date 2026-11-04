@@ -80,7 +80,7 @@ def check_include(patterns: list[str] | None) -> list[str]:
             continue
         if len(p) > 200 or p.startswith("/") or ".." in p.split("/") or any(ord(c) < 32 for c in p):
             raise ValueError(tr("la ruta «{{path}}» no es válida: relativa a la raíz del repositorio, sin «..»", SOURCE, path=p[:60]))
-        out.append(p)
+        out.append(_tidy(p))
     if not out:
         raise ValueError(tr("indica al menos una ruta que incluir", SOURCE))
     if len(out) > MAX_PATTERNS:
@@ -89,30 +89,66 @@ def check_include(patterns: list[str] | None) -> list[str]:
 
 
 # --- choosing the files -----------------------------------------------------------------------
+# Patterns are matched folder by folder, without regular expressions: a regex built from `**` nests `.*` and can backtrack for a very
+# long time on a long path, holding the only process (as the secret detector once did, #138). Both steps below are polynomial.
 
-def _rx(pattern: str) -> re.Pattern:
-    """A path pattern: `*` and `?` stay inside one folder, `**` crosses folders. Matched against the whole path from the root."""
-    out, i = "", 0
-    while i < len(pattern):
-        if pattern.startswith("**/", i):
-            out, i = out + "(?:.*/)?", i + 3
-        elif pattern.startswith("**", i):
-            out, i = out + ".*", i + 2
+def _tidy(pattern: str) -> str:
+    """Empty folders and repeated `**` folders say nothing more: `docs//**/**/x` is `docs/**/x`."""
+    out: list[str] = []
+    for seg in pattern.split("/"):
+        if seg and not (seg == "**" and out and out[-1] == "**"):
+            out.append(seg)
+    return "/".join(out)
+
+
+def _name(pattern: str, name: str) -> bool:
+    """One folder or file name against one segment of a pattern: `*` any run of characters, `?` one. Linear in practice, never
+    worse than len(pattern) × len(name): on a mismatch it only goes back to the last `*`."""
+    p, n = pattern.lower(), name.lower()
+    i = j = 0
+    star, mark = -1, 0
+    while j < len(n):
+        if i < len(p) and (p[i] == "?" or p[i] == n[j]):
+            i, j = i + 1, j + 1
+        elif i < len(p) and p[i] == "*":
+            star, mark, i = i, j, i + 1
+        elif star >= 0:
+            mark += 1
+            i, j = star + 1, mark
         else:
-            c = pattern[i]
-            out += "[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c)
-            i += 1
-    return re.compile(out + r"\Z", re.IGNORECASE)
+            return False
+    return all(c == "*" for c in p[i:])
+
+
+def _match(pattern: str, path: str) -> bool:
+    """The whole path against a pattern from the root: a `**` folder is zero or more folders (one or more at the end, as in
+    gitignore); `*` and `?` stay inside one name, and a `**` inside a name is just `*`."""
+    ps, ns = _tidy(pattern).split("/"), path.split("/")
+    seen: dict[tuple[int, int], bool] = {}
+
+    def at(i: int, j: int) -> bool:
+        if (i, j) not in seen:
+            if i == len(ps):
+                ok = j == len(ns)
+            elif ps[i] == "**" and i == len(ps) - 1:  # a final `**` is whatever is inside, not the folder itself
+                ok = j < len(ns)
+            elif ps[i] == "**":
+                ok = at(i + 1, j) or (j < len(ns) and at(i, j + 1))
+            else:
+                ok = j < len(ns) and _name(ps[i], ns[j]) and at(i + 1, j + 1)
+            seen[(i, j)] = ok
+        return seen[(i, j)]
+    return at(0, 0)
 
 
 def included(path: str, patterns: list[str]) -> bool:
-    return any(_rx(p).match(path) for p in patterns)
+    return any(_match(p, path) for p in patterns)
 
 
 def excluded(path: str) -> bool:
     """Hidden files and folders, and the names in EXCLUDE at any depth."""
     parts = path.split("/")
-    return any(x.startswith(".") for x in parts[:-1]) or any(_rx(p).match(parts[-1]) for p in EXCLUDE) or parts[-1].startswith(".")
+    return any(x.startswith(".") for x in parts) or any(_name(p, parts[-1]) for p in EXCLUDE)
 
 
 def select(entries: list[tuple[str, str, str]], include: list[str]) -> dict[str, str]:

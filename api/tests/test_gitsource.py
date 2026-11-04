@@ -64,9 +64,25 @@ def test_choosing_files_by_path():
     for p in ("docs/.env.md", "docs/.hidden/x.md", "docs/keys/id_rsa.txt", "docs/server.pem", "docs/credentials.txt", "docs/x.tfstate.md"):
         assert gitsource.excluded(p), p
     assert not gitsource.excluded("docs/secret-management.md")                    # a document about secrets is a document
+    assert gitsource.included("docs/x/adr/y/z.md", ["docs/**/adr/**"]) and not gitsource.included("docs/x/adr", ["docs/**/adr/**"])
+    assert gitsource.included("a/B/c.MD", ["a/?/*.md"]) and not gitsource.included("a/bb/c.md", ["a/?/*.md"])
+    assert gitsource.check_include(["docs//**/**/x", "docs/**"]) == ["docs/**/x", "docs/**"]
+
     entries = [("100644", "b1", "docs/a.md"), ("120000", "b2", "docs/link.md"), ("160000", "b3", "docs/sub"), ("100755", "b4", "docs/run.txt"),
                ("100644", "b5", "docs/app.py"), ("100644", "b6", "docs/.env.md")]
     assert gitsource.select(entries, inc) == {"docs/a.md": "b1", "docs/run.txt": "b4"}   # no links, no submodules, only document types
+
+
+def test_a_pattern_cannot_stall_the_process():
+    """Repeated `**` and `*` against a long path: a regex would backtrack for minutes (the reviewer's case took 0.84 s with four)."""
+    import time
+    evil = ["**a**a**a**ab", "**a" * 60 + "b", "**/a" * 50 + "/b", "*a" * 99 + "b", "/".join(["*a*a*a*a*a*a*a*a*a*b"] * 20)]
+    paths = ["a" * 479, "/".join(["a" * 9] * 48), "a/" * 239 + "a"]
+    t0 = time.monotonic()
+    for p in evil:
+        for path in paths:
+            assert not gitsource.included(path, [p])
+    assert time.monotonic() - t0 < 1.0
 
 
 def test_what_the_administrator_gives_is_checked():
