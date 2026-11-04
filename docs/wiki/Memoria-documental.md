@@ -55,6 +55,7 @@ Los originales viven en un **volumen del stack** (`MIMIRSYNTH_DOC_STORE`), **no*
 | **Subidas** | Ficheros arrastrados en la web | Colaborador o superior |
 | **Carpeta** | Directorio montado **en solo lectura**; se reescanea cada N minutos | Administrador del brain (raíces: administrador de la instancia) |
 | **Wiki** | Una wiki por su API, en solo lectura: Outline, Confluence o Notion | Administrador de la instancia |
+| **Repositorio Git** | README, `docs/`, ADR y changelog de un repositorio, sincronizados por commit | Administrador de la instancia |
 
 ### Escaneo de carpetas
 Detecta **nuevos, cambiados y desaparecidos** por tamaño, fecha y hash. Si la carpeta aparece vacía en un escaneo programado, falla sin borrar nada (protección contra volúmenes desmontados). Un almacén de Obsidian no necesita adaptador: úsalo como carpeta.
@@ -72,13 +73,16 @@ Docmost no está soportado: todavía no tiene una API pública documentada. Si u
 
 La sincronización es **incremental**: las páginas se comparan por fecha de modificación y solo se descargan las nuevas o cambiadas, lo que abarata los reescaneos aunque cada página cueste una petición (Notion). Si la wiki falla a mitad, el escaneo se corta sin borrar nada. Para escribir un adaptador nuevo (de solo lectura y sin estado), mira «Cómo añadir otra wiki» en [`docs/es/DOCUMENTS.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/DOCUMENTS.md).
 
+### Repositorios Git
+Un repositorio se lee con un clon superficial **sin contenidos**: se lista el árbol y solo se descargan los ficheros elegidos que son nuevos o cambiaron, así que un repositorio grande no llena el volumen. Sin commits nuevos, un escaneo no lee nada. Cada documento cita el repositorio, la ruta y el commit, y enlaza al fichero en ese commit en la forja. Los ficheros de claves (`.env*`, `*.pem`, `*.key`, `id_rsa*`…) y los ocultos no entran nunca, digan lo que digan las rutas. Si git falla, no se borra nada. Detalles en «Repositorios Git» de [`docs/es/DOCUMENTS.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/DOCUMENTS.md); cómo añadir uno, en [[Conocimiento]].
+
 ## Permisos
 | Acción | Rol |
 |---|---|
 | Buscar, abrir, ver contexto, descargar el original | lector |
 | Subir ficheros, promover un pasaje a memoria, borrar los ficheros que subiste | colaborador |
 | Reindexar, borrar cualquier documento subido, buscar duplicados, gestionar fuentes de carpeta | administrador del brain |
-| Añadir wikis, cambiar sus colecciones y credenciales | administrador de la instancia |
+| Añadir wikis, cambiar sus colecciones y credenciales; añadir repositorios Git, cambiar su rama, sus rutas y su token | administrador de la instancia |
 Toda acción queda en la [[Auditoría]].
 
 ## De documento a memoria

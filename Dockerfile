@@ -11,6 +11,8 @@ ARG VERSION=dev
 LABEL org.opencontainers.image.title="MimirSynth" org.opencontainers.image.description="Memory for AI agents on a temporal knowledge graph" org.opencontainers.image.licenses="Apache-2.0" org.opencontainers.image.source="https://github.com/MimirSynth/mimirsynth" org.opencontainers.image.version="${VERSION}"
 ENV PYTHONUNBUFFERED=1 MIMIRSYNTH_STATIC_DIR=/srv/web
 WORKDIR /srv
+# git: Git repositories as a document source (#118); only shallow, blobless clones of the chosen paths
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 COPY api ./api
 # The API answers in the caller's language with the same server catalogue the web uses (see mimirsynth/i18n.py).
 COPY web/src/i18n/en.server.json ./api/mimirsynth/en.server.json

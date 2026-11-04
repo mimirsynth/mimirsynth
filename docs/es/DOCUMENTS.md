@@ -2,7 +2,7 @@
 
 # Memoria documental (diseño)
 
-Estado: **implementada** (subidas, carpetas y wikis; fases D1 a D5, ver «Fases»). Esta página nació como el diseño de la memoria documental y sigue recogiendo las decisiones tomadas y las alternativas descartadas; donde la implementación acabó apartándose del primer diseño, el texto describe lo que hace hoy el código y lo indica.
+Estado: **implementada** (subidas, carpetas, wikis y repositorios Git; fases D1 a D5, ver «Fases»). Esta página nació como el diseño de la memoria documental y sigue recogiendo las decisiones tomadas y las alternativas descartadas; donde la implementación acabó apartándose del primer diseño, el texto describe lo que hace hoy el código y lo indica.
 
 ## Qué es y qué no es
 
@@ -18,22 +18,23 @@ Principios:
 
 ## Fuentes
 
-Una fuente es un conector que sabe **listar** documentos (con un identificador estable y una marca de cambio) y **traer su contenido**. Hay tres tipos:
+Una fuente es un conector que sabe **listar** documentos (con un identificador estable y una marca de cambio) y **traer su contenido**. Hay cuatro tipos:
 
 | Tipo | Qué es | Configuración |
 |---|---|---|
 | **Wiki por API** | Cualquier wiki con API de lectura. Están implementadas Outline, Confluence y Notion (ver «Wikis»); el conector es un adaptador con una interfaz pequeña, para sumar otras sin tocar el resto | Depende del adaptador (normalmente una URL y un token, con los secretos cifrados con el `secretbox`) más las colecciones que se indexan |
 | **Carpeta de archivos** | Una carpeta montada **en solo lectura** con ficheros `.md`, `.markdown`, `.txt`, `.rst`, `.log`, `.html`, `.htm` y `.pdf`, en subcarpetas. Los originales se **referencian donde están**, no se copian | Una raíz autorizada y una subcarpeta dentro de ella (ver «Carpetas y cola de trabajos») |
+| **Repositorio Git** | Los documentos de un repositorio (README, `docs/`, ADR, changelog), sincronizados por commit (ver «Repositorios Git») | La dirección, la rama (vacía = la principal), las rutas que se incluyen y, para un repositorio privado, un token de solo lectura (cifrado con el `secretbox`) |
 | **Subida desde la UI** | Ficheros arrastrados al navegador, de cualquier tamaño (subida por partes) | Ninguna; cada brain tiene una fuente «Subidas» y el original va al almacén de ficheros |
 
-Más adelante, sin cambiar el diseño: repositorio Git, rastreo de una URL, almacenamiento de objetos.
+Más adelante, sin cambiar el diseño: rastreo de una URL, almacenamiento de objetos.
 
 ## Modelo de datos
 
 Plano de control (PostgreSQL, migraciones Alembic):
 
-- `doc_sources`: `id`, `brain_id`, `kind` (`wiki` | `directory` | `upload`), `name` (único por brain), `config` (JSON; los secretos van cifrados), `enabled` (una fuente se puede pausar), `sync_interval` (minutos, vacío = solo manual), `status`, `last_sync_at`, `last_error`, `created_by`.
-- `documents`: `id`, `brain_id`, `source_id`, `external_id` (la ruta relativa en una carpeta, el id de la página en una wiki), `title`, `filename`, `url`, `mime`, `size`, `sha256`, `norm_hash` (huella del texto extraído, para detectar duplicados), `storage_ref` (dónde está el original, ver «Almacén de ficheros»), `text_ref` (el texto normalizado al que apuntan los trozos), `source_updated_at`, `status` (`pending` | `indexing` | `active` | `duplicate` | `error`), `error`, `chunks`, `meta` (colección, secretos detectados, el original de un duplicado…), `first_seen_at`, `last_seen_at`. Único por `(source_id, external_id)`.
+- `doc_sources`: `id`, `brain_id`, `kind` (`wiki` | `directory` | `git` | `upload`), `name` (único por brain), `config` (JSON; los secretos van cifrados), `enabled` (una fuente se puede pausar), `sync_interval` (minutos, vacío = solo manual), `status`, `last_sync_at`, `last_error`, `created_by`.
+- `documents`: `id`, `brain_id`, `source_id`, `external_id` (la ruta relativa en una carpeta o en un repositorio, el id de la página en una wiki), `title`, `filename`, `url`, `mime`, `size`, `sha256`, `norm_hash` (huella del texto extraído, para detectar duplicados), `storage_ref` (dónde está el original, ver «Almacén de ficheros»), `text_ref` (el texto normalizado al que apuntan los trozos), `source_updated_at`, `status` (`pending` | `indexing` | `active` | `duplicate` | `error`), `error`, `chunks`, `meta` (colección, secretos detectados, el original de un duplicado…), `first_seen_at`, `last_seen_at`. Único por `(source_id, external_id)`.
 - El trabajo en segundo plano va a la tabla general `jobs` (ver «Carpetas y cola de trabajos»). *La tabla `doc_jobs` del primer diseño no llegó a crearse.*
 
 Índice (igual que `episode_chunks`: tablas pgvector creadas por el módulo de índice, con la misma dimensión de embedding):
@@ -48,7 +49,7 @@ Los originales viven en un **volumen del stack** que monta la aplicación (`MIMI
 
 ```
 <almacén>/<brain>/<fuente>/<documento>/
-    <sha256>.<ext>        el fichero original (subidas) o la instantánea de la página (wikis), inmutable
+    <sha256>.<ext>        el fichero original (subidas) o la instantánea (página de una wiki, fichero de un repositorio en un commit), inmutable
     <sha256>.norm.txt     el texto normalizado al que apuntan char_start/char_end
 ```
 
@@ -98,7 +99,7 @@ Es idempotente y reanudable: si falla a mitad, la siguiente pasada continúa. Co
 | Borrar un documento subido | quien lo subió, o un administrador del brain |
 | Cancelar o reintentar un trabajo | curador |
 | Añadir, editar, pausar, escanear o quitar fuentes; reindexar un documento; buscar duplicados | administrador del brain |
-| Registrar raíces de carpetas; conectar una wiki o cambiar su conexión y sus colecciones | administrador de la instancia (no con un token de API) |
+| Registrar raíces de carpetas; conectar una wiki o cambiar su conexión y sus colecciones; conectar un repositorio Git o cambiar su rama, sus rutas o su token | administrador de la instancia (no con un token de API) |
 
 Solo los documentos subidos se pueden borrar de uno en uno: un documento de una carpeta o de una wiki volvería en el siguiente escaneo, así que se quita en su origen o quitando la fuente. Todo queda en la auditoría (qué fuente, quién, cuántos documentos). Quitar una fuente pide confirmación y elimina del índice sus documentos y sus trozos; los ficheros de la carpeta y las páginas de la wiki no se tocan.
 
@@ -108,6 +109,7 @@ La **federación** ([FEDERATION.md](FEDERATION.md)) trata los documentos como un
 
 - **Carpeta:** el administrador de la instancia registra las raíces en Administración → Carpetas, siempre bajo el bind de solo lectura `/sources`; un administrador de brain solo elige una raíz y una subcarpeta dentro de ella. Nunca una ruta arbitraria, y no se siguen los enlaces simbólicos que salen de la carpeta.
 - **Wiki:** solo los administradores de la instancia configuran la URL y las credenciales, porque el servidor hace peticiones a la dirección que se le da. Las redes privadas se permiten (es lo normal en un autoalojado). *El interruptor para prohibirlas que mencionaba el primer diseño no existe.*
+- **Repositorio Git:** la misma regla que una wiki (solo administradores de la instancia), y git se ejecuta acotado: solo `https` y `http`, sin usuario ni contraseña en la dirección, el token solo por https y en una cabecera que va en el entorno, sin la configuración de git del sistema ni del usuario, sin hooks, enlaces, submódulos ni Git LFS. Como con una wiki, el servidor se conecta a la dirección http(s) que dé el administrador de la instancia, también a las internas: es el uso previsto y no hay una lista de destinos permitidos. Ver «Repositorios Git».
 - **Subidas:** tope de tamaño; solo se aceptan las extensiones admitidas, y un fichero de texto cuyo contenido resulta ser binario se rechaza al extraerlo; el HTML se reduce a texto. El original solo se devuelve a quien tiene permiso de lectura en el brain, con `Content-Disposition: attachment` y `X-Content-Type-Options: nosniff`; nada se ejecuta ni se sirve como página.
 - **Secretos:** cifrados con el mismo `secretbox` que las claves de los motores; nunca se devuelven por la API (solo dice cuáles están puestos).
 - **Credenciales dentro de un documento:** antes de trocear, el detector de secretos enmascara lo que tiene forma de credencial en el texto que se indexa, o deja el documento sin indexar (en `error`) si el brain las bloquea. El original no se modifica. Ver «Secretos» en [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -184,6 +186,18 @@ Reglas del contrato: solo lectura; sin estado; `updated_at` es la fecha de últi
 - **Obsidian:** no necesita adaptador. Un vault es una carpeta de Markdown: se usa como fuente de carpeta. El extractor entiende sus convenciones: quita el frontmatter YAML (usando su `title:`), deja el texto de los `[[enlaces]]` y `[[destino|alias]]`, y descarta `![[incrustaciones]]`, `%%comentarios%%` y marcas `^bloque`, también con saltos de línea de Windows. `.obsidian/` se ignora por ser oculta.
 - **Confluence (Cloud y Data Center) y Notion:** escritos contra el formato documentado de cada API y cubiertos por tests con respuestas simuladas; **sin validar aún contra una instancia real**. Confluence usa la API REST v1 (`/rest/api`): Cloud con correo + token de API, Data Center con un token de acceso personal sin correo; las colecciones son los espacios y las páginas llegan como HTML (`body.storage`). Notion no tiene espacios: las colecciones son las bases de datos compartidas con la integración más «Páginas sueltas»; los bloques de cada página se convierten a Markdown y su contenido solo se pide cuando cambió la fecha de modificación.
 - **Docmost:** sin escribir; su API pública no está documentada de forma estable. Se añadirá cuando lo esté o cuando haya una instancia de prueba.
+
+## Repositorios Git
+
+Una fuente `git` (#118) indexa los documentos de un repositorio: por defecto los `README*` y `CHANGELOG*` de su raíz, todo lo que hay bajo `docs/` y cualquier carpeta `adr/`. Montar un clon como carpeta y actualizarlo con un cron sigue sirviendo; esta fuente añade lo que eso no da: sincronización por commit, una cita que apunta al fichero en el commit indexado y un token de solo lectura que guarda la instancia en lugar de un cron.
+
+- **Conexión:** la dirección (https, o http sin token), la rama (vacía = la principal del repositorio), las rutas y, para un repositorio privado, un token de solo lectura (con usuario, para las forjas que lo piden: Bitbucket, Gitea). El repositorio se comprueba con `git ls-remote` antes de guardar. Solo el administrador de la instancia lo conecta o cambia su rama, sus rutas o su token; un administrador del brain puede renombrarlo, cambiar su intervalo, pausarlo o quitarlo.
+- **Qué se lee:** un clon superficial y sin contenidos (`--depth 1 --filter=blob:none --no-checkout`) que se guarda en el almacén, en `<almacén>/<brain>/<fuente>/_git`. El árbol se lista **sin tamaños** (pedir un tamaño descarga el contenido) y los ficheros se eligen por ruta; después solo se descargan los elegidos que son **nuevos o cambiaron** (por su blob), con un *sparse checkout* de exactamente esas rutas. Medido con el repositorio de este mismo proyecto: 138 documentos, un clon de 1,8 MB.
+- **Elección de ficheros:** las rutas son patrones desde la raíz en los que `*` no sale de una carpeta y `**` sí. Solo entran los tipos de documento que lee el índice; los ficheros y carpetas ocultos y los nombres que guardan credenciales por naturaleza (`.env*`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `credentials*`, `*.tfstate*`…) no entran nunca, digan lo que digan los patrones; los enlaces y los submódulos se saltan. Todo pasa además por el detector de secretos al indexarse.
+- **Sincronización por commit:** sin commits nuevos, un escaneo programado no lee nada. Si los hay, los ficheros sin cambios conservan su documento, los cambiados se reindexan y los que salen de las rutas se retiran del índice. Cada documento guarda el repositorio, la ruta, el commit y el blob, y su enlace apunta al fichero en ese commit en la forja (se reconocen por la dirección GitHub, GitLab, Bitbucket, Gitea, Forgejo y Codeberg; cualquier otra recibe la forma de GitHub).
+- **Límites:** como mucho 2000 ficheros elegidos y 200 MB descargados en una sincronización (si no, el escaneo falla y pide acotar las rutas); un fichero por encima del tamaño máximo de documento se deja fuera.
+- **Protección:** si git falla (dirección, token, red) o las rutas eligen demasiados ficheros, el escaneo falla y no borra nada. Si las rutas no eligen nada y la fuente tenía documentos, un escaneo programado también falla; solo uno manual vacía el índice. Cambiar la rama o las rutas hace que el siguiente escaneo vuelva a leer todo el árbol. Quitar la fuente borra su clon; el repositorio no se toca nunca.
+- **Imagen del contenedor:** incluye `git`.
 
 ## Puentes con el grafo
 

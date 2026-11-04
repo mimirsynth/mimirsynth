@@ -15,12 +15,19 @@ type Doc = {
 type Chunk = { chunk_idx: number; heading_path: string; page: number | null; text: string };
 type Hit = { document_id: number; chunk: number; title: string; citation: string; text: string; similarity: number; updated_at: string };
 type Source = { id: number; kind: string; name: string; documents: number; by_status: Record<string, number>; last_sync_at: string | null; last_error: string; status: string; enabled: boolean;
-  sync_interval: number | null; config: { root?: string; subpath?: string; adapter?: string; settings?: Record<string, string>; collection_ids?: string[]; secrets_set?: string[] } };
+  sync_interval: number | null; config: { root?: string; subpath?: string; adapter?: string; settings?: Record<string, string>; collection_ids?: string[]; secrets_set?: string[];
+    url?: string; web?: string | null; branch?: string; include?: string[]; commit?: string | null } };
 type Adapter = { id: string; label: string; collection_label: string; fields: { name: string; label: string; secret: boolean; required: boolean; placeholder: string; help: string }[] };
 type Up = { key: string; name: string; size: number; done: number; state: "subiendo" | "listo" | "duplicado" | "error"; msg?: string };
 
 const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger", duplicate: "neutral" };
 const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: T("en cola"), error: "error", duplicate: T("duplicado") };
+// what a source is, in the table and its filter
+const KIND: Record<string, string> = { upload: T("subidas"), wiki: "wiki", git: T("repositorio"), directory: T("carpeta") };
+// the paths a new Git source indexes, one per line in the form (the server checks them again)
+const GIT_PATHS = ["README*", "docs/**", "**/adr/**", "CHANGELOG*"];
+const lines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
+type Repo = { name: string; url: string; branch: string; include: string; username: string; token: string; interval: number | "" };
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const PART = 32 * 1024 * 1024; // las partes son más pequeñas que el límite habitual de los proxies (~100 MB)
 
@@ -59,6 +66,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const [del, setDel] = useState<Doc | null>(null);
   const [newSrc, setNewSrc] = useState<{ name: string; root: string; subpath: string; interval: number | "" } | null>(null);
   const [delSrc, setDelSrc] = useState<Source | null>(null);
+  const [repo, setRepo] = useState<Repo | null>(null);
   const [wiki, setWiki] = useState<{ adapter: string; name: string; values: Record<string, string>; cols: { id: string; name: string; description: string }[] | null; picked: string[]; interval: number | "" } | null>(null);
 
   const { f, sent, setFilter, sortProps, sort, page, setPage, active, clear } = useServerTableView({ q: "", status: "", source: "", path: "" }, { debounced: ["q", "path"], firstDir: { title: "asc" } });
@@ -68,9 +76,10 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const sources = useQuery({ queryKey: ["docs-sources", graph], queryFn: () => get<{ enabled: boolean; sources: Source[] }>("docs/sources", { graph }),
     refetchInterval: (qr) => (qr.state.data?.sources.some((x) => x.status === "scanning") ? 3000 : false) });
   const sv = useTableView(sources.data?.sources ?? [], {
-    name: { get: (x: Source) => x.name }, kind: { get: (x: Source) => (x.kind === "upload" ? "subidas" : x.kind === "wiki" ? "wiki" : "carpeta"), exact: true }, docs: { get: (x: Source) => x.documents },
+    name: { get: (x: Source) => x.name }, kind: { get: (x: Source) => KIND[x.kind] ?? x.kind, label: (k: string) => t(k), exact: true }, docs: { get: (x: Source) => x.documents },
     state: { get: (x: Source) => (x.status === "scanning" ? "escaneando" : x.status === "error" ? t("con error") : !x.enabled ? "pausada" : t("al día")), exact: true }, last: { get: (x: Source) => x.last_sync_at ?? "" } });
-  const [editSrc, setEditSrc] = useState<{ s: Source; name: string; interval: number | ""; subpath: string; values: Record<string, string>; picked: string[] | null } | null>(null);
+  const [editSrc, setEditSrc] = useState<{ s: Source; name: string; interval: number | ""; subpath: string; values: Record<string, string>; picked: string[] | null;
+    branch: string; include: string; username: string; token: string; clearToken: boolean } | null>(null);
   const hits = useQuery({ queryKey: ["docs-search", graph, query], enabled: query.length >= 2, queryFn: () => get<{ enabled: boolean; results: Hit[] }>("docs/search", { graph, q: query, k: 8 }) });
   const detail = useQuery({ queryKey: ["doc", graph, open], enabled: open !== null, queryFn: () => get<Doc & { chunk_list: Chunk[] }>(`docs/${open}`, { graph, chunks: 200 }) });
   const context = useQuery({ queryKey: ["doc-ctx", graph, ctxOf?.document_id, ctxOf?.chunk], enabled: !!ctxOf,
@@ -99,11 +108,14 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
     queryFn: () => get<{ collections: { id: string; name: string; description: string }[]; selected: string[]; documents: Record<string, number> }>(`docs/sources/${editSrc!.s.id}/wiki/collections`, { graph }) });
   const connect = useMutation({ mutationFn: (w: NonNullable<typeof wiki>) => send<{ collections: { id: string; name: string; description: string }[] }>("POST", "docs/wiki/collections", { adapter: w.adapter, values: w.values }, { graph }),
     onSuccess: (r) => setWiki((w) => (w ? { ...w, cols: r.collections, picked: r.collections.map((c) => c.id) } : w)) });
+  const addRepo = useMutation({ mutationFn: (r: Repo) => send("POST", "docs/sources/git", { name: r.name.trim(), url: r.url.trim(), branch: r.branch.trim(), include: lines(r.include),
+      username: r.username.trim(), token: r.token.trim(), sync_interval: r.interval === "" ? null : r.interval }, { graph }), onSuccess: () => { setRepo(null); refreshSrc(); } });
   const addWiki = useMutation({ mutationFn: (w: NonNullable<typeof wiki>) => send("POST", "docs/sources/wiki", { adapter: w.adapter, values: w.values, name: w.name, collection_ids: w.picked, sync_interval: w.interval === "" ? null : w.interval }, { graph }),
     onSuccess: () => { setWiki(null); refreshSrc(); } });
   const saveSrc = useMutation({ mutationFn: ({ confirm, ...e }: NonNullable<typeof editSrc> & { confirm?: number }) => send("PATCH", `docs/sources/${e.s.id}`, {
       name: e.name.trim(), ...(e.interval === "" ? { clear_interval: true } : { sync_interval: Number(e.interval) }), ...(e.s.kind === "directory" ? { subpath: e.subpath } : {}),
-      ...(e.s.kind === "wiki" && Object.values(e.values).some((v) => v.trim()) ? { values: e.values } : {}), ...(e.s.kind === "wiki" && e.picked ? { collection_ids: e.picked, confirm_removed: confirm } : {}) }, { graph }),
+      ...(e.s.kind === "wiki" && Object.values(e.values).some((v) => v.trim()) ? { values: e.values } : {}), ...(e.s.kind === "wiki" && e.picked ? { collection_ids: e.picked, confirm_removed: confirm } : {}),
+      ...(e.s.kind === "git" ? gitChanges(e) : {}) }, { graph }),
     onSuccess: () => { setEditSrc(null); setDropAsk(null); refreshSrc(); } });
   // collections taken out of a wiki source: their documents leave the index when saving, so the count is confirmed first
   const [dropAsk, setDropAsk] = useState<{ e: NonNullable<typeof editSrc>; n: number; names: string[] } | null>(null);
@@ -115,6 +127,12 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
     if (n > 0) setDropAsk({ e, n, names: out.map((id) => d?.collections.find((c) => c.id === id)?.name ?? id) });
     else saveSrc.mutate(e);
   };
+  // only what changed goes to the server: a Git change is checked against the repository and starts a sync
+  function gitChanges(e: NonNullable<typeof editSrc>) {
+    const c = e.s.config;
+    return { ...(e.branch.trim() !== (c.branch ?? "") ? { branch: e.branch.trim() } : {}), ...(lines(e.include).join("\n") !== (c.include ?? []).join("\n") ? { include: lines(e.include) } : {}),
+      ...(e.username.trim() !== (c.settings?.username ?? "") ? { username: e.username.trim() } : {}), ...(e.token.trim() ? { token: e.token.trim() } : {}), ...(e.clearToken ? { clear_token: true } : {}) };
+  }
   const scanSrc = useMutation({ mutationFn: (id: number) => send("POST", `docs/sources/${id}/scan`, undefined, { graph }), onSuccess: refreshSrc });
   const toggleSrc = useMutation({ mutationFn: (s: Source) => send("PATCH", `docs/sources/${s.id}`, { enabled: !s.enabled }, { graph }), onSuccess: refreshSrc });
   const removeSrc = useMutation({ mutationFn: (s: Source) => send("DELETE", `docs/sources/${s.id}`, undefined, { graph }), onSuccess: () => { setDelSrc(null); refreshSrc(); } });
@@ -224,9 +242,10 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
           <Tabs.Panel value="src" pt="sm">
             <Stack gap="sm">
               <Group justify="space-between">
-                <Text size="sm" c="dimmed">{t("De dónde salen los documentos. Las carpetas se referencian sin copiar los originales y las wikis se leen por su API (solo lectura); ambas se reescanean solas: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en")} <Link to="/trabajos">{t("Trabajos")}</Link>.</Text>
+                <Text size="sm" c="dimmed">{t("De dónde salen los documentos. Las carpetas se referencian sin copiar los originales, las wikis se leen por su API y los repositorios Git por commit, todo en solo lectura; se reescanean solos: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en")} <Link to="/trabajos">{t("Trabajos")}</Link>.</Text>
                 {isAdmin && (
                   <Group gap={6} wrap="nowrap">
+                    {instanceAdmin && <Btn icon="repo" disabled={!enabled} onClick={() => { addRepo.reset(); setRepo({ name: "", url: "", branch: "", include: GIT_PATHS.join("\n"), username: "", token: "", interval: 60 }); }}>{t("Añadir repositorio")}</Btn>}
                     {instanceAdmin && <Btn icon="docs" disabled={!enabled || !adapters.data?.adapters.length} onClick={() => { connect.reset(); addWiki.reset(); setWiki({ adapter: adapters.data?.adapters[0]?.id ?? "outline", name: "", values: {}, cols: null, picked: [], interval: 60 }); }}>{t("Añadir wiki")}</Btn>}
                     <Btn kind="primary" icon="folder" disabled={!enabled || !roots.data?.roots.length} onClick={() => setNewSrc({ name: "", root: roots.data?.roots[0]?.name ?? "", subpath: "", interval: 60 })}>{t("Añadir carpeta")}</Btn>
                   </Group>)}
@@ -244,8 +263,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                 </DataTable.Tr></DataTable.Thead>
                 <DataTable.Tbody>{sv.rows.map((s) => (
                   <DataTable.Tr key={s.id}>
-                    <DataTable.Td><Text size="sm" fw={500}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
-                    <DataTable.Td><Pill size="xs">{s.kind === "upload" ? "subidas" : s.kind === "wiki" ? "wiki" : "carpeta"}</Pill></DataTable.Td>
+                    <DataTable.Td><Text size="sm" fw={500}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "git" ? `${s.config.web ?? s.config.url} · ${s.config.branch || t("rama principal")}${s.config.commit ? ` · ${s.config.commit.slice(0, 7)}` : ""}` : s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
+                    <DataTable.Td><Pill size="xs">{t(KIND[s.kind] ?? s.kind)}</Pill></DataTable.Td>
                     <DataTable.Td>{s.documents}</DataTable.Td>
                     <DataTable.Td>
                       {s.status === "scanning" ? <Pill size="xs" tone="warn">{t("escaneando")}</Pill>
@@ -258,7 +277,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                     <DataTable.Td>{isAdmin && s.kind !== "upload" && (
                       <Group gap={6} wrap="nowrap">
                         <Btn size="row" icon="refresh" loading={scanSrc.isPending && scanSrc.variables === s.id} disabled={s.status === "scanning"} onClick={() => scanSrc.mutate(s.id)}>{t("Escanear")}</Btn>
-                        <Btn size="row" icon="edit" onClick={() => { saveSrc.reset(); setEditSrc({ s, name: s.name, interval: s.sync_interval ?? "", subpath: s.config.subpath ?? "", values: {}, picked: null }); }}>{t("Editar")}</Btn>
+                        <Btn size="row" icon="edit" onClick={() => { saveSrc.reset(); setEditSrc({ s, name: s.name, interval: s.sync_interval ?? "", subpath: s.config.subpath ?? "", values: {}, picked: null,
+                          branch: s.config.branch ?? "", include: (s.config.include ?? []).join("\n"), username: s.config.settings?.username ?? "", token: "", clearToken: false }); }}>{t("Editar")}</Btn>
                         <Btn size="row" icon={s.enabled ? "pause" : "play"} onClick={() => toggleSrc.mutate(s)}>{s.enabled ? t("Pausar") : t("Reanudar")}</Btn>
                         <Btn kind="danger" size="row" icon="trash" onClick={() => setDelSrc(s)}>{t("Quitar")}</Btn>
                       </Group>)}</DataTable.Td>
@@ -285,7 +305,9 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             <Group gap={6}>
               <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>{t("Descargar original")}</Btn>
               <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>{t("Ver texto completo")}</Btn>
-              {detail.data.url && <Btn size="row" icon="docs" component="a" href={detail.data.url} target="_blank" rel="noreferrer">{t("Abrir en la wiki")}</Btn>}
+              {detail.data.url && (sources.data?.sources.find((x) => x.name === detail.data!.source)?.kind === "git"
+                ? <Btn size="row" icon="repo" component="a" href={detail.data.url} target="_blank" rel="noreferrer">{t("Abrir en el repositorio")}</Btn>
+                : <Btn size="row" icon="docs" component="a" href={detail.data.url} target="_blank" rel="noreferrer">{t("Abrir en la wiki")}</Btn>)}
               {isAdmin && <Btn size="row" icon="refresh" loading={reindex.isPending} onClick={() => reindex.mutate(detail.data!.id)}>{t("Reindexar")}</Btn>}
               {(isAdmin || canUpload) && detail.data.source !== undefined && !sources.data?.sources.some((x) => x.name === detail.data!.source && x.kind === "directory") && <Btn kind="danger" size="row" icon="trash" onClick={() => setDel(detail.data!)}>{t("Borrar")}</Btn>}
             </Group>
@@ -346,6 +368,15 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             <TextField label={t("Nombre")} value={editSrc.name} onChange={(e) => setEditSrc({ ...editSrc, name: e.currentTarget.value })} />
             <NumberField label={t("Reescanear cada (minutos)")} description={t("Vacío = solo cuando pulses «Escanear». Mínimo 5.")} min={5} value={editSrc.interval} onChange={(v) => setEditSrc({ ...editSrc, interval: v === "" ? "" : Number(v) })} />
             {editSrc.s.kind === "directory" && <TextField label={t("Subcarpeta")} description={t("Dentro de la raíz «{{root}}». Cambiarla reindexa lo que quede fuera o dentro en el próximo escaneo.", { root: editSrc.s.config.root })} value={editSrc.subpath} onChange={(e) => setEditSrc({ ...editSrc, subpath: e.currentTarget.value })} />}
+            {editSrc.s.kind === "git" && instanceAdmin && <>
+              <TextField label={t("Rama")} description={t("Vacío = la rama principal del repositorio.")} value={editSrc.branch} onChange={(e) => setEditSrc({ ...editSrc, branch: e.currentTarget.value })} />
+              <TextArea label={t("Rutas incluidas")} description={t("Una por línea. Al guardar un cambio se vuelve a leer el repositorio: lo que quede fuera sale del índice.")} autosize minRows={3}
+                value={editSrc.include} onChange={(e) => setEditSrc({ ...editSrc, include: e.currentTarget.value })} />
+              <TextField label={t("Usuario (opcional)")} value={editSrc.username} onChange={(e) => setEditSrc({ ...editSrc, username: e.currentTarget.value })} />
+              <PasswordField label={t("Token de solo lectura (opcional)")} description={t("Vacío = conservar el guardado. Si escribes uno nuevo se comprueba la conexión antes de guardar.")} value={editSrc.token}
+                disabled={editSrc.clearToken} onChange={(e) => setEditSrc({ ...editSrc, token: e.currentTarget.value })} />
+              {editSrc.s.config.secrets_set?.includes("token") && <Check label={t("Quitar el token guardado")} checked={editSrc.clearToken} onChange={(e) => setEditSrc({ ...editSrc, clearToken: e.currentTarget.checked, token: "" })} />}
+            </>}
             {editSrc.s.kind === "wiki" && instanceAdmin && (adapters.data?.adapters.find((a) => a.id === editSrc.s.config.adapter)?.fields ?? []).filter((f) => f.secret).map((f) => (
               <PasswordField key={f.name} label={t("{{label}} (opcional)", { label: f.label })} description={t("Vacío = conservar la guardada. Si escribes una nueva se comprueba la conexión antes de guardar.")} value={editSrc.values[f.name] ?? ""} onChange={(e) => setEditSrc({ ...editSrc, values: { ...editSrc.values, [f.name]: e.currentTarget.value } })} />))}
             {editSrc.s.kind === "wiki" && instanceAdmin && (() => {
@@ -366,7 +397,26 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                 </Stack>);
             })()}
             <MutationError error={saveSrc.error} />
-            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5) || (!!editSrc.picked && editSrc.picked.length === 0)} onClick={() => save(editSrc)}>{t("Guardar")}</Btn></Group>
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditSrc(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveSrc.isPending} disabled={!editSrc.name.trim() || (editSrc.interval !== "" && Number(editSrc.interval) < 5) || (!!editSrc.picked && editSrc.picked.length === 0) || (editSrc.s.kind === "git" && !lines(editSrc.include).length)} onClick={() => save(editSrc)}>{t("Guardar")}</Btn></Group>
+          </Stack>)}
+      </Modal>
+      <Modal opened={!!repo} onClose={() => setRepo(null)} title={t("Añadir repositorio")}>
+        {repo && (
+          <Stack>
+            <TextField label={t("Nombre de la fuente")} value={repo.name} onChange={(e) => setRepo({ ...repo, name: e.currentTarget.value })} />
+            <TextField label={t("Dirección del repositorio")} placeholder={t("https://github.com/equipo/proyecto.git")} description={t("La dirección para clonar por https. Sin usuario ni contraseña: para un repositorio privado, usa el token.")}
+              value={repo.url} onChange={(e) => setRepo({ ...repo, url: e.currentTarget.value })} />
+            <TextField label={t("Rama (opcional)")} description={t("Vacío = la rama principal del repositorio.")} value={repo.branch} onChange={(e) => setRepo({ ...repo, branch: e.currentTarget.value })} />
+            <TextArea label={t("Rutas incluidas")} autosize minRows={4} value={repo.include} onChange={(e) => setRepo({ ...repo, include: e.currentTarget.value })}
+              description={t("Una por línea, desde la raíz: «*» no cruza carpetas y «**» sí. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática). Nunca entran ficheros ocultos ni de claves (.env, *.pem, *.key, id_rsa…), y todo pasa por el detector de secretos.")} />
+            <TextField label={t("Usuario (opcional)")} description={t("Solo si tu forja lo pide junto al token (Bitbucket, Gitea). Si no, se deja vacío.")} value={repo.username} onChange={(e) => setRepo({ ...repo, username: e.currentTarget.value })} />
+            <PasswordField label={t("Token de solo lectura (opcional)")} description={t("Para un repositorio privado. Se guarda cifrado, no se vuelve a mostrar y solo se envía por https.")} value={repo.token}
+              onChange={(e) => setRepo({ ...repo, token: e.currentTarget.value })} />
+            <NumberField label={t("Reescanear cada (minutos)")} description={t("Vacío = solo cuando pulses «Escanear». Sin commits nuevos no se lee nada.")} min={5} value={repo.interval}
+              onChange={(v) => setRepo({ ...repo, interval: v === "" ? "" : Number(v) })} />
+            <MutationError error={addRepo.error} />
+            <Group justify="flex-end"><Btn kind="ghost" onClick={() => setRepo(null)}>{t("Cancelar")}</Btn>
+              <Btn kind="primary" icon="plus" loading={addRepo.isPending} disabled={!repo.name.trim() || !repo.url.trim() || !lines(repo.include).length} onClick={() => addRepo.mutate(repo)}>{t("Conectar y escanear")}</Btn></Group>
           </Stack>)}
       </Modal>
       <Modal opened={!!wiki} onClose={() => setWiki(null)} title={t("Añadir wiki")}>

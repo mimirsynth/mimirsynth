@@ -365,7 +365,6 @@
  "Datos comunes a todos los proveedores de inicio de sesión.": "Settings shared by all sign-in providers.",
  "Datos de tu cuenta y brains a los que tienes acceso.": "Your account details and the brains you can access.",
  "De confianza: aprobar sus propuestas sin revisión": "Trusted: approve its proposals without review",
- "De dónde salen los documentos. Las carpetas se referencian sin copiar los originales y las wikis se leen por su API (solo lectura); ambas se reescanean solas: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en": "Where the documents come from. Folders are referenced without copying the originals and wikis are read through their API (read-only); both rescan themselves: what is new or changed gets indexed, what disappears is removed. Progress is in",
  "De qué trata este brain. El decisor la usa para juzgar si una propuesta encaja en él.": "What this brain is about. The decider uses it to judge whether a proposal fits in it.",
  "Debe aparecer": "Must appear",
  "Debe haber pasajes de documentos": "There must be document passages",

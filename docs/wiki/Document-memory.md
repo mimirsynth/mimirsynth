@@ -55,6 +55,7 @@ Originals live on a **stack volume** (`MIMIRSYNTH_DOC_STORE`), **not** in Postgr
 | **Uploads** | Files dragged into the web | Contributor or higher |
 | **Folder** | A directory mounted **read-only**; rescanned every N minutes | Brain administrator (roots: instance administrator) |
 | **Wiki** | A wiki through its API, read-only: Outline, Confluence or Notion | Instance administrator |
+| **Git repository** | README, `docs/`, ADRs and changelog of a repository, synced by commit | Instance administrator |
 
 ### Folder scanning
 It detects **new, changed and disappeared** files by size, date and hash. If the folder appears empty in a scheduled scan, it fails without deleting anything (protection against unmounted volumes). An Obsidian vault needs no adapter: use it as a folder.
@@ -72,13 +73,16 @@ Docmost is not supported: it has no documented public API yet. If you use Conflu
 
 Sync is **incremental**: pages are compared by modification date and only new or changed ones are downloaded, which keeps rescans cheap even when each page costs a request (Notion). If the wiki fails halfway, the scan stops without deleting anything. To write a new adapter (read-only and stateless), see "How to add another wiki" in [`docs/DOCUMENTS.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/DOCUMENTS.md).
 
+### Git repositories
+A repository is read with a shallow clone **without contents**: the tree is listed and only the chosen files that are new or changed are downloaded, so a large repository does not fill the volume. With no new commit, a scan reads nothing. Each document cites the repository, the path and the commit, and links to the file at that commit in the forge. Key files (`.env*`, `*.pem`, `*.key`, `id_rsa*`…) and hidden files never come in, whatever the paths say. If git fails, nothing is deleted. Details in "Git repositories" in [`docs/DOCUMENTS.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/DOCUMENTS.md); how to add one, in [[Knowledge]].
+
 ## Permissions
 | Action | Role |
 |---|---|
 | Search, open, view context, download the original | reader |
 | Upload files, promote a passage to memory, delete the files you uploaded | contributor |
 | Reindex, delete any uploaded document, find duplicates, manage folder sources | brain administrator |
-| Add wikis, change their collections and credentials | instance administrator |
+| Add wikis, change their collections and credentials; add Git repositories, change their branch, paths and token | instance administrator |
 Every action is recorded in the [[Audit log]].
 
 ## From document to memory

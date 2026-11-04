@@ -265,7 +265,7 @@ def timeline(
 # --- Procedencia: de qué orígenes viene cada nodo y cada hecho del visor -------------------------
 GROUPINGS = ("label", "source", "document", "author", "token")
 _PROMOTED = re.compile(r"^documento (\d+) · trozo")  # source_description de un pasaje promovido a memoria (docbridge.promote)
-_DOC_KIND = {"upload": "document", "directory": "directory", "wiki": "wiki"}
+_DOC_KIND = {"upload": "document", "directory": "directory", "wiki": "wiki", "git": "git"}
 
 
 def _chunks(xs: list, n: int = 1000):
@@ -280,7 +280,7 @@ def _episode_origins(ctx: BrainCtx, kinds_of: dict[str, str], lang: str) -> tupl
     out: dict[str, dict[str, str]] = {e: {"source": s} for e, s in kinds_of.items() if s}
     names: dict[str, str] = {}
     kinds = {"text": tr("Texto", lang), "message": tr("Mensaje", lang), "json": "JSON", "document": tr("Documento", lang),
-             "directory": tr("Carpeta de archivos", lang), "wiki": "Wiki"}
+             "directory": tr("Carpeta de archivos", lang), "wiki": "Wiki", "git": tr("Repositorio Git", lang)}
     ids = sorted(kinds_of)
     docs: dict[str, int] = {}
     for part in _chunks(ids):
