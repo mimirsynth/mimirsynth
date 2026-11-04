@@ -100,9 +100,10 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
       {d.read_only && <Notice>{t("Entidad prestada por «{{origin}}»: solo lectura.", { origin: e.origin })}</Notice>}
       {asOf && <Notice>{t("Lo vigente el {{date}}, según las fechas de validez.", { date: asOf })}{d.facts.not_yet ? " " + t("{{count}} hechos aún no eran ciertos ese día y no se muestran.", { count: d.facts.not_yet }) : ""}</Notice>}
       {d.facts.truncated && <Notice tone="warn">{t("Se muestran los {{shown}} hechos más recientes de {{total}}.", { shown: d.facts.shown, total: d.facts.total })}</Notice>}
-      {/* the facts on the left and what mentions the entity on the right, about 70 / 30; one column on a phone */}
+      {/* the facts on the left and what mentions the entity on the right, about 70 / 30; one column on a phone. Both columns are a
+          card with their heading inside (issue 215); the relation groups inside are lighter blocks, so no card sits in another */}
       <div className="ms-entity-cols">
-        <Stack gap="sm">
+        <Panel withBorder p="sm"><Stack gap="sm">
           <Text size="sm" fw={700}>{d.stats.earlier ? t("Hechos ({{current}} vigentes, {{earlier}} anteriores)", { current: d.stats.current, earlier: d.stats.earlier })
             : t("Hechos ({{count}})", { count: d.stats.current })}</Text>
           {d.groups.length === 0 && <EmptyState>{t("Esta entidad no tiene hechos.")}</EmptyState>}
@@ -115,7 +116,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
             <Text size="xs" c="dimmed">{t("Relaciones genéricas, como RELATES_TO: el extractor las escribe cuando ningún tipo encaja y pueden unir cualquier cosa, así que no se leen como una evolución.")}</Text>
             {showOther && other.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} self={e} graph={graph} canEdit={canEdit} link={link} />)}
           </Stack>}
-        </Stack>
+        </Stack></Panel>
         <Panel withBorder p="sm"><Stack gap="sm">
           <Text size="sm" fw={700}>{t("Episodios que la mencionan ({{count}})", { count: d.episodes.total })}</Text>
           {d.episodes.total === 0 && <Text size="xs" c="dimmed">{t("Ningún episodio la menciona.")}</Text>}
@@ -167,7 +168,7 @@ function RelationGroup({ g, self, graph, canEdit, link }: { g: EGroup; self: Oth
   const [open, setOpen] = useState(false);
   const values = [...g.current].map((f) => f.other.name);
   return (
-    <Panel withBorder p="sm"><Stack gap="xs">
+    <section className="ms-relgroup"><Stack gap="xs">
       <Group gap="xs" justify="space-between">
         <Group gap="xs">
           <RelationHead g={g} self={self} link={link} />
@@ -183,7 +184,7 @@ function RelationGroup({ g, self, graph, canEdit, link }: { g: EGroup; self: Oth
         {open && g.previous.map((f) => <FactItem key={f.uuid} f={f} graph={graph} canEdit={canEdit} link={link} />)}
         {g.current.map((f) => <FactItem key={f.uuid} f={f} graph={graph} canEdit={canEdit} link={link} />)}
       </ol>
-    </Stack></Panel>
+    </Stack></section>
   );
 }
 
