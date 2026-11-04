@@ -177,6 +177,34 @@ def test_a_summary_that_changed_since_is_not_overwritten_and_the_budget_stops_th
     assert client.post(f"/api/brains/sumrev2/summaries/{item['id']}/approve", json={}).status_code == 404     # no longer pending
 
 
+@pytest.mark.skipif(not FALKOR, reason="needs a disposable FalkorDB (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_a_curator_asks_for_the_summary_of_one_entity_from_its_page(client, env, monkeypatch):  # noqa: F811
+    g, asked = env
+    assert client.post("/api/brains", json={"slug": "sumrev4", "name": "SR4", "graph_name": GRAPH}).status_code == 201
+    for email, role in (("rita@x.com", "reader"), ("cora@x.com", "curator")):
+        assert client.put("/api/brains/sumrev4/members", json={"email": email, "role": role}).status_code == 200
+    _as("rita@x.com", "Rita")
+    assert client.post("/api/brains/sumrev4/summaries/entity/het").status_code == 403
+    _as("cora@x.com", "Cora")                                   # a curator, who cannot start a whole analysis, can ask for one entity
+    assert client.post("/api/brains/sumrev4/summaries/entity/nope").status_code == 404
+    r = client.post("/api/brains/sumrev4/summaries/entity/het")   # Hetzner has no summary at all: one is proposed anyway
+    assert r.status_code == 201 and r.json()["created"] and len(asked) == 1 and "Name: Hetzner" in asked[0]
+    item = r.json()["item"]
+    assert item["status"] == "pending" and item["reason"] == "requested" and item["current"] == "" and item["entity_uuid"] == "het"
+    assert "ghp_" not in item["proposed"] and item["secrets"][0]["rule"] == "github_token"   # through the secret detector, masked
+    again = client.post("/api/brains/sumrev4/summaries/entity/het")
+    assert again.json()["item"]["id"] == item["id"] and not again.json()["created"] and len(asked) == 1               # the pending one, without a new call
+    assert client.get("/api/brains/sumrev4/summaries").json()["items"][0]["id"] == item["id"]
+    r = client.post("/api/brains/sumrev4/summaries/entity/lyra")  # a poor summary keeps the reason it has
+    assert r.json()["item"]["reason"] == "lines"
+    with _factory()() as db:
+        a = db.scalars(select(Audit).where(Audit.action == "summary.propose")).all()
+        assert [x.detail["uuid"] for x in a[-2:]] == ["het", "lyra"]
+    monkeypatch.setattr(usage, "paused", lambda bid: True)      # the brain spent its AI budget and pauses
+    assert client.post("/api/brains/sumrev4/summaries/entity/hyp").status_code == 409
+    app.dependency_overrides.clear()
+
+
 def test_only_curators_review_and_only_administrators_start_an_analysis(client, monkeypatch):  # noqa: F811
     monkeypatch.setattr(sr, "engine", lambda: {"base_url": "http://llm", "model": "m", "api_key": ""})
     assert client.post("/api/brains", json={"slug": "sumrev3", "name": "SR3", "graph_name": "zz-sr3"}).status_code == 201

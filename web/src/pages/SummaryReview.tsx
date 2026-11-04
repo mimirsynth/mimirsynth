@@ -16,6 +16,7 @@ type Applied = { applied: number; outdated?: number; skipped?: number; op: numbe
 /** Why a summary was picked, in a few words. */
 const REASON: Record<string, string> = {
   long: T("más de 1.000 caracteres"), lines: T("varias líneas"), repeats: T("repite sus hechos"), stale: T("muchos hechos nuevos desde que se aprobó"),
+  requested: T("pedido desde su página"),
 };
 const STATUSES: [string, string][] = [["pending", T("Propuestos")], ["applied", T("Aprobados")], ["rejected", T("Rechazados")],
   ["outdated", T("Retirados")], ["same", T("Sin cambios")], ["reverted", T("Deshechos")]];

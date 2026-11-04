@@ -1,0 +1,15 @@
+{
+ "Del {{first}} al {{last}}": "From {{first}} to {{last}}",
+ "Documentos que la mencionan": "Documents that mention it",
+ "El motor ha dejado el resumen como estaba.": "The engine left the summary as it was.",
+ "El resumen solo repite los hechos, que están más abajo.": "The summary only repeats the facts, which are below.",
+ "El {{date}}": "On {{date}}",
+ "Entidades relacionadas por tipo": "Related entities by type",
+ "Episodios que la mencionan": "Episodes that mention it",
+ "Esta entidad aún no tiene resumen.": "This entity has no summary yet.",
+ "Hechos ({{current}} vigentes, {{earlier}} anteriores)": "Facts ({{current}} current, {{earlier}} earlier)",
+ "Proponer un resumen": "Propose a summary",
+ "Proponer un resumen mejor": "Propose a better summary",
+ "pedido desde su página": "asked for from its page",
+ "{{current}} hechos vigentes · {{earlier}} anteriores · {{episodes}} episodios": "{{current}} current facts · {{earlier}} earlier · {{episodes}} episodes"
+}
