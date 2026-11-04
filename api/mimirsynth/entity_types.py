@@ -175,8 +175,9 @@ def move_type(name: str, body: MoveIn, ctx: BrainCtx = Depends(admin_of_brain)):
 
 
 def curated(kind: str) -> bool:
-    """Changes a curator makes (and so may undo): fact edits and the type of one entity. The rest is the brain administrator's."""
-    return kind.startswith("fact.") or kind == "entity.retype"
+    """Changes a curator makes (and so may undo): fact edits, the type of one entity and approved summaries. The rest is the brain
+    administrator's."""
+    return kind.startswith("fact.") or kind in ("entity.retype", "entity.summary")
 
 
 @router.post("/ops/{oid}/revert")
@@ -214,6 +215,13 @@ def revert_op(oid: int, ctx: BrainCtx = Depends(curator_of_brain)):
         ctx.db.commit()
         audit(ctx.db, ctx.user, "vocab.revert", ctx.brain, summary=op.summary, entities=restored, skipped=len(d.get("entries", [])) - restored)
         return {"ok": True, "restored": restored}
+    if op.kind == "entity.summary":   # the previous text, where the summary is still the approved one (#201)
+        from .summary_review import undo as undo_summaries
+        n = undo_summaries(ctx, d)
+        op.status = "reverted"
+        ctx.db.commit()
+        audit(ctx.db, ctx.user, "vocab.revert", ctx.brain, summary=op.summary, restored=n)
+        return {"ok": True, "restored": n}
     if op.kind == "entity.merge":
         _undo_merge(ctx, d)
         op.status = "reverted"

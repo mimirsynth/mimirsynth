@@ -46,7 +46,7 @@ function TypesTable({ rows, isAdmin, open }: { rows: TypeItem[]; isAdmin: boolea
 }
 
 /** Changes a curator makes, and so may undo: fact edits and the type of one entity (the server checks the same). */
-const curated = (kind: string) => kind.startsWith("fact.") || kind === "entity.retype";
+const curated = (kind: string) => kind.startsWith("fact.") || kind === "entity.retype" || kind === "entity.summary";
 
 export default function VocabTypes({ graph, isAdmin, isCurator }: { graph: string; isAdmin: boolean; isCurator: boolean }) {
   const { t } = useTranslation();

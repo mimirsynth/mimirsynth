@@ -52,7 +52,7 @@ BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; ""
     ("Recall", "Recall", ["/recall", "/answer", "/mcp"]), ("Text index", "Índice de texto", ["/index"]),
     ("Overview", "Resumen", ["/overview"]), ("Episodes", "Episodios", ["/episodes"]), ("Facts", "Hechos", ["/facts", "/timeline", "/entities"]),
     ("Graph and query", "Grafo y consulta", ["/graph", "/query"]), ("Proposals", "Propuestas", ["/proposals"]), ("Documents", "Documentos", ["/docs"]),
-    ("Vocabulary", "Vocabulario", ["/vocabulary", "/vocab", "/ontology", "/retype"]), ("Needs your attention", "Necesita tu atención", ["/attention"]),
+    ("Vocabulary", "Vocabulario", ["/vocabulary", "/vocab", "/ontology", "/retype", "/summaries"]), ("Needs your attention", "Necesita tu atención", ["/attention"]),
     ("What changed", "Lo que ha cambiado", ["/changes"]), ("Facts to review", "Hechos a revisar", ["/review"]),
     ("Contradictions", "Contradicciones", ["/conflicts"]), ("Reference queries", "Consultas de referencia", ["/refqueries"]),
     ("Federation", "Federación", ["/grants"]), ("Jobs", "Trabajos", ["/jobs"]), ("Members", "Miembros", ["/members"]), ("Tokens", "Tokens", ["/tokens"]),
