@@ -99,9 +99,9 @@ Index the documents of a repository, **read-only**, synced by commit.
 1. **Add repository.**
 2. The **Repository address** to clone over https (for example `https://github.com/team/project.git`), without a user or password in it.
 3. The **Branch**, or empty for the repository's main branch.
-4. The **Included paths**, one per line, from the root: `*` does not cross folders and `**` does. By default `README*`, `docs/**`, `**/adr/**` and `CHANGELOG*`. Only documents come in (Markdown, text, HTML, PDF and office files); hidden files and key files (`.env`, `*.pem`, `*.key`, `id_rsa`…) never do.
+4. The **Included paths**, one per line, from the root. A folder by its name (`docs` or `docs/`) comes in whole; `*` does not cross folders and `**` does. By default `README*`, `docs/**`, `**/adr/**` and `CHANGELOG*`. Only documents come in (Markdown, text, HTML, PDF and office files); hidden files and key files (`.env`, `*.pem`, `*.key`, `id_rsa`…) never do.
 5. For a private repository, a **read-only token** (and a **User**, only if your forge asks for it: Bitbucket, Gitea). It is stored **encrypted**, not shown again and only sent over https.
-6. **Connect and scan**: the repository and the branch are checked before saving, and the first sync starts as a job.
+6. **Connect and scan**: the repository, the branch and the paths are checked before saving (if the paths select no file, the form says so and lists the top-level folders), and the first sync starts as a job.
 
 Each sync only reads something when there is a new commit, and then only downloads the files that are new or changed. Each document cites the repository, the path and the commit. If the repository cannot be reached, the scan **stops without deleting anything**. Mounting a clone as a folder still works if you prefer it.
 

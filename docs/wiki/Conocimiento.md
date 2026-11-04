@@ -99,9 +99,9 @@ Indexa los documentos de un repositorio, **en solo lectura**, sincronizados por 
 1. **Añadir repositorio.**
 2. La **Dirección del repositorio** para clonar por https (por ejemplo `https://github.com/equipo/proyecto.git`), sin usuario ni contraseña en ella.
 3. La **Rama**, o vacía para la rama principal del repositorio.
-4. Las **Rutas incluidas**, una por línea, desde la raíz: `*` no cruza carpetas y `**` sí. Por defecto `README*`, `docs/**`, `**/adr/**` y `CHANGELOG*`. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática); los ficheros ocultos y los de claves (`.env`, `*.pem`, `*.key`, `id_rsa`…) no entran nunca.
+4. Las **Rutas incluidas**, una por línea, desde la raíz. Una carpeta por su nombre (`docs` o `docs/`) entra entera; `*` no cruza carpetas y `**` sí. Por defecto `README*`, `docs/**`, `**/adr/**` y `CHANGELOG*`. Solo entran documentos (Markdown, texto, HTML, PDF y ofimática); los ficheros ocultos y los de claves (`.env`, `*.pem`, `*.key`, `id_rsa`…) no entran nunca.
 5. Para un repositorio privado, un **token de solo lectura** (y un **Usuario**, solo si tu forja lo pide: Bitbucket, Gitea). Se guarda **cifrado**, no se vuelve a mostrar y solo se envía por https.
-6. **Conectar y escanear**: se comprueban el repositorio y la rama antes de guardar, y la primera sincronización arranca como un trabajo.
+6. **Conectar y escanear**: se comprueban el repositorio, la rama y las rutas antes de guardar (si las rutas no eligen ningún fichero, el formulario lo dice y muestra las carpetas de primer nivel), y la primera sincronización arranca como un trabajo.
 
 Cada sincronización solo lee algo cuando hay un commit nuevo, y entonces solo descarga los ficheros nuevos o cambiados. Cada documento cita el repositorio, la ruta y el commit. Si el repositorio no responde, el escaneo **se corta sin borrar nada**. Montar un clon como carpeta sigue sirviendo si lo prefieres.
 

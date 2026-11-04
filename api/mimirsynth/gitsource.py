@@ -4,7 +4,8 @@ How a sync reads the repository without downloading it whole:
 - **A shallow, blobless clone** (`--depth 1 --filter=blob:none --no-checkout`) in the document volume brings the last commit and its
   trees, not the contents. Later syncs `fetch --depth 1` the branch the same way.
 - **The tree is listed without sizes** (`ls-tree -r` without `-l`: asking for a size would download the content to measure it), and the
-  files are chosen by path: the include patterns, never the fixed exclusions, and only the document types the index reads.
+  files are chosen by path: the include patterns, never the fixed exclusions, and only the document types the index reads. A pattern
+  that names a folder (no `*` or `?` in its last part) takes everything inside it, as in `.gitignore`.
 - **Only the chosen files that are new or changed are downloaded**, with a sparse checkout of exactly those paths. A file above the
   maximum document size is left out once it is on disk.
 
@@ -23,6 +24,8 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +43,8 @@ MAX_FILES = 2000          # files the include patterns may select
 MAX_TOTAL_MB = 200        # what one sync may download
 MAX_PATTERNS = 50
 TIMEOUT = 600             # seconds for one git command
+PREVIEW_TIMEOUT = 60      # the check made when saving waits less: if it does not finish, saving goes on and the sync reports
+MAX_TOP = 30              # top-level folders named when the paths select nothing
 _BRANCH = re.compile(r"^(?!-)(?!.*\.\.)(?!.*//)[A-Za-z0-9._/-]{1,200}(?<![/.])$")
 
 
@@ -51,6 +56,23 @@ class GitError(Exception):
 class Synced:
     commit: str
     committed_at: datetime
+
+
+@dataclass
+class Matched:
+    """What the include paths select in a tree: the files, how many each path takes, and the top-level folders (to help when it
+    is none)."""
+    picked: dict[str, str]
+    counts: dict[str, int]
+    top: list[str]
+
+    def empty_message(self) -> str:
+        return tr("Ningún fichero coincide con las rutas elegidas. Carpetas de primer nivel del repositorio: {{folders}}.", SOURCE,
+                  folders=folders(self.top))
+
+
+def folders(top: list[str]) -> str:
+    return ", ".join(top) + (" …" if len(top) >= MAX_TOP else "") if top else "—"
 
 
 # --- what the administrator gives -------------------------------------------------------------
@@ -123,7 +145,7 @@ def _name(pattern: str, name: str) -> bool:
 def _match(pattern: str, path: str) -> bool:
     """The whole path against a pattern from the root: a `**` folder is zero or more folders (one or more at the end, as in
     gitignore); `*` and `?` stay inside one name, and a `**` inside a name is just `*`."""
-    ps, ns = _tidy(pattern).split("/"), path.split("/")
+    ps, ns = pattern.split("/"), path.split("/")
     seen: dict[tuple[int, int], bool] = {}
 
     def at(i: int, j: int) -> bool:
@@ -141,8 +163,25 @@ def _match(pattern: str, path: str) -> bool:
     return at(0, 0)
 
 
+def _nfc(s: str) -> str:
+    """A name typed on one system and committed from another can come composed or decomposed («í» or «i» + accent): both are the same."""
+    return unicodedata.normalize("NFC", s)
+
+
+def _hit(pattern: str, path: str) -> bool:
+    """One include path against one file. A path whose last part has no `*` or `?` also takes everything inside it as a folder:
+    `Fullstack` and `Fullstack/` are `Fullstack/**`, as in `.gitignore` or a sparse checkout; a file named that way still matches."""
+    p, f = _tidy(_nfc(pattern)), _nfc(path)
+    if not p:
+        return False
+    if _match(p, f):
+        return True
+    last = p.rsplit("/", 1)[-1]
+    return last != "**" and not any(c in last for c in "*?") and _match(p + "/**", f)
+
+
 def included(path: str, patterns: list[str]) -> bool:
-    return any(_match(p, path) for p in patterns)
+    return any(_hit(p, path) for p in patterns)
 
 
 def excluded(path: str) -> bool:
@@ -153,13 +192,24 @@ def excluded(path: str) -> bool:
 
 def select(entries: list[tuple[str, str, str]], include: list[str]) -> dict[str, str]:
     """{path: blob} of the files to index, from `(mode, blob, path)` entries: regular files only (no links, no submodules)."""
-    out = {}
+    return match(entries, include).picked
+
+
+def match(entries: list[tuple[str, str, str]], include: list[str]) -> Matched:
+    """The files to index and, for each include path, how many of the files that could come in it takes (one file can count
+    under several paths)."""
+    picked: dict[str, str] = {}
+    counts = dict.fromkeys(include, 0)
     for mode, blob, path in entries:
-        if mode not in ("100644", "100755") or len(path) > 480:
+        if mode not in ("100644", "100755") or len(path) > 480 or docstore.ext_of(path) not in docstore.ALLOWED_EXT or excluded(path):
             continue
-        if docstore.ext_of(path) in docstore.ALLOWED_EXT and included(path, include) and not excluded(path):
-            out[path] = blob
-    return out
+        hits = [p for p in include if _hit(p, path)]
+        for p in hits:
+            counts[p] += 1
+        if hits:
+            picked[path] = blob
+    top = sorted({path.split("/", 1)[0] for _, _, path in entries if "/" in path and not path.startswith(".")}, key=str.lower)
+    return Matched(picked, counts, top[:MAX_TOP])
 
 
 # --- links to the forge -----------------------------------------------------------------------
@@ -208,14 +258,14 @@ def _env(url: str, token: str = "", username: str = "") -> dict[str, str]:
     return env
 
 
-def _git(args: list[str], env: dict, cwd: Path | None = None, stdin: str | None = None) -> str:
+def _git(args: list[str], env: dict, cwd: Path | None = None, stdin: str | None = None, timeout: int = TIMEOUT) -> str:
     try:
         r = subprocess.run(["git", *args], cwd=cwd, env=env, input=stdin, capture_output=True, text=True, encoding="utf-8",
-                           errors="replace", timeout=TIMEOUT)
+                           errors="replace", timeout=timeout)
     except FileNotFoundError:
         raise GitError("git no está instalado en el servidor") from None
     except subprocess.TimeoutExpired:
-        raise GitError(f"git tardó más de {TIMEOUT // 60} minutos") from None
+        raise GitError(f"git tardó más de {timeout} segundos") from None
     if r.returncode != 0:
         lines = [x.strip() for x in (r.stderr or "").splitlines() if x.strip() and not x.lower().startswith(("hint:", "warning:"))]
         raise GitError(" ".join(lines)[-300:] or f"git terminó con el código {r.returncode}")
@@ -227,6 +277,21 @@ def probe(url: str, branch: str, token: str = "", username: str = "") -> None:
     out = _git(["ls-remote", "--", url, f"refs/heads/{branch}" if branch else "HEAD"], _env(url, token, username))
     if not out.strip():
         raise GitError(f"la rama «{branch}» no existe en el repositorio" if branch else "el repositorio está vacío")
+
+
+def preview(url: str, branch: str, include: list[str], token: str = "", username: str = "") -> Matched | None:
+    """What the paths would select, checked when saving: the trees of the last commit in a throwaway clone (no contents). None if
+    it could not be checked in time: saving goes on and the sync reports it."""
+    d = Path(tempfile.mkdtemp(prefix="mimirsynth-git-"))
+    env = _env(url, token, username)
+    try:
+        _git(["clone", "-q", "--depth", "1", "--filter=blob:none", "--no-checkout", "--no-tags", "--single-branch",
+              *(["--branch", branch] if branch else []), "--", url, str(d / "r")], env, timeout=PREVIEW_TIMEOUT)
+        return match(tree(d / "r", "HEAD", url), include)
+    except GitError:
+        return None
+    finally:
+        _rmtree(d)
 
 
 def repo_dir(brain_id: int, source_id: int) -> Path:

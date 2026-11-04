@@ -263,7 +263,7 @@ def _public_config(s: DocSource) -> dict:
     if s.kind == "git":
         from .gitsource import web_base
         return {"url": c.get("url"), "web": web_base(c.get("url", "")), "branch": c.get("branch", ""), "include": c.get("include", []),
-                "settings": c.get("settings", {}), "commit": c.get("commit"), "commit_at": c.get("commit_at"), "secrets_set": sorted((c.get("secrets") or {}).keys())}
+                "settings": c.get("settings", {}), "commit": c.get("commit"), "commit_at": c.get("commit_at"), "matched": c.get("matched"), "secrets_set": sorted((c.get("secrets") or {}).keys())}
     return c if s.kind == "directory" else {}
 
 
