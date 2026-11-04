@@ -8,18 +8,22 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
-## [0.12.1] - 2026-11-03
+## [0.12.1] - 2026-11-04
 ### Added
 - The entity page shows a small graph of the entity and its closest neighbours, coloured by type with the relation on each edge; a click opens a neighbour, and Expand opens the Graph with the entity selected. (#198)
+- Content quality has a «Repeated aliases» tab where a brain administrator previews and cleans the aliases that repeat an entity's own name, after a copy of the graph, with undo from Recent changes. (#203)
+- Content quality → Summaries: the engine proposes a short summary for the entities whose summary is a list of their facts, and a curator edits it, approves it (it replaces the entity's summary) or rejects it; every approval can be undone. (#206)
 
 ### Changed
 - The entity page header is one row with the type and the merged names as chips, and Facts is marked in the side bar with a way back. (#195)
 - On the entity page, each relation reads as a sentence, «A → relation → B», with the entity on its side in both directions, and fact cards no longer overflow on a phone. (#196)
 - On the entity page the summary is folded, and not shown when it only repeats the entity's own facts (`entity.summary_repeats` in `GET /entities/{uuid}`). (#197)
+- The entity page opens with a card holding the name, type, aliases and summary next to a larger graph of the entity, then shows facts and episodes side by side; entities are type-coloured chips, and each entity type has the same colour on every screen. (#204)
 
 ### Fixed
 - Merging duplicates no longer adds an alias equal to the entity's own name; the entity page hides the ones older merges wrote, and `python -m mimirsynth.entity_aliases` removes them. (#195)
 - On a phone the entity page's side panel no longer covers the list of facts. (#198)
+- Entity summaries are written by the LLM at every ingestion, merging what is new, instead of being the old summary with the new fact sentences appended. (#205)
 
 ## [0.12.0] - 2026-11-03
 ### Added
