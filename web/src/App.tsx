@@ -104,7 +104,8 @@ export default function App() {
   if (me.data?.must_setup_2fa) return <TwoFactorSetupScreen name={name} />;
   if (me.error) {
     return (
-      <Center component="main" className="ms-fullh"><Panel withBorder p="xl" w={420}><Stack>
+      <Center component="main" className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack>
+        <h1 className="ms-sr">{`${cfg.data?.name ?? "MimirSynth"} · ${t("No se pudo cargar tu sesión")}`}</h1>
         <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>
           <Stack gap={4}>{sessionProblem(me.error, t)}</Stack>
         </Notice>
