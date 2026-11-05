@@ -35,4 +35,4 @@ Run it on every route (with `?brain=<slug>`) in both `prefers-color-scheme` valu
 
 ## Rules for new screens
 
-Use the components in `web/src/ui` (they already carry labels, roles and focus styles); give icon-only buttons an `aria-label`; never convey meaning by colour alone (pills carry text); keep one `h1` per screen (`PageHeader`) and do not skip heading levels; give empty table headers a visually hidden label (`DataTable.ActionsHead`).
+Use the components in `web/src/ui` (they already carry labels, roles and focus styles); give icon-only buttons an `aria-label`; never convey meaning by colour alone (pills carry text); keep one `h1` per screen (`PageHeader`) and do not skip heading levels; give empty table headers a visually hidden label (`DataTable.ActionsHead`). A row or a card that opens on a click keeps its table or list role: give it a real button in its title (`RowOpen`, or `ListCard` with `onOpen`), never `role="button"` on the row. Dialogs name their close button.

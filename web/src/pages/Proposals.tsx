@@ -2,7 +2,7 @@ import { T, locale } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, QueueList, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -77,7 +77,7 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
             <DataTable.Td className="ms-data">#{p.id}</DataTable.Td><DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>
-            <DataTable.Td><Group gap="xs" wrap="nowrap">{p.purged_at ? <Text span size="sm" c="dimmed">{t("(texto purgado)")}</Text> : p.name}<SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
+            <DataTable.Td><Group gap="xs" wrap="nowrap"><RowOpen onOpen={() => onOpen(p.id)}>{p.purged_at ? t("(texto purgado)") : p.name}</RowOpen><SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td>{p.confidence ?? "—"}</DataTable.Td>
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
           </DataTable.Tr>))}
         {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={7}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}

@@ -299,7 +299,12 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-filterbar input[type="date"] { color-scheme: light dark; }
 
 .ms-listcard { display: flex; flex-direction: column; gap: 8px; background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 14px 16px; }
-.ms-listcard[data-clickable] { cursor: pointer; }
+.ms-listcard[data-clickable], .ms-table [data-clickable] { cursor: pointer; }
+/* the real button that opens a row or a card: it reads as its text, and shows the focus ring */
+.ms-rowopen { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ms-rowopen:hover { text-decoration: underline; text-underline-offset: 2px; }
+.ms-rowopen:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 4px; }
+.ms-rowopen.ms-listcard-title { font-size: 14px; font-weight: 600; color: var(--ms-ink); }  /* a card's title keeps its title look as a button */
 .ms-listcard[data-clickable]:hover { border-color: var(--ms-accent); }
 .ms-listcard-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .ms-listcard-title { font-weight: 600; font-size: 14px; color: var(--ms-ink); min-width: 0; }

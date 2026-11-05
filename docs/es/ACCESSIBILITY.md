@@ -35,4 +35,4 @@ Ejecútala en todas las rutas (con `?brain=<slug>`) con los dos valores de `pref
 
 ## Reglas para pantallas nuevas
 
-Usa los componentes de `web/src/ui` (ya llevan etiquetas, roles y estilos de foco); da a los botones que solo tienen icono un `aria-label`; no transmitas nunca un significado solo con el color (las etiquetas llevan texto); mantén un único `h1` por pantalla (`PageHeader`) y no te saltes niveles de encabezado; da a las cabeceras de tabla vacías una etiqueta oculta a la vista (`DataTable.ActionsHead`).
+Usa los componentes de `web/src/ui` (ya llevan etiquetas, roles y estilos de foco); da a los botones que solo tienen icono un `aria-label`; no transmitas nunca un significado solo con el color (las etiquetas llevan texto); mantén un único `h1` por pantalla (`PageHeader`) y no te saltes niveles de encabezado; da a las cabeceras de tabla vacías una etiqueta oculta a la vista (`DataTable.ActionsHead`). Una fila o una tarjeta que se abre con un clic conserva su papel de tabla o de lista: dale un botón de verdad en el título (`RowOpen`, o `ListCard` con `onOpen`), nunca `role="button"` en la fila. Los diálogos dan nombre a su botón de cerrar.
