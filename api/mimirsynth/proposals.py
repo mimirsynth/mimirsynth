@@ -2,6 +2,7 @@
 
 Una aportación aprobada queda lista para ingerir (extracción con Graphiti); eso es el paso siguiente.
 """
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -282,6 +283,24 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
 
 
 RELATED_FACTS = 5
+# How close a known fact is to a proposal, for the reviewer. The score is the embedding similarity, whose scale depends on the model, so
+# «repeats» does not rest on it alone: a fact most of whose words are already in the proposal repeats it, whatever the model.
+REPEATS_SCORE, CLOSE_SCORE, REPEATS_WORDS = 0.95, 0.85, 0.8
+_WORD = re.compile(r"\w{4,}")
+_RANK = {"repeats": 0, "close": 1, "related": 2}
+
+
+def _words(text: str | None) -> set[str]:
+    return set(_WORD.findall((text or "").lower()))
+
+
+def relevance(fact: str | None, proposal_words: set[str], score: float | None) -> str:
+    """«repeats»: the proposal says it again (most of the fact's words are in it, or the embeddings are nearly the same); «close»: very
+    similar; «related»: what the recall brought, no more."""
+    fw = _words(fact)
+    if (len(fw) >= 3 and len(fw & proposal_words) / len(fw) >= REPEATS_WORDS) or (score or 0) >= REPEATS_SCORE:
+        return "repeats"
+    return "close" if (score or 0) >= CLOSE_SCORE else "related"
 
 
 @router.get("/{pid}/related")
@@ -299,7 +318,9 @@ def related(pid: int, ctx: BrainCtx = Depends(curator)):
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"no se pudo buscar lo relacionado: {e}") from e
     keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "valid_at", "invalid_at", "status", "score")
-    return {"facts": [{k: f.get(k) for k in keys} for f in out.get("facts", [])]}
+    words = _words(query)
+    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score"))} for f in out.get("facts", [])]
+    return {"facts": sorted(facts, key=lambda f: (_RANK[f["relevance"]], -(f["score"] or 0)))}  # what it repeats first, then the closest
 
 
 @router.post("/{pid}/undo")

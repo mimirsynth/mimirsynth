@@ -105,8 +105,31 @@ def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
     assert client.get(url, headers=contrib).status_code == 403  # a reviewer's read
     r = client.get(url, headers=curator).json()
     assert r["facts"] == [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A", "source_uuid": None,
-                           "target_uuid": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8}]
+                           "target_uuid": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8,
+                           "relevance": "related"}]
     assert calls[0][0].startswith("NAS movido") and calls[0][1:] == (5, 0, 0)  # facts only: no fragments, no documents
     assert logged == []  # not an agent's recall: nothing for the recall ratings
     _set(pid, purged_at=__import__("datetime").datetime.now())
     assert client.get(url, headers=curator).json() == {"facts": []}
+
+
+def test_related_facts_say_how_close_they_are():
+    """«repeats» does not depend on the embedding model alone: the words of the fact already in the proposal are enough."""
+    from mimirsynth.proposals import _words, relevance
+    words = _words("Ampliación. La wiki usa PostgreSQL como base de datos desde marzo")
+    assert relevance("La wiki usa PostgreSQL como base de datos.", words, 0.6) == "repeats"     # same words, whatever the score
+    assert relevance("Nextcloud corre en Eridani", words, 0.97) == "repeats"                    # nearly the same embedding
+    assert relevance("Nextcloud corre en Eridani", words, 0.9) == "close"
+    assert relevance("Nextcloud corre en Eridani", words, 0.7) == "related"
+    assert relevance("La wiki", words, 0.5) == "related"                                        # too short to say it repeats
+
+
+def test_related_facts_are_ordered_by_closeness(client, monkeypatch):  # noqa: F811
+    from mimirsynth import recall
+    facts = [{"uuid": "a", "fact": "nas01 tiene 8 discos", "score": 0.7}, {"uuid": "b", "fact": "nas01 está en la sala norte", "score": 0.9},
+             {"uuid": "c", "fact": "La cabina nas01 movida a la sala sur", "score": 0.6}]
+    monkeypatch.setattr(recall, "recall", lambda *a, **k: {"facts": facts})
+    contrib, curator = _brain(client, "inbox-rel2")
+    pid = _propose(client, "inbox-rel2", contrib, "Cabina nas01 movida a la sala sur")
+    r = client.get(f"/api/brains/inbox-rel2/proposals/{pid}/related", headers=curator).json()["facts"]
+    assert [(f["uuid"], f["relevance"]) for f in r] == [("c", "repeats"), ("b", "close"), ("a", "related")]
