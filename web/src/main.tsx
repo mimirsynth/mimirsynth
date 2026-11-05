@@ -5,6 +5,12 @@ import { createTheme, MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import "@mantine/core/styles.css";
+// The fonts ship with the app (OFL-1.1, via Fontsource) so the instance never calls a third-party host: only the weights the design uses
+import "@fontsource/oxanium/500.css";
+import "@fontsource/oxanium/600.css";
+import "@fontsource/instrument-sans/400.css";
+import "@fontsource/instrument-sans/600.css";
+import "@fontsource/jetbrains-mono/400.css";
 import "./theme.css";
 import App from "./App";
 

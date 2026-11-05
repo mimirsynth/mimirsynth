@@ -40,7 +40,7 @@ All four points below hold together. A neighbouring product may offer one of the
 
 ## Capabilities and Constraints
 
-- **Nothing leaves the instance unless the administrator configured it.** No third-party fonts, analytics, CDNs or other outbound calls. The reasons are privacy, GDPR and air-gapped installs. Known deviation to fix: `web/index.html` still loads its fonts from Google Fonts.
+- **Nothing leaves the instance unless the administrator configured it.** No third-party fonts, analytics, CDNs or other outbound calls. The reasons are privacy, GDPR and air-gapped installs. The web fonts ship with the app (Fontsource, OFL-1.1).
 - **Two languages, Spanish and English, for the whole interface.** Translation keys are the Spanish strings (`web/src/i18n`). Text in CSS `content` and in `aria-label` templates must also go through translation.
 - **Two themes, light (Superficie) and dark (Pozo), equally finished.**
 - **Status:** 0.x, under active development. The API and the schema may change between versions.
