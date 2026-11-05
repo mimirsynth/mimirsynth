@@ -6,17 +6,18 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from . import deciders_admin, ingest, secretguard
 from .deps import BrainCtx, audit, brain_access
 from .i18n import language, tr
-from .models import Proposal, User
+from .models import Job, Proposal, User
 from .roles import allows
 
 router = APIRouter(prefix="/api/brains/{slug}/proposals")
 contributor = brain_access("contributor")
 curator = brain_access("curator")
+UNDO_SECONDS = 10  # how long a person's approval waits before ingestion starts, so it can be undone
 STATUSES = {"pending", "approved", "rejected", "ingested", "failed"}
 KINDS = {"memory", "correction"}  # adds knowledge | invalidates a fact (#109)
 
@@ -184,8 +185,9 @@ def approve(pid: int, body: ReviewIn, request: Request, bg: BackgroundTasks, ctx
         corrections.apply(ctx, p, language(request), note=body.note)
         return _out(p)
     out = _review(ctx, pid, "approved", body.note)
-    if ingest.enabled():
-        ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(_get(ctx, pid)), ctx.user.id)
+    if ingest.enabled():  # a person's approval waits UNDO_SECONDS queued: the curator can still take it back (`undo`)
+        ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(_get(ctx, pid)), ctx.user.id, delay=UNDO_SECONDS)
+        out["undo_seconds"] = UNDO_SECONDS
     return out
 
 
@@ -203,3 +205,31 @@ def retry_ingest(pid: int, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)
 @router.post("/{pid}/reject")
 def reject(pid: int, body: ReviewIn, ctx: BrainCtx = Depends(curator)):
     return _review(ctx, pid, "rejected", body.note)
+
+
+@router.post("/{pid}/undo")
+def undo(pid: int, ctx: BrainCtx = Depends(curator)):
+    """Takes a person's decision back: the proposal is pending again. A rejection can always be reopened (unless its text was purged); an
+    approval only while its ingestion has not started (the grace period after approving, or when there is no extraction engine). Once
+    ingestion starts, what reached the graph is corrected by invalidating its facts, as anything else in the memory. Corrections, applied on
+    approval, are undone with «Reactivar el hecho»."""
+    p = _get(ctx, pid)
+    if p.status == "rejected":
+        if p.purged_at:
+            raise HTTPException(409, "el texto de esta propuesta se purgó por el plazo de retención: no se puede reabrir")
+    elif p.status == "approved" and p.kind != "correction":
+        key = f"proposal.ingest:{pid}"
+        # only a job still waiting is cancelled, in one conditional update (jobs._run claims it the same way): whichever commits first wins,
+        # so an ingestion that has started is never interrupted
+        ctx.db.execute(update(Job).where(Job.dedupe_key == key, Job.status == "queued")
+                       .values(status="cancelled", finished_at=datetime.now(timezone.utc), error="aprobación deshecha por un curador"))
+        if ctx.db.scalar(select(Job.id).where(Job.dedupe_key == key, Job.status == "running")):
+            ctx.db.rollback()
+            raise HTTPException(409, "la ingesta ya ha empezado: lo que entre en el grafo se corrige invalidando sus hechos")
+    else:
+        raise HTTPException(409, f"la propuesta está {p.status}: no hay decisión que deshacer")
+    was = p.status
+    p.status, p.reviewer_id, p.reviewed_at, p.review_note, p.review_kind = "pending", None, None, "", ""
+    ctx.db.commit()
+    audit(ctx.db, ctx.user, "proposal.reopened" if was == "rejected" else "proposal.approval_undone", ctx.brain, id=p.id)
+    return _out(p)

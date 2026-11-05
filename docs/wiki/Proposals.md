@@ -12,7 +12,9 @@ Submitted ──► (optional decider) ──► Pending ──► Approved ─�
 ```
 1. **Submit.** A contributor ends up *Pending*. A curator (or higher) ends up *Approved* directly ("approved on submission"), unless the secret detector flagged something (see below).
 2. **Decider (optional).** If a decider model is configured, it evaluates the proposal against the **brain's scope**: its description and the entity and relation types of its [[Ontology]]. Without either, it only checks that the proposal is factual. It answers two questions (is it factual? what action does it recommend?) and, if both exceed the **confidence threshold**, it approves the proposal by itself. If not, it leaves it for a curator. **It never rejects on its own**: what does not fit goes to a curator.
-3. **Review.** A curator opens the proposal and **approves** or **rejects** it (with an optional note).
+3. **Review.** A curator opens the proposal and **approves** or **rejects** it (with an optional note). Above the buttons it says what each one will do. After deciding, a notice above the list says what happened and offers **Undo**:
+   - **An approval waits 10 seconds** before ingestion, and can be undone in that time: the proposal goes back to *Pending* and nothing reaches the graph. Afterwards the notice follows the ingestion until it ends and says how many entities and facts were created (or that none was extracted). What is already in the graph is corrected by invalidating its facts, like the rest of the memory. Approvals by the decider and by webhooks do not wait.
+   - **A rejection can be undone or reopened** at any time, unless its text was purged by the retention period.
 4. **Ingestion.** An approved proposal is sent to the LLM, which extracts entities and facts and adds them to the graph (invalidating those it contradicts). It becomes *Ingested*. If it fails, it stays *Failed* and can be **retried**.
 
 > The decider knows what the brain is about from its **description**: write one when creating or editing the brain (Administration → Brains, see [[Brains and members]]).
@@ -65,6 +67,7 @@ When you open it you see a **timeline**:
 
 ## Curator actions
 - **Approve / Reject** (with an optional note).
+- **Reopen** a rejected one, or **Undo the approval** of an approved one whose ingestion has not started yet.
 - **Ingest now** or **Retry ingestion** when an approved one has not been ingested or failed.
 - **Reactivate the fact** in an applied correction.
 

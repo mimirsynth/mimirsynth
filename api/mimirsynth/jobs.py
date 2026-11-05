@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 
 from . import appsettings
 from .config import settings
@@ -107,8 +107,11 @@ def _pool(kind: str) -> ThreadPoolExecutor:
         return _POOLS[kind]
 
 
-def submit(kind: str, brain_id: int | None, params: dict, title: str, user_id: int | None = None, dedupe_key: str = "", retry_of: int | None = None) -> int:
-    """Encola un trabajo. Con `dedupe_key`, si ya hay uno igual en cola o en marcha devuelve ese en lugar de duplicarlo."""
+def submit(kind: str, brain_id: int | None, params: dict, title: str, user_id: int | None = None, dedupe_key: str = "", retry_of: int | None = None,
+           delay: float = 0) -> int:
+    """Encola un trabajo. Con `dedupe_key`, si ya hay uno igual en cola o en marcha devuelve ese en lugar de duplicarlo.
+    With `delay` (seconds) it waits queued before it starts, so it can still be cancelled: the grace period that lets a person undo an
+    approval. A restart inside that period leaves it interrupted, like any queued job (`recover`)."""
     if kind not in _KINDS:
         raise ValueError(f"tipo de trabajo desconocido: {kind}")
     with _factory()() as db:
@@ -120,25 +123,33 @@ def submit(kind: str, brain_id: int | None, params: dict, title: str, user_id: i
         db.add(j)
         db.commit()
         jid = j.id
-    _enqueue(jid, kind)
+    _enqueue(jid, kind, delay)
     return jid
 
 
-def _enqueue(jid: int, kind: str) -> None:
+def _enqueue(jid: int, kind: str, delay: float = 0) -> None:
     if INLINE:
-        _run(jid)
+        if not delay:  # tests: a delayed job stays queued until the test runs it (`_run`), as the timer would
+            _run(jid)
+        return
+    if delay:
+        t = threading.Timer(delay, lambda: _pool(kind).submit(_run, jid))
+        t.daemon = True
+        t.start()
         return
     _pool(kind).submit(_run, jid)
 
 
 def _run(jid: int) -> None:
     with _factory()() as db:
-        j = db.get(Job, jid)
-        if not j or j.status != "queued":  # cancelado mientras esperaba
-            return
-        kind, brain_id, params = j.kind, j.brain_id, dict(j.params or {})
-        j.status, j.started_at = "running", _now()
+        # claimed in one conditional update: a job cancelled while it waited (or whose approval was undone) never starts, and a
+        # cancellation that loses the race finds it running instead of being overwritten
+        claimed = db.execute(update(Job).where(Job.id == jid, Job.status == "queued").values(status="running", started_at=_now())).rowcount
         db.commit()
+        if not claimed:
+            return
+        j = db.get(Job, jid)
+        kind, brain_id, params = j.kind, j.brain_id, dict(j.params or {})
     ctx = JobCtx(jid, brain_id, params)
     status, error, result = "done", "", None
     started = time.monotonic()

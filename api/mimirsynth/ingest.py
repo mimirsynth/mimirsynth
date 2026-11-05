@@ -160,9 +160,11 @@ def ingest_proposal(pid: int, job=None) -> str:
         return err
 
 
-def submit_ingest(pid: int, brain_id: int, name: str, user_id: int | None = None) -> int:
+def submit_ingest(pid: int, brain_id: int, name: str, user_id: int | None = None, delay: float = 0) -> int:
+    """Queues the ingestion of a proposal. `delay`: seconds it waits queued first, so a person can still undo the approval."""
     from . import jobs
-    return jobs.submit("proposal.ingest", brain_id, {"pid": pid}, f"Ingerir propuesta #{pid}: {name[:80]}", user_id, dedupe_key=f"proposal.ingest:{pid}")
+    return jobs.submit("proposal.ingest", brain_id, {"pid": pid}, f"Ingerir propuesta #{pid}: {name[:80]}", user_id, dedupe_key=f"proposal.ingest:{pid}",
+                       delay=delay)
 
 
 def _register() -> None:
