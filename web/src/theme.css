@@ -515,4 +515,5 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
+.ms-related .ms-fact-old { color: var(--ms-invalidado); text-decoration: line-through; }  /* no longer true: struck through, as in the entity lists */
 .ms-related a:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }

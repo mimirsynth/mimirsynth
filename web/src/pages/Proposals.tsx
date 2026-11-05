@@ -270,23 +270,41 @@ type Ops = {
 /** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
  *  duplicate, a contradiction, or nothing at all, which makes it new knowledge. Only for pending proposals that add knowledge. */
 type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
-  valid_at: string | null; invalid_at: string | null; score?: number | null };
+  valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related" };
+const RELATED_SHOWN = 3;  // the closest ones; the rest behind «Ver N más»
 function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ["proposal", ops.graph, d.id, "related"], staleTime: 60_000, queryFn: () => get<{ facts: RelatedFact[] }>(`${ops.base}/${d.id}/related`) });
+  const [all, setAll] = useState(false);
+  useEffect(() => setAll(false), [d.id]);
+  const facts = q.data?.facts ?? [];
+  const close = (f: RelatedFact) => f.relevance === "repeats" || f.relevance === "close";
+  // the one line to read first: a likely duplicate, something close that stopped being true, or only related facts. A contradiction
+  // cannot be told from the text alone: the closest facts are there to check it.
+  const verdict = facts.some((f) => f.relevance === "repeats" && !f.invalid_at)
+    ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
+    : facts.some((f) => close(f) && f.invalid_at)
+      ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
+      : facts.length ? { icon: "info" as const, text: t("Hechos relacionados: comprueba si la propuesta repite o contradice alguno.") } : null;
+  const shown = all ? facts : facts.slice(0, RELATED_SHOWN);
   return (<Panel withBorder p="sm" className="ms-related"><Stack gap={6}>
     <Text size="xs" fw={600}>{t("Lo que el brain ya sabe")}</Text>
     <MutationError error={q.error} />
     {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
-    {q.data && q.data.facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
-    {q.data?.facts.map((f) => (<Stack key={f.uuid} gap={0}>
-      <Text size="sm" className={f.invalid_at ? "ms-text-danger" : undefined}>{f.fact}</Text>
+    {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
+    {verdict && <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>}
+    {shown.map((f) => (<Stack key={f.uuid} gap={2}>
+      <Group gap={6} wrap="nowrap" align="flex-start">
+        <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
+        {f.relevance === "repeats" ? <Pill size="xs" tone="warn" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Casi igual")}</Pill>
+          : f.relevance === "close" ? <Pill size="xs" tone="neutral" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Muy parecido")}</Pill> : null}
+      </Group>
       <Text size="xs" c="dimmed">
         {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → {f.name} → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
-        {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: f.valid_at.slice(0, 10) })}` : ""}{f.invalid_at ? ` · ${t("invalidado el {{date}}", { date: f.invalid_at.slice(0, 10) })}` : ""}
+        {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: f.valid_at.slice(0, 10) })}` : ""}{f.invalid_at ? ` · ${t("ya no es cierto: invalidado el {{date}}", { date: f.invalid_at.slice(0, 10) })}` : ""}
       </Text>
     </Stack>))}
-    {q.data && q.data.facts.length > 0 && <Text size="xs" c="dimmed">{t("Comprueba si la propuesta repite o contradice alguno de estos hechos.")}</Text>}
+    {facts.length > RELATED_SHOWN && <Group><Btn kind="link" onClick={() => setAll(!all)}>{all ? t("Ver menos") : t("Ver {{n}} más", { n: facts.length - RELATED_SHOWN })}</Btn></Group>}
   </Stack></Panel>);
 }
 

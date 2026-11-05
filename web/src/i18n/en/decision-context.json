@@ -1,6 +1,5 @@
 {
   "Buscando lo relacionado…": "Looking for related knowledge…",
-  "Comprueba si la propuesta repite o contradice alguno de estos hechos.": "Check whether the proposal repeats or contradicts any of these facts.",
   "Ir a Modelo LLM": "Go to LLM model",
   "JSON": "JSON",
   "Lo que el brain ya sabe": "What the brain already knows",
@@ -11,6 +10,5 @@
   "Ver los trabajos": "See the jobs",
   "conversación": "conversation",
   "el decisor dudó · {{p}}": "the decider hesitated · {{p}}",
-  "invalidado el {{date}}": "invalidated on {{date}}",
   "texto": "text"
 }
