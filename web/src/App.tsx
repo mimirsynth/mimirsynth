@@ -46,6 +46,19 @@ const NAV = [
   ] },
 ];
 
+/** What went wrong when the session could not be loaded, said so that someone can act on it: the browser could not reach the server,
+ *  the proxy reached it but MimirSynth did not answer (starting, updating or down), or the server explained the problem itself.
+ *  The HTTP status stays underneath, small, for whoever administers the instance. */
+const GENERIC_STATUS = new Set(["", "Bad Gateway", "Service Unavailable", "Gateway Timeout", "Internal Server Error"]);
+function sessionProblem(error: unknown, t: (k: string) => string) {
+  if (!(error instanceof ApiError)) return <Text size="sm">{t("No se puede contactar con el servidor de MimirSynth. Comprueba la conexión y vuelve a intentarlo.")}</Text>;
+  const gateway = [502, 503, 504].includes(error.status) && GENERIC_STATUS.has(error.message);
+  const text = gateway ? t("El servidor de MimirSynth no responde: puede estar arrancando o actualizándose. Vuelve a intentarlo en un momento y, si sigue igual, avisa a quien administra la instancia.")
+    : GENERIC_STATUS.has(error.message) ? t("El servidor de MimirSynth ha fallado al cargar tu sesión. Vuelve a intentarlo y, si sigue igual, avisa a quien administra la instancia.")
+    : error.message;
+  return <><Text size="sm">{text}</Text><Text size="xs" c="dimmed" className="ms-data">{`HTTP ${error.status}`}</Text></>;
+}
+
 export default function App() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -90,7 +103,9 @@ export default function App() {
   if (me.error) {
     return (
       <Center component="main" className="ms-fullh"><Panel withBorder p="xl" w={420}><Stack>
-        <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>{(me.error as Error).message}</Notice>
+        <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>
+          <Stack gap={4}>{sessionProblem(me.error, t)}</Stack>
+        </Notice>
         <Btn onClick={() => void me.refetch()} loading={me.isFetching}>{t("Reintentar")}</Btn>
       </Stack></Panel></Center>
     );
