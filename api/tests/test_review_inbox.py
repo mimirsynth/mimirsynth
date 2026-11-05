@@ -87,3 +87,26 @@ def test_bulk_decisions(client, monkeypatch):  # noqa: F811
     assert r["done"] == [secret, fix] and r["skipped"] == [{"id": a, "reason": "not_pending"}] and "undo_seconds" not in r
     for pid in (a, b):  # each approval in the batch can still be undone, as a single one
         assert client.post(f"{url}/{pid}/undo", headers=curator).json()["status"] == "pending"
+
+
+def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
+    from mimirsynth import ratings, recall
+    calls, logged = [], []
+
+    def fake_recall(brain_id, graph, query, n_facts, n_chunks, max_chars, n_docs=None, **kw):
+        calls.append((query, n_facts, n_chunks, n_docs))
+        return {"facts": [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A",
+                           "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "score": 0.8, "extra": "dropped"}]}
+    monkeypatch.setattr(recall, "recall", fake_recall)
+    monkeypatch.setattr(ratings, "log", lambda *a, **k: logged.append(a))
+    contrib, curator = _brain(client, "inbox-rel")
+    pid = _propose(client, "inbox-rel", contrib, "NAS movido")
+    url = f"/api/brains/inbox-rel/proposals/{pid}/related"
+    assert client.get(url, headers=contrib).status_code == 403  # a reviewer's read
+    r = client.get(url, headers=curator).json()
+    assert r["facts"] == [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A", "source_uuid": None,
+                           "target_uuid": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8}]
+    assert calls[0][0].startswith("NAS movido") and calls[0][1:] == (5, 0, 0)  # facts only: no fragments, no documents
+    assert logged == []  # not an agent's recall: nothing for the recall ratings
+    _set(pid, purged_at=__import__("datetime").datetime.now())
+    assert client.get(url, headers=curator).json() == {"facts": []}

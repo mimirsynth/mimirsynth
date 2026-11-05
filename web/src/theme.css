@@ -505,3 +505,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-preview { font-size: 13px; color: var(--ms-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-queue-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ms-muted); }
 .ms-queue-meta .ms-data { font-size: 12px; }
+
+/* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
+.ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
+.ms-related a:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }

@@ -5,8 +5,8 @@ import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, Em
   Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { fmt, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
@@ -17,6 +17,7 @@ type Correction = { fact_uuid: string; fact: { fact: string; source: string; tar
   invalid_at: string; applied_at?: string; reverted_at?: string };
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
+const SOURCE: Record<string, string> = { text: T("texto"), message: T("conversación"), json: T("JSON") };
 const LOW_CONFIDENCE = 0.6;  // the same threshold as the review queue's risk order in the API
 const flagged = (p: Prop) => !!p.secrets?.some((f) => f.action === "flagged");
 
@@ -170,7 +171,7 @@ function CorrectionDetail({ c, replacement }: { c: Correction; replacement: stri
 }
 
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
-function ProposalBody({ d }: { d: Prop }) {
+function ProposalBody({ d, context }: { d: Prop; context?: ReactNode }) {
   const { t } = useTranslation();
   return (<Stack gap="sm">
     <Group gap="xs"><KindPill kind={d.kind} /><Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>
@@ -178,8 +179,10 @@ function ProposalBody({ d }: { d: Prop }) {
     {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} /> : <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>}
     <SecretsNotice found={d.secrets} />
+    {context}
     <Steps>
-      <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text></Step>
+      <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text>
+        <Text size="xs" c="dimmed">{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</Text></Step>
       <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
         {d.review_kind === "direct" && <Text size="xs" c="dimmed">{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</Text>}
         {d.review_kind === "webhook" && <Text size="xs" c="dimmed">{t("Aprobada al llegar por un webhook de confianza ·")} {fmt(d.reviewed_at)}</Text>}
@@ -199,10 +202,12 @@ function ProposalBody({ d }: { d: Prop }) {
         {d.correction.reverted_at && <Text size="xs" c="dimmed">{t("Reactivado después · {{at}}", { at: fmt(d.correction.reverted_at) })}</Text>}
       </Step>}
       {(!d.correction || d.body.trim()) && <Step title={d.correction ? t("Ingesta del sustituto") : t("Ingesta en el grafo")} tone={d.status === "ingested" ? "success" : d.status === "failed" ? "danger" : "neutral"}>
-        {d.status === "ingested" && <Group gap="xs"><Text size="xs" c="dimmed">{t("Episodio")} {d.episode_uuid ?? ""} · {fmt(d.ingested_at)}</Text>
+        {d.status === "ingested" && <Group gap="xs"><Text size="xs" c="dimmed">{fmt(d.ingested_at)}</Text>
+          {d.episode_uuid && <Btn size="row" kind="link" component={Link} to={`/diario?episodio=${d.episode_uuid}`}>{t("Ver el episodio en Diario")}</Btn>}
           {d.episode_uuid && <CopyBtn value={d.episode_uuid} label={t("Copiar id")} doneLabel={t("Copiado")} />}</Group>}
         {d.status === "ingested" && d.ingest_report && <Text size="xs" c="dimmed">{d.ingest_report.entities} {t("entidades (")}{d.ingest_report.untyped_entities} {t("sin tipo) ·")} {d.ingest_report.edges} {t("hechos")}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</Text>}
-        {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error || t("error sin detalle")}</Notice>}
+        {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error || t("error sin detalle")}{" "}
+          <Btn kind="link" component={Link} to="/trabajos">{t("Ver los trabajos")}</Btn> · <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Revisar el modelo LLM")}</Btn></Notice>}
         {d.status === "approved" && <Text size="xs" c="dimmed">{t("Pendiente de ingestar.")}</Text>}
         {(d.status === "pending" || d.status === "rejected") && <Text size="xs" c="dimmed">{t("No aplica.")}</Text>}
       </Step>}
@@ -217,6 +222,29 @@ type Ops = {
   undo: UseMutationResult<unknown, Error, number[]>; reactivate: UseMutationResult<unknown, Error, number>; retry: UseMutationResult<unknown, Error, number>;
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
 };
+
+/** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
+ *  duplicate, a contradiction, or nothing at all, which makes it new knowledge. Only for pending proposals that add knowledge. */
+type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
+  valid_at: string | null; invalid_at: string | null; score?: number | null };
+function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
+  const { t } = useTranslation();
+  const q = useQuery({ queryKey: ["proposal", ops.graph, d.id, "related"], staleTime: 60_000, queryFn: () => get<{ facts: RelatedFact[] }>(`${ops.base}/${d.id}/related`) });
+  return (<Panel withBorder p="sm" className="ms-related"><Stack gap={6}>
+    <Text size="xs" fw={600}>{t("Lo que el brain ya sabe")}</Text>
+    <MutationError error={q.error} />
+    {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
+    {q.data && q.data.facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
+    {q.data?.facts.map((f) => (<Stack key={f.uuid} gap={0}>
+      <Text size="sm" className={f.invalid_at ? "ms-text-danger" : undefined}>{f.fact}</Text>
+      <Text size="xs" c="dimmed">
+        {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → {f.name} → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
+        {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: f.valid_at.slice(0, 10) })}` : ""}{f.invalid_at ? ` · ${t("invalidado el {{date}}", { date: f.invalid_at.slice(0, 10) })}` : ""}
+      </Text>
+    </Stack>))}
+    {q.data && q.data.facts.length > 0 && <Text size="xs" c="dimmed">{t("Comprueba si la propuesta repite o contradice alguno de estos hechos.")}</Text>}
+  </Stack></Panel>);
+}
 
 /** The decision on a pending proposal: a note, what each button will do, and Reject / Approve (each with its own progress). */
 function DecisionBlock({ d, ops, onDecided }: { d: Prop; ops: Ops; onDecided?: () => void }) {
@@ -270,7 +298,7 @@ function ProposalModal({ open, onClose, ops }: { open: number | null; onClose: (
     <Modal opened={open !== null} onClose={onClose} title={d ? `#${d.id} · ${d.purged_at ? t("(texto purgado)") : d.name}` : t("Propuesta")} size="lg" centered>
       <MutationError error={detail.error} />
       {d && <Stack gap="sm">
-        <ProposalBody d={d} />
+        <ProposalBody d={d} context={ops.isCurator && d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} />
         <AfterActions d={d} ops={ops} />
         {ops.isCurator && d.status === "pending" && <DecisionBlock d={d} ops={ops} onDecided={onClose} />}
       </Stack>}
@@ -356,7 +384,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const queueItems: QueueItem[] = items.map((p) => ({
     id: p.id, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
-      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="warn">{t("confianza {{c}}", { c: p.confidence })}</Pill>}</>,
+      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="warn">{t("confianza {{c}}", { c: p.confidence })}</Pill>}
+      {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={p.decision.note}>{t("el decisor dudó · {{p}}", { p: p.decision.action?.prob })}</Pill>}</>,
     meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
@@ -394,7 +423,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             <div className="ms-inbox-body">
               <Btn size="row" kind="ghost" icon="undo" className="ms-inbox-back" onClick={() => setShowDetail(false)}>{t("Volver a la cola")}</Btn>
               <MutationError error={detail.error} />
-              {d ? <><Text fw={600}>#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} /></>
+              {d ? <><Text fw={600}>#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
             </div>
             {d && d.status === "pending" && <div className="ms-inbox-actions">
@@ -475,7 +504,8 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   return (
     <Page>
       <PageHeader title={t("Propuestas")} description={<>{t("Cuarentena de aportaciones. Lo que envía un colaborador o un agente no entra al grafo hasta que un curador lo aprueba; las de un curador quedan aprobadas al enviarlas.")}</>} />
-      {ai.data && !ai.data.llm.configured && <Notice tone="warn" title={t("Sin motor LLM configurado")}>{t("Las propuestas aprobadas no se ingieren al grafo y se quedan en «Aprobadas». Un administrador debe configurarlo en Administración → Proveedores IA.")}</Notice>}
+      {ai.data && !ai.data.llm.configured && <Notice tone="warn" title={t("Sin motor LLM configurado")}>{t("Las propuestas aprobadas no se ingieren al grafo y se quedan en «Aprobadas». Un administrador debe configurarlo en Administración → Proveedores IA.")}{" "}
+        <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Ir a Modelo LLM")}</Btn></Notice>}
       {ai.data && ai.data.llm.configured && !ai.data.decider.configured && <Notice>{t("Sin decisor: las propuestas de colaboradores esperan siempre a un curador.")}</Notice>}
       <div role="status" aria-live="polite">
         <DecisionNotice base={base} graph={graph} last={last} llm={ops.llm} onUndo={(ids) => undo.mutate(ids)} undoing={undo.isPending}
