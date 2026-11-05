@@ -216,7 +216,7 @@ Pills carry four status tones (success, warn, danger, alt), defined per theme as
 - **Data** (JetBrains Mono 400, 13px, tabular figures): dates, identifiers, scores, commands and code.
 
 ### Named Rules
-**The Two Weights Rule.** Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. Some sub-nav headings and graph legends currently do, which is drift to correct.
+**The Two Weights Rule.** Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. `b` and `strong` are set to 600 for the same reason.
 
 **The Tabular Truth Rule.** Any column of dates or numbers is set in the data style, so the digits line up and history can be compared at a glance.
 
@@ -242,7 +242,7 @@ Spacing follows a small rhythm: 4px inside chips, 8px between related controls, 
 The system is flat. Depth is tonal: the page sits on the surface colour, and panels, tables, inputs and dialogs sit one step up on the raised colour, edged with a 1px line. Table headers take a tinted band and a 2px bottom rule. The only things that sit above content are overlays (popovers, tooltips, dialogs), and they too rely on the raised colour and a 1px line rather than a shadow. Mantine's shadow tokens are set to `none`.
 
 ### Named Rules
-**The No-Shadow Rule.** Relief comes from the 1px rule and the surface colour, never from `box-shadow`. The chart tooltip currently breaks this, which is drift to correct.
+**The No-Shadow Rule.** Relief comes from the 1px rule and the surface colour, never from `box-shadow`, tooltips and popovers included.
 
 **The Inset Marker Exception.** A 3px inset edge marks a selected item (the active sub-nav entry, a table sub-row). It is a position marker, not elevation.
 
@@ -267,7 +267,7 @@ Every action is a button, and it is secondary by default.
 
 ### Chips
 - **Pill:** a 24px label with a 6px corner, uppercase, 0.06em tracking and semibold, on the chip wash with chip ink. Tones: neutral, success, warn, danger and alt. The strong variant is filled teal. Pills are not interactive.
-- **Entity chip:** a named entity with a dot and a 3px left edge in its type colour. The name keeps the theme's ink, so contrast never depends on the type colour. It is a link unless it is the entity of the current page.
+- **Entity chip:** a named entity with a dot and a 3px left edge in its type colour. The name keeps the theme's ink, so contrast never depends on the type colour. It is a link unless it is the entity of the current page, which draws its whole edge in the type colour instead.
 
 ### Segments
 The options of a status filter, shaped like pills but interactive and 36px tall. The active option is filled teal, and each option may carry a count in a 4px-corner counter. They move with the arrow keys. The status of an inbox (proposals, jobs, documents) is always a segment row with its counts and «All» first, never a dropdown.
@@ -294,7 +294,7 @@ The options of a status filter, shaped like pills but interactive and 36px tall.
 The signature of an operating screen. A 1px outer line, a tinted header band with 12px uppercase muted labels and a 2px rule underneath, solid striped rows (marked in Superficie, subtle in Pozo) and the teal wash on hover. Each column header sorts when you press its name, and its funnel opens a filter. The header exposes `aria-sort`. A table scrolls horizontally inside its own box and becomes cards on a phone.
 
 ### Graph Canvas
-A dark canvas in both themes, with a 10px corner. Nodes take their entity-type colour. Halos show which source contributed a node and use their own palette, distinct from the type colours. Links are a cool blue and invalid links grey. Nothing moves at rest, and with reduced motion nothing moves on its own at all.
+A dark canvas in both themes, with a 10px corner. Nodes take their entity-type colour. Halos show which source contributed a node and use their own palette, distinct from the type colours. Links are a cool blue and invalid links grey. The canvas colours are tokens of their own (`--ms-canvas`, `--ms-canvas-ink`, `--ms-canvas-rule`, `--ms-canvas-link`), mirrored by `CANVAS` in `web/src/ui/palette.ts` for the renderers; the tooltip and the busy overlay over the canvas use them too. Nothing moves at rest, and with reduced motion nothing moves on its own at all.
 
 ## Do's and Don'ts
 

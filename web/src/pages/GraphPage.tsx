@@ -204,15 +204,15 @@ export default function GraphPage({ graph }: { graph: string }) {
           <FillArea>
             {sel ? (
               <Stack gap="xs">
-                <Group justify="space-between" gap="xs"><Text fw={700}>{sel.name}</Text>
+                <Group justify="space-between" gap="xs"><Text fw={600}>{sel.name}</Text>
                   <Btn size="row" icon="graph" component={Link} to={`/entidad/${sel.uuid}`}>{t("Ver página")}</Btn></Group>
                 <Group gap={4}>{sel.labels.map((l) => <Pill key={l} size="xs">{l}</Pill>)}<Pill size="xs">{t("grado")} {sel.degree}</Pill></Group>
                 <Text size="xs" c="dimmed" className="ms-prose">{sel.summary}</Text>
                 <Sources keys={srcOf(sel)} name={(k) => originName.get(k) ?? k} />
-                <Text size="xs" fw={700}>{t("Hechos ({{count}})", { count: nodeFacts.length })}</Text>
+                <Text size="xs" fw={600}>{t("Hechos ({{count}})", { count: nodeFacts.length })}</Text>
                 {nodeFacts.map((l) => <Text key={l.uuid} size="xs" td={l.status === "invalidated" ? "line-through" : undefined}>• {l.fact}</Text>)}
                 {(mentions.data?.documents.length ?? 0) > 0 && <>
-                  <Text size="xs" fw={700}>{t("Documentos que la mencionan ({{count}})", { count: mentions.data!.documents.length })}</Text>
+                  <Text size="xs" fw={600}>{t("Documentos que la mencionan ({{count}})", { count: mentions.data!.documents.length })}</Text>
                   {mentions.data!.documents.map((d) => (
                     <Stack key={d.document_id} gap={0}>
                       <Text size="xs" component={Link} to={`/conocimiento?doc=${d.document_id}`}>{d.title}{d.chunks > 1 ? t(" · {{chunks}} pasajes", { chunks: d.chunks }) : ""}</Text>
@@ -242,7 +242,7 @@ function Sources({ keys, name }: { keys: string[]; name: (k: string) => string }
   const { t } = useTranslation();
   return (
     <Stack gap={2}>
-      <Text size="xs" fw={700}>{t("Orígenes ({{count}})", { count: keys.length })}</Text>
+      <Text size="xs" fw={600}>{t("Orígenes ({{count}})", { count: keys.length })}</Text>
       {keys.length ? <Group gap={4}>{keys.map((k) => <Pill key={k} size="xs">{name(k)}</Pill>)}</Group> : <Text size="xs" c="dimmed">{t("Sin origen conocido")}</Text>}
     </Stack>
   );
