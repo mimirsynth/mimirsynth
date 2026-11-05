@@ -5,7 +5,7 @@ import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, Em
   Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fmt, get, send } from "../api";
 
@@ -90,12 +90,17 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
   </>);
 }
 
-/** The last decision taken here, said above the work, in a live region: what happened, what happens next, and the way back.
- *  An approval waits `undo_seconds` before ingestion; after that a single one is followed until it is ingested or failed. `ids` when it was
- *  a decision on several at once (`skipped`: how many of the selected ones were left to decide one at a time). */
+/** The last decision taken here: what happened, what happens next, and the way back. An approval waits `undo_seconds` before ingestion;
+ *  after that a single one is followed until it is ingested or failed. `ids` when it was a decision on several at once (`skipped`: how
+ *  many of the selected ones were left to decide one at a time). */
 type Decision = { id: number; ids?: number[]; skipped?: number; verb: "approve" | "reject" | "undone"; until: number | null };
-function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, onOpen, onClose }: { base: string; graph: string; last: Decision | null; llm: boolean;
-  onUndo: (ids: number[]) => void; undoing: boolean; undoError: unknown; onOpen: (id: number) => void; onClose: () => void }) {
+/** Whether the last decision can still be taken back: a rejection, or an approval not yet handed to ingestion. */
+const undoable = (last: Decision | null) => !!last && last.verb !== "undone" && (last.ids ?? [last.id]).length > 0
+  && (last.verb === "reject" || !last.until || last.until > Date.now());
+
+/** What to say about the last decision, shared by the notice on screen and the screen reader's live region. `phase` changes when the
+ *  message does, never with the countdown, so the live region speaks each step once. */
+function useDecisionText(base: string, graph: string, last: Decision | null, llm: boolean) {
   const { t } = useTranslation();
   const [, tick] = useState(0);  // only re-renders while counting: the time itself is read fresh on every render
   const now = Date.now();
@@ -111,46 +116,81 @@ function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, on
     refetchInterval: (q) => (q.state.data?.status === "approved" ? 2000 : false) });
   if (!last) return null;
   const id = last.id;
-  const ids = last.ids ?? [id];
-  const n = ids.length;
+  const n = (last.ids ?? [id]).length;
   const s = last.until ? Math.max(1, Math.ceil((last.until - now) / 1000)) : 0;
-  const undo = <Btn kind="link" loading={undoing} onClick={() => onUndo(ids)}>{t("Deshacer")}</Btn>;
-  const view = <Btn kind="link" onClick={() => onOpen(id)}>{t("Ver la propuesta")}</Btn>;
-  const close = <Btn kind="link" onClick={onClose}>{t("Cerrar aviso")}</Btn>;
   let tone: "success" | "danger" | "info" = "success";
   let text: string;
-  let actions = <>{close}</>;
+  let step: string;
+  let undo = false, view = false;
   if (many) {
-    if (n === 0) { tone = "info"; text = t("No se ha decidido ninguna: las seleccionadas se deciden una a una."); }
-    else if (last.verb === "undone") { tone = "info"; text = t("{{n}} propuestas otra vez pendientes.", { n }); }
-    else if (last.verb === "reject") { text = t("{{n}} propuestas rechazadas: no entra nada en el grafo.", { n }); actions = <>{undo} · {close}</>; }
-    else if (waiting) { text = t("{{n}} propuestas aprobadas: entran en el grafo dentro de {{s}} s.", { n, s }); actions = <>{undo} · {close}</>; }
-    else text = last.until ? t("{{n}} propuestas aprobadas: entrando en el grafo. El resultado de cada una está en «Decididas».", { n }) : t("{{n}} propuestas aprobadas.", { n });
+    if (n === 0) { tone = "info"; step = "none"; text = t("No se ha decidido ninguna: las seleccionadas se deciden una a una."); }
+    else if (last.verb === "undone") { tone = "info"; step = "undone"; text = t("{{n}} propuestas otra vez pendientes.", { n }); }
+    else if (last.verb === "reject") { tone = "info"; step = "reject"; undo = true; text = t("{{n}} propuestas rechazadas: no entra nada en el grafo.", { n }); }
+    else if (waiting) { step = "wait"; undo = true; text = t("{{n}} propuestas aprobadas: entran en el grafo dentro de {{s}} s.", { n, s }); }
+    else { step = "after"; text = last.until ? t("{{n}} propuestas aprobadas: entrando en el grafo. El resultado de cada una está en «Decididas».", { n }) : t("{{n}} propuestas aprobadas.", { n }); }
     if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar o ya decidida).");
     else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar o ya decididas).", { k: last.skipped });
   } else if (last.verb === "undone") {
-    tone = "info"; text = t("Propuesta #{{id}} otra vez pendiente.", { id }); actions = <>{view} · {close}</>;
+    tone = "info"; step = "undone"; view = true; text = t("Propuesta #{{id}} otra vez pendiente.", { id });
   } else if (last.verb === "reject") {
-    text = t("Propuesta #{{id}} rechazada: no entra nada en el grafo.", { id }); actions = <>{undo} · {close}</>;
+    tone = "info"; step = "reject"; undo = true; text = t("Propuesta #{{id}} rechazada: no entra nada en el grafo.", { id });
   } else if (!last.until) {
+    step = "approved"; undo = true;
     text = llm ? t("Propuesta #{{id}} aprobada.", { id }) : t("Propuesta #{{id}} aprobada: se queda en «Aprobadas» hasta que haya un motor de extracción.", { id });
-    actions = <>{undo} · {close}</>;
   } else if (waiting) {
-    text = t("Propuesta #{{id}} aprobada: entra en el grafo dentro de {{s}} s.", { id, s });
-    actions = <>{undo} · {close}</>;
+    step = "wait"; undo = true; text = t("Propuesta #{{id}} aprobada: entra en el grafo dentro de {{s}} s.", { id, s });
   } else if (p.data?.status === "ingested") {
     const r = p.data.ingest_report;
     const ents = r ? (r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })) : "";
     const facts = r ? (r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })) : "";
+    step = "ingested"; view = true;
     text = r ? t("Propuesta #{{id}} en el grafo: {{ents}} y {{facts}}.", { id, ents, facts }) : t("Propuesta #{{id}} en el grafo.", { id });
     if (r && r.edges === 0) text += " " + t("No se extrajo ningún hecho: revisa el texto de la propuesta.");
-    actions = <>{view} · {close}</>;
   } else if (p.data?.status === "failed") {
-    tone = "danger"; text = t("Propuesta #{{id}}: falló la ingesta. {{error}}", { id, error: p.data.ingest_error }); actions = <>{view} · {close}</>;
+    tone = "danger"; step = "failed"; view = true; text = t("Propuesta #{{id}}: falló la ingesta. {{error}}", { id, error: p.data.ingest_error });
   } else {
-    text = t("Propuesta #{{id}} aprobada: entrando en el grafo…", { id });
+    step = "entering"; text = t("Propuesta #{{id}} aprobada: entrando en el grafo…", { id });
   }
-  return (<Notice tone={tone}><Stack gap={4}><Text size="sm">{text}</Text><Text size="sm">{actions}</Text><MutationError error={undoError} /></Stack></Notice>);
+  return { tone, text, undo, view, phase: `${last.verb}:${(last.ids ?? [id]).join(",")}:${step}` };
+}
+
+/** The last decision on screen, with its way back. It sits in the review footer, under the buttons it answers, when that footer is in
+ *  view, and above the work otherwise. It is not a live region: `DecisionLive` speaks for it. */
+function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, onOpen, onClose }: { base: string; graph: string; last: Decision | null; llm: boolean;
+  onUndo: (ids: number[]) => void; undoing: boolean; undoError: unknown; onOpen: (id: number) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const m = useDecisionText(base, graph, last, llm);
+  if (!m || !last) return null;
+  const links = [
+    m.undo && <Btn kind="link" loading={undoing} onClick={() => onUndo(last.ids ?? [last.id])}>{t("Deshacer")}</Btn>,
+    m.view && <Btn kind="link" onClick={() => onOpen(last.id)}>{t("Ver la propuesta")}</Btn>,
+    <Btn kind="link" onClick={onClose}>{t("Cerrar aviso")}</Btn>,
+  ].filter(Boolean);
+  return (<Notice tone={m.tone}><Stack gap={4}><Text size="sm">{m.text}</Text>
+    <Text size="sm">{links.map((l, i) => <Fragment key={i}>{i > 0 && " · "}{l}</Fragment>)}</Text>
+    <MutationError error={undoError} /></Stack></Notice>);
+}
+
+/** The screen reader's side of the notice: always mounted, because a live region must exist before it changes, and it speaks each step
+ *  of a decision once (decided, entering, in the graph or failed), never the countdown. */
+function DecisionLive({ base, graph, last, llm }: { base: string; graph: string; last: Decision | null; llm: boolean }) {
+  const m = useDecisionText(base, graph, last, llm);
+  const [said, setSaid] = useState({ phase: "", text: "" });
+  if (m && m.phase !== said.phase) setSaid({ phase: m.phase, text: m.text });
+  return <div className="ms-sr-only" role="status" aria-live="polite">{m ? said.text : ""}</div>;
+}
+
+/** Whether an element is on screen: false while it, or a parent, is `display: none` (the narrow inbox showing the queue). */
+function useShown(ref: RefObject<HTMLElement | null>, mounted: boolean) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!mounted || !el) { setShown(false); return; }
+    const ro = new ResizeObserver(() => setShown(el.getClientRects().length > 0));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mounted, ref]);
+  return shown;
 }
 
 /** What to look at before approving a correction: the affected fact as it was, the reason and the text that replaces it. */
@@ -223,6 +263,8 @@ type Ops = {
   review: UseMutationResult<Prop & { undo_seconds?: number }, Error, { id: number; verb: Verb }>;
   undo: UseMutationResult<unknown, Error, number[]>; reactivate: UseMutationResult<unknown, Error, number>; retry: UseMutationResult<unknown, Error, number>;
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
+  /** The last decision, its notice (for the review footer to dock) and the way to take it back from the keyboard. */
+  last: Decision | null; notice: ReactNode; setDocked: (on: boolean) => void; undoLast: () => void;
 };
 
 /** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
@@ -369,6 +411,12 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const [confirm, setConfirm] = useState<"approve" | "reject" | null>(null);
   const [masking, setMasking] = useState(false);
   const actions = useRef<HTMLDivElement>(null);
+  const footer = mode === "pending" && active !== null;
+  const shown = useShown(actions, footer);
+  useEffect(() => { ops.setDocked(shown); }, [shown]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => ops.setDocked(false), []);  // eslint-disable-line react-hooks/exhaustive-deps
+  const [focusKey, setFocusKey] = useState(0);
+  const handled = useRef<Decision | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const selected = items.filter((p) => checked.has(p.id));
   const oneByOne = selected.filter((p) => p.kind === "correction" || flagged(p)).length;
@@ -392,11 +440,19 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (verb === "approve" && flagged(d)) { setMasking(true); return; }  // never as written: the same confirmation as its button
     ops.review.mutate({ id: d.id, verb }, { onSuccess: () => advance(d.id) });
   };
+  useEffect(() => {  // after an undo the proposal is back in the queue: it opens there and the focus returns to it, not to the page
+    const l = ops.last;
+    if (!l || l.verb !== "undone" || handled.current === l) return;
+    const id = (l.ids ?? [l.id]).find((i) => items.some((p) => p.id === i));
+    if (id === undefined) return;  // not back yet: the queue is refetching
+    handled.current = l;
+    setActive(id); setShowDetail(false); setFocusKey((k) => k + 1); ops.setNote("");
+  }, [ops.last, items]);  // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (id: number | null, on?: boolean) => {
     if (id === null) return;
     setChecked((c) => { const n = new Set(c); (on ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
   };
-  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active) }, mode === "pending" && confirm === null && !masking);
+  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active), z: () => ops.undoLast() }, mode === "pending" && confirm === null && !masking);
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
@@ -433,7 +489,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
               </>}
             </div>
             <div className="ms-inbox-scroll">
-              <QueueList items={queueItems} activeId={active} onActivate={open} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
+              <QueueList items={queueItems} activeId={active} focusKey={focusKey} onActivate={open} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
             </div>
             <Pager total={queue.data?.total ?? 0} offset={offset} limit={limit} onChange={(p) => setOffset(p.offset)} />
           </>}
@@ -444,9 +500,10 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
               {d ? <><Text fw={600}>#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
             </div>
-            {d && d.status === "pending" && <div className="ms-inbox-actions" ref={actions}>
-              <DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} />
-              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")}</Text>
+            {footer && <div className="ms-inbox-actions" ref={actions}>
+              {shown && ops.notice}
+              {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} />
+              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
           </>} />}
     </>}
@@ -509,6 +566,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [note, setNote] = useState("");
   const [open, setOpen] = useState<number | null>(null);
   const [last, setLast] = useState<Decision | null>(null);
+  const [docked, setDocked] = useState(false);
   const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((id) => send("POST", `${base}/${id}/undo`))),
     onSuccess: (_, ids) => { setLast({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null }); refresh(); } });
   const review = useMutation({ mutationFn: (a: { id: number; verb: Verb }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note }),
@@ -516,8 +574,12 @@ export default function Proposals({ graph, role }: { graph: string; role: string
     onSuccess: (r, a) => { setNote(""); setLast({ id: a.id, verb: a.verb === "reject" ? "reject" : "approve", until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null }); refresh(); } });
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/ingest`), onSuccess: () => { setOpen(null); setTimeout(refresh, 8000); refresh(); } });
-  const ops: Ops = { base, graph, isCurator, llm: !!ai.data?.llm.configured, note, setNote, review, undo, reactivate, retry, setLast, refresh,
-    openDetail: (id) => { setOpen(id); setNote(""); } };
+  const llm = !!ai.data?.llm.configured;
+  const notice = <DecisionNotice base={base} graph={graph} last={last} llm={llm} onUndo={(ids) => undo.mutate(ids)} undoing={undo.isPending}
+    undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={(id) => { setOpen(id); setNote(""); }} onClose={() => { setLast(null); undo.reset(); }} />;
+  const ops: Ops = { base, graph, isCurator, llm, note, setNote, review, undo, reactivate, retry, setLast, refresh,
+    openDetail: (id) => { setOpen(id); setNote(""); }, last, notice, setDocked,
+    undoLast: () => { if (last && undoable(last) && !undo.isPending) undo.mutate(last.ids ?? [last.id]); } };
   if (role === "reader") return <Page><PageHeader title={t("Propuestas")} description={<>{t("Con rol de lector no puedes proponer ni ver propuestas. Pide rol de colaborador a un administrador del brain.")}</>} /></Page>;
   return (
     <Page>
@@ -525,10 +587,8 @@ export default function Proposals({ graph, role }: { graph: string; role: string
       {ai.data && !ai.data.llm.configured && <Notice tone="warn" title={t("Sin motor LLM configurado")}>{t("Las propuestas aprobadas no se ingieren al grafo y se quedan en «Aprobadas». Un administrador debe configurarlo en Administración → Proveedores IA.")}{" "}
         <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Ir a Modelo LLM")}</Btn></Notice>}
       {ai.data && ai.data.llm.configured && !ai.data.decider.configured && <Notice>{t("Sin decisor: las propuestas de colaboradores esperan siempre a un curador.")}</Notice>}
-      <div role="status" aria-live="polite">
-        <DecisionNotice base={base} graph={graph} last={last} llm={ops.llm} onUndo={(ids) => undo.mutate(ids)} undoing={undo.isPending}
-          undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={ops.openDetail} onClose={() => { setLast(null); undo.reset(); }} />
-      </div>
+      <DecisionLive base={base} graph={graph} last={last} llm={llm} />
+      {!docked && notice}
       {isCurator
         ? <Tabs value={tab} onChange={(v) => setTab(v)} keepMounted={false} className="ms-tabs-fill">
             <Tabs.List>
