@@ -520,6 +520,9 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-meta .ms-data { font-size: 12px; }
 
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
+.ms-fold[hidden] { display: none; }  /* a folded region stays in the page, for aria-controls, but out of sight */
+.ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); }  /* a section of the detail, ruled off like the rest, not a card inside its card */
+.ms-section-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--ms-ink); }
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
 .ms-related .ms-fact-old { color: var(--ms-invalidado); text-decoration: line-through; }  /* no longer true: struck through, as in the entity lists */
 .ms-related a:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }
