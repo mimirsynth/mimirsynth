@@ -340,7 +340,8 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
 /** The decision on a pending proposal: a note, what each button will do, and Reject / Approve (each with its own progress).
  *  With secrets flagged for review, Approve becomes «Mask and approve», behind a confirmation that names the kinds of secret; `masking`
  *  lets the queue open that confirmation from its A shortcut. */
-function DecisionBlock({ d, ops, onDecided, masking, onMasking }: { d: Prop; ops: Ops; onDecided?: () => void; masking?: boolean; onMasking?: (on: boolean) => void }) {
+function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: Prop; ops: Ops; onDecided?: () => void; masking?: boolean; onMasking?: (on: boolean) => void;
+  /** The whole proposal is still loading: the buttons stay where they are, disabled. */ waiting?: boolean }) {
   const { t } = useTranslation();
   const { review } = ops;
   const [ownMasking, setOwnMasking] = useState(false);
@@ -382,9 +383,9 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking }: { d: Prop; ops
           onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
       </Group>
       <Group gap="xs">
-        <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={review.isPending && review.variables?.verb !== "reject"}
+        <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
           onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
-        <Btn kind="primary" loading={approving} disabled={review.isPending && !approving}
+        <Btn kind="primary" loading={approving} disabled={waiting || (review.isPending && !approving)}
           onClick={() => asks ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
@@ -482,8 +483,21 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (active === null || !items.some((p) => p.id === active)) setActive(items[0].id);
     setChecked((c) => new Set([...c].filter((id) => items.some((p) => p.id === id))));  // nothing hidden stays selected
   }, [items]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const detail = useQuery({ queryKey: ["proposal", ops.graph, active], enabled: active !== null, queryFn: () => get<Prop>(`${ops.base}/${active}`) });
-  const d = detail.data && detail.data.id === active ? detail.data : undefined;
+  // the open one shows at once from its queue row (its text cut at 300 characters) while the whole proposal loads, so moving through
+  // the queue never blanks the detail or unmounts the decision
+  const detail = useQuery({ queryKey: ["proposal", ops.graph, active], enabled: active !== null, queryFn: () => get<Prop>(`${ops.base}/${active}`),
+    placeholderData: () => items.find((p) => p.id === active) });
+  // a cached copy can lag behind the queue (a proposal reopened by an undo still cached as rejected): the queue row wins until it reloads
+  const row = items.find((p) => p.id === active);
+  const stale = !!row && !!detail.data && detail.data.id === active && detail.data.status !== row.status;
+  const d = stale ? row : detail.data && detail.data.id === active ? detail.data : undefined;
+  // shown from its queue row: deciding waits only when the row cut the text (300 characters), since the rest (secrets, kind, what the
+  // brain knows) is all in the row
+  const partial = (detail.isPlaceholderData || stale) && (row?.body.length ?? 0) >= 300;
+  const listRef = useRef<HTMLDivElement>(null);
+  // where the focus goes once the proposal it is about is on screen: its title after a decision, so a button that stays where it was
+  // is never pressed again by accident; after an undo, the queue entry (or the title when the queue is hidden, on a narrow screen)
+  const [focusTo, setFocusTo] = useState<"title" | "undone" | null>(null);
   const [confirm, setConfirm] = useState<"approve" | "reject" | null>(null);
   const [batch, setBatch] = useState<{ verb: "approve" | "reject"; items: Prop[] }>({ verb: "approve", items: [] });  // what the dialog shows: kept while it closes
   const ask = (verb: "approve" | "reject") => { setBatch({ verb, items: selected }); setConfirm(verb); };
@@ -512,11 +526,17 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const advance = (id: number) => {  // after a decision the next one opens, so the curator never goes back to the list
     const i = items.findIndex((p) => p.id === id);
     const next = items[i + 1] ?? items[i - 1];
-    if (next) { setActive(next.id); ops.setNote(""); } else setShowDetail(false);
+    if (next) { setActive(next.id); ops.setNote(""); setFocusTo("title"); } else setShowDetail(false);
   };
+  useEffect(() => {
+    if (!focusTo || !d) return;
+    if (focusTo === "undone" && listRef.current?.getClientRects().length) setFocusKey((k) => k + 1);
+    else document.getElementById(`ms-title-${d.id}`)?.focus();
+    setFocusTo(null);
+  }, [focusTo, d?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
   const related = useRelated(ops, d);
   const decide = (verb: "approve" | "reject") => {
-    if (!d || d.status !== "pending" || ops.review.isPending) return;
+    if (!d || d.status !== "pending" || ops.review.isPending || partial) return;
     if (!actions.current?.getClientRects().length) return;  // narrow layout showing the queue: nothing is decided without being seen
     if (verb === "approve" && (flagged(d) || knownOf(d, related.data?.facts))) { setMasking(true); return; }  // the same confirmation as its button
     ops.review.mutate({ id: d.id, verb }, { onSuccess: () => advance(d.id) });
@@ -527,7 +547,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     const id = (l.ids ?? [l.id]).find((i) => items.some((p) => p.id === i));
     if (id === undefined) return;  // not back yet: the queue is refetching
     handled.current = l;
-    setActive(id); setShowDetail(false); setFocusKey((k) => k + 1); ops.setNote("");
+    // it opens again; on a narrow screen with its detail, so the notice docked under its buttons stays in view
+    setActive(id); setShowDetail(true); setFocusTo("undone"); ops.setNote("");
   }, [ops.last, items]);  // eslint-disable-line react-hooks/exhaustive-deps
   const toggle = (id: number | null, on?: boolean) => {
     if (id === null) return;
@@ -573,7 +594,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
                 <Btn size="row" kind="ghost" onClick={() => setChecked(new Set(items.map((p) => p.id)))}>{t("Seleccionar todas")}</Btn>
               </>}
             </div>
-            <div className="ms-inbox-scroll">
+            <div className="ms-inbox-scroll" ref={listRef}>
               <QueueList items={queueItems} activeId={active} focusKey={focusKey} onActivate={open} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
             </div>
             <Pager total={queue.data?.total ?? 0} offset={offset} limit={limit} onChange={(p) => setOffset(p.offset)} />
@@ -582,12 +603,12 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             <div className="ms-inbox-body">
               <Btn size="row" kind="ghost" icon="back" className="ms-inbox-back" onClick={() => setShowDetail(false)}>{t("Volver a la cola")}</Btn>
               <MutationError error={detail.error} />
-              {d ? <><Text fw={600}>#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
+              {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
             </div>
             {footer && <div className="ms-inbox-actions" ref={actions}>
               {shown && ops.notice}
-              {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} />
+              {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} waiting={partial} />
               <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
           </>} />}
