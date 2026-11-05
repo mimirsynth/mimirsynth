@@ -150,7 +150,8 @@ def list_proposals(status: str | None = None, kind: str | None = None, q: str = 
 @router.get("/counts")
 def counts(kind: str | None = None, mine: bool = False, ctx: BrainCtx = Depends(contributor)):
     """Número de propuestas por estado (un colaborador solo cuenta las suyas), only of one `kind` when given.
-    `kinds` counts each kind across every state, and `corrections_pending` the corrections a person still has to decide."""
+    `kinds` counts each kind across every state, `kinds_in` each kind inside each state (and «all», «decided»), and
+    `corrections_pending` the corrections a person still has to decide."""
     if kind and kind not in KINDS:
         raise HTTPException(400, "tipo inválido")
     q = select(Proposal.status, Proposal.kind, func.count()).where(Proposal.brain_id == ctx.brain.id).group_by(Proposal.status, Proposal.kind)
@@ -164,6 +165,9 @@ def counts(kind: str | None = None, mine: bool = False, ctx: BrainCtx = Depends(
     out["all"] = sum(out[k] for k in STATUSES)
     out["decided"] = out["all"] - out["pending"]
     out["kinds"] = {k: sum(n for _, kk, n in rows if kk == k) for k in sorted(KINDS)}
+    # each kind inside each state (and inside «all» and «decided»), so a kind's count matches the state on screen
+    groups = {st: {st} for st in STATUSES} | {"all": set(STATUSES), "decided": set(STATUSES) - {"pending"}}
+    out["kinds_in"] = {g: {k: sum(n for st, kk, n in rows if kk == k and st in sts) for k in sorted(KINDS)} for g, sts in groups.items()}
     out["corrections_pending"] = sum(n for st, k, n in rows if st == "pending" and k == "correction")
     return out
 

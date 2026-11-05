@@ -55,22 +55,31 @@ function waited(iso: string): string {
 }
 
 type PropList = { total: number; limit: number; offset: number; authors: { id: number; name: string }[]; items: Prop[] };
-type Counts = Record<string, number> & { kinds?: Record<string, number>; corrections_pending?: number };
+type Counts = Record<string, number> & { kinds?: Record<string, number>; kinds_in?: Record<string, Record<string, number>>; corrections_pending?: number };
+/** The kind counts inside one state (or «all», «decided»), for a kind selector whose numbers match the state on screen: every option
+ *  gets its number, or none does while the counts load. */
+const kindCounts = (c: Counts | undefined, status: string) => {
+  const k = c?.kinds_in?.[status];
+  return { all: k ? (k.memory ?? 0) + (k.correction ?? 0) : undefined, memory: k?.memory, correction: k?.correction };
+};
 const PLURAL: Record<string, string> = { pending: T("Pendientes"), approved: T("Aprobadas"), rejected: T("Rechazadas"), failed: T("Fallidas"), ingested: T("Ingeridas") };
 type View = ReturnType<typeof useProposalsView>;
 const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debounced: ["q"], firstDir: { name: "asc", author: "asc" } });
 
 /** Estado, filtros, orden y página se resuelven en el servidor (#88): con muchas propuestas se llega a todas y los filtros abarcan el conjunto entero.
  *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza. `statuses` are the state segments it offers, the first one being «all of them». */
-function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, counts, onOpen }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
-  statuses: { value: string; label: string; count?: number }[]; kind: string; onKind: (k: string) => void; counts: Counts; onOpen: (id: number) => void }) {
+function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, kindsFrom, onOpen, emptyAll }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
+  statuses: { value: string; label: string; count?: number }[]; kind: string; onKind: (k: string) => void; onOpen: (id: number) => void;
+  /** The counts not filtered by kind, which the kind selector counts from. */ kindsFrom?: Counts;
+  /** What to say when nothing at all is there yet (the first state, no filters). */ emptyAll: string }) {
   const { t } = useTranslation();
   const { f, setFilter, sortProps, page, setPage, active, clear } = view;
   const rows = data?.items ?? [];
   return (<>
     <Segments label={t("Estado")} value={status} onChange={onStatus} data={statuses} />
     <Segments label={t("Tipo")} value={kind} onChange={onKind}
-      data={[{ value: "all", label: t("Todas") }, { value: "memory", label: t("Añaden"), count: counts.kinds?.memory }, { value: "correction", label: t("Corrigen"), count: counts.kinds?.correction }]} />
+      data={[{ value: "all", label: t("Todas"), count: kindCounts(kindsFrom, status).all }, { value: "memory", label: t("Añaden"), count: kindCounts(kindsFrom, status).memory },
+        { value: "correction", label: t("Corrigen"), count: kindCounts(kindsFrom, status).correction }]} />
     <ClearFilters active={active} onClear={clear} />
     <FillArea><DataTable fz="sm">
       <DataTable.Thead><DataTable.Tr>
@@ -91,7 +100,7 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td>{fmt(p.created_at)}</DataTable.Td>
             <DataTable.Td>{p.reviewed_at ? <Stack gap={0}><Text size="sm">{decidedBy(p, t)}</Text><Text size="xs" c="dimmed">{fmt(p.reviewed_at)}</Text></Stack> : "—"}</DataTable.Td>
           </DataTable.Tr>))}
-        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={8}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
+        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={8}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : status === statuses[0]?.value && kind === "all" ? emptyAll : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
       </DataTable.Tbody>
     </DataTable></FillArea>
     <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} />
@@ -471,10 +480,16 @@ function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind }
       sort: sort?.key, order: sort?.dir, limit: page.limit, offset: page.offset, mine: mine || undefined }) });
   const cnt = useQuery({ queryKey: ["proposals", ops.graph, "counts", kind, mine], refetchInterval: 15000,
     queryFn: () => get<Counts>(`${ops.base}/counts`, { kind: kind === "all" ? undefined : kind, mine: mine || undefined }) });
+  // the kind counts never depend on the kind chosen, only on the state: they come from the unfiltered counts
+  const all = useQuery({ queryKey: ["proposals", ops.graph, "counts", "all", mine], refetchInterval: 15000,
+    queryFn: () => get<Counts>(`${ops.base}/counts`, { mine: mine || undefined }) });
   const counts = cnt.data ?? {};
+  const emptyAll = mine ? t("Aún no has enviado ninguna propuesta. Lo que envíes aparecerá aquí, con su estado.") : t("Aún no se ha decidido ninguna propuesta.");
+  if (all.data && all.data.all === 0 && !view.active)  // nothing yet: no filters over an empty table, just say so
+    return <EmptyState>{emptyAll}</EmptyState>;
   return (<>
     <MutationError error={list.error} />
-    <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} counts={counts} onOpen={ops.openDetail}
+    <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} kindsFrom={all.data} onOpen={ops.openDetail} emptyAll={emptyAll}
       statuses={[{ value: first.value, label: first.label, count: cnt.data ? counts[first.countKey] ?? 0 : undefined }, ...statuses.map((k) => ({ value: k, label: t(PLURAL[k]), count: cnt.data ? counts[k] ?? 0 : undefined }))]} />
   </>);
 }
@@ -587,7 +602,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
         data={[{ value: "pending", label: t("Pendientes"), count: cnt.data ? counts.pending ?? 0 : undefined }, { value: "decided", label: t("Decididas"), count: cnt.data ? counts.decided ?? 0 : undefined }]} />
       {mode === "pending" && <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
-        data={[{ value: "all", label: t("Todas") }, { value: "memory", label: t("Añaden") }, { value: "correction", label: t("Corrigen"), count: cnt.data ? pendingFixes : undefined }]} />}
+        data={[{ value: "all", label: t("Todas"), count: kindCounts(cnt.data, "pending").all }, { value: "memory", label: t("Añaden"), count: kindCounts(cnt.data, "pending").memory },
+          { value: "correction", label: t("Corrigen"), count: kindCounts(cnt.data, "pending").correction }]} />}
     </div>
     {mode === "decided" ? <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={initialKind}
         first={{ value: "decided", label: t("Todas las decididas"), countKey: "decided" }} /> : <>
@@ -725,7 +741,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
       {isCurator
         ? <Tabs value={tab} onChange={(v) => setTab(v)} keepMounted={false} className="ms-tabs-fill">
             <Tabs.List>
-              <Tabs.Tab value="revisar">{t("Por revisar")}{pendingCount.data ? ` (${pendingCount.data.pending ?? 0})` : ""}</Tabs.Tab>
+              <Tabs.Tab value="revisar">{t("Por revisar")}{tab !== "revisar" && pendingCount.data ? ` (${pendingCount.data.pending ?? 0})` : ""}</Tabs.Tab>
               <Tabs.Tab value="mias">{t("Mis propuestas")}</Tabs.Tab>
             </Tabs.List>
             <Tabs.Panel value="revisar" pt="sm" className="ms-tabpanel-col">
