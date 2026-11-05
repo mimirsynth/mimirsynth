@@ -105,6 +105,27 @@ def safe_name(p) -> str:
     return name
 
 
+def mask_flagged(text: str, findings: list[dict], lang: str | None = None) -> tuple[str, list[dict]]:
+    """Masks what was flagged in one field of a stored text, because a curator decided it must not reach the memory as written («Mask
+    and approve»). The already masked findings stay as they are; every position is recomputed for the new text. Like `guard`, the
+    marker is written in the instance's language."""
+    lang = lang or instance_lang()
+    names = labels(lang)
+    marker = tr("[secreto eliminado: {{label}}]", lang, label="{label}")
+    out, new, last, pos = [], [], 0, 0
+    for f in sorted(findings, key=lambda f: f["start"]):
+        out.append(text[last:f["start"]])
+        pos += f["start"] - last
+        flag = f.get("action") == "flagged"
+        piece = marker.format(label=names.get(f["rule"], f["rule"])) if flag else text[f["start"]:f["end"]]
+        out.append(piece)
+        new.append({**f, "start": pos, "end": pos + len(piece), "action": "masked" if flag else f.get("action")})
+        pos += len(piece)
+        last = f["end"]
+    out.append(text[last:])
+    return "".join(out), new
+
+
 def flagged(findings: list[dict] | None) -> bool:
     return any(f.get("action") == "flagged" for f in findings or [])
 

@@ -21,7 +21,7 @@ Cada columna se puede ordenar y filtrar.
 | **Brains y miembros** | `brain.create`, `brain.update` (incluidas la descripción y la política de secretos), `brain.delete`, `brain.retention` (cada plazo que cambió, de cuánto a cuánto), `recall.query_text` (guardar el texto de las consultas valoradas, sí o no), `member.set` (`via=oidc-default:<proveedor>` cuando viene del acceso inicial de un proveedor), `member.remove` |
 | **Federación** | `grant.create`, `grant.update`, `grant.revoke` |
 | **Tokens** | `token.create` (con el alcance y los días hasta que caduca), `token.rotate` (con el periodo de gracia), `token.revoke` |
-| **Propuestas** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (el veredicto del decisor), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rechazada por la política de [[Secretos]], con las reglas, nunca el valor) |
+| **Propuestas** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (el veredicto del decisor), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rechazada por la política de [[Secretos]], con las reglas, nunca el valor), `proposal.secrets_masked` (un curador tapó los secretos marcados antes de aprobar, con las reglas, nunca el valor) |
 | **Secretos** | `secrets.scan` (recuentos por regla) |
 | **Exportar** | `brain.export` (las opciones, nunca la contraseña), `brain.export.download` |
 | **Importar** | `brain.import` (slug, modo y nombre del fichero, nunca la contraseña), `brain.import.done` (cómo entró el grafo y los recuentos) |
