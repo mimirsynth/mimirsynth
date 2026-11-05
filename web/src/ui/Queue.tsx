@@ -7,14 +7,19 @@ export type QueueItem = { id: number; title: ReactNode; preview?: string; meta?:
 /** A review queue: one item is open (the detail beside it), several can be checked for a decision on all of them. Each item is a list
  *  entry with a real button to open it and its own checkbox, so screen readers keep the list structure and the open one is announced
  *  (`aria-current`). Up/Down move the focus between items; the page's J/K shortcuts move the open one (`useShortcuts`). */
-export function QueueList({ items, activeId, onActivate, checked, onCheck, label }: {
+export function QueueList({ items, activeId, focusKey, onActivate, checked, onCheck, label }: {
   items: QueueItem[]; activeId: number | null; onActivate: (id: number) => void; checked: Set<number>; onCheck: (id: number, on: boolean) => void; label: string;
+  /** Bumped to move the focus to the open item (after an undo, for example), so it is not lost when the control that had it goes away. */
+  focusKey?: number;
 }) {
   const { t } = useTranslation();
   const refs = useRef(new Map<number, HTMLButtonElement>());
   useEffect(() => {  // the open item stays in view when J/K move it
     if (activeId !== null) refs.current.get(activeId)?.scrollIntoView({ block: "nearest" });
   }, [activeId]);
+  useEffect(() => {
+    if (focusKey && activeId !== null) refs.current.get(activeId)?.focus();
+  }, [focusKey]);  // eslint-disable-line react-hooks/exhaustive-deps
   const move = (from: number, step: number) => {
     const i = items.findIndex((it) => it.id === from);
     const next = items[i + step];
