@@ -1,6 +1,4 @@
 {
-  "1 no se aprueba así (una corrección o un secreto por revisar): se queda seleccionada para decidirla aparte.": "1 is not approved this way (a correction or a secret to review): it stays selected, to decide on its own.",
-  "1 se queda para decidirla aparte (una corrección, un secreto por revisar o ya decidida).": "1 is left to decide on its own (a correction, a secret to review or already decided).",
   "Aprobar las seleccionadas": "Approve the selected ones",
   "Aprobar {{n}}": "Approve {{n}}",
   "Atajos:": "Shortcuts:",
@@ -27,8 +25,6 @@
   "confianza {{c}}": "confidence {{c}}",
   "moverse": "move",
   "seleccionar": "select",
-  "{{k}} no se aprueban así (correcciones o secretos por revisar): se quedan seleccionadas para decidirlas una a una.": "{{k}} are not approved this way (corrections or secrets to review): they stay selected, to decide one at a time.",
-  "{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar o ya decididas).": "{{k}} are left to decide one at a time (corrections, secrets to review or already decided).",
   "{{n}} propuestas aprobadas.": "{{n}} proposals approved.",
   "{{n}} propuestas aprobadas: entran en el grafo dentro de {{s}} s.": "{{n}} proposals approved: they go into the graph in {{s}} s.",
   "{{n}} propuestas aprobadas: entrando en el grafo. El resultado de cada una está en «Decididas».": "{{n}} proposals approved: going into the graph. The result of each one is under «Decided».",

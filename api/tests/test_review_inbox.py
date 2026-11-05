@@ -147,3 +147,33 @@ def test_history_says_who_decided_and_sorts_by_it(client):  # noqa: F811
     assert client.get(f"/api/brains/inbox-who/proposals/{a}", headers=curator).json()["reviewer"] == items[0]["reviewer"]
     pending = _propose(client, "inbox-who", contrib, "Tercera")
     assert client.get(f"/api/brains/inbox-who/proposals/{pending}", headers=curator).json()["reviewer"] is None
+
+
+def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client, monkeypatch):  # noqa: F811
+    """A proposal the brain already knows (nearly the same as a current fact, or close to one no longer true) is checked after it
+    arrives, ranked after secrets and before low confidence, kept out of a batch approval, and refreshed when its detail is opened."""
+    from mimirsynth import ingest, recall
+    from mimirsynth.proposals import verdict
+    assert verdict([]) == "new"
+    assert verdict([{"relevance": "related", "invalid_at": None}]) == "related"
+    assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}]) == "stale"
+    assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}, {"relevance": "repeats", "invalid_at": None}]) == "duplicate"
+
+    known = {"fact": "La cabina nas01 movida a la sala sur", "score": 0.6}
+    monkeypatch.setattr(ingest, "enabled", lambda: True)
+    monkeypatch.setattr(ingest, "submit_ingest", lambda *a, **k: None)
+    monkeypatch.setattr(recall, "recall", lambda brain_id, graph, query, *a, **k: {"facts": [{"uuid": "f", **known}] if "nas01" in query else []})
+    contrib, curator = _brain(client, "inbox-known")
+    dup = _propose(client, "inbox-known", contrib, "Cabina nas01 movida a la sala sur")
+    low = _propose(client, "inbox-known", contrib, "Algo poco seguro", confidence=0.3)
+    fresh = _propose(client, "inbox-known", contrib, "Algo nuevo del todo")
+    base = "/api/brains/inbox-known/proposals"
+    items = {p["id"]: p for p in client.get(base, params={"status": "pending"}, headers=curator).json()["items"]}
+    assert items[dup]["related_verdict"] == "duplicate" and items[fresh]["related_verdict"] == "new"   # checked after it arrived
+    assert [p["id"] for p in client.get(base, params={"status": "pending", "sort": "risk", "order": "asc"}, headers=curator).json()["items"]] == [dup, low, fresh]
+    r = client.post(f"{base}/bulk", json={"verb": "approve", "ids": [dup, fresh]}, headers=curator).json()
+    assert r["done"] == [fresh] and r["skipped"] == [{"id": dup, "reason": "known"}]                  # decided one at a time
+
+    known["fact"] = "Otra cosa distinta"                                                              # the graph changed since
+    client.get(f"{base}/{dup}/related", headers=curator)
+    assert client.get(f"{base}/{dup}", headers=curator).json()["related_verdict"] == "related"        # opening it refreshes the verdict

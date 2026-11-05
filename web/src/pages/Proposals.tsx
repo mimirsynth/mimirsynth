@@ -11,7 +11,7 @@ import { fmt, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
-  kind?: string; correction?: Correction | null; secrets_notice?: string };
+  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
 type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
   invalid_at: string; applied_at?: string; reverted_at?: string };
@@ -136,8 +136,8 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
     else if (last.verb === "reject") { tone = "info"; step = "reject"; undo = true; text = t("{{n}} propuestas rechazadas: no entra nada en el grafo.", { n }); }
     else if (waiting) { step = "wait"; undo = true; text = t("{{n}} propuestas aprobadas: entran en el grafo dentro de {{s}} s.", { n, s }); }
     else { step = "after"; text = last.until ? t("{{n}} propuestas aprobadas: entrando en el grafo. El resultado de cada una está en «Decididas».", { n }) : t("{{n}} propuestas aprobadas.", { n }); }
-    if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar o ya decidida).");
-    else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar o ya decididas).", { k: last.skipped });
+    if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar, algo que el brain ya sabe o ya decidida).");
+    else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar, lo que el brain ya sabe o ya decididas).", { k: last.skipped });
   } else if (last.verb === "undone") {
     tone = "info"; step = "undone"; view = true; text = t("Propuesta #{{id}} otra vez pendiente.", { id });
   } else if (last.verb === "reject") {
@@ -282,9 +282,28 @@ type Ops = {
 type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
   valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related" };
 const RELATED_SHOWN = 3;  // the closest ones; the rest behind «Ver N más»
+/** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
+ *  A key. Opening it also refreshes the verdict the queue ranks by. */
+function useRelated(ops: Ops, d?: Prop) {
+  const on = !!d && d.status === "pending" && !d.correction && !d.purged_at;
+  return useQuery({ queryKey: ["proposal", ops.graph, d?.id, "related"], enabled: on, staleTime: 60_000,
+    queryFn: () => get<{ facts: RelatedFact[] }>(`${ops.base}/${d!.id}/related`) });
+}
+/** «duplicate» when a current fact says nearly the same, «stale» when a close one stopped being true (as the API decides); with the
+ *  fact that makes it so, for the confirmation to quote. Until the facts arrive, the verdict stored with the proposal. */
+type Known = { verdict: "duplicate" | "stale"; fact?: RelatedFact } | null;
+function knownOf(d: Prop | undefined, facts?: RelatedFact[]): Known {
+  if (!d || d.status !== "pending" || d.correction) return null;
+  if (!facts) return d.related_verdict === "duplicate" || d.related_verdict === "stale" ? { verdict: d.related_verdict } : null;
+  const dup = facts.find((f) => f.relevance === "repeats" && !f.invalid_at);
+  if (dup) return { verdict: "duplicate", fact: dup };
+  const old = facts.find((f) => (f.relevance === "repeats" || f.relevance === "close") && f.invalid_at);
+  return old ? { verdict: "stale", fact: old } : null;
+}
+const isKnown = (p: Prop) => p.related_verdict === "duplicate" || p.related_verdict === "stale";
 function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
-  const q = useQuery({ queryKey: ["proposal", ops.graph, d.id, "related"], staleTime: 60_000, queryFn: () => get<{ facts: RelatedFact[] }>(`${ops.base}/${d.id}/related`) });
+  const q = useRelated(ops, d);
   const [all, setAll] = useState(false);
   useEffect(() => setAll(false), [d.id]);
   const facts = q.data?.facts ?? [];
@@ -327,6 +346,8 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking }: { d: Prop; ops
   const [ownMasking, setOwnMasking] = useState(false);
   const askMask = onMasking ?? setOwnMasking;
   const secret = flagged(d);
+  const known = knownOf(d, useRelated(ops, d).data?.facts);
+  const asks = secret || !!known;  // approving asks first: to mask what was flagged, or because the brain already knows it
   const kinds = [...new Set((d.secrets ?? []).filter((f) => f.action === "flagged").map((f) => t(f.label)))].join(", ");
   const approving = review.isPending && review.variables?.verb !== "reject";
   const decide = (verb: Verb) => review.mutateAsync({ id: d.id, verb }).then(() => onDecided?.());
@@ -364,9 +385,17 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking }: { d: Prop; ops
         <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={review.isPending && review.variables?.verb !== "reject"}
           onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
         <Btn kind="primary" loading={approving} disabled={review.isPending && !approving}
-          onClick={() => secret ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
+          onClick={() => asks ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
+    {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary"
+      title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un dato caducado?")}
+      warning={known.verdict === "duplicate"
+        ? (known.fact ? t("El brain ya dice algo casi igual: «{{fact}}». Si la apruebas, el grafo tendrá lo mismo dos veces.", { fact: known.fact.fact })
+          : t("El brain ya dice algo casi igual. Si la apruebas, el grafo tendrá lo mismo dos veces."))
+        : (known.fact ? t("Se parece a «{{fact}}», que dejó de ser cierto el {{date}}. Apruébala solo si vuelve a ser cierto.", { fact: known.fact.fact, date: (known.fact.invalid_at ?? "").slice(0, 10) })
+          : t("Se parece a algo que dejó de ser cierto. Apruébala solo si vuelve a ser cierto."))}
+      action={t("Aprobar igualmente")} onConfirm={() => decide("approve")} />}
     <ConfirmDialog opened={secret && (onMasking ? !!masking : ownMasking)} onClose={() => askMask(false)} tone="primary"
       title={t("¿Enmascarar y aprobar la propuesta #{{id}}?", { id: d.id })}
       warning={t("Se tapa lo marcado como secreto ({{kinds}}) en el título y el texto, y después se aprueba. El valor original no se guarda: aunque deshagas la aprobación, no vuelve.", { kinds })}
@@ -468,7 +497,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const handled = useRef<Decision | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const selected = items.filter((p) => checked.has(p.id));
-  const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p);  // never approved in a batch: decided one at a time
+  const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p) || isKnown(p);  // never approved in a batch: decided one at a time
   const goes = batch.verb === "approve" ? batch.items.filter((p) => !oneByOne(p)) : batch.items;
   const stays = batch.items.filter((p) => !goes.includes(p));
   const bulk = useMutation({ mutationFn: ({ verb, ids }: { verb: "approve" | "reject"; ids: number[] }) => send<{ done: number[]; skipped: { id: number; reason: string }[]; undo_seconds?: number }>("POST", `${ops.base}/bulk`,
@@ -485,10 +514,11 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     const next = items[i + 1] ?? items[i - 1];
     if (next) { setActive(next.id); ops.setNote(""); } else setShowDetail(false);
   };
+  const related = useRelated(ops, d);
   const decide = (verb: "approve" | "reject") => {
     if (!d || d.status !== "pending" || ops.review.isPending) return;
     if (!actions.current?.getClientRects().length) return;  // narrow layout showing the queue: nothing is decided without being seen
-    if (verb === "approve" && flagged(d)) { setMasking(true); return; }  // never as written: the same confirmation as its button
+    if (verb === "approve" && (flagged(d) || knownOf(d, related.data?.facts))) { setMasking(true); return; }  // the same confirmation as its button
     ops.review.mutate({ id: d.id, verb }, { onSuccess: () => advance(d.id) });
   };
   useEffect(() => {  // after an undo the proposal is back in the queue: it opens there and the focus returns to it, not to the page
@@ -509,6 +539,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const queueItems: QueueItem[] = items.map((p) => ({
     id: p.id, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
+      {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}>{t("Posible duplicado")}</Pill>}
+      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}>{t("Posible dato caducado")}</Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="warn">{t("confianza {{c}}", { c: p.confidence })}</Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={p.decision.note}>{t("el decisor dudó · {{p}}", { p: p.decision.action?.prob })}</Pill>}</>,
     meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
@@ -565,8 +597,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
         ? (stays.length ? t("¿Aprobar {{n}} de {{total}}?", { n: goes.length, total: batch.items.length }) : goes.length === 1 ? t("¿Aprobar 1 propuesta?") : t("¿Aprobar {{n}} propuestas?", { n: goes.length }))
         : goes.length === 1 ? t("¿Rechazar 1 propuesta?") : t("¿Rechazar {{n}} propuestas?", { n: goes.length })}
       warning={batch.verb === "approve"
-        ? <>{t("Entran en el grafo dentro de unos segundos, con la opción de deshacerlo mientras tanto.")}{stays.length === 1 ? " " + t("1 no se aprueba así (una corrección o un secreto por revisar): se queda seleccionada para decidirla aparte.")
-          : stays.length ? " " + t("{{k}} no se aprueban así (correcciones o secretos por revisar): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
+        ? <>{t("Entran en el grafo dentro de unos segundos, con la opción de deshacerlo mientras tanto.")}{stays.length === 1 ? " " + t("1 no se aprueba así (una corrección, un secreto por revisar o algo que el brain ya sabe): se queda seleccionada para decidirla aparte.")
+          : stays.length ? " " + t("{{k}} no se aprueban así (correcciones, secretos por revisar o lo que el brain ya sabe): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
         : t("No entra nada en el grafo; se pueden reabrir después.")}
       subject={<Stack gap={6}>
         <ul className="ms-batch-list" aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>
