@@ -26,7 +26,7 @@ Each brain chooses it in **Administration → Brain → Secrets** (brain adminis
 | **Only warn** | Flagged, left untouched | Flagged |
 
 What this means in practice:
-- A proposal with anything **flagged** always **waits for a curator**: the decider does not approve it and it is not approved on submission, even when a curator sends it. Its detail shows a **Secrets detected** notice with what was masked or flagged.
+- A proposal with anything **flagged** always **waits for a curator**: the decider does not approve it and it is not approved on submission, even when a curator sends it. Its detail shows a **Secrets detected** notice with what was masked or flagged. It is never approved as written: the curator's button is **Mask and approve**, which masks the flagged values before approving (see [[Proposals]]).
 - In a document, the **indexed text** is masked (passages, vectors and search text). **The downloadable original is not modified**: it keeps the value as it is, and the document viewer says so.
 - The marker is written in the instance's language, because it stays in memory.
 - Changing the mode does not reprocess what is already stored. To apply it to a document, **reindex** it.

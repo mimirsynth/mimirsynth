@@ -30,9 +30,9 @@ A **contributor** only has the second one.
 On the left, the **queue** of pending proposals; on the right, the open proposal with its detail and the **Reject** and **Approve** buttons always in view. On a narrow screen you see one at a time, with **Back to the queue**.
 
 - **Ordered by risk and age:** corrections first, then the ones with a secret to review, then those with a low declared confidence (below 0.6) and, inside each group, the oldest first. Each entry says who sent it and how long it has been waiting.
-- **Keyboard shortcuts:** <kbd>J</kbd>/<kbd>K</kbd> go to the next or the previous one, <kbd>A</kbd> approves, <kbd>R</kbd> rejects and <kbd>X</kbd> marks it for a batch decision. They do nothing while you type in the note. After a decision the next one opens.
+- **Keyboard shortcuts:** <kbd>J</kbd>/<kbd>K</kbd> go to the next or the previous one, <kbd>A</kbd> approves, <kbd>R</kbd> rejects and <kbd>X</kbd> marks it for a batch decision. They do nothing while you type in the note. After a decision the next one opens. On a narrow screen <kbd>A</kbd> and <kbd>R</kbd> act only while the proposal is open, never on one you have not seen. On a proposal with a secret to review, <kbd>A</kbd> opens the **Mask and approve** confirmation.
 - **In batches:** check several (or **Select all**) and use **Approve the selected ones** or **Reject the selected ones**. A confirmation says how many and takes a common note. Corrections and proposals with a secret to review **are not approved in a batch**: they stay selected, to decide one at a time. Only what you see in the queue goes into the batch.
-- The **State** selector switches between **Pending** and **Decided**, the history: approved, ingested, rejected and failed ones, in a table with filters. The **Kind** selector (*All*, *Add*, *Correct*) filters both views.
+- The **Show** selector switches between **Pending** and **Decided**, the history: approved, ingested, rejected and failed ones, in a table with filters. The **Kind** selector (*All*, *Add*, *Correct*) filters both views.
 
 When corrections are waiting, a notice says how many, because each one invalidates a fact and only a person decides it. **Show only the pending corrections** filters the queue.
 
@@ -67,6 +67,7 @@ Before a proposal is stored (from the interface, the API or the `remember` tool 
 | **Only warn** | Flagged, left untouched | Flagged, left untouched |
 
 - **A flagged proposal always waits for a curator**, even when a curator sent it, and the decider does not approve it on its own.
+- **It is never approved as written.** Its **Approve** button becomes **Mask and approve**. A confirmation names the types of secret; then every flagged value in the title and the text is replaced with `[secret removed: type]` and the proposal is approved. The original value is not kept, not even if you undo the approval. The audit log records which types were masked (`proposal.secrets_masked`), never the values. Over the API it is `POST /proposals/{id}/mask-and-approve`; `POST /proposals/{id}/approve` answers 409 for such a proposal.
 - **With Mask, a curator's proposal is stored already masked and approved at once:** nothing is left for anyone to review, because the value never reached the memory.
 - **The author is told when submitting:** the form says which types of secret were masked or flagged, the `POST /proposals` response carries the same text in `secrets_notice`, and the `remember` result adds it, so an agent knows its text was altered.
 - Afterwards, the list marks those proposals (**Secret masked** or **Secret to review**, also the ones approved at once) and the detail shows **Secrets detected**: what was masked and what was flagged for review. The value itself is never shown, stored in the audit log or sent in notifications.

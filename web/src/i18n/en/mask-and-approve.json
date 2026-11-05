@@ -1,0 +1,7 @@
+{
+  "Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.": "Before approving, what was flagged as a secret ({{kinds}}) is masked in the title and the text.",
+  "Enmascarar y aprobar": "Mask and approve",
+  "Se tapa lo marcado como secreto ({{kinds}}) en el título y el texto, y después se aprueba. El valor original no se guarda: aunque deshagas la aprobación, no vuelve.": "What was flagged as a secret ({{kinds}}) is masked in the title and the text, then the proposal is approved. The original value is not kept: undoing the approval does not bring it back.",
+  "enmascarar y aprobar": "mask and approve",
+  "¿Enmascarar y aprobar la propuesta #{{id}}?": "Mask and approve proposal #{{id}}?"
+}

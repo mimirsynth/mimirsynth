@@ -21,7 +21,7 @@ Each column can be sorted and filtered.
 | **Brains and members** | `brain.create`, `brain.update` (including the description and the secrets policy), `brain.delete`, `brain.retention` (each period that changed, from and to), `recall.query_text` (keeping the text of rated queries, on or off), `member.set` (`via=oidc-default:<provider>` when it comes from a provider's initial access), `member.remove` |
 | **Federation** | `grant.create`, `grant.update`, `grant.revoke` |
 | **Tokens** | `token.create` (with the scope and the days until it expires), `token.rotate` (with the grace period), `token.revoke` |
-| **Proposals** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (the decider's verdict), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rejected by the [[Secrets]] policy, with the rules, never the value) |
+| **Proposals** | `proposal.submit`, `proposal.approved`, `proposal.rejected`, `proposal.triage.*` (the decider's verdict), `proposal.ingested`, `proposal.failed`, `proposal.blocked` (rejected by the [[Secrets]] policy, with the rules, never the value), `proposal.secrets_masked` (a curator masked the flagged secrets before approving, with the rules, never the value) |
 | **Secrets** | `secrets.scan` (counts per rule) |
 | **Export** | `brain.export` (the options, never the password), `brain.export.download` |
 | **Import** | `brain.import` (slug, mode and file name, never the password), `brain.import.done` (how the graph came in and the counts) |

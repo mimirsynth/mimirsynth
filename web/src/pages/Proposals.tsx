@@ -5,7 +5,7 @@ import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, Em
   Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { fmt, get, send } from "../api";
 
@@ -20,6 +20,8 @@ const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobad
 const SOURCE: Record<string, string> = { text: T("texto"), message: T("conversación"), json: T("JSON") };
 const LOW_CONFIDENCE = 0.6;  // the same threshold as the review queue's risk order in the API
 const flagged = (p: Prop) => !!p.secrets?.some((f) => f.action === "flagged");
+/** How a person decides one proposal. One with secrets flagged for review is never approved as written: «mask-and-approve» masks them first. */
+type Verb = "approve" | "reject" | "mask-and-approve";
 
 /** What a proposal does: adds knowledge or invalidates a fact. A correction is the delicate one, so it differs by icon, text and a filled look, not only by colour. */
 function KindPill({ kind }: { kind?: string }) {
@@ -218,7 +220,7 @@ function ProposalBody({ d, context }: { d: Prop; context?: ReactNode }) {
 /** Everything a screen of this page needs to decide: shared so the queue, the history and one's own proposals act the same way. */
 type Ops = {
   base: string; graph: string; isCurator: boolean; llm: boolean; note: string; setNote: (v: string) => void;
-  review: UseMutationResult<Prop & { undo_seconds?: number }, Error, { id: number; verb: "approve" | "reject" }>;
+  review: UseMutationResult<Prop & { undo_seconds?: number }, Error, { id: number; verb: Verb }>;
   undo: UseMutationResult<unknown, Error, number[]>; reactivate: UseMutationResult<unknown, Error, number>; retry: UseMutationResult<unknown, Error, number>;
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
 };
@@ -246,14 +248,22 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   </Stack></Panel>);
 }
 
-/** The decision on a pending proposal: a note, what each button will do, and Reject / Approve (each with its own progress). */
-function DecisionBlock({ d, ops, onDecided }: { d: Prop; ops: Ops; onDecided?: () => void }) {
+/** The decision on a pending proposal: a note, what each button will do, and Reject / Approve (each with its own progress).
+ *  With secrets flagged for review, Approve becomes «Mask and approve», behind a confirmation that names the kinds of secret; `masking`
+ *  lets the queue open that confirmation from its A shortcut. */
+function DecisionBlock({ d, ops, onDecided, masking, onMasking }: { d: Prop; ops: Ops; onDecided?: () => void; masking?: boolean; onMasking?: (on: boolean) => void }) {
   const { t } = useTranslation();
   const { review } = ops;
-  const decide = (verb: "approve" | "reject") => review.mutate({ id: d.id, verb }, { onSuccess: () => onDecided?.() });
+  const [ownMasking, setOwnMasking] = useState(false);
+  const askMask = onMasking ?? setOwnMasking;
+  const secret = flagged(d);
+  const kinds = [...new Set((d.secrets ?? []).filter((f) => f.action === "flagged").map((f) => t(f.label)))].join(", ");
+  const approving = review.isPending && review.variables?.verb !== "reject";
+  const decide = (verb: Verb) => review.mutateAsync({ id: d.id, verb }).then(() => onDecided?.());
   return (<Stack gap="xs">
     <TextArea size="xs" autosize minRows={1} maxRows={4} label={t("Nota (opcional)")} value={ops.note} onChange={(e) => ops.setNote(e.currentTarget.value)} />
     <Stack gap={2}>
+      {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
       <Text size="xs" c="dimmed">{d.correction
         ? t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: d.correction.invalid_at.slice(0, 10) })
         : ops.llm
@@ -264,10 +274,14 @@ function DecisionBlock({ d, ops, onDecided }: { d: Prop; ops: Ops; onDecided?: (
     <MutationError error={review.error} />
     <Group justify="flex-end">
       <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={review.isPending && review.variables?.verb !== "reject"}
-        onClick={() => decide("reject")} icon="close">{t("Rechazar")}</Btn>
-      <Btn kind="primary" loading={review.isPending && review.variables?.verb === "approve"} disabled={review.isPending && review.variables?.verb !== "approve"}
-        onClick={() => decide("approve")} icon="check">{t("Aprobar")}</Btn>
+        onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
+      <Btn kind="primary" loading={approving} disabled={review.isPending && !approving}
+        onClick={() => secret ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
     </Group>
+    <ConfirmDialog opened={secret && (onMasking ? !!masking : ownMasking)} onClose={() => askMask(false)} tone="primary"
+      title={t("¿Enmascarar y aprobar la propuesta #{{id}}?", { id: d.id })}
+      warning={t("Se tapa lo marcado como secreto ({{kinds}}) en el título y el texto, y después se aprueba. El valor original no se guarda: aunque deshagas la aprobación, no vuelve.", { kinds })}
+      action={t("Enmascarar y aprobar")} onConfirm={() => decide("mask-and-approve")} />
   </Stack>);
 }
 
@@ -353,6 +367,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const detail = useQuery({ queryKey: ["proposal", ops.graph, active], enabled: active !== null, queryFn: () => get<Prop>(`${ops.base}/${active}`) });
   const d = detail.data && detail.data.id === active ? detail.data : undefined;
   const [confirm, setConfirm] = useState<"approve" | "reject" | null>(null);
+  const [masking, setMasking] = useState(false);
+  const actions = useRef<HTMLDivElement>(null);
   const [bulkNote, setBulkNote] = useState("");
   const selected = items.filter((p) => checked.has(p.id));
   const oneByOne = selected.filter((p) => p.kind === "correction" || flagged(p)).length;
@@ -372,13 +388,15 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   };
   const decide = (verb: "approve" | "reject") => {
     if (!d || d.status !== "pending" || ops.review.isPending) return;
+    if (!actions.current?.getClientRects().length) return;  // narrow layout showing the queue: nothing is decided without being seen
+    if (verb === "approve" && flagged(d)) { setMasking(true); return; }  // never as written: the same confirmation as its button
     ops.review.mutate({ id: d.id, verb }, { onSuccess: () => advance(d.id) });
   };
   const toggle = (id: number | null, on?: boolean) => {
     if (id === null) return;
     setChecked((c) => { const n = new Set(c); (on ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
   };
-  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active) }, mode === "pending" && confirm === null);
+  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active) }, mode === "pending" && confirm === null && !masking);
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
@@ -426,9 +444,9 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
               {d ? <><Text fw={600}>#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
             </div>
-            {d && d.status === "pending" && <div className="ms-inbox-actions">
-              <DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} />
-              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")}</Text>
+            {d && d.status === "pending" && <div className="ms-inbox-actions" ref={actions}>
+              <DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} />
+              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")}</Text>
             </div>}
           </>} />}
     </>}
@@ -493,9 +511,9 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [last, setLast] = useState<Decision | null>(null);
   const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((id) => send("POST", `${base}/${id}/undo`))),
     onSuccess: (_, ids) => { setLast({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null }); refresh(); } });
-  const review = useMutation({ mutationFn: (a: { id: number; verb: "approve" | "reject" }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note }),
+  const review = useMutation({ mutationFn: (a: { id: number; verb: Verb }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note }),
     onMutate: () => undo.reset(),
-    onSuccess: (r, a) => { setNote(""); setLast({ id: a.id, verb: a.verb, until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null }); refresh(); } });
+    onSuccess: (r, a) => { setNote(""); setLast({ id: a.id, verb: a.verb === "reject" ? "reject" : "approve", until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null }); refresh(); } });
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/ingest`), onSuccess: () => { setOpen(null); setTimeout(refresh, 8000); refresh(); } });
   const ops: Ops = { base, graph, isCurator, llm: !!ai.data?.llm.configured, note, setNote, review, undo, reactivate, retry, setLast, refresh,

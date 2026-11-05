@@ -142,3 +142,61 @@ def test_flagged_waits_even_for_a_curator_and_audit_hides_it(client, monkeypatch
     names = [json.loads(a)["name"] for a in _audits("proposal.submit") if '"Clave' in a]
     assert names == ["Clave […]"]                                                           # el título marcado no llega a la auditoría
     assert all(TOKEN not in a for a in _audits("proposal.submit"))
+
+
+def test_flagged_is_masked_never_approved_as_written(client, monkeypatch):  # noqa: F811
+    """Critique of the curator's flow (P0): a proposal with flagged secrets has one way in, «mask and approve». The flagged spans of
+    its title and text are masked first, the audit names the kinds and never the values, and plain approval is refused."""
+    monkeypatch.setattr(ingest, "enabled", lambda: False)
+    contrib = _brain(client, "sg-ma", "warn")
+    cur = {"Authorization": "Bearer " + client.post("/api/brains/sg-ma/tokens", json={"name": "k", "role": "curator"}).json()["token"]}
+    pid = client.post("/api/brains/sg-ma/proposals", headers=contrib, json={"name": f"Clave {TOKEN}", "body": f"usa {TOKEN}\n{POSSIBLE} y nada más"}).json()["id"]
+    url = f"/api/brains/sg-ma/proposals/{pid}"
+    assert client.post(f"{url}/approve", headers=cur, json={}).status_code == 409                     # tal cual, no
+    assert client.post(f"{url}/mask-and-approve", headers=contrib, json={}).status_code == 403        # solo un curador
+    r = client.post(f"{url}/mask-and-approve", headers=cur, json={"note": "revisado"})
+    assert r.status_code == 200 and r.json()["status"] == "approved"
+    p = client.get(url, headers=cur).json()
+    assert TOKEN not in p["name"] + p["body"] and "Zq8!mW2#pL5v" not in p["body"] and p["body"].endswith(" y nada más")
+    assert p["name"] == "Clave [secreto eliminado: token de GitHub]"
+    assert {s["action"] for s in p["secrets"]} == {"masked"}
+    for s in p["secrets"]:                                                                           # las posiciones siguen al texto nuevo
+        assert (p["name"] if s["field"] == "name" else p["body"])[s["start"]:s["end"]].startswith("[secreto eliminado: ")
+    masked = _audits("proposal.secrets_masked")
+    assert len(masked) == 1 and '"github_token"' in masked[0] and TOKEN not in masked[0] and "Zq8!" not in masked[0]
+    assert client.post(f"{url}/mask-and-approve", headers=cur, json={}).status_code == 409           # ya decidida
+    clean = client.post("/api/brains/sg-ma/proposals", headers=contrib, json={"name": "Limpia", "body": "texto"}).json()["id"]
+    assert client.post(f"/api/brains/sg-ma/proposals/{clean}/mask-and-approve", headers=cur, json={}).status_code == 409  # nada que tapar
+    assert client.post(f"/api/brains/sg-ma/proposals/{clean}/approve", headers=cur, json={}).json()["status"] == "approved"
+
+
+def test_mask_flagged_keeps_masked_spans_and_moves_positions():
+    from mimirsynth import secretguard
+    text = "a SECRETO b YA c OTRO"
+    found = [{"rule": "generic_token", "start": 2, "end": 9, "action": "flagged"}, {"rule": "github_token", "start": 12, "end": 14, "action": "masked"},
+             {"rule": "generic_token", "start": 17, "end": 21, "action": "flagged"}]
+    out, new = secretguard.mask_flagged(text, found, "es")
+    assert "SECRETO" not in out and "OTRO" not in out and " YA " in out and out.startswith("a [secreto eliminado: ")
+    assert [f["action"] for f in new] == ["masked"] * 3
+    assert [out[f["start"]:f["end"]] for f in new] == [out[new[0]["start"]:new[0]["end"]], "YA", out[new[2]["start"]:new[2]["end"]]]
+    assert all(out[f["start"]:f["end"]].startswith("[secreto eliminado") for f in (new[0], new[2]))
+
+
+def test_mask_and_approve_masks_a_corrections_reason(client, monkeypatch):  # noqa: F811
+    """A correction's reason is guarded too (field «reason», inside `correction`): masking it is what lets the correction be applied."""
+    from mimirsynth import corrections
+    from mimirsynth.models import Brain, User
+    seen = []
+    monkeypatch.setattr(corrections, "apply", lambda ctx, p, lang, note="": seen.append(p.correction["reason"]) or setattr(p, "status", "approved"))
+    _brain(client, "sg-corr", "warn")
+    cur = {"Authorization": "Bearer " + client.post("/api/brains/sg-corr/tokens", json={"name": "k", "role": "curator"}).json()["token"]}
+    reason = f"rotado con {TOKEN}"
+    with _factory()() as db:
+        b = db.query(Brain).filter(Brain.slug == "sg-corr").one()
+        p = Proposal(brain_id=b.id, author_id=db.query(User).first().id, kind="correction", name="Corrección: x", body="", source="text", status="pending",
+                     secret_findings=[{"rule": "github_token", "start": 11, "end": 11 + len(TOKEN), "action": "flagged", "field": "reason"}],
+                     correction={"fact_uuid": "f1", "fact": {"fact": "x"}, "reason": reason, "invalid_at": "2026-01-01T00:00:00Z"})
+        db.add(p); db.commit(); pid = p.id
+    assert client.post(f"/api/brains/sg-corr/proposals/{pid}/approve", headers=cur, json={}).status_code == 409
+    assert client.post(f"/api/brains/sg-corr/proposals/{pid}/mask-and-approve", headers=cur, json={}).status_code == 200
+    assert seen == ["rotado con [secreto eliminado: token de GitHub]"]

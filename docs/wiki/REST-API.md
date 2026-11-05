@@ -28,7 +28,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` | curator |
 | **Graph and query** | `GET /graph` · `POST /query` | reader |
 | **Proposals** | `POST /proposals/corrections` · `GET/POST /proposals` · `GET /proposals/counts` · `GET /proposals/{pid}` | contributor |
-| | `POST /proposals/{pid}/reactivate` · `POST /proposals/{pid}/approve` · `POST /proposals/{pid}/ingest` · `POST /proposals/{pid}/reject` · `POST /proposals/bulk` · `GET /proposals/{pid}/related` · `POST /proposals/{pid}/undo` | curator |
+| | `POST /proposals/{pid}/reactivate` · `POST /proposals/{pid}/approve` · `POST /proposals/{pid}/mask-and-approve` · `POST /proposals/{pid}/ingest` · `POST /proposals/{pid}/reject` · `POST /proposals/bulk` · `GET /proposals/{pid}/related` · `POST /proposals/{pid}/undo` | curator |
 | **Documents** | `GET /docs/sources` · `GET /docs` · `GET /docs/search` · `GET /docs/{doc_id}` · `GET /docs/{doc_id}/text` · `GET /docs/{doc_id}/file` · `GET /docs/{doc_id}/context` · `GET /docs/{doc_id}/entities` · `GET /docs/mentions` | reader |
 | | `DELETE /docs/{doc_id}` · `POST /docs/{doc_id}/reindex` · `POST /docs/uploads` · `PUT /docs/uploads/{uid}/parts/{n}` · `DELETE /docs/uploads/{uid}` · `POST /docs/uploads/{uid}/complete` · `POST /docs/{doc_id}/promote` | contributor |
 | | `POST /docs/duplicates` · `GET /docs/roots` · `POST /docs/sources` · `PATCH/DELETE /docs/sources/{sid}` · `POST /docs/sources/{sid}/scan` · `GET /docs/wiki/adapters` · `POST /docs/wiki/collections` · `GET /docs/sources/{sid}/wiki/collections` · `POST /docs/sources/wiki` · `POST /docs/sources/git` | administrator |

@@ -30,9 +30,9 @@ Un **colaborador** solo tiene la segunda.
 A la izquierda, la **cola** de pendientes; a la derecha, la propuesta abierta con su detalle y los botones **Rechazar** y **Aprobar** siempre a la vista. En una pantalla estrecha se ve una cosa cada vez, con **Volver a la cola**.
 
 - **Orden por riesgo y antigüedad:** primero las correcciones, después las que tienen un secreto por revisar, después las de poca confianza declarada (menos de 0,6) y, dentro de cada grupo, la más antigua primero. Cada entrada dice quién la envió y cuánto lleva esperando.
-- **Atajos de teclado:** <kbd>J</kbd>/<kbd>K</kbd> pasan a la siguiente o a la anterior, <kbd>A</kbd> aprueba, <kbd>R</kbd> rechaza y <kbd>X</kbd> la marca para decidir en lote. No actúan mientras escribes en la nota. Al decidir, se abre sola la siguiente.
+- **Atajos de teclado:** <kbd>J</kbd>/<kbd>K</kbd> pasan a la siguiente o a la anterior, <kbd>A</kbd> aprueba, <kbd>R</kbd> rechaza y <kbd>X</kbd> la marca para decidir en lote. No actúan mientras escribes en la nota. Al decidir, se abre sola la siguiente. En una pantalla estrecha, <kbd>A</kbd> y <kbd>R</kbd> solo actúan con la propuesta abierta, nunca sobre una que no has visto. En una propuesta con un secreto por revisar, <kbd>A</kbd> abre la confirmación de **Enmascarar y aprobar**.
 - **En lote:** marca varias (o **Seleccionar todas**) y usa **Aprobar las seleccionadas** o **Rechazar las seleccionadas**. Una confirmación dice cuántas son y admite una nota común. Las correcciones y las que tienen un secreto por revisar **no se aprueban en lote**: se quedan seleccionadas para decidirlas una a una. Solo entran en el lote las que ves en la cola.
-- El selector **Estado** cambia entre **Pendientes** y **Decididas**, el historial: aprobadas, ingeridas, rechazadas y fallidas, en una tabla con filtros. El selector **Tipo** (*Todas*, *Añaden*, *Corrigen*) filtra las dos vistas.
+- El selector **Mostrar** cambia entre **Pendientes** y **Decididas**, el historial: aprobadas, ingeridas, rechazadas y fallidas, en una tabla con filtros. El selector **Tipo** (*Todas*, *Añaden*, *Corrigen*) filtra las dos vistas.
 
 Cuando hay correcciones esperando, un aviso dice cuántas, porque cada una invalida un hecho y solo la decide una persona. **Ver solo las correcciones pendientes** filtra la cola.
 
@@ -67,6 +67,7 @@ Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `reme
 | **Solo avisar** | Se marcan, sin tocarlos | Se marcan, sin tocarlos |
 
 - **Una propuesta con algo marcado siempre espera a un curador**, aunque la haya enviado un curador, y el decisor no la aprueba por su cuenta.
+- **Nunca se aprueba tal cual.** Su botón **Aprobar** pasa a ser **Enmascarar y aprobar**. Una confirmación nombra los tipos de secreto; después, cada valor marcado del título y del texto se sustituye por `[secreto eliminado: tipo]` y la propuesta se aprueba. El valor original no se guarda, ni aunque deshagas la aprobación. La auditoría registra qué tipos se taparon (`proposal.secrets_masked`), nunca los valores. Por la API es `POST /proposals/{id}/mask-and-approve`; `POST /proposals/{id}/approve` responde 409 con una propuesta así.
 - **Con Enmascarar, la propuesta de un curador se guarda ya enmascarada y se aprueba al momento:** no queda nada que revisar, porque el valor nunca llega a la memoria.
 - **El autor se entera al enviarla:** el formulario dice qué tipos de secreto se enmascararon o se marcaron, la respuesta de `POST /proposals` lleva el mismo texto en `secrets_notice` y el resultado de `remember` lo añade, para que un agente sepa que su texto ha cambiado.
 - Después, la lista marca esas propuestas (**Secreto enmascarado** o **Secreto por revisar**, también las aprobadas al momento) y el detalle muestra **Secretos detectados**: qué se enmascaró y qué se marcó para revisar. El valor no se muestra nunca, ni se guarda en la auditoría ni viaja en las notificaciones.

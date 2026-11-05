@@ -26,7 +26,7 @@ Cada brain lo elige en **Administración → Brain → Secretos** (administrador
 | **Solo avisar** | Se marcan y no se tocan | Se marcan |
 
 En la práctica:
-- Una propuesta con algo **marcado** siempre **espera a un curador**: el decisor no la aprueba y no se aprueba al enviarla, aunque la envíe un curador. Su detalle muestra un aviso de **Secretos detectados** con lo que se enmascaró o se marcó.
+- Una propuesta con algo **marcado** siempre **espera a un curador**: el decisor no la aprueba y no se aprueba al enviarla, aunque la envíe un curador. Su detalle muestra un aviso de **Secretos detectados** con lo que se enmascaró o se marcó. Nunca se aprueba tal cual: el botón del curador es **Enmascarar y aprobar**, que tapa los valores marcados antes de aprobar (ver [[Propuestas]]).
 - En un documento se enmascara el **texto indexado** (pasajes, vectores y texto de búsqueda). **El original que se descarga no se modifica**: conserva el valor tal cual, y el visor del documento lo indica.
 - La marca se escribe en el idioma de la instancia, porque se queda en la memoria.
 - Cambiar el modo no vuelve a procesar lo ya guardado. Para aplicarlo a un documento, **reindéxalo**.

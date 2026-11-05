@@ -190,6 +190,8 @@ def _review(ctx: BrainCtx, pid: int, status: str, note: str) -> dict:
 @router.post("/{pid}/approve")
 def approve(pid: int, body: ReviewIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)):
     p = _get(ctx, pid)
+    if p.status == "pending" and secretguard.flagged(p.secret_findings):  # what the detector flagged never enters as written: «mask-and-approve»
+        raise HTTPException(409, "la propuesta tiene secretos por revisar: enmascáralos al aprobarla")
     if p.kind == "correction":  # applied on approval, and only approved if it could be applied (#109)
         from . import corrections
         if p.status != "pending":
@@ -201,6 +203,34 @@ def approve(pid: int, body: ReviewIn, request: Request, bg: BackgroundTasks, ctx
         ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(_get(ctx, pid)), ctx.user.id, delay=UNDO_SECONDS)
         out["undo_seconds"] = UNDO_SECONDS
     return out
+
+
+@router.post("/{pid}/mask-and-approve")
+def mask_and_approve(pid: int, body: ReviewIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)):
+    """For a proposal with secrets flagged for review, the only way in: masks every flagged span of its title and text (as the
+    brain's «mask» mode would have done), audits which kinds were masked (never the values) and approves it like any other. A
+    proposal approved as written could carry a live credential into the permanent memory."""
+    p = _get(ctx, pid)
+    if p.status != "pending":
+        raise HTTPException(409, f"la propuesta ya está {p.status}")
+    if not secretguard.flagged(p.secret_findings):
+        raise HTTPException(409, "la propuesta no tiene secretos por revisar")
+    found = p.secret_findings or []
+    rules = sorted({f["rule"] for f in found if f.get("action") == "flagged"})
+    lang = secretguard.instance_lang()
+    texts = {"name": p.name, "body": p.body, "reason": (p.correction or {}).get("reason") or ""}  # a correction's reason is guarded too
+    where = lambda f: f.get("field") or "body"  # noqa: E731
+    masked, findings = {}, [f for f in found if where(f) not in texts]
+    for field, text in texts.items():
+        if mine := [f for f in found if where(f) == field]:
+            masked[field], new = secretguard.mask_flagged(text, mine, lang)
+            findings += new
+    p.name, p.body, p.secret_findings = masked.get("name", p.name)[:255], masked.get("body", p.body), findings
+    if "reason" in masked:
+        p.correction = {**p.correction, "reason": masked["reason"]}
+    ctx.db.commit()
+    audit(ctx.db, ctx.user, "proposal.secrets_masked", ctx.brain, id=p.id, rules=rules)
+    return approve(pid, body, request, bg, ctx)
 
 
 @router.post("/{pid}/ingest")
