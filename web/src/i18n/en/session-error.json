@@ -1,5 +1,0 @@
-{
-  "El servidor de MimirSynth ha fallado al cargar tu sesión. Vuelve a intentarlo y, si sigue igual, avisa a quien administra la instancia.": "The MimirSynth server failed while loading your session. Try again and, if it keeps happening, tell whoever runs this instance.",
-  "El servidor de MimirSynth no responde: puede estar arrancando o actualizándose. Vuelve a intentarlo en un momento y, si sigue igual, avisa a quien administra la instancia.": "The MimirSynth server is not answering: it may be starting or updating. Try again in a moment and, if it keeps happening, tell whoever runs this instance.",
-  "No se puede contactar con el servidor de MimirSynth. Comprueba la conexión y vuelve a intentarlo.": "The MimirSynth server cannot be reached. Check your connection and try again."
-}
