@@ -257,7 +257,7 @@ circle.ms-chart-grid { stroke-width: 16; opacity: 0.35; }
 
 /* Fila de botones de la barra lateral (estilo compacto) */
 .ms-iconrow { gap: 0; padding: 0; justify-content: space-around; }
-.ms-roundbtn { width: 34px; height: 34px; flex: 0 0 34px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--ms-radius); background: transparent; color: var(--ms-muted); cursor: pointer; text-decoration: none; padding: 0; }
+.ms-roundbtn { width: 36px; height: 36px; flex: 0 0 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--ms-radius); background: transparent; color: var(--ms-muted); cursor: pointer; text-decoration: none; padding: 0; }
 .ms-roundbtn:hover { color: var(--ms-accent); background: transparent; }
 .ms-roundbtn.active { color: var(--ms-accent); }
 .ms-usercard { display: flex; align-items: center; gap: 4px; }
@@ -425,7 +425,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-graph-busy { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--ms-canvas) 60%, transparent); color: var(--ms-canvas-ink); font-size: 13px; }
 .ms-canvas-fill { height: 100%; }
 .ms-tabpanel-fill { flex: 1; min-height: 0; }
-.ms-fullh { height: 100dvh; }
+.ms-fullh { height: 100dvh; padding: 16px; }  /* full-screen panels (sign-in, setup, session error) keep a 16px gutter on a phone */
 .ms-scroll { overflow-y: auto; }
 .ms-card-hint { margin-top: 8px; font-size: 12px; color: var(--ms-muted); }
 .ms-stat[data-inline] { padding: 0; border: 0; background: none; }
