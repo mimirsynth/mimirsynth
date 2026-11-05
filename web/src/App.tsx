@@ -5,26 +5,28 @@ import { AppShell, Burger, Center, Group, Stack, Text, Title } from "@mantine/co
 import { Avatar, Btn, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState } from "./ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ApiError, Brain, get, Me, send } from "./api";
-import Overview from "./pages/Overview";
-import Journal from "./pages/Journal";
-import Facts from "./pages/Facts";
-import GraphPage from "./pages/GraphPage";
-import Query from "./pages/Query";
-import Vocabulary from "./pages/Vocabulary";
-import Admin from "./pages/Admin";
-import Ask from "./pages/Ask";
 import Logo from "./Logo";
 import { AcceptScreen, AuthScreen, ChangePasswordScreen, TwoFactorSetupScreen } from "./pages/AuthPages";
-import Proposals from "./pages/Proposals";
-import Knowledge from "./pages/Knowledge";
-import Account from "./pages/Account";
-import Jobs from "./pages/Jobs";
-import Notifications, { Summary } from "./pages/Notifications";
-import FirstSteps from "./pages/FirstSteps";
-import EntityPage from "./pages/EntityPage";
-import Quality from "./pages/Quality";
+import type { Summary } from "./pages/Notifications";
+// Each screen is its own chunk, loaded the first time it is opened: the first visit downloads the shell and one screen, not all fifty.
+const Overview = lazy(() => import("./pages/Overview"));
+const Journal = lazy(() => import("./pages/Journal"));
+const Facts = lazy(() => import("./pages/Facts"));
+const GraphPage = lazy(() => import("./pages/GraphPage"));
+const Query = lazy(() => import("./pages/Query"));
+const Vocabulary = lazy(() => import("./pages/Vocabulary"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Ask = lazy(() => import("./pages/Ask"));
+const Proposals = lazy(() => import("./pages/Proposals"));
+const Knowledge = lazy(() => import("./pages/Knowledge"));
+const Account = lazy(() => import("./pages/Account"));
+const Jobs = lazy(() => import("./pages/Jobs"));
+const FirstSteps = lazy(() => import("./pages/FirstSteps"));
+const EntityPage = lazy(() => import("./pages/EntityPage"));
+const Quality = lazy(() => import("./pages/Quality"));
+const Notifications = lazy(() => import("./pages/Notifications"));
 
 const NAV = [
   { section: T("Memoria"), items: [
@@ -136,6 +138,7 @@ export default function App() {
         </div>
       </AppShell.Navbar>
       <AppShell.Main>
+        <Suspense fallback={<EmptyState>{t("Cargando…")}</EmptyState>}>
         <Routes>
           <Route path="/admin" element={<Admin me={me.data} brain={brain} setBrain={setBrain} />} />
           <Route path="/cuenta" element={<Account />} />
@@ -162,6 +165,7 @@ export default function App() {
             : me.data.is_admin && brains.data?.length === 0 ? <FirstSteps docs={cfg.data?.links?.docs} />
             : <Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}
         </Routes>
+        </Suspense>
       </AppShell.Main>
     </AppShell>
   );
