@@ -57,7 +57,7 @@ function ChannelForm({ initial, id, cat, onClose }: { initial: Draft; id: number
       {cat.kinds[d.kind]?.secret && <PasswordField label={t(SECRET_LABEL[d.kind] ?? "Secreto")} description={id !== null ? t("Vacío = conservar el guardado. Nunca se muestra.") : undefined} autoComplete="off" value={d.secret} onChange={(e) => set("secret", e.currentTarget.value)} />}
       <SelectField label={t("Severidad mínima")} description={t("Por debajo de esta severidad no se envía nada por este canal.")} data={SEVS.map((s) => ({ value: s, label: t(SEVERITY[s].label) }))} value={d.min_severity} allowDeselect={false} onChange={(v) => v && set("min_severity", v)} />
       <Stack gap={4}>
-        <Text size="sm" fw={500}>{t("Eventos")}</Text>
+        <Text size="sm" fw={600}>{t("Eventos")}</Text>
         <Text size="xs" c="dimmed">{t("Sin ninguno marcado, el canal recibe todos.")}</Text>
         {cat.events.map((e) => <Check key={e.key} label={t(e.label)} checked={d.events.includes(e.key)} onChange={(ev) => set("events", ev.currentTarget.checked ? [...d.events, e.key] : d.events.filter((x) => x !== e.key))} />)}
       </Stack>

@@ -216,7 +216,7 @@ Pills carry four status tones (success, warn, danger, alt), defined per theme as
 - **Data** (JetBrains Mono 400, 13px, tabular figures): dates, identifiers, scores, commands and code.
 
 ### Named Rules
-**The Two Weights Rule.** Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. `b` and `strong` are set to 600 for the same reason.
+**The Two Weights Rule.** Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. `b` and `strong` are set to 600 for the same reason. Do not ask for 500 either: it renders as 400, so the emphasis is lost. Emphasis is 600; secondary text is 400 in the muted colour.
 
 **The Tabular Truth Rule.** Any column of dates or numbers is set in the data style, so the digits line up and history can be compared at a glance.
 
@@ -314,5 +314,5 @@ A dark canvas in both themes, with a 10px corner. Nodes take their entity-type c
 - **Don't** use emoji or text characters as icons. Icons are Tabler icons registered in `web/src/ui/Icon.tsx`.
 - **Don't** convey a state through colour alone.
 - **Don't** lighten the graph canvas in the light theme. Type colours are tuned against the dark canvas.
-- **Don't** use weights the fonts do not ship (700 or 800 in Instrument Sans).
+- **Don't** use weights the fonts do not ship: 500, 700 or 800 in Instrument Sans.
 - **Don't** load fonts or any other asset from a third-party host. Serve them from the instance (see PRODUCT.md).

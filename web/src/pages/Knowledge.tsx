@@ -224,7 +224,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                   </DataTable.Tr></DataTable.Thead>
                   <DataTable.Tbody>{(docs.data?.items ?? []).map((d) => (
                     <DataTable.Tr key={d.id}>
-                      <DataTable.Td><Text fw={500} size="sm">{d.title}</Text><Text size="xs" c="dimmed">{d.filename}</Text></DataTable.Td>
+                      <DataTable.Td><Text fw={600} size="sm">{d.title}</Text><Text size="xs" c="dimmed">{d.filename}</Text></DataTable.Td>
                       <DataTable.Td>{d.source}</DataTable.Td>
                       <DataTable.Td>{human(d.size)}</DataTable.Td>
                       <DataTable.Td>{d.status === "indexing" && d.progress ? `${d.progress.done}/${d.progress.total}` : d.chunks}</DataTable.Td>
@@ -265,7 +265,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                 </DataTable.Tr></DataTable.Thead>
                 <DataTable.Tbody>{sv.rows.map((s) => (
                   <DataTable.Tr key={s.id}>
-                    <DataTable.Td><Text size="sm" fw={500}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "git" ? `${s.config.web ?? s.config.url} · ${s.config.branch || t("rama principal")}${s.config.commit ? ` · ${s.config.commit.slice(0, 7)}` : ""}` : s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
+                    <DataTable.Td><Text size="sm" fw={600}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "git" ? `${s.config.web ?? s.config.url} · ${s.config.branch || t("rama principal")}${s.config.commit ? ` · ${s.config.commit.slice(0, 7)}` : ""}` : s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
                     <DataTable.Td><Pill size="xs">{t(KIND[s.kind] ?? s.kind)}</Pill></DataTable.Td>
                     <DataTable.Td>{s.documents}</DataTable.Td>
                     <DataTable.Td>
@@ -439,7 +439,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               ? <><MutationError error={connect.error} />
                   <Group justify="flex-end"><Btn kind="ghost" onClick={() => setWiki(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={connect.isPending} disabled={ad.fields.some((f) => f.required && !(wiki.values[f.name] ?? "").trim())} onClick={() => connect.mutate(wiki)}>{t("Conectar")}</Btn></Group></>
               : <>
-                  <Text size="sm" fw={500}>{ad.collection_label} {t("a indexar")}</Text>
+                  <Text size="sm" fw={600}>{ad.collection_label} {t("a indexar")}</Text>
                   <Stack gap={4}>{wiki.cols.map((c) => (
                     <Check key={c.id} label={c.name} description={c.description || undefined} checked={wiki.picked.includes(c.id)}
                       onChange={(e) => setWiki({ ...wiki, picked: e.currentTarget.checked ? [...wiki.picked, c.id] : wiki.picked.filter((x) => x !== c.id) })} />))}</Stack>
@@ -453,7 +453,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
         {promo && (
           <Stack>
             <Text size="sm" c="dimmed">{t("El pasaje se envía como propuesta con su procedencia (documento y sección).")} {canUpload && ["curator", "admin", "owner"].includes(role) ? t("Como curador, se aprueba directamente y se extraen los hechos al grafo.") : t("Entra en cuarentena hasta que un curador la apruebe.")} {t("El documento no cambia.")}</Text>
-            <Text size="xs" fw={500}>{promo.title}</Text>
+            <Text size="xs" fw={600}>{promo.title}</Text>
             <TextArea label={t("Texto a recordar")} description={t("Puedes recortarlo o reescribirlo: conviene que sea una afirmación autocontenida.")} autosize minRows={5} maxRows={14} value={promo.text} onChange={(e) => setPromo({ ...promo, text: e.currentTarget.value })} />
             <TextField label={t("Título de la propuesta (opcional)")} value={promo.name} onChange={(e) => setPromo({ ...promo, name: e.currentTarget.value })} />
             <MutationError error={promote.error} />

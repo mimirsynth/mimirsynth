@@ -34,7 +34,7 @@ function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: 
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((ty) => (
           <DataTable.Tr key={ty.name}>
-            <DataTable.Td><Text fw={500} size="sm">{ty.name}</Text></DataTable.Td>
+            <DataTable.Td><Text fw={600} size="sm">{ty.name}</Text></DataTable.Td>
             <DataTable.Td><Text size="sm" c="dimmed" lineClamp={2}>{ty.description}</Text></DataTable.Td>
             <DataTable.Td>{used(ty.name)}</DataTable.Td>
             <DataTable.Td>{ty.functional ? <Pill size="xs" tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : <Text size="sm" c="dimmed">—</Text>}</DataTable.Td>
@@ -184,7 +184,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
             <SelectField label={t("Origen")} data={entityNames} value={src} disabled={dlg?.kind === "rule" && !!dlg.item} onChange={setSrc} searchable />
             <SelectField label={t("Destino")} data={entityNames} value={tgt} disabled={dlg?.kind === "rule" && !!dlg.item} onChange={setTgt} searchable />
           </Group>
-          <Text size="sm" fw={500}>{t("Relaciones permitidas entre esos dos tipos")}</Text>
+          <Text size="sm" fw={600}>{t("Relaciones permitidas entre esos dos tipos")}</Text>
           <Stack gap={6} mah={260} className="ms-scroll">{(o?.edge_types ?? []).map((t) => <Check key={t.name} label={t.name} checked={edges.includes(t.name)} onChange={(e) => toggle(t.name, e.currentTarget.checked)} />)}</Stack>
           <MutationError error={saveRule.error} />
           <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!src || !tgt || edges.length === 0} loading={saveRule.isPending} onClick={() => saveRule.mutate()}>{t("Guardar")}</Btn></Group>
