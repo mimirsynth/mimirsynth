@@ -1,0 +1,13 @@
+{
+  "Decidida": "Decided",
+  "Se aprueban": "Approved",
+  "Se quedan para decidirlas aparte:": "Left to decide one at a time:",
+  "Se rechazan": "Rejected",
+  "al enviarla": "on submission",
+  "el decisor": "the decider",
+  "por {{who}} ·": "by {{who}} ·",
+  "un webhook": "a webhook",
+  "¿Aprobar 1 propuesta?": "Approve 1 proposal?",
+  "¿Aprobar {{n}} de {{total}}?": "Approve {{n}} of {{total}}?",
+  "¿Rechazar 1 propuesta?": "Reject 1 proposal?"
+}

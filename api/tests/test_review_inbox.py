@@ -133,3 +133,17 @@ def test_related_facts_are_ordered_by_closeness(client, monkeypatch):  # noqa: F
     pid = _propose(client, "inbox-rel2", contrib, "Cabina nas01 movida a la sala sur")
     r = client.get(f"/api/brains/inbox-rel2/proposals/{pid}/related", headers=curator).json()["facts"]
     assert [(f["uuid"], f["relevance"]) for f in r] == [("c", "repeats"), ("b", "close"), ("a", "related")]
+
+
+def test_history_says_who_decided_and_sorts_by_it(client):  # noqa: F811
+    contrib, curator = _brain(client, "inbox-who")
+    a = _propose(client, "inbox-who", contrib, "Primera")
+    b = _propose(client, "inbox-who", contrib, "Segunda")
+    client.post(f"/api/brains/inbox-who/proposals/{b}/reject", json={}, headers=curator)
+    client.post(f"/api/brains/inbox-who/proposals/{a}/reject", json={}, headers=curator)
+    items = client.get("/api/brains/inbox-who/proposals", params={"status": "decided", "sort": "decided", "order": "desc"}, headers=curator).json()["items"]
+    assert [p["id"] for p in items] == [a, b]                        # the last decided first
+    assert all(p["reviewer"] and p["reviewed_at"] for p in items)    # who decided it
+    assert client.get(f"/api/brains/inbox-who/proposals/{a}", headers=curator).json()["reviewer"] == items[0]["reviewer"]
+    pending = _propose(client, "inbox-who", contrib, "Tercera")
+    assert client.get(f"/api/brains/inbox-who/proposals/{pending}", headers=curator).json()["reviewer"] is None
