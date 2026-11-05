@@ -480,6 +480,9 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 
 /* Review inbox (Proposals → To review): the queue and the open proposal side by side; one at a time on a narrow content area */
 .ms-tabpanel-col { display: flex; flex-direction: column; gap: 10px; }
+.ms-batch-list { list-style: none; margin: 0; padding: 6px 10px; max-height: 168px; overflow: auto; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); font-size: 13px; line-height: 1.6; }
+.ms-batch-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-batch-list[data-muted] { color: var(--ms-muted); }
 .ms-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 28px; }  /* the selectors of a view on one line; they wrap when narrow */
 .ms-inbox-wrap { container-type: inline-size; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ms-inbox { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); gap: 12px; flex: 1; min-height: 0; }

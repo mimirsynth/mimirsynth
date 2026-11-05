@@ -250,6 +250,7 @@ class Proposal(Base):
     purged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # its text went with the retention period (#137)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
     author: Mapped[User] = relationship(foreign_keys=[author_id])
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewer_id])  # who decided it, for the history
 
 
 class LlmEngine(Base):
