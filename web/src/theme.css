@@ -7,12 +7,12 @@
   --ms-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
 }
 :root[data-mantine-color-scheme="light"] {
-  --ms-surface: #e9efee; --ms-raised: #ffffff; --ms-line: #b4c6c3; --ms-stripe: #d9e5e3; --ms-hover: rgba(30, 107, 115, 0.14); --ms-thead: #dbe6e4; --ms-chip-bg: #d6e8e6; --ms-chip-fg: #12474e; --ms-chip-line: #9cc3c0; --ms-ink: #0d1f26; --ms-muted: #4d6168;
+  --ms-surface: #e9efee; --ms-raised: #ffffff; --ms-line: #b4c6c3; --ms-field-line: #718c8a; --ms-stripe: #d9e5e3; --ms-hover: rgba(30, 107, 115, 0.14); --ms-thead: #dbe6e4; --ms-chip-bg: #d6e8e6; --ms-chip-fg: #12474e; --ms-chip-line: #9cc3c0; --ms-ink: #0d1f26; --ms-muted: #4d6168;
   --ms-accent: #1e6b73; --ms-on-accent: #ffffff; --ms-invalidado: #a8461f; --ms-focus: #1e6b73;
   --mantine-color-body: #e9efee; --mantine-color-text: #0d1f26; --mantine-color-dimmed: #4d6168;
 }
 :root[data-mantine-color-scheme="dark"] {
-  --ms-surface: #0b171c; --ms-raised: #12242b; --ms-line: #24404a; --ms-stripe: #0f2128; --ms-hover: rgba(95, 184, 191, 0.08); --ms-thead: #0f2027; --ms-chip-bg: rgba(95, 184, 191, 0.14); --ms-chip-fg: #9fdde1; --ms-chip-line: rgba(95, 184, 191, 0.4); --ms-ink: #e6efed; --ms-muted: #9db2b3;
+  --ms-surface: #0b171c; --ms-raised: #12242b; --ms-line: #24404a; --ms-field-line: #527a86; --ms-stripe: #0f2128; --ms-hover: rgba(95, 184, 191, 0.08); --ms-thead: #0f2027; --ms-chip-bg: rgba(95, 184, 191, 0.14); --ms-chip-fg: #9fdde1; --ms-chip-line: rgba(95, 184, 191, 0.4); --ms-ink: #e6efed; --ms-muted: #9db2b3;
   --ms-accent: #5fb8bf; --ms-on-accent: #0b171c; --ms-invalidado: #e88a62; --ms-focus: #d4a03a;
   --mantine-color-body: #0b171c; --mantine-color-text: #e6efed; --mantine-color-dimmed: #9db2b3;
 }
@@ -47,7 +47,7 @@ h1, h2, h3, h4, .mantine-Title-root { font-family: var(--ms-display); font-weigh
 .mantine-Tabs-list::before { border-color: var(--ms-line); }
 .mantine-Tabs-tab[data-active] { color: var(--ms-accent); }
 .mantine-NavLink-root[data-active] { background: var(--ms-hover); color: var(--ms-accent); font-weight: 600; border-left: 3px solid var(--ms-accent); }
-.mantine-Input-input, .mantine-Select-input, .mantine-Textarea-input { background: var(--ms-raised); border: 1px solid var(--ms-line); }
+.mantine-Input-input, .mantine-Select-input, .mantine-Textarea-input { background: var(--ms-raised); border: 1px solid var(--ms-field-line); }  /* a field is told apart by its edge alone: --ms-field-line keeps 3:1 against the raised fill and the surface (WCAG 1.4.11), where --ms-line is a quiet rule */
 .mantine-SegmentedControl-root { background: var(--ms-surface); border: 1px solid var(--ms-line); }
 .mantine-SegmentedControl-indicator { background: var(--ms-raised); border: 1px solid var(--ms-line); }
 
@@ -147,7 +147,8 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-field input:focus, .ms-field textarea:focus { border-color: var(--ms-accent); }
 .ms-check .mantine-Checkbox-input:checked { background: var(--ms-accent); border-color: var(--ms-accent); }
 .ms-check .mantine-Radio-radio:checked { background: var(--ms-accent); border-color: var(--ms-accent); }
-.ms-toggle-field .mantine-Switch-track { background: var(--ms-line); border-color: var(--ms-line); }
+.ms-toggle-field .mantine-Switch-track { background: var(--ms-field-line); border-color: var(--ms-field-line); }
+.ms-check .mantine-Checkbox-input:not(:checked), .ms-check .mantine-Radio-radio:not(:checked) { border-color: var(--ms-field-line); }
 .ms-toggle-field input:checked + .mantine-Switch-track { background: var(--ms-accent); border-color: var(--ms-accent); }
 .ms-notice { border: 1px solid var(--ms-chip-line); border-radius: var(--ms-radius); background: var(--ms-chip-bg); color: var(--ms-ink); }
 .ms-notice[data-tone="success"] { border-color: var(--ms-accent); background: color-mix(in srgb, var(--ms-accent) 14%, var(--ms-raised)); }

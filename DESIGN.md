@@ -11,6 +11,7 @@ colors:
   superficie: "#e9efee"
   superficie-raised: "#ffffff"
   superficie-line: "#b4c6c3"
+  superficie-field-line: "#718c8a"
   superficie-stripe: "#d9e5e3"
   superficie-thead: "#dbe6e4"
   superficie-chip: "#d6e8e6"
@@ -22,6 +23,7 @@ colors:
   pozo-surface: "#0b171c"
   pozo-raised: "#12242b"
   pozo-line: "#24404a"
+  pozo-field-line: "#527a86"
   pozo-stripe: "#0f2128"
   pozo-thead: "#0f2027"
   pozo-chip-ink: "#9fdde1"
@@ -179,6 +181,7 @@ The palette is a narrow teal-grey family drawn from water and stone, with a sing
 - **Superficie / Pozo surface** (`superficie`, `pozo-surface`): the page background.
 - **Raised** (`superficie-raised`, `pozo-raised`): panels, cards, tables, inputs, modals and the navbar, one step up from the surface.
 - **Line** (`superficie-line`, `pozo-line`): every 1px rule and border, and the slider and progress track.
+- **Field line** (`superficie-field-line`, `pozo-field-line`): the edge of fields, checkboxes and radios, and the track of an off switch. A field is told apart by its edge alone, so this line keeps 3:1 against both the raised fill and the surface (WCAG 1.4.11). The quieter Line would not.
 - **Stripe and table head** (`superficie-stripe`/`superficie-thead`, `pozo-stripe`/`pozo-thead`): striped rows and table headers.
 - **Chip** (`superficie-chip`, `superficie-chip-ink`, `superficie-chip-line`, and `pozo-chip-ink` on a 14% teal wash in the dark theme): pills, segments, notices, the selected sub-nav item and avatars.
 - **Ink and muted** (`superficie-ink`/`superficie-muted`, `pozo-ink`/`pozo-muted`): body text and secondary text. Muted text stays above 5:1 on every surface.
@@ -278,7 +281,7 @@ The options of a status filter, shaped like pills but interactive and 36px tall.
 - **List card:** a title with a muted aside on the right, a body in 14/1.55 text, then tags and actions. An invalidated card shows its body in rust and struck through. A clickable card turns teal at the edge on hover and opens with Enter or Space.
 
 ### Inputs / Fields
-- **Style:** raised fill, a 1px line, 6px corner and 36px height. Labels are 13px semibold ink and descriptions 12px muted. All fields share one size; a size requested at the call site is ignored.
+- **Style:** raised fill, a 1px field line, 6px corner and 36px height. Labels are 13px semibold ink and descriptions 12px muted. All fields share one size; a size requested at the call site is ignored.
 - **Focus:** the border turns teal, and a 2px focus ring sits 2px outside the field (teal in light, gold in dark).
 - **Errors:** a mutation error appears as a danger notice under the form, never as loose red text.
 
