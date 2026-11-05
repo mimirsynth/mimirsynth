@@ -74,7 +74,8 @@ Before a proposal is stored (from the interface, the API or the `remember` tool 
 
 ## A proposal's detail
 When you open it you see a **timeline**:
-- **Submitted:** who and when, and the declared confidence.
+- **Submitted:** who and when, the declared confidence and the **source** (where the author says it comes from, and the format it arrived in).
+- **What the brain already knows** (on pending proposals that add knowledge): the facts closest to the proposal's text, with their entities linked and their dates, to see whether it repeats or contradicts something. When nothing is similar it says so: it would be new knowledge. This lookup does not count towards recall quality.
 - **Review:** whether it was approved on submission, approved by a curator (with their note) or decided by the decider. If it was the decider, it shows which model, the threshold, its two answers with their confidence and the verdict (**Approved automatically** or **Referred to a curator**). If the decider was unavailable, the error is shown.
 - **Ingestion into the graph:** the id of the created episode, the date, and a **report**: how many entities and facts were created, how many entities ended up *untyped*, which types fell outside the ontology, which entities were merged into their primary, which were not merged because the match was ambiguous, and how many relations were normalised by an alias.
 

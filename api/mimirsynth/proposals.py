@@ -251,6 +251,27 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
     return out
 
 
+RELATED_FACTS = 5
+
+
+@router.get("/{pid}/related")
+def related(pid: int, ctx: BrainCtx = Depends(curator)):
+    """What the brain already knows close to a proposal: the facts a recall of its title and text brings back, for the curator to check
+    it against (a duplicate, a contradiction, or nothing at all: new knowledge). It is a read for the reviewer, not an agent's recall, so it
+    is not logged for the recall ratings."""
+    from . import recall as recall_mod
+    p = _get(ctx, pid)
+    if p.purged_at or not (p.body or "").strip():
+        return {"facts": []}
+    try:
+        query = f"{p.name}. {p.body}"[:1500]
+        out = recall_mod.recall(ctx.brain.id, ctx.brain.graph_name, query, RELATED_FACTS, 0, 4000, n_docs=0)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"no se pudo buscar lo relacionado: {e}") from e
+    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "valid_at", "invalid_at", "status", "score")
+    return {"facts": [{k: f.get(k) for k in keys} for f in out.get("facts", [])]}
+
+
 @router.post("/{pid}/undo")
 def undo(pid: int, ctx: BrainCtx = Depends(curator)):
     """Takes a person's decision back: the proposal is pending again. A rejection can always be reopened (unless its text was purged); an

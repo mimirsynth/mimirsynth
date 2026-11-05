@@ -74,7 +74,8 @@ Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `reme
 
 ## Detalle de una propuesta
 Al abrirla ves una **línea de tiempo**:
-- **Enviada:** quién y cuándo, y la confianza declarada.
+- **Enviada:** quién y cuándo, la confianza declarada y la **procedencia** (de dónde dice el autor que sale y en qué formato llegó).
+- **Lo que el brain ya sabe** (en las pendientes que añaden conocimiento): los hechos más parecidos al texto de la propuesta, con sus entidades enlazadas y sus fechas, para ver si repite o contradice algo. Si no hay nada parecido, lo dice: sería conocimiento nuevo. Esta consulta no cuenta para la calidad del recall.
 - **Revisión:** si se aprobó al enviar, la aprobó un curador (con su nota) o la decidió el decisor. Si fue el decisor, se muestra qué modelo, el umbral, sus dos respuestas con su confianza y el veredicto (**Aprobada automáticamente** o **Derivada a un curador**). Si el decisor no estaba disponible, se indica el error.
 - **Ingesta en el grafo:** el id del episodio creado, la fecha, y un **informe**: cuántas entidades y hechos se crearon, cuántas entidades quedaron *sin tipo*, qué tipos se salieron de la ontología, qué entidades se fusionaron con su principal, cuáles no se fusionaron por ser ambiguas y cuántas relaciones se normalizaron por un alias.
 
