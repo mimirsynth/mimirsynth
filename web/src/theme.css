@@ -519,8 +519,12 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ms-muted); }
 .ms-queue-meta .ms-data { font-size: 12px; }
 
-/* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
 .ms-fold[hidden] { display: none; }  /* a folded region stays in the page, for aria-controls, but out of sight */
+.ms-hit { min-height: 24px; }  /* text buttons outside a sentence: at least the 24px target of WCAG 2.5.8 */
+.ms-queue-item .ms-check { --checkbox-size: 24px !important; }  /* the queue's checkboxes, at the same minimum target */
+@media (pointer: coarse) { .ms-hit { min-height: 44px; } .ms-queue-item .ms-check { --checkbox-size: 28px !important; } }
+.ms-queue-desc { display: contents; }  /* only groups the description for aria-describedby; the layout is its children's */
+/* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
 .ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); }  /* a section of the detail, ruled off like the rest, not a card inside its card */
 .ms-section-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--ms-ink); }
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
