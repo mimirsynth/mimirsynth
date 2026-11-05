@@ -365,12 +365,12 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-fill { flex: none; overflow: visible; }
   .ms-split-main { height: 360px; }
 }
-.ms-querybox { display: flex; align-items: flex-start; gap: 16px; }
-.ms-querybox > :first-child { flex: 1; min-width: 0; }
-.ms-querybox-side { width: 260px; flex-shrink: 0; }
+/* Query: the Cypher box and its actions side by side while the box keeps 420px; measured on the content width, like Ask */
+.ms-querybox-wrap { container-type: inline-size; }
+.ms-querybox { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
+.ms-querybox > * { min-width: 0; }
+@container (max-width: 700px) { .ms-querybox { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 48em) {
-  .ms-querybox { flex-direction: column; }
-  .ms-querybox > :first-child, .ms-querybox-side { width: 100%; flex: none; }
   .ms-table { border: 0; }
   .ms-table, .ms-table .mantine-Table-tbody { display: block; }
   /* La cabecera se queda como barra de orden y filtro sobre las tarjetas: solo las columnas con ColHead. */

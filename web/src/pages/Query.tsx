@@ -76,7 +76,7 @@ ${lab(n)}` })),
   return (
     <Page>
       <PageHeader title={t("Consulta")} description={t("Consultas Cypher de solo lectura contra el grafo del brain (Ctrl+Enter para ejecutar). Cualquier escritura se rechaza.")} />
-      <div className="ms-querybox">
+      <div className="ms-querybox-wrap"><div className="ms-querybox">
         <TextArea autosize minRows={3} maxRows={8} value={q} onChange={(e) => setQ(e.currentTarget.value)} className="ms-mono-input"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) run(); }} placeholder={t("MATCH (n) RETURN n LIMIT 25   (Ctrl+Enter para ejecutar)")} />
         <Stack gap={6} className="ms-querybox-side">
@@ -84,7 +84,7 @@ ${lab(n)}` })),
           <SelectField placeholder={t("Ejemplos")} data={EXAMPLES.map(([title]) => ({ value: title, label: t(title) }))} onChange={(v) => v && setQ(EXAMPLES.find(([title]) => title === v)![1])} clearable />
           <SelectField placeholder={t("Historial")} data={hist.map((h, i) => ({ value: String(i), label: h.slice(0, 60) }))} onChange={(v) => v !== null && setQ(hist[Number(v)])} clearable />
         </Stack>
-      </div>
+      </div></div>
       {err && <Notice tone="danger" p="xs">{err}</Notice>}
       {res && (
         <Tabs value={tab} onChange={(v) => setTab(v ?? "tabla")} className="ms-tabs-fill">
