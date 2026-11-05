@@ -28,7 +28,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` | curador |
 | **Grafo y consulta** | `GET /graph` · `POST /query` | lector |
 | **Propuestas** | `POST /proposals/corrections` · `GET/POST /proposals` · `GET /proposals/counts` · `GET /proposals/{pid}` | colaborador |
-| | `POST /proposals/{pid}/reactivate` · `POST /proposals/{pid}/approve` · `POST /proposals/{pid}/ingest` · `POST /proposals/{pid}/reject` · `POST /proposals/{pid}/undo` | curador |
+| | `POST /proposals/{pid}/reactivate` · `POST /proposals/{pid}/approve` · `POST /proposals/{pid}/ingest` · `POST /proposals/{pid}/reject` · `POST /proposals/bulk` · `POST /proposals/{pid}/undo` | curador |
 | **Documentos** | `GET /docs/sources` · `GET /docs` · `GET /docs/search` · `GET /docs/{doc_id}` · `GET /docs/{doc_id}/text` · `GET /docs/{doc_id}/file` · `GET /docs/{doc_id}/context` · `GET /docs/{doc_id}/entities` · `GET /docs/mentions` | lector |
 | | `DELETE /docs/{doc_id}` · `POST /docs/{doc_id}/reindex` · `POST /docs/uploads` · `PUT /docs/uploads/{uid}/parts/{n}` · `DELETE /docs/uploads/{uid}` · `POST /docs/uploads/{uid}/complete` · `POST /docs/{doc_id}/promote` | colaborador |
 | | `POST /docs/duplicates` · `GET /docs/roots` · `POST /docs/sources` · `PATCH/DELETE /docs/sources/{sid}` · `POST /docs/sources/{sid}/scan` · `GET /docs/wiki/adapters` · `POST /docs/wiki/collections` · `GET /docs/sources/{sid}/wiki/collections` · `POST /docs/sources/wiki` · `POST /docs/sources/git` | administrador |

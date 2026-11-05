@@ -19,17 +19,30 @@ Submitted ──► (optional decider) ──► Pending ──► Approved ─�
 
 > The decider knows what the brain is about from its **description**: write one when creating or editing the brain (Administration → Brains, see [[Brains and members]]).
 
-## The list
-At the top, the **State** selector with a counter per state: *All*, *Pending*, *Approved*, *Rejected*, *Failed*, *Ingested*. It opens on *Pending* when there are pending proposals, and on *All* otherwise. Next to it, the **Kind** selector: *All*, *Add* (proposals that add knowledge) and *Correct* ([corrections](#corrections), which invalidate a fact). The state counters follow the chosen kind.
+## The screen
+It has two tabs:
+- **To review** (curators; it opens by default) is the queue of what waits for a decision.
+- **My proposals** has the form to propose and what you have sent, in every state.
 
-When corrections are waiting, a notice above the list says how many, because each one invalidates a fact and only a person decides it. **Show only the pending corrections** sets both selectors at once.
+A **contributor** only has the second one.
 
-The table shows **#** (the proposal number), **Kind**, **Title**, **Author**, **Confidence**, **State** and **Submitted**. The kind is a marker with an icon and a word, **Adds** or **Corrects**, and a correction's marker is filled, so it stands out without relying on colour; the detail repeats it next to the number. You can filter by title and by author (**All authors**), sort by title, author, confidence or date, and move through the pages with the pager below. Filters and sort order apply to **every proposal**, not only to the rows on screen, so old proposals are always reachable.
+### To review
+On the left, the **queue** of pending proposals; on the right, the open proposal with its detail and the **Reject** and **Approve** buttons always in view. On a narrow screen you see one at a time, with **Back to the queue**.
+
+- **Ordered by risk and age:** corrections first, then the ones with a secret to review, then those with a low declared confidence (below 0.6) and, inside each group, the oldest first. Each entry says who sent it and how long it has been waiting.
+- **Keyboard shortcuts:** <kbd>J</kbd>/<kbd>K</kbd> go to the next or the previous one, <kbd>A</kbd> approves, <kbd>R</kbd> rejects and <kbd>X</kbd> marks it for a batch decision. They do nothing while you type in the note. After a decision the next one opens.
+- **In batches:** check several (or **Select all**) and use **Approve the selected ones** or **Reject the selected ones**. A confirmation says how many and takes a common note. Corrections and proposals with a secret to review **are not approved in a batch**: they stay selected, to decide one at a time. Only what you see in the queue goes into the batch.
+- The **State** selector switches between **Pending** and **Decided**, the history: approved, ingested, rejected and failed ones, in a table with filters. The **Kind** selector (*All*, *Add*, *Correct*) filters both views.
+
+When corrections are waiting, a notice says how many, because each one invalidates a fact and only a person decides it. **Show only the pending corrections** filters the queue.
+
+### The tables
+**Decided** and **My proposals** show **#** (the proposal number), **Kind**, **Title**, **Author**, **Confidence**, **State** and **Submitted**. The kind is a marker with an icon and a word, **Adds** or **Corrects**, and a correction's marker is filled, so it stands out without relying on colour. You can filter by title and by author (**All authors**), sort by title, author, confidence or date, and move through the pages with the pager below. Filters and sort order apply to **every proposal**, not only to the rows on screen, so old proposals are always reachable.
 
 > A **reader** neither sees proposals nor can create them. A **contributor** sees only their own; a **curator** or higher sees all.
 
 ## Creating a proposal
-The form above the list, with:
+In **My proposals**, the form (it can be folded away), with:
 - **Title:** short and descriptive ("Database migration to PostgreSQL 17").
 - **Content:** *what happened or what needs remembering, with exact dates and names*.
 - **Confidence (0–1, optional):** how much you trust that data. It is shown to the reviewer.

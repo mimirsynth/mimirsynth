@@ -293,6 +293,13 @@ The options of a status filter, shaped like pills but interactive and 36px tall.
 ### Data Table
 The signature of an operating screen. A 1px outer line, a tinted header band with 12px uppercase muted labels and a 2px rule underneath, solid striped rows (marked in Superficie, subtle in Pozo) and the teal wash on hover. Each column header sorts when you press its name, and its funnel opens a filter. The header exposes `aria-sort`. A table scrolls horizontally inside its own box and becomes cards on a phone.
 
+### Review Queue
+The curator's inbox (Proposals → To review): the queue and the open item side by side in two 1px-ruled raised panels, the queue about two fifths of the width. On a narrow content area (below about 760px) one shows at a time, with «Back to the queue».
+- **Queue entry:** a checkbox for a batch decision, then the title (14px semibold), one muted line of the text, and a meta line with the markers that matter (correction, secret to review, low confidence) and how long it has waited, in the data style. Entries are separated by a 1px rule; the open one takes the chip wash and the 3px inset accent edge.
+- **Header bar:** the order it follows, «Select all», and, once something is checked, the batch actions as row-size buttons (approve secondary, reject danger). The detail's Approve stays the zone's only primary.
+- **Detail:** the proposal scrolls; the note, the consequence lines, Reject / Approve and the shortcut hint (J/K, A, R, X as small keycaps) stay pinned at the bottom.
+- **Rhythm:** deciding opens the next one; the decision notice with Undo sits above, so the curator never goes back to the list.
+
 ### Graph Canvas
 A dark canvas in both themes, with a 10px corner. Nodes take their entity-type colour. Halos show which source contributed a node and use their own palette, distinct from the type colours. Links are a cool blue and invalid links grey. The canvas colours are tokens of their own (`--ms-canvas`, `--ms-canvas-ink`, `--ms-canvas-rule`, `--ms-canvas-link`), mirrored by `CANVAS` in `web/src/ui/palette.ts` for the renderers; the tooltip and the busy overlay over the canvas use them too. Nothing moves at rest, and with reduced motion nothing moves on its own at all.
 

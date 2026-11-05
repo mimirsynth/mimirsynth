@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select, update
+from sqlalchemy import String, case, cast, func, select, update
 
 from . import deciders_admin, ingest, secretguard
 from .deps import BrainCtx, audit, brain_access
@@ -99,24 +99,32 @@ def _blocked_rules(ctx: BrainCtx, text: str) -> list[str]:
 
 _AUTHOR = func.coalesce(User.email, User.name)
 _SORTS = {"id": Proposal.id, "name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id}  # el id sigue el orden de envío
+# the review queue's order: what most needs a person first (corrections, then flagged secrets, then low declared confidence), oldest
+# first inside each group, so nothing waits forever behind newer arrivals
+LOW_CONFIDENCE = 0.6
+_RISK = case((Proposal.kind == "correction", 0), (cast(Proposal.secret_findings, String).like('%"flagged"%'), 1), (Proposal.confidence < LOW_CONFIDENCE, 2), else_=3)
+BULK_MAX = 200
 
 
 @router.get("")
 def list_proposals(status: str | None = None, kind: str | None = None, q: str = Query("", max_length=200), author: int | None = None, sort: str = "at", order: str = "desc",
-                   limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0), ctx: BrainCtx = Depends(contributor)):
+                   limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0), mine: bool = False, ctx: BrainCtx = Depends(contributor)):
     """Los curadores ven todas; un colaborador solo las suyas. Paginado en el servidor (#88): `total` cuenta lo que pasa los filtros
-    y `authors` lista los autores visibles para el filtro de la columna. `kind` keeps only memories or only corrections."""
-    if status and status not in STATUSES:
+    y `authors` lista los autores visibles para el filtro de la columna. `kind` keeps only memories or only corrections. `status=decided`
+    keeps everything but the pending ones (the review history); `mine` only the caller's own; `sort=risk` is the review queue's order."""
+    if status and status not in STATUSES and status != "decided":
         raise HTTPException(400, "estado inválido")
     if kind and kind not in KINDS:
         raise HTTPException(400, "tipo inválido")
-    if sort not in _SORTS:
+    if sort not in _SORTS and sort != "risk":
         raise HTTPException(400, "orden inválido")
     base = select(Proposal).join(User, User.id == Proposal.author_id).where(Proposal.brain_id == ctx.brain.id)
-    if not allows(ctx.role, "curator"):
+    if mine or not allows(ctx.role, "curator"):
         base = base.where(Proposal.author_id == ctx.user.id)
     authors = ctx.db.execute(base.with_only_columns(User.id, _AUTHOR).distinct().order_by(_AUTHOR)).all()
-    if status:
+    if status == "decided":
+        base = base.where(Proposal.status != "pending")
+    elif status:
         base = base.where(Proposal.status == status)
     if kind:
         base = base.where(Proposal.kind == kind)
@@ -125,19 +133,22 @@ def list_proposals(status: str | None = None, kind: str | None = None, q: str = 
     if q.strip():
         base = base.where(Proposal.name.ilike("%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\"))
     total = ctx.db.scalar(select(func.count()).select_from(base.subquery()))
-    key = _SORTS[sort].asc() if order == "asc" else _SORTS[sort].desc()
-    rows = ctx.db.scalars(base.order_by(key.nulls_last(), Proposal.id.desc()).limit(limit).offset(offset)).all()
+    if sort == "risk":  # `order=desc` turns the whole queue around (newest and least risky first)
+        keys = (_RISK.asc(), Proposal.created_at.asc(), Proposal.id.asc()) if order == "asc" else (_RISK.desc(), Proposal.created_at.desc(), Proposal.id.desc())
+    else:
+        keys = ((_SORTS[sort].asc() if order == "asc" else _SORTS[sort].desc()).nulls_last(), Proposal.id.desc())
+    rows = ctx.db.scalars(base.order_by(*keys).limit(limit).offset(offset)).all()
     return {"total": total, "limit": limit, "offset": offset, "authors": [{"id": i, "name": n} for i, n in authors], "items": [_out(p) for p in rows]}
 
 
 @router.get("/counts")
-def counts(kind: str | None = None, ctx: BrainCtx = Depends(contributor)):
+def counts(kind: str | None = None, mine: bool = False, ctx: BrainCtx = Depends(contributor)):
     """Número de propuestas por estado (un colaborador solo cuenta las suyas), only of one `kind` when given.
     `kinds` counts each kind across every state, and `corrections_pending` the corrections a person still has to decide."""
     if kind and kind not in KINDS:
         raise HTTPException(400, "tipo inválido")
     q = select(Proposal.status, Proposal.kind, func.count()).where(Proposal.brain_id == ctx.brain.id).group_by(Proposal.status, Proposal.kind)
-    if not allows(ctx.role, "curator"):
+    if mine or not allows(ctx.role, "curator"):
         q = q.where(Proposal.author_id == ctx.user.id)
     rows = [(st, k or "memory", n) for st, k, n in ctx.db.execute(q)]
     out: dict = {k: 0 for k in sorted(STATUSES)}
@@ -145,6 +156,7 @@ def counts(kind: str | None = None, ctx: BrainCtx = Depends(contributor)):
         if not kind or k == kind:
             out[st] += n
     out["all"] = sum(out[k] for k in STATUSES)
+    out["decided"] = out["all"] - out["pending"]
     out["kinds"] = {k: sum(n for _, kk, n in rows if kk == k) for k in sorted(KINDS)}
     out["corrections_pending"] = sum(n for st, k, n in rows if st == "pending" and k == "correction")
     return out
@@ -205,6 +217,38 @@ def retry_ingest(pid: int, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)
 @router.post("/{pid}/reject")
 def reject(pid: int, body: ReviewIn, ctx: BrainCtx = Depends(curator)):
     return _review(ctx, pid, "rejected", body.note)
+
+
+class BulkIn(BaseModel):
+    verb: str = Field(pattern="^(approve|reject)$")
+    ids: list[int] = Field(min_length=1, max_length=BULK_MAX)
+    note: str = Field("", max_length=2000)
+
+
+@router.post("/bulk")
+def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
+    """One decision for several proposals the curator selected. Each is decided as if alone (same audit, same 10 s grace before ingestion);
+    what cannot be decided this way is skipped and said why: not pending any more, or, for approving, a correction or a proposal with a
+    secret to review, which a person decides one at a time."""
+    done, skipped = [], []
+    for pid in dict.fromkeys(body.ids):
+        p = ctx.db.get(Proposal, pid)
+        if not p or p.brain_id != ctx.brain.id:
+            skipped.append({"id": pid, "reason": "not_found"}); continue
+        if p.status != "pending":
+            skipped.append({"id": pid, "reason": "not_pending"}); continue
+        if body.verb == "approve" and p.kind == "correction":
+            skipped.append({"id": pid, "reason": "correction"}); continue
+        if body.verb == "approve" and any(f.get("action") == "flagged" for f in (p.secret_findings or [])):
+            skipped.append({"id": pid, "reason": "secret"}); continue
+        _review(ctx, pid, "approved" if body.verb == "approve" else "rejected", body.note)
+        if body.verb == "approve" and ingest.enabled():
+            ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(p), ctx.user.id, delay=UNDO_SECONDS)
+        done.append(pid)
+    out = {"done": done, "skipped": skipped}
+    if body.verb == "approve" and done and ingest.enabled():
+        out["undo_seconds"] = UNDO_SECONDS
+    return out
 
 
 @router.post("/{pid}/undo")
