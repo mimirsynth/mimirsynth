@@ -12,7 +12,9 @@ Enviada ──► (decisor opcional) ──► Pendiente ──► Aprobada ─�
 ```
 1. **Enviar.** Un colaborador queda en *Pendiente*. Un curador (o superior) queda *Aprobada* directamente («aprobada al enviar»), salvo que el detector de secretos haya marcado algo (ver abajo).
 2. **Decisor (opcional).** Si hay un modelo decisor configurado, evalúa la propuesta según el **ámbito del brain**: su descripción y los tipos de entidad y de relación de su [[Ontología]]. Sin ninguna de las dos cosas, solo comprueba que la propuesta sea factual. Responde a dos preguntas (¿es factual? ¿qué acción recomienda?) y, si ambas respuestas superan el **umbral de confianza**, la aprueba solo. Si no, la deja para un curador. **Nunca rechaza por su cuenta**: lo que no encaja va a un curador.
-3. **Revisión.** Un curador abre la propuesta y la **aprueba** o la **rechaza** (con una nota opcional).
+3. **Revisión.** Un curador abre la propuesta y la **aprueba** o la **rechaza** (con una nota opcional). Encima de los botones se explica qué pasará con cada uno. Al decidir aparece un aviso sobre la lista con lo que ha pasado y **Deshacer**:
+   - **Una aprobación espera 10 segundos** antes de ingerirse, y en ese tiempo se puede deshacer: la propuesta vuelve a *Pendiente* y no entra nada en el grafo. Después, el aviso sigue la ingesta hasta que termina y dice cuántas entidades y hechos se crearon (o que no se extrajo ninguno). Lo que ya está en el grafo se corrige invalidando sus hechos, como el resto de la memoria. Las aprobaciones del decisor y de los webhooks no esperan.
+   - **Un rechazo se puede deshacer o reabrir** cuando quieras, salvo que su texto se haya purgado por la retención.
 4. **Ingesta.** Una propuesta aprobada se envía al LLM, que extrae entidades y hechos y los añade al grafo (invalidando los que contradice). Pasa a *Ingerida*. Si falla, queda *Fallida* y se puede **reintentar**.
 
 > El decisor sabe de qué trata el brain por su **descripción**: escribe una al crear o editar el brain (Administración → Brains, ver [[Administrar brains y miembros]]).
@@ -65,6 +67,7 @@ Al abrirla ves una **línea de tiempo**:
 
 ## Acciones del curador
 - **Aprobar / Rechazar** (con nota opcional).
+- **Reabrir** una rechazada, o **Deshacer la aprobación** de una aprobada cuya ingesta aún no ha empezado.
 - **Ingerir ahora** o **Reintentar ingesta** cuando una aprobada no se ha ingerido o falló.
 - **Reactivar el hecho** en una corrección aplicada.
 

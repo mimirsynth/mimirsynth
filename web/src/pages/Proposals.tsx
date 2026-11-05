@@ -79,6 +79,56 @@ function ProposalsTable({ data, view, status, onStatus, kind, onKind, counts, on
   </>);
 }
 
+/** The last decision taken here, said where the list is, in a live region: what happened, what happens next, and the way back.
+ *  An approval waits `undo_seconds` before ingestion; after that it follows the ingestion until the proposal is ingested or failed. */
+type Decision = { id: number; verb: "approve" | "reject" | "undone"; until: number | null };
+function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, onOpen, onClose }: { base: string; graph: string; last: Decision | null; llm: boolean;
+  onUndo: (id: number) => void; undoing: boolean; undoError: unknown; onOpen: (id: number) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [, tick] = useState(0);  // only re-renders while counting: the time itself is read fresh on every render
+  const now = Date.now();
+  const waiting = !!last?.until && last.until > now;
+  useEffect(() => {
+    if (!waiting) return;
+    const h = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(h);
+  }, [waiting]);
+  const follow = !!last && last.verb === "approve" && !waiting && !!last.until;
+  const p = useQuery({ queryKey: ["proposal", graph, last?.id, "after"], enabled: follow, queryFn: () => get<Prop>(`${base}/${last!.id}`),
+    refetchInterval: (q) => (q.state.data?.status === "approved" ? 2000 : false) });
+  if (!last) return null;
+  const id = last.id;
+  const undo = <Btn kind="link" loading={undoing} onClick={() => onUndo(id)}>{t("Deshacer")}</Btn>;
+  const view = <Btn kind="link" onClick={() => onOpen(id)}>{t("Ver la propuesta")}</Btn>;
+  const close = <Btn kind="link" onClick={onClose}>{t("Cerrar aviso")}</Btn>;
+  let tone: "success" | "danger" | "info" = "success";
+  let text: string;
+  let actions = <>{close}</>;
+  if (last.verb === "undone") {
+    tone = "info"; text = t("Propuesta #{{id}} otra vez pendiente.", { id }); actions = <>{view} · {close}</>;
+  } else if (last.verb === "reject") {
+    text = t("Propuesta #{{id}} rechazada: no entra nada en el grafo.", { id }); actions = <>{undo} · {close}</>;
+  } else if (!last.until) {
+    text = llm ? t("Propuesta #{{id}} aprobada.", { id }) : t("Propuesta #{{id}} aprobada: se queda en «Aprobadas» hasta que haya un motor de extracción.", { id });
+    actions = <>{undo} · {close}</>;
+  } else if (waiting) {
+    text = t("Propuesta #{{id}} aprobada: entra en el grafo dentro de {{s}} s.", { id, s: Math.max(1, Math.ceil((last.until - now) / 1000)) });
+    actions = <>{undo} · {close}</>;
+  } else if (p.data?.status === "ingested") {
+    const r = p.data.ingest_report;
+    const ents = r ? (r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })) : "";
+    const facts = r ? (r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })) : "";
+    text = r ? t("Propuesta #{{id}} en el grafo: {{ents}} y {{facts}}.", { id, ents, facts }) : t("Propuesta #{{id}} en el grafo.", { id });
+    if (r && r.edges === 0) text += " " + t("No se extrajo ningún hecho: revisa el texto de la propuesta.");
+    actions = <>{view} · {close}</>;
+  } else if (p.data?.status === "failed") {
+    tone = "danger"; text = t("Propuesta #{{id}}: falló la ingesta. {{error}}", { id, error: p.data.ingest_error }); actions = <>{view} · {close}</>;
+  } else {
+    text = t("Propuesta #{{id}} aprobada: entrando en el grafo…", { id });
+  }
+  return (<Notice tone={tone}><Stack gap={4}><Text size="sm">{text}</Text><Text size="sm">{actions}</Text><MutationError error={undoError} /></Stack></Notice>);
+}
+
 /** What to look at before approving a correction: the affected fact as it was, the reason and the text that replaces it. */
 function CorrectionDetail({ c, replacement }: { c: Correction; replacement: string }) {
   const { t } = useTranslation();
@@ -115,6 +165,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const base = `brains/${graph}/proposals`;
   const { sent, sort, page } = view;
   const list = useQuery({ queryKey: ["proposals", graph, status, kind, sent.q, sent.author, sort?.key, sort?.dir, page.offset, page.limit], placeholderData: keepPreviousData,
+    refetchInterval: (q) => (q.state.data?.items.some((p) => p.status === "approved") ? 3000 : false),  // an approved row becomes ingested or failed on its own
     queryFn: () => get<PropList>(base, { status: status === "all" ? undefined : status, kind: kind === "all" ? undefined : kind, q: sent.q || undefined, author: sent.author || undefined,
       sort: sort?.key, order: sort?.dir, limit: page.limit, offset: page.offset }) });
   const cnt = useQuery({ queryKey: ["proposals", graph, "counts", kind], refetchInterval: 15000, queryFn: () => get<Counts>(`${base}/counts`, { kind: kind === "all" ? undefined : kind }) });
@@ -128,8 +179,12 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const submit = useMutation({ mutationFn: () => send<Prop>("POST", base, { name, body, confidence: conf === "" ? undefined : Number(conf) }),
     onMutate: () => setSentProp(null),
     onSuccess: (p) => { setName(""); setBody(""); setConf(""); setSentProp(p); refresh(); } });
-  const review = useMutation({ mutationFn: (a: { id: number; verb: "approve" | "reject" }) => send("POST", `${base}/${a.id}/${a.verb}`, { note }),
-    onSuccess: () => { setOpen(null); setNote(""); refresh(); } });
+  const [last, setLast] = useState<Decision | null>(null);
+  const undo = useMutation({ mutationFn: (id: number) => send<Prop>("POST", `${base}/${id}/undo`),
+    onSuccess: (_, id) => { setLast({ id, verb: "undone", until: null }); refresh(); } });
+  const review = useMutation({ mutationFn: (a: { id: number; verb: "approve" | "reject" }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note }),
+    onMutate: () => undo.reset(),
+    onSuccess: (r, a) => { setOpen(null); setNote(""); setLast({ id: a.id, verb: a.verb, until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null }); refresh(); } });
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/ingest`), onSuccess: () => { setOpen(null); setTimeout(refresh, 8000); refresh(); } });
   const d = detail.data;
@@ -157,6 +212,10 @@ export default function Proposals({ graph, role }: { graph: string; role: string
       {isCurator && pendingFixes > 0 && !(kind === "correction" && status === "pending") && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setStatus("pending"); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
+      <div role="status" aria-live="polite">
+        <DecisionNotice base={base} graph={graph} last={last} llm={!!ai.data?.llm.configured} onUndo={(id) => undo.mutate(id)} undoing={undo.isPending}
+          undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={(id) => { setOpen(id); setNote(""); }} onClose={() => { setLast(null); undo.reset(); }} />
+      </div>
       <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} counts={cnt.data ?? {}} onOpen={(id) => { setOpen(id); setNote(""); }} />
       <Modal opened={open !== null} onClose={() => setOpen(null)} title={d ? `#${d.id} · ${d.purged_at ? t("(texto purgado)") : d.name}` : t("Propuesta")} size="lg" centered>
         {d && <Stack gap="sm">
@@ -197,15 +256,28 @@ export default function Proposals({ graph, role }: { graph: string; role: string
           {isCurator && (d.status === "failed" || d.status === "approved") && <Group justify="flex-end">
             <MutationError error={retry.error} />
             <Btn kind="primary" loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn></Group>}
+          {isCurator && ((d.status === "rejected" && !d.purged_at) || (d.status === "approved" && d.kind !== "correction")) && <Group justify="flex-end">
+            <MutationError error={undo.error} />
+            <Btn kind="secondary" loading={undo.isPending} onClick={() => undo.mutate(d.id)} icon="undo">{d.status === "rejected" ? t("Reabrir") : t("Deshacer la aprobación")}</Btn></Group>}
           {isCurator && d.correction?.applied_at && !d.correction.reverted_at && <Group justify="flex-end">
             <MutationError error={reactivate.error} />
             <Btn kind="secondary" loading={reactivate.isPending} onClick={() => reactivate.mutate(d.id)} icon="undo">{t("Reactivar el hecho")}</Btn></Group>}
           {isCurator && d.status === "pending" && <>
             <TextArea size="xs" autosize minRows={2} label={t("Nota (opcional)")} value={note} onChange={(e) => setNote(e.currentTarget.value)} />
+            <Stack gap={2}>
+              <Text size="xs" c="dimmed">{d.correction
+                ? t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: d.correction.invalid_at.slice(0, 10) })
+                : ai.data?.llm.configured
+                  ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
+                  : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>
+              <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
+            </Stack>
             <MutationError error={review.error} />
             <Group justify="flex-end">
-              <Btn kind="danger" loading={review.isPending} onClick={() => review.mutate({ id: d.id, verb: "reject" })} icon="close">{t("Rechazar")}</Btn>
-              <Btn kind="primary" loading={review.isPending} onClick={() => review.mutate({ id: d.id, verb: "approve" })} icon="check">{t("Aprobar")}</Btn>
+              <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={review.isPending && review.variables?.verb !== "reject"}
+                onClick={() => review.mutate({ id: d.id, verb: "reject" })} icon="close">{t("Rechazar")}</Btn>
+              <Btn kind="primary" loading={review.isPending && review.variables?.verb === "approve"} disabled={review.isPending && review.variables?.verb !== "approve"}
+                onClick={() => review.mutate({ id: d.id, verb: "approve" })} icon="check">{t("Aprobar")}</Btn>
             </Group></>}
         </Stack>}
       </Modal>
