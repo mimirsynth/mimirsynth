@@ -108,7 +108,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error} />}
       {view === "contexto" && scope === "brain" && rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
       {view === "contexto" && scope === "brain" && r && (
-        <Group align="flex-start" wrap="nowrap" gap="md">
+        <div className="ms-ask-wrap"><div className="ms-ask-cols">
           <Stack className="ms-ask-main" gap="xs">
             <Title order={5}>{t("Hechos (")}{r.facts.length})</Title>
             {r.facts.map((f) => (
@@ -131,7 +131,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             <Title order={6}>{t("Contexto inyectado")}</Title>
             <CodeBlock copy>{r.context}</CodeBlock>
           </Stack>
-        </Group>)}
+        </div></div>)}
       {save && <RefQueryForm graph={graph} initial={save} onClose={() => setSave(null)} />}
     </Stack>
   );

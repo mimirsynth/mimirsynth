@@ -391,8 +391,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-grow { flex: 1; min-width: 0; }
 .ms-breakall { overflow-wrap: anywhere; word-break: break-all; }
 .ms-nolink { text-decoration: none; }
-.ms-ask-main { flex: 1; min-width: 0; }
-.ms-ask-side { width: 420px; flex-shrink: 0; }
+/* Ask: the results and the injected context side by side while both fit; measured on the content width (the navbar takes 240px), so they stack well before the facts get squeezed */
+.ms-ask-wrap { container-type: inline-size; }
+.ms-ask-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: var(--mantine-spacing-md); align-items: start; }
+.ms-ask-main, .ms-ask-side { min-width: 0; }
+@container (max-width: 860px) { .ms-ask-cols { grid-template-columns: minmax(0, 1fr); } }
 .ms-graph-canvas { position: absolute; inset: 0; }
 /* entity page (issue 200): a top card in two columns (head and summary | graph), then facts and episodes about 70 / 30 */
 .ms-entity-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "head graph" "summary graph"; grid-template-rows: auto 1fr; gap: 8px 20px; align-items: start; }
@@ -419,7 +422,6 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-canvas-fill { height: 100%; }
 .ms-tabpanel-fill { flex: 1; min-height: 0; }
 .ms-fullh { height: 100dvh; }
-@media (max-width: 48em) { .ms-ask-side { width: auto; } }
 .ms-scroll { overflow-y: auto; }
 .ms-card-hint { margin-top: 8px; font-size: 12px; color: var(--ms-muted); }
 .ms-stat[data-inline] { padding: 0; border: 0; background: none; }
