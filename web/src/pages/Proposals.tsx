@@ -205,7 +205,7 @@ function ProposalBody({ d, context }: { d: Prop; context?: ReactNode }) {
         {d.status === "ingested" && <Group gap="xs"><Text size="xs" c="dimmed">{fmt(d.ingested_at)}</Text>
           {d.episode_uuid && <Btn size="row" kind="link" component={Link} to={`/diario?episodio=${d.episode_uuid}`}>{t("Ver el episodio en Diario")}</Btn>}
           {d.episode_uuid && <CopyBtn value={d.episode_uuid} label={t("Copiar id")} doneLabel={t("Copiado")} />}</Group>}
-        {d.status === "ingested" && d.ingest_report && <Text size="xs" c="dimmed">{d.ingest_report.entities} {t("entidades (")}{d.ingest_report.untyped_entities} {t("sin tipo) ·")} {d.ingest_report.edges} {t("hechos")}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</Text>}
+        {d.status === "ingested" && d.ingest_report && <Text size="xs" c="dimmed">{d.ingest_report.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: d.ingest_report.entities })}{d.ingest_report.untyped_entities ? ` (${t("{{n}} sin tipo", { n: d.ingest_report.untyped_entities })})` : ""} · {d.ingest_report.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: d.ingest_report.edges })}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</Text>}
         {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error || t("error sin detalle")}{" "}
           <Btn kind="link" component={Link} to="/trabajos">{t("Ver los trabajos")}</Btn> · <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Revisar el modelo LLM")}</Btn></Notice>}
         {d.status === "approved" && <Text size="xs" c="dimmed">{t("Pendiente de ingestar.")}</Text>}
@@ -389,7 +389,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
-    <Segments label={t("Estado")} value={mode} onChange={(m) => setMode(m)}
+    <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
       data={[{ value: "pending", label: t("Pendientes"), count: counts.pending ?? 0 }, { value: "decided", label: t("Decididas"), count: counts.decided ?? 0 }]} />
     {mode === "decided" ? <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={initialKind}
         first={{ value: "decided", label: t("Todas las decididas"), countKey: "decided" }} /> : <>
@@ -512,7 +512,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
           undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={ops.openDetail} onClose={() => { setLast(null); undo.reset(); }} />
       </div>
       {isCurator
-        ? <Tabs value={tab} onChange={(v) => setTab(v)} className="ms-tabs-fill">
+        ? <Tabs value={tab} onChange={(v) => setTab(v)} keepMounted={false} className="ms-tabs-fill">
             <Tabs.List>
               <Tabs.Tab value="revisar">{t("Por revisar")} ({pendingCount.data?.pending ?? 0})</Tabs.Tab>
               <Tabs.Tab value="mias">{t("Mis propuestas")}</Tabs.Tab>
