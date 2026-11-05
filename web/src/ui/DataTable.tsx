@@ -1,6 +1,6 @@
 import { Table } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { useEffect, useRef, type ComponentProps, type CSSProperties } from "react";
+import { useEffect, useRef, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 
 type P = Omit<ComponentProps<typeof Table>, "striped" | "highlightOnHover" | "withTableBorder" | "withRowBorders" | "variant">;
 
@@ -25,10 +25,14 @@ function ActionsHead(props: ComponentProps<typeof Table.Th>) {
 
 export const DataTable = Object.assign(DataTableRoot, { Thead: Table.Thead, Tbody: Table.Tbody, Tr: Table.Tr, Th: Table.Th, Td: Table.Td, ActionsHead });
 
-/** Props para una fila que se abre al pulsarla: también con teclado (Tab, Intro, Espacio). `<DataTable.Tr {...rowOpen(() => abrir(id))}>`. */
+/** Props for a row that opens when clicked anywhere: a mouse convenience only. The row stays a table row (screen readers keep the
+ *  table and its cells); the keyboard and screen-reader way in is a real button in one of its cells, usually the title: `RowOpen`.
+ *  `<DataTable.Tr {...rowOpen(() => abrir(id))}><DataTable.Td><RowOpen onOpen={() => abrir(id)}>{título}</RowOpen></DataTable.Td>…` */
 export function rowOpen(onOpen: () => void) {
-  return {
-    role: "button" as const, tabIndex: 0, style: { cursor: "pointer" }, onClick: onOpen,
-    onKeyDown: (e: { key: string; target: unknown; currentTarget: unknown; preventDefault: () => void }) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); onOpen(); } },
-  };
+  return { "data-clickable": "", onClick: onOpen };
+}
+
+/** The real button that opens a row (see `rowOpen`): it looks like the cell's text and takes the focus, Enter and Space. */
+export function RowOpen({ onOpen, children }: { onOpen: () => void; children: ReactNode }) {
+  return <button type="button" className="ms-rowopen" onClick={(e) => { e.stopPropagation(); onOpen(); }}>{children}</button>;
 }

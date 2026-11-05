@@ -12,9 +12,12 @@ function TabsRoot(props: Omit<TabsProps, "variant">) {
 }
 export const Tabs = Object.assign(TabsRoot, { List: MTabs.List, Tab: MTabs.Tab, Panel: MTabs.Panel });
 
-/** Diálogo de la aplicación: centrado, con título en la tipografía de títulos. */
+/** Diálogo de la aplicación: centrado, con título en la tipografía de títulos. Its close button is named («Cerrar»): it is where the focus
+ *  lands when a dialog opens, and a nameless one reads as just «button». */
 export function Modal(props: ModalProps) {
-  return <MModal centered {...props} className={`ms-modal${props.className ? ` ${props.className}` : ""}`} />;
+  const { t } = useTranslation();
+  return <MModal centered {...props} closeButtonProps={{ "aria-label": t("Cerrar"), ...props.closeButtonProps }}
+    className={`ms-modal${props.className ? ` ${props.className}` : ""}`} />;
 }
 
 /** Entrada del menú lateral, con su icono. */
@@ -77,7 +80,8 @@ export function FillArea({ children }: { children: ReactNode }) {
 
 /** Panel lateral deslizante para ver el detalle de un elemento; el contenido se desplaza por dentro. */
 export function SidePanel({ children, ...rest }: Omit<DrawerProps, "position" | "size">) {
-  return <MDrawer position="right" size="xl" {...rest} className={`ms-side${rest.className ? ` ${rest.className}` : ""}`}><div className="ms-drawer-body">{children}</div></MDrawer>;
+  const { t } = useTranslation();
+  return <MDrawer position="right" size="xl" {...rest} closeButtonProps={{ "aria-label": t("Cerrar"), ...rest.closeButtonProps }} className={`ms-side${rest.className ? ` ${rest.className}` : ""}`}><div className="ms-drawer-body">{children}</div></MDrawer>;
 }
 
 /**

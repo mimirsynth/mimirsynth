@@ -2,7 +2,7 @@ export { Pill } from "./Pill";
 export type { Tone } from "./Pill";
 export { Btn } from "./Btn";
 export { Segments } from "./Segments";
-export { DataTable, rowOpen } from "./DataTable";
+export { DataTable, RowOpen, rowOpen } from "./DataTable";
 export { Slider, SliderField, ProgressBar, StatCard } from "./Controls";
 export { ThemeToggle, ThemeButton } from "./ThemeToggle";
 export { Icon } from "./Icon";
