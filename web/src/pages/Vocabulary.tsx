@@ -33,7 +33,7 @@ function RelationsTable({ rows, isAdmin, onUnify }: { rows: RelRow[]; isAdmin: b
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((r) => (
           <DataTable.Tr key={r.name}>
-            <DataTable.Td><Group gap={6}><Text fw={500}>{r.name}</Text>{r.generic && <Pill size="xs" tone="warn">{t("genérica")}</Pill>}</Group></DataTable.Td>
+            <DataTable.Td><Group gap={6}><Text fw={600}>{r.name}</Text>{r.generic && <Pill size="xs" tone="warn">{t("genérica")}</Pill>}</Group></DataTable.Td>
             <DataTable.Td>{r.facts}</DataTable.Td>
             <DataTable.Td>{r.variants.length > 1 ? r.variants.map((x) => `${x.raw} (${x.facts})`).join(" · ") : <Text span c="dimmed">—</Text>}</DataTable.Td>
             {isAdmin && <DataTable.Td><Btn size="row" icon="refresh" onClick={() => onUnify(r.name)}>{t("Unificar con…")}</Btn></DataTable.Td>}

@@ -93,7 +93,7 @@ function UserPanel({ id, me, brains, onClose, onLink }: { id: number; me: number
             {d.memberships.length === 0 && <Text size="sm" c="dimmed">{t("Sin acceso a ningún brain.")}</Text>}
             {d.memberships.map((m) => (
               <Group key={m.slug} gap="xs" wrap="nowrap" justify="space-between">
-                <Text size="sm" fw={500}>{m.name}</Text>
+                <Text size="sm" fw={600}>{m.name}</Text>
                 <Group gap={6} wrap="nowrap">
                   <SelectField aria-label={t("Rol en {{name}}", { name: m.name })} w={150} allowDeselect={false} value={m.role} data={ROLE_OPTS.map((o) => ({ ...o, label: t(o.label) }))} onChange={(v) => v && member.mutate({ slug: m.slug, role: v })} />
                   <Btn size="row" icon="close" onClick={() => member.mutate({ slug: m.slug, role: null })}>{t("Quitar")}</Btn>
@@ -149,7 +149,7 @@ export default function AdminUsers({ me }: { me?: number }) {
             </DataTable.Tr></DataTable.Thead>
             <DataTable.Tbody>{v.rows.map((u) => (
               <DataTable.Tr key={u.id}>
-                <DataTable.Td><Text size="sm" fw={500}>{u.name}</Text><Text size="xs" c="dimmed">{u.email}</Text></DataTable.Td>
+                <DataTable.Td><Text size="sm" fw={600}>{u.name}</Text><Text size="xs" c="dimmed">{u.email}</Text></DataTable.Td>
                 <DataTable.Td>{u.is_admin ? <Pill size="xs" tone="alt">{t("administrador")}</Pill> : t("Usuario")}</DataTable.Td>
                 <DataTable.Td><Group gap={4}>{u.has_password && <Pill size="xs">{t("contraseña")}</Pill>}{u.identities.map((i) => <Pill key={i} size="xs">{i.toUpperCase()}</Pill>)}{!u.has_password && u.identities.length === 0 && "—"}</Group></DataTable.Td>
                 <DataTable.Td><Pill size="xs" tone={TONE[u.status]}>{t(STATUS[u.status])}</Pill>{u.locked && <Pill size="xs" tone="danger"> {t("bloqueado")}</Pill>}</DataTable.Td>

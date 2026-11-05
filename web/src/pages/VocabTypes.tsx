@@ -31,7 +31,7 @@ function TypesTable({ rows, isAdmin, open }: { rows: TypeItem[]; isAdmin: boolea
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((i) => (
           <DataTable.Tr key={i.name}>
-            <DataTable.Td><Group gap={6}><Text fw={500}>{i.name}</Text>{!i.in_ontology && <Pill size="xs" tone="warn">{t("fuera de la ontología")}</Pill>}</Group></DataTable.Td>
+            <DataTable.Td><Group gap={6}><Text fw={600}>{i.name}</Text>{!i.in_ontology && <Pill size="xs" tone="warn">{t("fuera de la ontología")}</Pill>}</Group></DataTable.Td>
             <DataTable.Td>{i.count}</DataTable.Td>
             <DataTable.Td><Text size="sm" c="dimmed" lineClamp={2}>{i.description || "—"}</Text></DataTable.Td>
             {isAdmin && <DataTable.Td><Group gap={6} wrap="nowrap">

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-05T09:01:43.227Z",
+  "generatedAt": "2026-11-05T09:32:13.745Z",
   "title": "Design System: MimirSynth",
   "extensions": {
     "colorMeta": {
@@ -652,7 +652,7 @@
       },
       {
         "name": "The Two Weights Rule",
-        "body": "Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. `b` and `strong` are set to 600 for the same reason.",
+        "body": "Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. `b` and `strong` are set to 600 for the same reason. Do not ask for 500 either: it renders as 400, so the emphasis is lost. Emphasis is 600; secondary text is 400 in the muted colour.",
         "section": "typography"
       },
       {
@@ -697,7 +697,7 @@
       "**Don't** use emoji or text characters as icons. Icons are Tabler icons registered in `web/src/ui/Icon.tsx`.",
       "**Don't** convey a state through colour alone.",
       "**Don't** lighten the graph canvas in the light theme. Type colours are tuned against the dark canvas.",
-      "**Don't** use weights the fonts do not ship (700 or 800 in Instrument Sans).",
+      "**Don't** use weights the fonts do not ship: 500, 700 or 800 in Instrument Sans.",
       "**Don't** load fonts or any other asset from a third-party host. Serve them from the instance (see PRODUCT.md)."
     ]
   }

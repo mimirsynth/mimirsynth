@@ -62,7 +62,7 @@ export default function BrainWebhooks({ brain }: { brain: Brain }) {
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{d.items.map((h) => (
           <DataTable.Tr key={h.id}>
-            <DataTable.Td><Group gap={6}><Text size="sm" fw={500}>{h.name}</Text>{!h.enabled && <Pill size="xs" tone="warn">{t("desactivado")}</Pill>}
+            <DataTable.Td><Group gap={6}><Text size="sm" fw={600}>{h.name}</Text>{!h.enabled && <Pill size="xs" tone="warn">{t("desactivado")}</Pill>}
               {h.auto_approve && <Pill size="xs" tone="alt">{t("de confianza")}</Pill>}</Group>
               <Text size="xs" c="dimmed" className="ms-data">{url(h)}</Text></DataTable.Td>
             <DataTable.Td>{t(TEMPLATE[h.template] ?? d.templates[h.template] ?? h.template)}</DataTable.Td>

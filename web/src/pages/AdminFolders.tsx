@@ -30,7 +30,7 @@ export default function AdminFolders() {
         <DataTable.Thead><DataTable.Tr><ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Nombre")}</ColHead><ColHead filter={v.text("path")}>{t("Ruta en el contenedor")}</ColHead><ColHead filter={v.select("state")}>{t("Estado")}</ColHead><ColHead sort={v.sortProps("sources")}>{t("Fuentes")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((r) => (
           <DataTable.Tr key={r.id}>
-            <DataTable.Td><Text size="sm" fw={500}>{r.name}</Text>{r.description && <Text size="xs" c="dimmed">{r.description}</Text>}</DataTable.Td>
+            <DataTable.Td><Text size="sm" fw={600}>{r.name}</Text>{r.description && <Text size="xs" c="dimmed">{r.description}</Text>}</DataTable.Td>
             <DataTable.Td><Text size="xs" className="ms-data">{r.path}</Text></DataTable.Td>
             <DataTable.Td><Pill size="xs" tone={r.available ? "success" : "danger"}>{r.available ? "disponible" : t("no disponible")}</Pill></DataTable.Td>
             <DataTable.Td>{r.sources}</DataTable.Td>
@@ -40,7 +40,7 @@ export default function AdminFolders() {
       {d?.roots.length === 0 && <EmptyState>{t("Aún no hay carpetas autorizadas.")}</EmptyState>}
       <ConfirmDialog opened={!!delRoot} onClose={() => setDelRoot(null)} title={t("Quitar carpeta autorizada")} action={t("Quitar carpeta")} subject={delRoot?.path}
         warning={t("Los brains dejan de poder usar esta carpeta como fuente. Los ficheros no se tocan.")} onConfirm={() => del.mutateAsync(delRoot!.id)} />
-      <Text size="sm" fw={500}>{t("Autorizar una carpeta")}</Text>
+      <Text size="sm" fw={600}>{t("Autorizar una carpeta")}</Text>
       {d && d.suggestions.length > 0 && (
         <Group gap={6}><Text size="xs" c="dimmed">{t("Detectadas bajo")} {d.base}:</Text>{d.suggestions.map((s) => <Btn size="row" key={s} onClick={() => pick(s)}>{s.replace(`${d.base}/`, "")}</Btn>)}</Group>)}
       {d && d.suggestions.length === 0 && d.base_available && <EmptyState>{t("No hay carpetas nuevas bajo {{base}}. Móntalas en el host dentro de la carpeta del bind y aparecerán aquí.", { base: d.base })}</EmptyState>}

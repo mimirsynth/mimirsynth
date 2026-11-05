@@ -80,7 +80,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
             const row = (x: Job, child = false) => (
               <DataTable.Tr key={x.id} className={child ? "ms-subrow" : undefined}>
                 <DataTable.Td><Pill size="xs" tone={TONE[x.status] ?? "neutral"} title={x.error || undefined}>{t(LABEL[x.status] ?? x.status)}</Pill>{x.attempts > 1 && <Text span size="xs" c="dimmed"> · {x.attempts} {t("intentos")}</Text>}</DataTable.Td>
-                <DataTable.Td><Text size="sm" fw={500}>{x.title}</Text><Text size="xs" c="dimmed">{x.label}{x.retry_of ? t(" · reintento de #{{retry_of}}", { retry_of: x.retry_of }) : ""}</Text></DataTable.Td>
+                <DataTable.Td><Text size="sm" fw={600}>{x.title}</Text><Text size="xs" c="dimmed">{x.label}{x.retry_of ? t(" · reintento de #{{retry_of}}", { retry_of: x.retry_of }) : ""}</Text></DataTable.Td>
                 <DataTable.Td>{x.status === "running"
                   ? <ProgressBar done={x.done} total={x.total} text={x.total ? `${x.done}/${x.total} · ${x.message}` : x.message || "…"} />
                   : x.status === "failed" ? <Text size="xs" className="ms-text-danger" lineClamp={2}>{x.error}</Text>
@@ -95,7 +95,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
             const group = (
               <DataTable.Tr key={`g${j.id}`}>
                 <DataTable.Td><Pill size="xs" tone="success">{t("terminado")}</Pill></DataTable.Td>
-                <DataTable.Td><Text size="sm" fw={500}>{j.title}</Text><Text size="xs" c="dimmed">{j.label} · {all.length} {t("ejecuciones seguidas sin incidencias")}</Text></DataTable.Td>
+                <DataTable.Td><Text size="sm" fw={600}>{j.title}</Text><Text size="xs" c="dimmed">{j.label} · {all.length} {t("ejecuciones seguidas sin incidencias")}</Text></DataTable.Td>
                 <DataTable.Td><Text size="xs" c="dimmed">{all.length} {t("de")} {all.length} {t("correctas")}</Text></DataTable.Td>
                 <DataTable.Td>{fmt(j.started_at ?? j.created_at)}<Text size="xs" c="dimmed">a {fmt(all[all.length - 1].started_at ?? all[all.length - 1].created_at)}</Text></DataTable.Td>
                 <DataTable.Td>—</DataTable.Td>
@@ -112,7 +112,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
       <SidePanel opened={open !== null} onClose={() => setOpen(null)} title={d ? `${d.label} #${d.id}` : t("Trabajo")}>
         {d && (
           <Stack>
-            <Text fw={500}>{d.title}</Text>
+            <Text fw={600}>{d.title}</Text>
             <Group gap={6}><Pill size="xs" tone={TONE[d.status] ?? "neutral"}>{t(LABEL[d.status] ?? d.status)}</Pill>{d.attempts > 1 && <Pill size="xs">{d.attempts} {t("intentos")}</Pill>}{d.retry_of && <Pill size="xs">{t("reintento de #")}{d.retry_of}</Pill>}</Group>
             <Text size="xs" c="dimmed">{t("Creado")} {fmt(d.created_at)} {t("· inicio")} {fmt(d.started_at)} {t("· fin")} {fmt(d.finished_at)} {t("· duración")} {took(d.started_at, d.finished_at)} · {d.user || "sistema"}</Text>
             {d.status === "running" && <ProgressBar done={d.done} total={d.total} text={d.total ? `${d.done}/${d.total} · ${d.message}` : d.message || "…"} />}

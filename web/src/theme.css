@@ -157,7 +157,7 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-notice[data-tone="success"] { border-color: var(--ms-accent); background: color-mix(in srgb, var(--ms-accent) 14%, var(--ms-raised)); }
 .ms-empty { color: var(--ms-muted); font-size: 14px; padding: 16px 4px; }
 .ms-confirm { display: flex; flex-direction: column; gap: 12px; }
-.ms-confirm-subject { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.ms-confirm-subject { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .ms-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .ms-notice .mantine-Alert-title { font-family: var(--ms-display); font-weight: 600; }
 .ms-notice[data-tone="warn"] { border-color: var(--ms-hidromiel); background: color-mix(in srgb, var(--ms-hidromiel) 14%, var(--ms-raised)); }
@@ -204,7 +204,7 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-tl-body { flex: 1; min-width: 0; }  /* the text of a fact wraps and leaves room for its action, also on a phone */
 .ms-relhead { font-weight: 600; }
 .ms-relhead-self { color: var(--ms-accent); }  /* the entity of the page, marked as the current one */
-.ms-relhead-rel { color: var(--ms-muted); font-weight: 500; }
+.ms-relhead-rel { color: var(--ms-muted); font-weight: 400; }
 
 /* Barra lateral por secciones */
 .ms-nav-group { margin-bottom: 10px; }
