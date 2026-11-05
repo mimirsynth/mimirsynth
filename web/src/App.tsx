@@ -105,7 +105,7 @@ export default function App() {
   if (me.error) {
     return (
       <Center component="main" className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack>
-        <h1 className="ms-sr">{`${name} · ${t("No se pudo cargar tu sesión")}`}</h1>
+        <h1 className="ms-sr">{`${cfg.data?.name ?? "MimirSynth"} · ${t("No se pudo cargar tu sesión")}`}</h1>
         <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>
           <Stack gap={4}>{sessionProblem(me.error, t)}</Stack>
         </Notice>
