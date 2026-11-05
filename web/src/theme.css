@@ -373,7 +373,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   /* La cabecera se queda como barra de orden y filtro sobre las tarjetas: solo las columnas con ColHead. */
   .ms-table .mantine-Table-thead { display: block; margin-bottom: 8px; }
   .ms-table .mantine-Table-thead .mantine-Table-tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-  .ms-table .mantine-Table-thead .mantine-Table-tr::before { content: "Ordenar y filtrar"; flex-basis: 100%; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }
+  .ms-table .mantine-Table-thead .mantine-Table-tr::before { content: var(--ms-sortbar-label, "Sort and filter"); flex-basis: 100%; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }
   .ms-table .mantine-Table-th { display: block; width: auto !important; padding: 0; border: 0; }
   .ms-table .mantine-Table-th:not(.ms-colhead) { display: none; }
   .ms-table .ms-colhead-in { gap: 0; padding: 2px 4px 2px 10px; border: 1px solid var(--ms-line); border-radius: 999px; min-height: 32px; }

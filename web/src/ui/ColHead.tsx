@@ -18,7 +18,7 @@ export function ColHead({ children, sort, filter, width }: { children: ReactNode
   const [open, setOpen] = useState(false);
   const active = !!filter && filter.value !== "";
   const label = sort
-    ? <UnstyledButton className="ms-colhead-label" onClick={sort.onSort} aria-label={`Ordenar por ${typeof children === "string" ? children : t("esta columna")}`}>{children}<span data-on={sort.dir ? "" : undefined}><Icon name={sort.dir === "asc" ? "sortUp" : sort.dir === "desc" ? "sortDown" : "sortNone"} size={14} /></span></UnstyledButton>
+    ? <UnstyledButton className="ms-colhead-label" onClick={sort.onSort} aria-label={t("Ordenar por {{col}}", { col: typeof children === "string" ? children : t("esta columna") })}>{children}<span data-on={sort.dir ? "" : undefined}><Icon name={sort.dir === "asc" ? "sortUp" : sort.dir === "desc" ? "sortDown" : "sortNone"} size={14} /></span></UnstyledButton>
     : <span className="ms-colhead-label">{children}</span>;
   return (
     <DataTable.Th className="ms-colhead" aria-sort={sort ? (sort.dir === "asc" ? "ascending" : sort.dir === "desc" ? "descending" : "none") : undefined} data-filtered={active ? "" : undefined} style={width ? { width } : undefined}>
