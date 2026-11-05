@@ -8,6 +8,38 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-05
+### Added
+- approving a proposal says beforehand what will happen, waits 10 seconds so it can be undone, and then reports the result of the ingestion; a rejected proposal can be reopened. (#233)
+- the API lists the review history (`status=decided`), one's own proposals (`mine`) and the queue's order (`sort=risk`), and decides several proposals at once (`POST /proposals/bulk`). (#234)
+- a proposal under review shows what the brain already knows about it (the closest facts, linked to their entities), where it comes from, and whether the decider hesitated; notices and results link to where to act (LLM model, Jobs, the episode in the Journal). (#236)
+- the review queue marks and ranks a proposal the brain already knows (a possible duplicate or something resembling a fact no longer true), batch approval leaves it aside, and approving it asks for a confirmation that quotes the existing fact. (#243)
+
+### Changed
+- each screen of the web interface is downloaded the first time it is opened, so the first visit loads about a quarter less JavaScript. (#228)
+- the graph canvas and its libraries are downloaded only with the screens that draw graphs, so the first visit loads about 100 KB less JavaScript. (#229)
+- a curator's approval starts its ingestion after a 10-second grace period instead of at once. (#233)
+- Proposals has two tabs: «To review», the curators' queue (riskiest and oldest first) beside the open proposal, with keyboard shortcuts and decisions on several at once; and «My proposals», with the form and one's own proposals. (#234)
+- a proposal with a secret flagged for review can no longer be approved as written; «Mask and approve» masks the flagged values first and records it in the audit log, and the review queue's A and R shortcuts no longer act on a proposal that is not open on screen. (#238)
+- in the review queue the notice of the last decision appears right above the decision buttons without moving the page, a screen reader announces each step once instead of the countdown, Z undoes the last decision and the focus returns to the proposal, and on a phone the decision stays at the bottom of the screen. (#239)
+- «What the brain already knows» opens with a line saying whether the proposal looks like a duplicate or resembles something that stopped being true, marks how close each fact is, strikes through the ones no longer true and shows the three closest first. (#240)
+- the review screen gives the open proposal most of the height: a one-line description, the selectors on one row, the note behind «+ Note» (or N) and what each decision does folded, except what must be read before approving. (#241)
+- the batch confirmation lists what it decides and says how many of the selected ones («Approve 2 of 3?»), the proposals history shows who decided each one and when, counts wait to be loaded instead of showing 0, and waiting times read the same way throughout. (#242)
+
+### Fixed
+- the web fonts ship with the app instead of loading from Google Fonts, so no visit contacts a third-party host and installs without internet access keep the right typography. (#223)
+- text fields, selects, checkboxes, radios and off switches have an edge with at least 3:1 contrast in both themes (WCAG 1.4.11). (#222)
+- Ask puts the injected context under the results when the content area is too narrow for two columns, instead of squeezing the facts or overflowing on a phone. (#221)
+- the sort and filter icons in table headers are visible enough (at least 3:1) and the filter button meets the 24px minimum target. (#225)
+- the «Sort and filter» caption over tables on a phone and the «Sort by …» label of column headers are translated, so English users and screen readers no longer get them in Spanish. (#224)
+- when the session cannot be loaded, the message says whether the server is unreachable, not answering (starting or updating) or failing, and what to do, instead of a bare «Bad Gateway». (#227)
+- the interface follows its design rules again: no tooltip shadow, no browser-faked bold text, graph canvas colours as tokens, and drawn icons in the graph legend. (#226)
+- Query puts its actions under the Cypher box when the content area cannot keep the box at a usable width. (#230)
+- text meant to stand out, such as names and small headings in Administration, Jobs, Knowledge and Vocabulary, is shown in the semibold weight the fonts ship, instead of silently falling back to regular. (#231)
+- sign-in and error panels keep a margin on a phone, the session error screen has a heading for screen readers, and the sidebar's round buttons share the 36px height of every other control. (#232)
+- the close button of every dialog and side panel has an accessible name, and rows and cards that open on a click keep their table and list structure for screen readers, with a real button in their title. (#235)
+- pills are readable (11px) and never cut their word, field placeholders have enough contrast in both themes, and the ingest report of a proposal counts in the singular when there is one. (#237)
+
 ## [0.12.2] - 2026-11-04
 ### Added
 - The entity page shows a small graph of the entity and its closest neighbours, coloured by type with the relation on each edge; a click opens a neighbour, and Expand opens the Graph with the entity selected. (#198)
