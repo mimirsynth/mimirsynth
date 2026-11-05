@@ -42,7 +42,7 @@ def _out(p: Proposal, full: bool = False) -> dict:
          "reviewer": (p.reviewer.email or p.reviewer.name) if p.reviewer else None,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
-         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "correction": p.correction, "purged_at": p.purged_at}
+         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "purged_at": p.purged_at}
     d["body"] = p.body if full else p.body[:300]
     return d
 
@@ -87,6 +87,7 @@ def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list
     if direct and ingest.enabled():
         ingest.submit_ingest(p.id, brain.id, secretguard.safe_name(p), user.id)
     elif not direct:
+        later(check_related, p.id)  # what the brain already knows close to it, for the queue's order and the batch
         later(deciders_admin.triage_proposal, p.id)  # sin decisor configurado no hace nada; con secretos marcados, tampoco
     return p
 
@@ -101,10 +102,13 @@ def _blocked_rules(ctx: BrainCtx, text: str) -> list[str]:
 
 _AUTHOR = func.coalesce(User.email, User.name)
 _SORTS = {"id": Proposal.id, "name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id, "decided": Proposal.reviewed_at}  # el id sigue el orden de envío
-# the review queue's order: what most needs a person first (corrections, then flagged secrets, then low declared confidence), oldest
-# first inside each group, so nothing waits forever behind newer arrivals
+# the review queue's order: what most needs a person first (corrections, then flagged secrets, then what the brain already knows as
+# nearly the same or as no longer true, then low declared confidence), oldest first inside each group, so nothing waits forever behind
+# newer arrivals
 LOW_CONFIDENCE = 0.6
-_RISK = case((Proposal.kind == "correction", 0), (cast(Proposal.secret_findings, String).like('%"flagged"%'), 1), (Proposal.confidence < LOW_CONFIDENCE, 2), else_=3)
+KNOWN = ("duplicate", "stale")  # what the brain already knows: never approved in a batch, and the A key asks first
+_RISK = case((Proposal.kind == "correction", 0), (cast(Proposal.secret_findings, String).like('%"flagged"%'), 1),
+             (Proposal.related_verdict.in_(KNOWN), 2), (Proposal.confidence < LOW_CONFIDENCE, 3), else_=4)
 BULK_MAX = 200
 
 
@@ -260,8 +264,8 @@ class BulkIn(BaseModel):
 @router.post("/bulk")
 def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
     """One decision for several proposals the curator selected. Each is decided as if alone (same audit, same 10 s grace before ingestion);
-    what cannot be decided this way is skipped and said why: not pending any more, or, for approving, a correction or a proposal with a
-    secret to review, which a person decides one at a time."""
+    what cannot be decided this way is skipped and said why: not pending any more, or, for approving, a correction, a proposal with a
+    secret to review or one the brain already knows (nearly the same, or no longer true), which a person decides one at a time."""
     done, skipped = [], []
     for pid in dict.fromkeys(body.ids):
         p = ctx.db.get(Proposal, pid)
@@ -273,6 +277,8 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
             skipped.append({"id": pid, "reason": "correction"}); continue
         if body.verb == "approve" and any(f.get("action") == "flagged" for f in (p.secret_findings or [])):
             skipped.append({"id": pid, "reason": "secret"}); continue
+        if body.verb == "approve" and p.related_verdict in KNOWN:
+            skipped.append({"id": pid, "reason": "known"}); continue
         _review(ctx, pid, "approved" if body.verb == "approve" else "rejected", body.note)
         if body.verb == "approve" and ingest.enabled():
             ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(p), ctx.user.id, delay=UNDO_SECONDS)
@@ -304,24 +310,61 @@ def relevance(fact: str | None, proposal_words: set[str], score: float | None) -
     return "close" if (score or 0) >= CLOSE_SCORE else "related"
 
 
+def related_facts(brain, p: Proposal) -> list[dict]:
+    """The facts a recall of the proposal's title and text brings back, each with its relevance, what it repeats first. Facts only (no
+    fragments, no documents), and not logged for the recall ratings: it is a read for the reviewer, not an agent's recall."""
+    from . import recall as recall_mod
+    if p.purged_at or not (p.body or "").strip():
+        return []
+    query = f"{p.name}. {p.body}"[:1500]
+    out = recall_mod.recall(brain.id, brain.graph_name, query, RELATED_FACTS, 0, 4000, n_docs=0)
+    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "valid_at", "invalid_at", "status", "score")
+    words = _words(query)
+    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score"))} for f in out.get("facts", [])]
+    return sorted(facts, key=lambda f: (_RANK[f["relevance"]], -(f["score"] or 0)))  # what it repeats first, then the closest
+
+
+def verdict(facts: list[dict]) -> str:
+    """One word for the queue: «duplicate» when a current fact says nearly the same, «stale» when a close one stopped being true,
+    «related» when there is something near, «new» when nothing is."""
+    if any(f["relevance"] == "repeats" and not f.get("invalid_at") for f in facts):
+        return "duplicate"
+    if any(f["relevance"] in ("repeats", "close") and f.get("invalid_at") for f in facts):
+        return "stale"
+    return "related" if facts else "new"
+
+
+def check_related(pid: int) -> None:
+    """In the background after a proposal arrives: stores what the brain already knows close to it, so the review queue can rank it
+    and the batch can leave it aside without a recall per row. A failure leaves it unchecked: the detail checks again when opened."""
+    from .models import Brain
+    from .store import _factory
+    with _factory()() as db:
+        p = db.get(Proposal, pid)
+        if not p or p.status != "pending" or p.kind == "correction" or not ingest.enabled():
+            return  # without an extraction engine nothing reaches the graph, so there is nothing to compare with
+        try:
+            v = verdict(related_facts(db.get(Brain, p.brain_id), p))
+        except Exception:  # noqa: BLE001 — no engine or graph yet: nothing to rank by
+            return
+        p.related_verdict = v
+        db.commit()
+
+
 @router.get("/{pid}/related")
 def related(pid: int, ctx: BrainCtx = Depends(curator)):
     """What the brain already knows close to a proposal: the facts a recall of its title and text brings back, for the curator to check
     it against (a duplicate, a contradiction, or nothing at all: new knowledge). It is a read for the reviewer, not an agent's recall, so it
-    is not logged for the recall ratings."""
-    from . import recall as recall_mod
+    is not logged for the recall ratings. Opening it refreshes the verdict the queue ranks by."""
     p = _get(ctx, pid)
-    if p.purged_at or not (p.body or "").strip():
-        return {"facts": []}
     try:
-        query = f"{p.name}. {p.body}"[:1500]
-        out = recall_mod.recall(ctx.brain.id, ctx.brain.graph_name, query, RELATED_FACTS, 0, 4000, n_docs=0)
+        facts = related_facts(ctx.brain, p)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"no se pudo buscar lo relacionado: {e}") from e
-    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "valid_at", "invalid_at", "status", "score")
-    words = _words(query)
-    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score"))} for f in out.get("facts", [])]
-    return {"facts": sorted(facts, key=lambda f: (_RANK[f["relevance"]], -(f["score"] or 0)))}  # what it repeats first, then the closest
+    if p.status == "pending" and p.kind != "correction" and not p.purged_at and (v := verdict(facts)) != p.related_verdict:
+        p.related_verdict = v
+        ctx.db.commit()
+    return {"facts": facts}
 
 
 @router.post("/{pid}/undo")
