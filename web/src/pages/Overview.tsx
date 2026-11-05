@@ -50,7 +50,7 @@ const CHANGES: { key: keyof Changes; label: string; to: string }[] = [
   { key: "facts_gone", label: T("Hechos invalidados"), to: "/hechos" },
   { key: "docs_new", label: T("Documentos añadidos"), to: "/conocimiento" },
   { key: "proposals_new", label: T("Propuestas recibidas"), to: "/propuestas" },
-  { key: "proposals_decided", label: T("Propuestas decididas"), to: "/propuestas" },
+  { key: "proposals_decided", label: T("Propuestas decididas"), to: "/propuestas?estado=decided" },
 ];
 
 /** What moved in the brain in the last day or week, next to what waits for a decision. Only for those who curate. */

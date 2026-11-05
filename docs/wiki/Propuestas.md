@@ -19,17 +19,30 @@ Enviada ──► (decisor opcional) ──► Pendiente ──► Aprobada ─�
 
 > El decisor sabe de qué trata el brain por su **descripción**: escribe una al crear o editar el brain (Administración → Brains, ver [[Administrar brains y miembros]]).
 
-## La lista
-Arriba, el selector **Estado** con un contador por estado: *Todas*, *Pendientes*, *Aprobadas*, *Rechazadas*, *Fallidas*, *Ingeridas*. Se abre en *Pendientes* si hay alguna pendiente y, si no, en *Todas*. Al lado, el selector **Tipo**: *Todas*, *Añaden* (propuestas que añaden conocimiento) y *Corrigen* ([correcciones](#correcciones), que invalidan un hecho). Los contadores de estado siguen al tipo elegido.
+## La pantalla
+Tiene dos pestañas:
+- **Por revisar** (curadores, se abre por defecto) es la cola de lo que espera una decisión.
+- **Mis propuestas** tiene el formulario para proponer y lo que has enviado, en todos sus estados.
 
-Cuando hay correcciones esperando, un aviso encima de la lista dice cuántas, porque cada una invalida un hecho y solo la decide una persona. **Ver solo las correcciones pendientes** pone los dos selectores a la vez.
+Un **colaborador** solo tiene la segunda.
 
-La tabla muestra **#** (el número de la propuesta), **Tipo**, **Título**, **Autor**, **Confianza**, **Estado** y **Enviada**. El tipo es una marca con un icono y una palabra, **Añade** o **Corrige**, y la de una corrección va rellena, así que se distingue sin depender del color; el detalle la repite junto al número. Puedes filtrar por título y por autor (**Todos los autores**), ordenar por título, autor, confianza o fecha, y pasar de página con el paginador de abajo. Los filtros y el orden se aplican a **todas las propuestas**, no solo a las filas que ves, así que siempre se llega a las antiguas.
+### Por revisar
+A la izquierda, la **cola** de pendientes; a la derecha, la propuesta abierta con su detalle y los botones **Rechazar** y **Aprobar** siempre a la vista. En una pantalla estrecha se ve una cosa cada vez, con **Volver a la cola**.
+
+- **Orden por riesgo y antigüedad:** primero las correcciones, después las que tienen un secreto por revisar, después las de poca confianza declarada (menos de 0,6) y, dentro de cada grupo, la más antigua primero. Cada entrada dice quién la envió y cuánto lleva esperando.
+- **Atajos de teclado:** <kbd>J</kbd>/<kbd>K</kbd> pasan a la siguiente o a la anterior, <kbd>A</kbd> aprueba, <kbd>R</kbd> rechaza y <kbd>X</kbd> la marca para decidir en lote. No actúan mientras escribes en la nota. Al decidir, se abre sola la siguiente.
+- **En lote:** marca varias (o **Seleccionar todas**) y usa **Aprobar las seleccionadas** o **Rechazar las seleccionadas**. Una confirmación dice cuántas son y admite una nota común. Las correcciones y las que tienen un secreto por revisar **no se aprueban en lote**: se quedan seleccionadas para decidirlas una a una. Solo entran en el lote las que ves en la cola.
+- El selector **Estado** cambia entre **Pendientes** y **Decididas**, el historial: aprobadas, ingeridas, rechazadas y fallidas, en una tabla con filtros. El selector **Tipo** (*Todas*, *Añaden*, *Corrigen*) filtra las dos vistas.
+
+Cuando hay correcciones esperando, un aviso dice cuántas, porque cada una invalida un hecho y solo la decide una persona. **Ver solo las correcciones pendientes** filtra la cola.
+
+### Las tablas
+**Decididas** y **Mis propuestas** muestran **#** (el número de la propuesta), **Tipo**, **Título**, **Autor**, **Confianza**, **Estado** y **Enviada**. El tipo es una marca con un icono y una palabra, **Añade** o **Corrige**, y la de una corrección va rellena, así que se distingue sin depender del color. Puedes filtrar por título y por autor (**Todos los autores**), ordenar por título, autor, confianza o fecha, y pasar de página con el paginador de abajo. Los filtros y el orden se aplican a **todas las propuestas**, no solo a las filas que ves, así que siempre se llega a las antiguas.
 
 > Un **lector** no ve propuestas ni puede crearlas. Un **colaborador** ve solo las suyas; un **curador** o superior ve todas.
 
 ## Crear una propuesta
-El formulario encima de la lista, con:
+En **Mis propuestas**, el formulario (se puede plegar), con:
 - **Título:** corto y descriptivo («Migración de la base de datos a PostgreSQL 17»).
 - **Contenido:** *qué ha pasado o qué hay que recordar, con fecha y nombres exactos*.
 - **Confianza (0–1, opcional):** cuánto te fías de ese dato. Se muestra al revisor.

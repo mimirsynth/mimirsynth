@@ -471,3 +471,32 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 
 /* Texto solo para lectores de pantalla (cabeceras de columna de acciones, título de las pantallas de acceso) */
 .ms-sr { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* Review inbox (Proposals → To review): the queue and the open proposal side by side; one at a time on a narrow content area */
+.ms-tabpanel-col { display: flex; flex-direction: column; gap: 10px; }
+.ms-inbox-wrap { container-type: inline-size; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ms-inbox { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); gap: 12px; flex: 1; min-height: 0; }
+.ms-inbox-list, .ms-inbox-detail { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); background: var(--ms-raised); overflow: hidden; }
+.ms-inbox-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-bottom: 1px solid var(--ms-line); background: var(--ms-thead); font-size: 13px; }
+.ms-inbox-scroll { flex: 1; min-height: 0; overflow: auto; }
+.ms-inbox-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ms-inbox-actions { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--ms-line); background: var(--ms-raised); }
+.ms-inbox-back { display: none; }
+.ms-inbox-keys { font-size: 12px; color: var(--ms-muted); }
+.ms-inbox-keys kbd { display: inline-block; min-width: 18px; padding: 0 4px; border: 1px solid var(--ms-field-line); border-radius: 4px; text-align: center; font-size: 11px; line-height: 16px; color: var(--ms-ink); }
+@container (max-width: 760px) {
+  .ms-inbox { grid-template-columns: minmax(0, 1fr); }
+  .ms-inbox[data-detail] .ms-inbox-list, .ms-inbox:not([data-detail]) .ms-inbox-detail { display: none; }
+  .ms-inbox-back { display: inline-flex; align-self: flex-start; }
+}
+.ms-queue { list-style: none; margin: 0; padding: 0; }
+.ms-queue-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ms-line); }
+.ms-queue-item:hover { background: var(--ms-hover); }
+.ms-queue-item[data-active] { background: var(--ms-chip-bg); box-shadow: inset 3px 0 0 var(--ms-accent); }  /* the open one: the inset marker, not elevation */
+.ms-queue-item .ms-check { padding-top: 2px; }
+.ms-queue-open { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: var(--ms-ink); text-align: left; cursor: pointer; }
+.ms-queue-open:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 4px; }
+.ms-queue-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ms-queue-preview { font-size: 13px; color: var(--ms-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-queue-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ms-muted); }
+.ms-queue-meta .ms-data { font-size: 12px; }
