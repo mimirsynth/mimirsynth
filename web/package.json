@@ -4,6 +4,11 @@
   "license": "Apache-2.0",
   "version": "0.1.0",
   "type": "module",
+  "sideEffects": [
+    "*.css",
+    "./src/main.tsx",
+    "./src/i18n/index.ts"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
