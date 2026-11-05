@@ -480,6 +480,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 
 /* Review inbox (Proposals → To review): the queue and the open proposal side by side; one at a time on a narrow content area */
 .ms-tabpanel-col { display: flex; flex-direction: column; gap: 10px; }
+.ms-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 28px; }  /* the selectors of a view on one line; they wrap when narrow */
 .ms-inbox-wrap { container-type: inline-size; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .ms-inbox { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); gap: 12px; flex: 1; min-height: 0; }
 .ms-inbox-list, .ms-inbox-detail { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); background: var(--ms-raised); overflow: hidden; }

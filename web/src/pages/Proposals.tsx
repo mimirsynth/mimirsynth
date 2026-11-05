@@ -265,6 +265,8 @@ type Ops = {
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
   /** The last decision, its notice (for the review footer to dock) and the way to take it back from the keyboard. */
   last: Decision | null; notice: ReactNode; setDocked: (on: boolean) => void; undoLast: () => void;
+  /** Bumped by the N key to open the note; whether «Qué pasa al decidir» is unfolded (kept while moving through the queue). */
+  noteKey: number; openNote: () => void; explain: boolean; setExplain: (on: boolean) => void;
 };
 
 /** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
@@ -320,23 +322,42 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking }: { d: Prop; ops
   const kinds = [...new Set((d.secrets ?? []).filter((f) => f.action === "flagged").map((f) => t(f.label)))].join(", ");
   const approving = review.isPending && review.variables?.verb !== "reject";
   const decide = (verb: Verb) => review.mutateAsync({ id: d.id, verb }).then(() => onDecided?.());
+  // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is one fold
+  // away, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
+  const noteId = `ms-note-${d.id}`;
+  const [noteOpen, setNoteOpen] = useState(false);
+  useEffect(() => setNoteOpen(false), [d.id]);
+  const [focusNote, setFocusNote] = useState(0);
+  useEffect(() => { if (focusNote) document.getElementById(noteId)?.focus(); }, [focusNote]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const openNote = () => { setNoteOpen(true); setFocusNote((k) => k + 1); };  // focused once it is rendered
+  const seenNoteKey = useRef(ops.noteKey);
+  useEffect(() => { if (ops.noteKey !== seenNoteKey.current) { seenNoteKey.current = ops.noteKey; openNote(); } }, [ops.noteKey]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const showNote = noteOpen || !!ops.note;
   return (<Stack gap="xs">
-    <TextArea size="xs" autosize minRows={1} maxRows={4} label={t("Nota (opcional)")} value={ops.note} onChange={(e) => ops.setNote(e.currentTarget.value)} />
-    <Stack gap={2}>
+    {showNote && <TextArea id={noteId} autosize minRows={1} maxRows={4} label={t("Nota (opcional)")} value={ops.note} onChange={(e) => ops.setNote(e.currentTarget.value)} />}
+    {(secret || d.correction) && <Stack gap={2}>
       {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
-      <Text size="xs" c="dimmed">{d.correction
-        ? t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: d.correction.invalid_at.slice(0, 10) })
-        : ops.llm
-          ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
-          : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>
+      {d.correction && <Text size="xs" c="dimmed">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: d.correction.invalid_at.slice(0, 10) })}</Text>}
+    </Stack>}
+    {ops.explain && <Stack gap={2} id={`ms-why-${d.id}`}>
+      {!d.correction && <Text size="xs" c="dimmed">{ops.llm
+        ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
+        : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>}
       <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
-    </Stack>
+    </Stack>}
     <MutationError error={review.error} />
-    <Group justify="flex-end">
-      <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={review.isPending && review.variables?.verb !== "reject"}
-        onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
-      <Btn kind="primary" loading={approving} disabled={review.isPending && !approving}
-        onClick={() => secret ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
+    <Group justify="space-between" gap="xs">
+      <Group gap="xs">
+        {!showNote && <Btn kind="link" icon="plus" onClick={openNote}>{t("Nota")}</Btn>}
+        <Btn kind="link" icon={ops.explain ? "chevronDown" : "chevronRight"} aria-expanded={ops.explain} aria-controls={`ms-why-${d.id}`}
+          onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
+      </Group>
+      <Group gap="xs">
+        <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={review.isPending && review.variables?.verb !== "reject"}
+          onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
+        <Btn kind="primary" loading={approving} disabled={review.isPending && !approving}
+          onClick={() => secret ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
+      </Group>
     </Group>
     <ConfirmDialog opened={secret && (onMasking ? !!masking : ownMasking)} onClose={() => askMask(false)} tone="primary"
       title={t("¿Enmascarar y aprobar la propuesta #{{id}}?", { id: d.id })}
@@ -470,7 +491,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (id === null) return;
     setChecked((c) => { const n = new Set(c); (on ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
   };
-  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active), z: () => ops.undoLast() }, mode === "pending" && confirm === null && !masking);
+  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, mode === "pending" && confirm === null && !masking);
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
@@ -481,12 +502,14 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
-    <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
-      data={[{ value: "pending", label: t("Pendientes"), count: counts.pending ?? 0 }, { value: "decided", label: t("Decididas"), count: counts.decided ?? 0 }]} />
+    <div className="ms-filter-row">
+      <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
+        data={[{ value: "pending", label: t("Pendientes"), count: counts.pending ?? 0 }, { value: "decided", label: t("Decididas"), count: counts.decided ?? 0 }]} />
+      {mode === "pending" && <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
+        data={[{ value: "all", label: t("Todas") }, { value: "memory", label: t("Añaden") }, { value: "correction", label: t("Corrigen"), count: pendingFixes }]} />}
+    </div>
     {mode === "decided" ? <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={initialKind}
         first={{ value: "decided", label: t("Todas las decididas"), countKey: "decided" }} /> : <>
-      <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
-        data={[{ value: "all", label: t("Todas") }, { value: "memory", label: t("Añaden") }, { value: "correction", label: t("Corrigen"), count: pendingFixes }]} />
       {pendingFixes > 0 && kind !== "correction" && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
@@ -521,7 +544,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             {footer && <div className="ms-inbox-actions" ref={actions}>
               {shown && ops.notice}
               {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} />
-              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
+              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
           </>} />}
     </>}
@@ -585,6 +608,8 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [open, setOpen] = useState<number | null>(null);
   const [last, setLast] = useState<Decision | null>(null);
   const [docked, setDocked] = useState(false);
+  const [noteKey, setNoteKey] = useState(0);
+  const [explain, setExplain] = useState(false);
   const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((id) => send("POST", `${base}/${id}/undo`))),
     onSuccess: (_, ids) => { setLast({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null }); refresh(); } });
   const review = useMutation({ mutationFn: (a: { id: number; verb: Verb }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note }),
@@ -596,12 +621,12 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const notice = <DecisionNotice base={base} graph={graph} last={last} llm={llm} onUndo={(ids) => undo.mutate(ids)} undoing={undo.isPending}
     undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={(id) => { setOpen(id); setNote(""); }} onClose={() => { setLast(null); undo.reset(); }} />;
   const ops: Ops = { base, graph, isCurator, llm, note, setNote, review, undo, reactivate, retry, setLast, refresh,
-    openDetail: (id) => { setOpen(id); setNote(""); }, last, notice, setDocked,
+    openDetail: (id) => { setOpen(id); setNote(""); }, last, notice, setDocked, noteKey, openNote: () => setNoteKey((k) => k + 1), explain, setExplain,
     undoLast: () => { if (last && undoable(last) && !undo.isPending) undo.mutate(last.ids ?? [last.id]); } };
   if (role === "reader") return <Page><PageHeader title={t("Propuestas")} description={<>{t("Con rol de lector no puedes proponer ni ver propuestas. Pide rol de colaborador a un administrador del brain.")}</>} /></Page>;
   return (
     <Page>
-      <PageHeader title={t("Propuestas")} description={<>{t("Cuarentena de aportaciones. Lo que envía un colaborador o un agente no entra al grafo hasta que un curador lo aprueba; las de un curador quedan aprobadas al enviarlas.")}</>} />
+      <PageHeader title={t("Propuestas")} description={<>{t("Lo que envían colaboradores y agentes espera aquí a que un curador lo apruebe.")}</>} />
       {ai.data && !ai.data.llm.configured && <Notice tone="warn" title={t("Sin motor LLM configurado")}>{t("Las propuestas aprobadas no se ingieren al grafo y se quedan en «Aprobadas». Un administrador debe configurarlo en Administración → Proveedores IA.")}{" "}
         <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Ir a Modelo LLM")}</Btn></Notice>}
       {ai.data && ai.data.llm.configured && !ai.data.decider.configured && <Notice>{t("Sin decisor: las propuestas de colaboradores esperan siempre a un curador.")}</Notice>}
