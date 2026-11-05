@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-05T08:37:14.641Z",
+  "generatedAt": "2026-11-05T09:01:43.227Z",
   "title": "Design System: MimirSynth",
   "extensions": {
     "colorMeta": {
@@ -652,7 +652,7 @@
       },
       {
         "name": "The Two Weights Rule",
-        "body": "Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. Some sub-nav headings and graph legends currently do, which is drift to correct.",
+        "body": "Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. `b` and `strong` are set to 600 for the same reason.",
         "section": "typography"
       },
       {
@@ -672,7 +672,7 @@
       },
       {
         "name": "The No-Shadow Rule",
-        "body": "Relief comes from the 1px rule and the surface colour, never from `box-shadow`. The chart tooltip currently breaks this, which is drift to correct.",
+        "body": "Relief comes from the 1px rule and the surface colour, never from `box-shadow`, tooltips and popovers included.",
         "section": "elevation"
       },
       {

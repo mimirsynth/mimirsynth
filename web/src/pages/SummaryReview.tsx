@@ -89,7 +89,7 @@ export default function SummaryReview({ graph, role }: { graph: string; role: st
           <Stack gap="xs">
             <Group gap="xs" wrap="wrap">
               {pending && <Check aria-label={t("Seleccionar {{name}}", { name: i.name })} checked={chosen.includes(i.id)} onChange={(e) => setSel(e.currentTarget.checked ? [...sel, i.id] : sel.filter((x) => x !== i.id))} />}
-              <Text fw={700} size="sm" component={Link} to={`/entidad/${i.entity_uuid}`}>{i.name}</Text>
+              <Text fw={600} size="sm" component={Link} to={`/entidad/${i.entity_uuid}`}>{i.name}</Text>
               <Pill size="xs">{t("{{count}} hechos", { count: i.facts })}</Pill>
               {REASON[i.reason] && <Pill size="xs" tone="alt">{t(REASON[i.reason])}</Pill>}
               {i.edited && <Pill size="xs">{t("editado por un curador")}</Pill>}
@@ -98,11 +98,11 @@ export default function SummaryReview({ graph, role }: { graph: string; role: st
             </Group>
             <div className="ms-summary-pair">
               <Stack gap={2}>
-                <Text size="xs" c="dimmed" fw={700}>{pending ? t("Ahora") : t("Antes")}</Text>
+                <Text size="xs" c="dimmed" fw={600}>{pending ? t("Ahora") : t("Antes")}</Text>
                 <Text size="sm" className="ms-prose" lineClamp={10}>{i.current}</Text>
               </Stack>
               <Stack gap={2}>
-                <Text size="xs" c="dimmed" fw={700}>{status === "applied" ? t("Aprobado") : t("Propuesto")}</Text>
+                <Text size="xs" c="dimmed" fw={600}>{status === "applied" ? t("Aprobado") : t("Propuesto")}</Text>
                 {pending ? <TextArea aria-label={t("Resumen propuesto para {{name}}", { name: i.name })} autosize minRows={3} maxRows={10} maxLength={1000}
                   value={texts[i.id] ?? i.proposed} onChange={(e) => setTexts({ ...texts, [i.id]: e.currentTarget.value })} />
                   : <Text size="sm" className="ms-prose">{status === "applied" ? i.applied : i.proposed}</Text>}

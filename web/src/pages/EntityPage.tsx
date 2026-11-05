@@ -104,13 +104,13 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
           card with their heading inside (issue 215); the relation groups inside are lighter blocks, so no card sits in another */}
       <div className="ms-entity-cols">
         <Panel withBorder p="sm"><Stack gap="sm">
-          <Text size="sm" fw={700}>{d.stats.earlier ? t("Hechos ({{current}} vigentes, {{earlier}} anteriores)", { current: d.stats.current, earlier: d.stats.earlier })
+          <Text size="sm" fw={600}>{d.stats.earlier ? t("Hechos ({{current}} vigentes, {{earlier}} anteriores)", { current: d.stats.current, earlier: d.stats.earlier })
             : t("Hechos ({{count}})", { count: d.stats.current })}</Text>
           {d.groups.length === 0 && <EmptyState>{t("Esta entidad no tiene hechos.")}</EmptyState>}
           {specific.map((g) => <RelationGroup key={`${g.direction}:${g.relation}`} g={g} self={e} graph={graph} canEdit={canEdit} link={link} />)}
           {other.length > 0 && <Stack gap="xs">
             <Group gap="xs">
-              <Text size="sm" fw={700}>{t("Otras relaciones ({{count}} hechos)", { count: otherFacts })}</Text>
+              <Text size="sm" fw={600}>{t("Otras relaciones ({{count}} hechos)", { count: otherFacts })}</Text>
               <Btn kind="link" aria-expanded={showOther} onClick={() => setShowOther((x) => !x)}>{showOther ? t("Ocultar") : t("Ver")}</Btn>
             </Group>
             <Text size="xs" c="dimmed">{t("Relaciones genéricas, como RELATES_TO: el extractor las escribe cuando ningún tipo encaja y pueden unir cualquier cosa, así que no se leen como una evolución.")}</Text>
@@ -118,7 +118,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
           </Stack>}
         </Stack></Panel>
         <Panel withBorder p="sm"><Stack gap="sm">
-          <Text size="sm" fw={700}>{t("Episodios que la mencionan ({{count}})", { count: d.episodes.total })}</Text>
+          <Text size="sm" fw={600}>{t("Episodios que la mencionan ({{count}})", { count: d.episodes.total })}</Text>
           {d.episodes.total === 0 && <Text size="xs" c="dimmed">{t("Ningún episodio la menciona.")}</Text>}
           {d.episodes.items.length > 0 && <ol className="ms-tl ms-tl-list" aria-label={t("Episodios que la mencionan")}>
             {d.episodes.items.map((ep) => (
@@ -128,7 +128,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
               </Stack></li>))}
           </ol>}
           {!origin && docs.length > 0 && <>
-            <Text size="sm" fw={700}>{t("Documentos que la mencionan ({{count}})", { count: docs.length })}</Text>
+            <Text size="sm" fw={600}>{t("Documentos que la mencionan ({{count}})", { count: docs.length })}</Text>
             <ol className="ms-tl ms-tl-list" aria-label={t("Documentos que la mencionan")}>
               {docs.map((x) => (
                 <li key={x.document_id} className="ms-tl-item"><Stack gap={0} className="ms-tl-body">
@@ -138,7 +138,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
             </ol>
           </>}
           {isCurator && <>
-            <Text size="sm" fw={700}>{t("Curación")}</Text>
+            <Text size="sm" fw={600}>{t("Curación")}</Text>
             <Text size="xs" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Text>
             {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Revisar los tipos dudosos (Calidad del contenido → Tipos dudosos)")}</Text>}
             <Text size="xs" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Text>

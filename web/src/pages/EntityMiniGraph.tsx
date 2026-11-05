@@ -76,7 +76,7 @@ export default function EntityMiniGraph({ entity, groups, neighbors, link, expan
   return (
     <Stack gap={4}>
       <Group justify="space-between" gap="xs">
-        <Text size="sm" fw={700}>{t("Relacionadas ({{count}})", { count: neighbors.length })}</Text>
+        <Text size="sm" fw={600}>{t("Relacionadas ({{count}})", { count: neighbors.length })}</Text>
         {expand && <Btn size="row" icon="graph" component={Link} to={expand}>{t("Ampliar")}</Btn>}
       </Group>
       <div ref={box} className="ms-minigraph" role="img" aria-label={t("Grafo de {{name}} y {{count}} entidades relacionadas", { name: entity.name, count: shown.length })}>

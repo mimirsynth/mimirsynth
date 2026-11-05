@@ -1,12 +1,13 @@
 import { useTranslation } from "react-i18next";
 import type { ReactNode } from "react";
+import { Icon } from "./Icon";
 
 /** Leyenda plegable sobre un lienzo: secciones con elementos que se pueden activar o apagar (ratón y teclado). */
 export function Legend({ open, onToggle, children }: { open: boolean; onToggle: () => void; children: ReactNode }) {
   const { t } = useTranslation();
   return (
     <div className="ms-legend-box">
-      <button type="button" className="ms-legend-head" aria-expanded={open} onClick={onToggle}><span>{t("Leyenda")}</span><span>{open ? "▾" : "▸"}</span></button>
+      <button type="button" className="ms-legend-head" aria-expanded={open} onClick={onToggle}><span>{t("Leyenda")}</span><Icon name={open ? "chevronDown" : "chevronRight"} size={14} /></button>
       {open && children}
     </div>
   );
