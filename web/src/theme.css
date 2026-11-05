@@ -268,12 +268,12 @@ circle.ms-chart-grid { stroke-width: 16; opacity: 0.35; }
 .ms-colhead { text-align: left; }
 .ms-colhead-in { display: inline-flex; align-items: center; gap: 4px; }
 .ms-colhead-label { display: inline-flex; align-items: center; gap: 3px; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: default; }
-button.ms-colhead-label { cursor: pointer; }
-button.ms-colhead-label span { display: inline-flex; opacity: 0.35; }
+button.ms-colhead-label { cursor: pointer; min-height: 24px; }
+button.ms-colhead-label span { display: inline-flex; opacity: 0.75; }  /* 0.75 keeps the idle sort arrow at 3:1 on the header band in both themes (WCAG 1.4.11) */
 button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opacity: 1; color: var(--ms-accent); }
-.ms-colhead-filter { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 4px; color: var(--ms-muted); opacity: 0.55; }
-.ms-colhead-filter:hover { opacity: 1; background: var(--ms-hover); }
-.ms-colhead-filter[data-active] { opacity: 1; color: var(--ms-accent); background: var(--ms-chip-bg); }
+.ms-colhead-filter { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 4px; color: var(--ms-muted); }  /* the funnel is the only sign of the filter button: full muted (5:1) and the 24px minimum target (WCAG 2.5.8) */
+.ms-colhead-filter:hover { color: var(--ms-ink); background: var(--ms-hover); }
+.ms-colhead-filter[data-active] { color: var(--ms-accent); background: var(--ms-chip-bg); }
 .ms-colhead[data-filtered] .ms-colhead-label { color: var(--ms-accent); }
 .ms-colhead-pop { background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 8px; }
 .ms-colhead-opts { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; }
