@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-05T08:24:55.690Z",
+  "generatedAt": "2026-11-05T08:37:14.641Z",
   "title": "Design System: MimirSynth",
   "extensions": {
     "colorMeta": {
@@ -146,6 +146,22 @@
           "#97a5a3",
           "#c0cac8",
           "#ecefef"
+        ]
+      },
+      "superficie-field-line": {
+        "role": "neutral",
+        "displayName": "Superficie Field Line",
+        "canonical": "#718c8a",
+        "oklch": "oklch(61.9% 0.031 190.8)",
+        "tonalRamp": [
+          "#040d0d",
+          "#162827",
+          "#2e4543",
+          "#4a6362",
+          "#6c8684",
+          "#90a7a5",
+          "#bbcbca",
+          "#eaf0ef"
         ]
       },
       "superficie-stripe": {
@@ -322,6 +338,22 @@
           "#8da6b0",
           "#b9cbd2",
           "#eaf0f2"
+        ]
+      },
+      "pozo-field-line": {
+        "role": "neutral",
+        "displayName": "Pozo Field Line",
+        "canonical": "#527a86",
+        "oklch": "oklch(55.4% 0.048 218.6)",
+        "tonalRamp": [
+          "#010e12",
+          "#0b2830",
+          "#214650",
+          "#3d6470",
+          "#618793",
+          "#86a8b2",
+          "#b5ccd3",
+          "#e8f0f3"
         ]
       },
       "pozo-stripe": {
@@ -551,7 +583,7 @@
       "refersTo": "input",
       "description": "One size and shape for every field; the label is 13px semibold above.",
       "html": "<label class=\"ds-field\"><span>Brain name</span><input placeholder=\"docs\"></label>",
-      "css": ".ds-field{display:flex;flex-direction:column;gap:4px;font:600 13px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);color:var(--ms-ink, #0d1f26);}.ds-field input{height:36px;padding:0 12px;border-radius:var(--ms-radius, 6px);border:1px solid var(--ms-line, #b4c6c3);background:var(--ms-raised, #ffffff);color:var(--ms-ink, #0d1f26);font:400 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);}.ds-field input:focus{border-color:var(--ms-accent, #1e6b73);}.ds-field input:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+      "css": ".ds-field{display:flex;flex-direction:column;gap:4px;font:600 13px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);color:var(--ms-ink, #0d1f26);}.ds-field input{height:36px;padding:0 12px;border-radius:var(--ms-radius, 6px);border:1px solid var(--ms-field-line, #718c8a);background:var(--ms-raised, #ffffff);color:var(--ms-ink, #0d1f26);font:400 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);}.ds-field input:focus{border-color:var(--ms-accent, #1e6b73);}.ds-field input:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
     },
     {
       "name": "Pill",
