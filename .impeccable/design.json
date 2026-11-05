@@ -1,0 +1,672 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-05T08:24:55.690Z",
+  "title": "Design System: MimirSynth",
+  "extensions": {
+    "colorMeta": {
+      "pozo": {
+        "role": "primary",
+        "displayName": "Pozo Deep Teal-Black",
+        "canonical": "#0d1f26",
+        "oklch": "oklch(22.7% 0.027 225.3)",
+        "tonalRamp": [
+          "#050c10",
+          "#19262c",
+          "#31434a",
+          "#4d6169",
+          "#70848c",
+          "#93a5ac",
+          "#bdcacf",
+          "#ebeff1"
+        ]
+      },
+      "mimir": {
+        "role": "primary",
+        "displayName": "Mimir Teal",
+        "canonical": "#1e6b73",
+        "oklch": "oklch(48.6% 0.073 205.2)",
+        "tonalRamp": [
+          "#12424a",
+          "#18565d",
+          "#1e6b73",
+          "#2d8189",
+          "#3f9aa3",
+          "#5fb8bf",
+          "#a6d2d3",
+          "#e6f3f3"
+        ]
+      },
+      "mimir-bright": {
+        "role": "primary",
+        "displayName": "Mimir Teal (Pozo)",
+        "canonical": "#5fb8bf",
+        "oklch": "oklch(73.0% 0.086 202.2)",
+        "tonalRamp": [
+          "#001013",
+          "#002d32",
+          "#004b52",
+          "#006b72",
+          "#388f95",
+          "#69afb4",
+          "#a3d1d5",
+          "#e3f2f3"
+        ]
+      },
+      "hidromiel": {
+        "role": "primary",
+        "displayName": "Hidromiel Gold",
+        "canonical": "#d4a03a",
+        "oklch": "oklch(73.7% 0.131 80.6)",
+        "tonalRamp": [
+          "#946a20",
+          "#b9862a",
+          "#d4a03a",
+          "#e8c56a",
+          "#efd592",
+          "#f5e4bd",
+          "#f8ecd0",
+          "#fbf3e1"
+        ]
+      },
+      "espuma": {
+        "role": "tertiary",
+        "displayName": "Espuma Foam",
+        "canonical": "#cfe4e1",
+        "oklch": "oklch(90.2% 0.023 186.5)",
+        "tonalRamp": [
+          "#060d0c",
+          "#1a2725",
+          "#334441",
+          "#506260",
+          "#728582",
+          "#95a5a3",
+          "#bfcac8",
+          "#ebefef"
+        ]
+      },
+      "pizarra": {
+        "role": "tertiary",
+        "displayName": "Pizarra Slate",
+        "canonical": "#7f93a8",
+        "oklch": "oklch(65.5% 0.039 249.7)",
+        "tonalRamp": [
+          "#050c13",
+          "#192532",
+          "#314152",
+          "#4d6073",
+          "#708296",
+          "#93a4b5",
+          "#bdc9d5",
+          "#ebeff3"
+        ]
+      },
+      "superficie": {
+        "role": "neutral",
+        "displayName": "Superficie",
+        "canonical": "#e9efee",
+        "oklch": "oklch(94.7% 0.007 185.3)",
+        "tonalRamp": [
+          "#0a0c0b",
+          "#212524",
+          "#3c4140",
+          "#5a5f5e",
+          "#7c8181",
+          "#9ea3a2",
+          "#c5c8c7",
+          "#edefee"
+        ]
+      },
+      "superficie-raised": {
+        "role": "neutral",
+        "displayName": "Superficie Raised",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#242424",
+          "#404040",
+          "#5d5d5d",
+          "#808080",
+          "#a1a1a1",
+          "#c7c7c7",
+          "#eeeeee"
+        ]
+      },
+      "superficie-line": {
+        "role": "neutral",
+        "displayName": "Superficie Line",
+        "canonical": "#b4c6c3",
+        "oklch": "oklch(81.2% 0.020 184.8)",
+        "tonalRamp": [
+          "#070d0c",
+          "#1c2725",
+          "#354341",
+          "#51615f",
+          "#748482",
+          "#97a5a3",
+          "#c0cac8",
+          "#ecefef"
+        ]
+      },
+      "superficie-stripe": {
+        "role": "neutral",
+        "displayName": "Superficie Stripe",
+        "canonical": "#d9e5e3",
+        "oklch": "oklch(91.2% 0.013 185.1)",
+        "tonalRamp": [
+          "#080c0b",
+          "#1f2625",
+          "#394240",
+          "#56605e",
+          "#788381",
+          "#9aa4a2",
+          "#c2c9c8",
+          "#edefef"
+        ]
+      },
+      "superficie-thead": {
+        "role": "neutral",
+        "displayName": "Superficie Thead",
+        "canonical": "#dbe6e4",
+        "oklch": "oklch(91.6% 0.012 184.1)",
+        "tonalRamp": [
+          "#080c0b",
+          "#1f2624",
+          "#394240",
+          "#56605e",
+          "#798381",
+          "#9ba4a2",
+          "#c3c9c8",
+          "#edefee"
+        ]
+      },
+      "superficie-chip": {
+        "role": "neutral",
+        "displayName": "Superficie Chip",
+        "canonical": "#d6e8e6",
+        "oklch": "oklch(91.7% 0.019 188.8)",
+        "tonalRamp": [
+          "#070d0c",
+          "#1c2625",
+          "#354342",
+          "#526160",
+          "#748482",
+          "#97a5a3",
+          "#c0cac9",
+          "#ecefef"
+        ]
+      },
+      "superficie-chip-ink": {
+        "role": "neutral",
+        "displayName": "Superficie Chip Ink",
+        "canonical": "#12474e",
+        "oklch": "oklch(36.7% 0.055 207.8)",
+        "tonalRamp": [
+          "#000e11",
+          "#032a2f",
+          "#18474e",
+          "#35666e",
+          "#5a8991",
+          "#81aab0",
+          "#b1cdd2",
+          "#e7f1f2"
+        ]
+      },
+      "superficie-chip-line": {
+        "role": "neutral",
+        "displayName": "Superficie Chip Line",
+        "canonical": "#9cc3c0",
+        "oklch": "oklch(78.8% 0.042 190.5)",
+        "tonalRamp": [
+          "#020e0d",
+          "#0f2928",
+          "#264644",
+          "#416563",
+          "#658886",
+          "#8aa9a6",
+          "#b7cdcb",
+          "#e9f0f0"
+        ]
+      },
+      "superficie-ink": {
+        "role": "neutral",
+        "displayName": "Superficie Ink",
+        "canonical": "#0d1f26",
+        "oklch": "oklch(22.7% 0.027 225.3)",
+        "tonalRamp": [
+          "#050c10",
+          "#19262c",
+          "#31434a",
+          "#4d6169",
+          "#70848c",
+          "#93a5ac",
+          "#bdcacf",
+          "#ebeff1"
+        ]
+      },
+      "superficie-muted": {
+        "role": "neutral",
+        "displayName": "Superficie Muted",
+        "canonical": "#4d6168",
+        "oklch": "oklch(47.9% 0.027 221.2)",
+        "tonalRamp": [
+          "#050d0f",
+          "#19262b",
+          "#314349",
+          "#4d6168",
+          "#70848b",
+          "#93a5ab",
+          "#bdcace",
+          "#ebeff1"
+        ]
+      },
+      "superficie-invalidado": {
+        "role": "secondary",
+        "displayName": "Rust Invalidado",
+        "canonical": "#a8461f",
+        "oklch": "oklch(51.8% 0.139 40.4)",
+        "tonalRamp": [
+          "#210000",
+          "#4b0300",
+          "#741c00",
+          "#9b3a10",
+          "#c1613d",
+          "#de8869",
+          "#f5b7a1",
+          "#ffe9e1"
+        ]
+      },
+      "pozo-surface": {
+        "role": "neutral",
+        "displayName": "Pozo Surface",
+        "canonical": "#0b171c",
+        "oklch": "oklch(19.6% 0.020 226.3)",
+        "tonalRamp": [
+          "#070c0e",
+          "#1c262a",
+          "#364247",
+          "#526066",
+          "#758389",
+          "#97a4a9",
+          "#c0c9cd",
+          "#eceff0"
+        ]
+      },
+      "pozo-raised": {
+        "role": "neutral",
+        "displayName": "Pozo Raised",
+        "canonical": "#12242b",
+        "oklch": "oklch(24.8% 0.027 224.9)",
+        "tonalRamp": [
+          "#050c10",
+          "#19262c",
+          "#31434a",
+          "#4d6169",
+          "#70848c",
+          "#93a5ac",
+          "#bdcacf",
+          "#ebeff1"
+        ]
+      },
+      "pozo-line": {
+        "role": "neutral",
+        "displayName": "Pozo Line",
+        "canonical": "#24404a",
+        "oklch": "oklch(35.4% 0.038 222.9)",
+        "tonalRamp": [
+          "#030d11",
+          "#13272e",
+          "#2a444d",
+          "#46636d",
+          "#698590",
+          "#8da6b0",
+          "#b9cbd2",
+          "#eaf0f2"
+        ]
+      },
+      "pozo-stripe": {
+        "role": "neutral",
+        "displayName": "Pozo Stripe",
+        "canonical": "#0f2128",
+        "oklch": "oklch(23.6% 0.027 225.1)",
+        "tonalRamp": [
+          "#050c10",
+          "#19262c",
+          "#31434a",
+          "#4d6169",
+          "#70848c",
+          "#93a5ac",
+          "#bdcacf",
+          "#ebeff1"
+        ]
+      },
+      "pozo-thead": {
+        "role": "neutral",
+        "displayName": "Pozo Thead",
+        "canonical": "#0f2027",
+        "oklch": "oklch(23.2% 0.026 226.4)",
+        "tonalRamp": [
+          "#060c10",
+          "#19262c",
+          "#32434a",
+          "#4e6169",
+          "#71848c",
+          "#94a5ac",
+          "#becacf",
+          "#ebeff1"
+        ]
+      },
+      "pozo-chip-ink": {
+        "role": "neutral",
+        "displayName": "Pozo Chip Ink",
+        "canonical": "#9fdde1",
+        "oklch": "oklch(85.7% 0.063 201.1)",
+        "tonalRamp": [
+          "#000f11",
+          "#002b2e",
+          "#0a494c",
+          "#2b686c",
+          "#528b8f",
+          "#7bacaf",
+          "#adcfd1",
+          "#e6f1f2"
+        ]
+      },
+      "pozo-ink": {
+        "role": "neutral",
+        "displayName": "Pozo Ink",
+        "canonical": "#e6efed",
+        "oklch": "oklch(94.5% 0.010 181.4)",
+        "tonalRamp": [
+          "#090c0b",
+          "#202524",
+          "#3b4140",
+          "#585f5e",
+          "#7a8280",
+          "#9ca3a2",
+          "#c4c8c7",
+          "#edefee"
+        ]
+      },
+      "pozo-muted": {
+        "role": "neutral",
+        "displayName": "Pozo Muted",
+        "canonical": "#9db2b3",
+        "oklch": "oklch(74.8% 0.023 200.2)",
+        "tonalRamp": [
+          "#060d0d",
+          "#1a2727",
+          "#324344",
+          "#4f6263",
+          "#718585",
+          "#94a5a6",
+          "#becacb",
+          "#ebefef"
+        ]
+      },
+      "pozo-invalidado": {
+        "role": "secondary",
+        "displayName": "Rust Invalidado (Pozo)",
+        "canonical": "#e88a62",
+        "oklch": "oklch(72.5% 0.127 43.4)",
+        "tonalRamp": [
+          "#1f0000",
+          "#470a00",
+          "#702300",
+          "#964015",
+          "#bb6540",
+          "#d98b6b",
+          "#f0b9a2",
+          "#feeae2"
+        ]
+      },
+      "graph-canvas": {
+        "role": "neutral",
+        "displayName": "Graph Canvas Black",
+        "canonical": "#101113",
+        "oklch": "oklch(17.7% 0.004 264.5)",
+        "tonalRamp": [
+          "#0b0b0c",
+          "#232426",
+          "#3f4042",
+          "#5c5e60",
+          "#7f8083",
+          "#a0a1a4",
+          "#c6c7c9",
+          "#eeeeef"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The page title; one per screen."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Dialog titles."
+      },
+      "stat": {
+        "displayName": "Stat",
+        "purpose": "Key figures on stat cards."
+      },
+      "card-label": {
+        "displayName": "Card label",
+        "purpose": "Chart and card titles, uppercase."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Everything you read."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Table headers and group headings, uppercase."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Dates, identifiers, scores and code, with tabular figures."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "toggle",
+        "value": "0.2s ease (track), 0.22s ease (thumb)",
+        "purpose": "The theme switch; removed under prefers-reduced-motion."
+      },
+      {
+        "name": "drop-zone",
+        "value": "0.15s",
+        "purpose": "Border and background of the drop zone while a file hovers."
+      },
+      {
+        "name": "graph",
+        "value": "settles before painting; expansions grow animated",
+        "purpose": "Nothing moves at rest; with reduced motion nothing moves on its own."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "xs",
+        "value": "36em"
+      },
+      {
+        "name": "sm",
+        "value": "48em"
+      },
+      {
+        "name": "md",
+        "value": "62em"
+      },
+      {
+        "name": "split",
+        "value": "1000px"
+      },
+      {
+        "name": "lg",
+        "value": "75em"
+      },
+      {
+        "name": "xl",
+        "value": "88em"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one Hidromiel action of a zone: a dialog's submit, Search.",
+      "html": "<button class=\"ds-btn-primary\">Approve</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--ms-radius, 6px);font:600 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);cursor:pointer;background:var(--ms-hidromiel, #d4a03a);color:var(--ms-pozo, #0d1f26);border:1px solid rgba(13,31,38,.3);}.ds-btn-primary:hover{filter:brightness(1.07);}.ds-btn-primary:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "The default for every action.",
+      "html": "<button class=\"ds-btn-secondary\">Edit</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--ms-radius, 6px);font:600 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);cursor:pointer;background:var(--ms-raised, #ffffff);color:var(--ms-ink, #0d1f26);border:1px solid var(--ms-line, #b4c6c3);}.ds-btn-secondary:hover{background:var(--ms-hover, rgba(30,107,115,.14));border-color:var(--ms-accent, #1e6b73);}.ds-btn-secondary:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Cancel and clearing filters; Cancel sits left of the primary.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--ms-radius, 6px);font:600 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);cursor:pointer;background:transparent;color:var(--ms-ink, #0d1f26);border:1px solid transparent;}.ds-btn-ghost:hover{background:var(--ms-hover, rgba(30,107,115,.14));}.ds-btn-ghost:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Delete, remove, revoke; always confirmed in a dialog.",
+      "html": "<button class=\"ds-btn-danger\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3\"/></svg>Delete</button>",
+      "css": ".ds-btn-danger{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--ms-radius, 6px);font:600 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);cursor:pointer;background:transparent;color:var(--ms-invalidado, #a8461f);border:1px solid var(--ms-invalidado, #a8461f);}.ds-btn-danger:hover{background:color-mix(in srgb, var(--ms-invalidado, #a8461f) 14%, transparent);}.ds-btn-danger:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "One size and shape for every field; the label is 13px semibold above.",
+      "html": "<label class=\"ds-field\"><span>Brain name</span><input placeholder=\"docs\"></label>",
+      "css": ".ds-field{display:flex;flex-direction:column;gap:4px;font:600 13px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);color:var(--ms-ink, #0d1f26);}.ds-field input{height:36px;padding:0 12px;border-radius:var(--ms-radius, 6px);border:1px solid var(--ms-line, #b4c6c3);background:var(--ms-raised, #ffffff);color:var(--ms-ink, #0d1f26);font:400 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);}.ds-field input:focus{border-color:var(--ms-accent, #1e6b73);}.ds-field input:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "Pill",
+      "kind": "chip",
+      "refersTo": "pill",
+      "description": "A non-interactive status label, always with its word.",
+      "html": "<span class=\"ds-pill\">Pending</span> <span class=\"ds-pill\" data-tone=\"danger\">Invalidated</span>",
+      "css": ".ds-pill{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:var(--ms-radius, 6px);border:1px solid var(--ms-chip-line, #9cc3c0);background:var(--ms-chip-bg, #d6e8e6);color:var(--ms-chip-fg, #12474e);font:600 11px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);letter-spacing:.06em;text-transform:uppercase;}.ds-pill[data-tone=danger]{background:#f4d6c8;color:#8a3416;border-color:#dba58d;}"
+    },
+    {
+      "name": "Status Segments",
+      "kind": "chip",
+      "refersTo": "segment",
+      "description": "The status row of an inbox, with counts and All first.",
+      "html": "<div class=\"ds-seg-row\" role=\"radiogroup\" aria-label=\"Status\"><button class=\"ds-seg\" role=\"radio\" aria-checked=\"true\">All <b>12</b></button><button class=\"ds-seg\" role=\"radio\" aria-checked=\"false\">Pending <b>3</b></button></div>",
+      "css": ".ds-seg-row{display:flex;gap:8px;}.ds-seg{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:var(--ms-radius, 6px);border:1px solid var(--ms-chip-line, #9cc3c0);background:var(--ms-chip-bg, #d6e8e6);color:var(--ms-chip-fg, #12474e);font:600 13px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);cursor:pointer;}.ds-seg:hover{border-color:var(--ms-accent, #1e6b73);}.ds-seg[aria-checked=true]{background:var(--ms-accent, #1e6b73);color:var(--ms-on-accent, #ffffff);border-color:var(--ms-accent, #1e6b73);}.ds-seg b{min-width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;font-size:11px;background:var(--ms-raised, #ffffff);color:var(--ms-ink, #0d1f26);}.ds-seg[aria-checked=true] b{background:var(--ms-on-accent, #ffffff);color:var(--ms-accent, #1e6b73);}.ds-seg:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar entry; the active one has the teal wash and a 3px left edge.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">Proposals</a><a href=\"#\">Facts</a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:2px;width:220px;}.ds-nav a{padding:8px 12px;border-radius:var(--ms-radius, 6px);color:var(--ms-ink, #0d1f26);text-decoration:none;font:400 14px var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);border-left:3px solid transparent;}.ds-nav a:hover{background:var(--ms-hover, rgba(30,107,115,.14));}.ds-nav a[aria-current]{background:var(--ms-hover, rgba(30,107,115,.14));color:var(--ms-accent, #1e6b73);font-weight:600;border-left-color:var(--ms-accent, #1e6b73);}.ds-nav a:focus-visible{outline:2px solid var(--ms-focus, #1e6b73);outline-offset:2px;}"
+    },
+    {
+      "name": "List Card",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A fact or episode in a list; invalidated ones are rust and struck through.",
+      "html": "<article class=\"ds-card\"><header><strong>deploys to</strong><span>2026-10-30</span></header><p>The API deploys to the staging cluster.</p></article>",
+      "css": ".ds-card{display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-radius:var(--ms-radius, 6px);border:1px solid var(--ms-line, #b4c6c3);background:var(--ms-raised, #ffffff);color:var(--ms-ink, #0d1f26);font:400 14px/1.55 var(--ms-sans, 'Instrument Sans', system-ui, sans-serif);}.ds-card:hover{border-color:var(--ms-accent, #1e6b73);}.ds-card header{display:flex;justify-content:space-between;gap:12px;}.ds-card header span{font:400 12px var(--ms-mono, monospace);color:var(--ms-muted, #4d6168);}.ds-card p{margin:0;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Well of Mímir",
+    "overview": "In the myth, Mímir guards a well of knowledge that Odin consults. The interface is that well: deep and still, read from the surface. The two themes take their names from it. **Superficie** is the light surface of the water, a pale teal-grey. **Pozo** is the well itself, a deep blue-green that is never pure black. **Mimir** teal marks where you are and where you can go. **Hidromiel**, the mead gold, is kept for the single action that matters on each zone, so it reads as an offering rather than decoration. Nothing in the system floats or glows. Depth comes from tone and from the 1px rule at the edge of each surface.\n\nThis is an operating interface. Curators, individual users and administrators come to review, query and maintain a memory, so density and scanability come first. Every control in a row has the same height. Tables are striped in solid colour. Dates and identifiers are set in a monospace with tabular figures, so columns of history line up. Personality lives in a few precise places: Oxanium on titles and figures, the gold primary button, the entity chips coloured by type, and the dark graph canvas that never turns light.\n\nComponents are sober and precise: flat, with a 1px rule and one corner radius, and fixed heights. Colour belongs to state (active, success, warning, danger, invalidated) and to the one primary action per zone. It is never there for decoration.",
+    "keyCharacteristics": [
+      "Two themes of equal standing, Superficie and Pozo, built from the same tokens.",
+      "Flat surfaces separated by 1px rules. No shadows.",
+      "One corner (6px) for every control, chip and panel. 10px only for dialogs, side panels and settings groups.",
+      "One control height (36px). Table row actions are 28px and pills 24px.",
+      "Oxanium for display and figures, Instrument Sans for everything you read, and JetBrains Mono for data.",
+      "Hidromiel gold appears on one primary action per zone and nowhere else as a fill."
+    ],
+    "rules": [
+      {
+        "name": "The One Mead Rule",
+        "body": "A zone has at most one Hidromiel fill: its primary action. If two buttons in a zone both want to be gold, one of them is secondary.",
+        "section": "colors"
+      },
+      {
+        "name": "The Accent Is a Signpost Rule",
+        "body": "Teal marks state, links and focus. It never colours body text or decoration, and text on a surface is always ink or muted.",
+        "section": "colors"
+      },
+      {
+        "name": "The Word Before Colour Rule",
+        "body": "Every state carries a word or a date (invalidated, success, warn, danger). Colour only reinforces it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Same Type, Same Colour Rule",
+        "body": "An entity type takes its colour from a hash of its name (`typeColor` in `web/src/ui/palette.ts`), so a Host is the same colour on every screen and in both themes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Weights Rule",
+        "body": "Instrument Sans ships in 400 and 600, and Oxanium in 500 and 600. Do not ask for 700 or 800: the browser would fake the bold. Some sub-nav headings and graph legends currently do, which is drift to correct.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Truth Rule",
+        "body": "Any column of dates or numbers is set in the data style, so the digits line up and history can be compared at a glance.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Height Rule",
+        "body": "Controls in a row are all 36px: buttons, fields, selects, segments and icon buttons.",
+        "section": "layout"
+      },
+      {
+        "name": "The Page Owns the Height Rule",
+        "body": "Pages fill the window and their data area scrolls. Screens never size themselves against the viewport.",
+        "section": "layout"
+      },
+      {
+        "name": "The No-Shadow Rule",
+        "body": "Relief comes from the 1px rule and the surface colour, never from `box-shadow`. The chart tooltip currently breaks this, which is drift to correct.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Inset Marker Exception",
+        "body": "A 3px inset edge marks a selected item (the active sub-nav entry, a table sub-row). It is a position marker, not elevation.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** build every screen from the kit in `web/src/ui`. `npm run check:ui` fails the build when a screen uses a Mantine primitive the kit wraps, an inline style, a native element, a colour literal, `vh`, or a loose loading or empty text.",
+      "**Do** keep controls in a row at 36px. Use 28px only for row actions and 24px for pills.",
+      "**Do** use the 6px corner everywhere, and 10px only for dialogs, side panels and settings groups.",
+      "**Do** give every state a word or a date as well as its tone, and strike invalidated facts through as well as colouring them rust.",
+      "**Do** set dates, identifiers and scores in the data style with tabular figures.",
+      "**Do** take colours from the tokens (`var(--ms-…)`) or from `web/src/ui/palette.ts`, and check both themes.",
+      "**Do** use the fixed action verbs and their icons: Add, Create, Delete, Remove, Revoke, Cancel, Close, Undo, Search, Run."
+    ],
+    "donts": [
+      "**Don't** use `box-shadow` for depth. Use the raised colour and a 1px line.",
+      "**Don't** put more than one Hidromiel button in a zone.",
+      "**Don't** use teal for body text or decoration.",
+      "**Don't** use emoji or text characters as icons. Icons are Tabler icons registered in `web/src/ui/Icon.tsx`.",
+      "**Don't** convey a state through colour alone.",
+      "**Don't** lighten the graph canvas in the light theme. Type colours are tuned against the dark canvas.",
+      "**Don't** use weights the fonts do not ship (700 or 800 in Instrument Sans).",
+      "**Don't** load fonts or any other asset from a third-party host. Serve them from the instance (see PRODUCT.md)."
+    ]
+  }
+}
