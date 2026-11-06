@@ -262,7 +262,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
     {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
       <Text size="xs" c="dimmed">{t("Enviada por {{who}}", { who: d.author })} · <span className="ms-data">{fmt(d.created_at)}</span> · {[d.source_description, t(SOURCE[d.source] ?? d.source)].filter(Boolean).join(" · ")}</Text>
       <DeciderView d={d} />
-    </Stack> : <Steps>
+    </Stack> : <Steps label={t("Historia de la propuesta")}>
       <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text>
         <Text size="xs" c="dimmed">{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</Text></Step>
       <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
@@ -476,6 +476,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
         <Btn kind={clear ? "primary" : "danger"} loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
           onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{known && !secret ? knownReject(known, t) : t("Rechazar")}</Btn>
         <Btn kind={clear ? "secondary" : "primary"} loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
+          aria-label={checking ? `${secret ? t("Enmascarar y aprobar") : t("Aprobar")}: ${t("Antes de aprobar, se comprueba lo que el brain ya sabe")}` : undefined}
           onClick={approve} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
@@ -644,6 +645,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const advance = (id: number) => {  // after a decision the next one opens, so the curator never goes back to the list
     const i = items.findIndex((p) => p.id === id);
     const next = items[i + 1] ?? items[i - 1];
+    if (next && !items[i + 1]) setMoved(t("Era la última de la cola: se abre la anterior, #{{id}}.", { id: next.id }));
     if (next) { setActive(next.id); ops.setNote(""); setFocusTo("title"); } else setShowDetail(false);
   };
   useEffect(() => {
@@ -701,7 +703,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {p.related_verdict === "stale" && <Pill size="xs" tone="neutral" title={t("Se parece a algo que dejó de ser cierto")}><Group gap={4} wrap="nowrap"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</Group></Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><Group gap={4} wrap="nowrap"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</Group></Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
-    meta: <><span className="ms-queue-author">{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
+    meta: <><span className="ms-queue-author">{p.author}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
     <SelectField className="ms-only-narrow" aria-label={t("Qué propuestas ver")} allowDeselect={false} comboboxProps={{ withinPortal: true }}
@@ -727,11 +729,13 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
         ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={() => setMode("decided")}>{t("Ver las decididas")}</Btn></EmptyState>
-        : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined}
+        : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading"
           list={<>
+            <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
             <div className="ms-inbox-bar">
               {selected.length > 0 ? <>
                 <Text size="sm" fw={600}>{t("{{n}} seleccionadas", { n: selected.length })}</Text>
+                {selected.some(oneByOne) && <Text size="xs" c="dimmed">{t("{{k}} se aprueban aparte", { k: selected.filter(oneByOne).length })}</Text>}
                 <Btn size="row" icon="check" onClick={() => ask("approve")}>{t("Aprobar las seleccionadas")}</Btn>
                 <Btn size="row" kind="danger" icon="close" onClick={() => ask("reject")}>{t("Rechazar las seleccionadas")}</Btn>
                 <Btn size="row" kind="ghost" onClick={() => setChecked(new Set())}>{t("Quitar la selección")}</Btn>
@@ -808,7 +812,7 @@ function MineTab({ ops, isCurator }: { ops: Ops; isCurator: boolean }) {
       <TextArea size="xs" autosize minRows={3} label={t("Contenido")} placeholder={t("Qué ha pasado o qué hay que recordar, con fecha y nombres exactos.")} value={body} onChange={(e) => setBody(e.currentTarget.value)} />
       {isCurator && <Text size="xs" c="dimmed">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
       <Group align="flex-end">
-        <NumberField size="xs" label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={170} />
+        <NumberField size="xs" label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={170} hideControls />
         <Btn kind="primary" disabled={!name || !body} loading={submit.isPending} onClick={() => submit.mutate()} icon="plus">{isCurator ? t("Crear y aprobar") : t("Proponer")}</Btn>
       </Group>
       <MutationError error={submit.error} />
