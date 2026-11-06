@@ -7,7 +7,9 @@ export type QueueItem = { id: number; title: ReactNode; preview?: string; meta?:
 
 /** A review queue: one item is open (the detail beside it), several can be checked for a decision on all of them. Each item is a list
  *  entry with a real button to open it and its own checkbox, so screen readers keep the list structure and the open one is announced
- *  (`aria-current`). Up/Down move the focus between items; the page's J/K shortcuts move the open one (`useShortcuts`). */
+ *  (`aria-current`). The queue is one Tab stop (the open item, or the first): Up/Down, Home/End move the focus between items, and the
+ *  page's J/K shortcuts move the open one, the focus with it when it was in the queue (`useShortcuts`). The checkboxes stay out of the Tab
+ *  order: the page's X checks the item with the focus, and a checked item says so to a screen reader. */
 export function QueueList({ items, activeId, focusKey, onActivate, checked, onCheck, label }: {
   items: QueueItem[]; activeId: number | null; onActivate: (id: number) => void; checked: Set<number>; onCheck: (id: number, on: boolean) => void; label: string;
   /** Bumped to move the focus to the open item (after an undo, for example), so it is not lost when the control that had it goes away. */
@@ -15,29 +17,35 @@ export function QueueList({ items, activeId, focusKey, onActivate, checked, onCh
 }) {
   const { t } = useTranslation();
   const refs = useRef(new Map<number, HTMLButtonElement>());
-  useEffect(() => {  // the open item stays in view when J/K move it
-    if (activeId !== null) refs.current.get(activeId)?.scrollIntoView({ block: "nearest" });
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {  // the open item stays in view when J/K move it, and takes the focus when the queue had it
+    if (activeId === null) return;
+    const el = refs.current.get(activeId);
+    el?.scrollIntoView({ block: "nearest" });
+    if (el && list.current?.contains(document.activeElement) && document.activeElement !== el) el.focus();
   }, [activeId]);
   useEffect(() => {
     if (focusKey && activeId !== null) refs.current.get(activeId)?.focus();
   }, [focusKey]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const move = (from: number, step: number) => {
-    const i = items.findIndex((it) => it.id === from);
-    const next = items[i + step];
+  const keys: Record<string, (i: number) => number> = { ArrowDown: (i) => i + 1, ArrowUp: (i) => i - 1, Home: () => 0, End: () => items.length - 1 };
+  const move = (from: number, key: string) => {
+    const next = items[keys[key](items.findIndex((it) => it.id === from))];
     if (next) refs.current.get(next.id)?.focus();
   };
+  const stop = items.some((it) => it.id === activeId) ? activeId : items[0]?.id;  // the queue's one Tab stop
   return (
-    <ul className="ms-queue" aria-label={label}>
+    <ul className="ms-queue" aria-label={label} ref={list}>
       {items.map((it) => (
-        <li key={it.id} className="ms-queue-item" data-active={it.id === activeId ? "" : undefined} data-checked={checked.has(it.id) ? "" : undefined}>
-          <Check checked={checked.has(it.id)} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={it.label ? t("Seleccionar #{{id}} · {{title}}", { id: it.id, title: it.label }) : t("Seleccionar #{{id}}", { id: it.id })} />
-          <button type="button" className="ms-queue-open" aria-current={it.id === activeId ? "true" : undefined}
-            aria-labelledby={`ms-q-${it.id}-t`} aria-describedby={it.preview || it.meta || it.tags ? `ms-q-${it.id}-d` : undefined}
+        <li key={it.id} className="ms-queue-item" data-qid={it.id} data-active={it.id === activeId ? "" : undefined} data-checked={checked.has(it.id) ? "" : undefined}>
+          <Check checked={checked.has(it.id)} tabIndex={-1} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={it.label ? t("Seleccionar #{{id}} · {{title}}", { id: it.id, title: it.label }) : t("Seleccionar #{{id}}", { id: it.id })} />
+          <button type="button" className="ms-queue-open" aria-current={it.id === activeId ? "true" : undefined} tabIndex={it.id === stop ? 0 : -1}
+            aria-labelledby={`ms-q-${it.id}-t`} aria-describedby={`ms-q-${it.id}-d`}
             ref={(el) => { if (el) refs.current.set(it.id, el); else refs.current.delete(it.id); }}
             onClick={() => onActivate(it.id)}
-            onKeyDown={(e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); move(it.id, e.key === "ArrowDown" ? 1 : -1); } }}>
+            onKeyDown={(e) => { if (keys[e.key]) { e.preventDefault(); move(it.id, e.key); } }}>
             <span className="ms-queue-title" id={`ms-q-${it.id}-t`}>{it.title}</span>
             <span className="ms-queue-desc" id={`ms-q-${it.id}-d`}>
+              {checked.has(it.id) && <span className="ms-sr">{t("Seleccionada.")} </span>}
               {it.preview && <span className="ms-queue-preview">{it.preview}</span>}
               {(it.meta || it.tags) && <span className="ms-queue-meta">{it.tags}{it.meta}</span>}
             </span>
@@ -70,14 +78,25 @@ export function useShortcuts(map: Record<string, () => void>, enabled = true, sc
 
 /** The two-pane layout of a review screen: the queue and the open item side by side; on a narrow content area (below about 760px) one at a
  *  time, the detail when `showDetail`, with its own way back. Measured on the content width, like Ask and Query. */
-export function InboxLayout({ list, detail, showDetail, detailLabelledBy, listLabelledBy, scopeRef }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
+/** The queue item the focus is on, if it is in a `QueueList`: the page's X checks that one rather than the open one. */
+export function focusedQueueItem(): number | null {
+  const li = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>("[data-qid]") : null;
+  return li ? Number(li.dataset.qid) : null;
+}
+
+export function InboxLayout({ list, detail, showDetail, detailLabelledBy, listLabelledBy, scopeRef, skip }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
+  /** A link at the top of the queue, shown when it has the focus, straight to the open item («Ir a la propuesta abierta»). */
+  skip?: { label: string; onSkip: () => void };
   /** The area a screen's shortcuts act in (`useShortcuts`' scope): a click anywhere in it, even on plain text, puts the focus there. */ scopeRef?: RefObject<HTMLDivElement | null>;
   /** The id of the open item's heading, which names the detail region for screen readers. */ detailLabelledBy?: string;
   /** The id of the queue's heading, which names the queue region. */ listLabelledBy?: string }) {
   return (
     <div className="ms-inbox-wrap">
       <div className="ms-inbox" data-detail={showDetail ? "" : undefined} ref={scopeRef} tabIndex={scopeRef ? -1 : undefined}>
-        <section className="ms-inbox-list" aria-labelledby={listLabelledBy}>{list}</section>
+        <section className="ms-inbox-list" aria-labelledby={listLabelledBy}>
+          {skip && <button type="button" className="ms-skip" onClick={skip.onSkip}>{skip.label}</button>}
+          {list}
+        </section>
         <section className="ms-inbox-detail" aria-labelledby={detailLabelledBy}>{detail}</section>
       </div>
     </div>
