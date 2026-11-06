@@ -670,6 +670,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     setFocusTo(null);
   }, [focusTo, d?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
   const detailRef = useRef<HTMLDivElement>(null);
+  const inboxRef = useRef<HTMLDivElement>(null);  // the queue and the open proposal: where the single-key shortcuts act
   useEffect(() => {  // one pane at a time (the queue hidden): the proposal just opened is read from its title, not from mid-page
     if (!showDetail || active === null || listRef.current?.getClientRects().length) return;
     detailRef.current?.scrollIntoView({ block: "start" });
@@ -708,7 +709,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (id === null) return;
     setChecked((c) => { const n = new Set(c); (on ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
   };
-  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, mode === "pending" && confirm === null && !masking);
+  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, mode === "pending" && confirm === null && !masking, inboxRef);
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
@@ -745,7 +746,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
         ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={() => setMode("decided")}>{t("Ver las decididas")}</Btn></EmptyState>
-        : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading"
+        : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading" scopeRef={inboxRef}
           list={<>
             <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
             <div className="ms-inbox-bar">
@@ -783,7 +784,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             {footer && <div className="ms-inbox-actions" ref={actions}>
               {shown && ops.notice({ openId: active })}
               {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} waiting={partial} onApprove={() => decide("approve")} />
-              <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
+              <Text className="ms-inbox-keys">{t("Atajos, con el foco en la cola o en la propuesta:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
           </>} />}
     </>}
