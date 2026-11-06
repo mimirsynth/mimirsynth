@@ -533,7 +533,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
         <Btn kind="link" className="ms-hit" icon={ops.explain ? "chevronDown" : "chevronRight"} aria-expanded={ops.explain} aria-controls={`ms-why-${d.id}`}
           onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
       </Group>
-      <Group gap="xs">
+      <Group gap="xs" className="ms-decide">
         <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
           aria-label={known && !secret ? knownReject(known, t) : undefined}
           onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{t("Rechazar")}{known && !secret && <span className="ms-reject-why">: {knownWhy(known, t)}</span>}</Btn>
