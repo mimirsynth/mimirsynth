@@ -192,9 +192,10 @@ function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, on
 /** The screen reader's side of the notice: always mounted, because a live region must exist before it changes, and it speaks each step
  *  of a decision once (decided, entering, in the graph or failed), never the countdown. */
 function DecisionLive({ base, graph, last, llm }: { base: string; graph: string; last: Decision | null; llm: boolean }) {
+  const { t } = useTranslation();
   const m = useDecisionText(base, graph, last, llm);
   const [said, setSaid] = useState({ phase: "", text: "" });
-  if (m && m.phase !== said.phase) setSaid({ phase: m.phase, text: m.text });
+  if (m && m.phase !== said.phase) setSaid({ phase: m.phase, text: m.undo ? `${m.text} ${t("Se deshace con «Deshacer» o con Z en la cola.")}` : m.text });
   return <div className="ms-sr-only" role="status" aria-live="polite">{m ? said.text : ""}</div>;
 }
 
@@ -374,7 +375,12 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
   useEffect(() => { if (ops.noteKey !== seenNoteKey.current) { seenNoteKey.current = ops.noteKey; openNote(); } }, [ops.noteKey]);  // eslint-disable-line react-hooks/exhaustive-deps
   const showNote = noteOpen || !!ops.note;
   return (<Stack gap="xs">
-    {showNote && <TextArea id={noteId} autosize minRows={1} maxRows={4} label={t("Nota (opcional)")} value={ops.note} onChange={(e) => ops.setNote(e.currentTarget.value)} />}
+    {showNote && <TextArea id={noteId} autosize minRows={1} maxRows={4} label={t("Nota (opcional)")} value={ops.note} onChange={(e) => ops.setNote(e.currentTarget.value)}
+      description={<span className="ms-inbox-keys"><kbd>{t("Ctrl")}</kbd>+<kbd>{t("Intro")}</kbd> {t("aprueba")} · <kbd>{t("Esc")}</kbd> {t("sale de la nota")}</span>}
+      onKeyDown={(e) => {  // the keyboard loop goes on from the note: Esc back to the proposal, Ctrl+Enter approves as A does
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); document.getElementById(`ms-title-${d.id}`)?.focus(); }
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !waiting && !review.isPending) { e.preventDefault(); if (asks) askMask(true); else decide("approve").catch(() => {}); }
+      }} />}
     {(secret || d.correction) && <Stack gap={2}>
       {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
       {d.correction && <Text size="xs" c="dimmed">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: d.correction.invalid_at.slice(0, 10) })}</Text>}
@@ -382,8 +388,8 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
     <MutationError error={review.error} />
     <Group justify="space-between" gap="xs">
       <Group gap="xs">
-        {!showNote && <Btn kind="link" icon="plus" onClick={openNote}>{t("Nota")}</Btn>}
-        <Btn kind="link" icon={ops.explain ? "chevronDown" : "chevronRight"} aria-expanded={ops.explain} aria-controls={`ms-why-${d.id}`}
+        {!showNote && <Btn kind="link" icon="plus" className="ms-hit" onClick={openNote}>{t("Nota")}</Btn>}
+        <Btn kind="link" className="ms-hit" icon={ops.explain ? "chevronDown" : "chevronRight"} aria-expanded={ops.explain} aria-controls={`ms-why-${d.id}`}
           onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
       </Group>
       <Group gap="xs">
@@ -591,7 +597,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
         ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={() => setMode("decided")}>{t("Ver las decididas")}</Btn></EmptyState>
-        : <InboxLayout showDetail={showDetail}
+        : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined}
           list={<>
             <div className="ms-inbox-bar">
               {selected.length > 0 ? <>

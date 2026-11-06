@@ -31,12 +31,15 @@ export function QueueList({ items, activeId, focusKey, onActivate, checked, onCh
         <li key={it.id} className="ms-queue-item" data-active={it.id === activeId ? "" : undefined} data-checked={checked.has(it.id) ? "" : undefined}>
           <Check checked={checked.has(it.id)} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={t("Seleccionar #{{id}}", { id: it.id })} />
           <button type="button" className="ms-queue-open" aria-current={it.id === activeId ? "true" : undefined}
+            aria-labelledby={`ms-q-${it.id}-t`} aria-describedby={it.preview || it.meta || it.tags ? `ms-q-${it.id}-d` : undefined}
             ref={(el) => { if (el) refs.current.set(it.id, el); else refs.current.delete(it.id); }}
             onClick={() => onActivate(it.id)}
             onKeyDown={(e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); move(it.id, e.key === "ArrowDown" ? 1 : -1); } }}>
-            <span className="ms-queue-title">{it.title}</span>
-            {it.preview && <span className="ms-queue-preview">{it.preview}</span>}
-            {(it.meta || it.tags) && <span className="ms-queue-meta">{it.tags}{it.meta}</span>}
+            <span className="ms-queue-title" id={`ms-q-${it.id}-t`}>{it.title}</span>
+            <span className="ms-queue-desc" id={`ms-q-${it.id}-d`}>
+              {it.preview && <span className="ms-queue-preview">{it.preview}</span>}
+              {(it.meta || it.tags) && <span className="ms-queue-meta">{it.tags}{it.meta}</span>}
+            </span>
           </button>
         </li>))}
     </ul>
@@ -64,12 +67,13 @@ export function useShortcuts(map: Record<string, () => void>, enabled = true) {
 
 /** The two-pane layout of a review screen: the queue and the open item side by side; on a narrow content area (below about 760px) one at a
  *  time, the detail when `showDetail`, with its own way back. Measured on the content width, like Ask and Query. */
-export function InboxLayout({ list, detail, showDetail }: { list: ReactNode; detail: ReactNode; showDetail: boolean }) {
+export function InboxLayout({ list, detail, showDetail, detailLabelledBy }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
+  /** The id of the open item's heading, which names the detail region for screen readers. */ detailLabelledBy?: string }) {
   return (
     <div className="ms-inbox-wrap">
       <div className="ms-inbox" data-detail={showDetail ? "" : undefined}>
         <div className="ms-inbox-list">{list}</div>
-        <section className="ms-inbox-detail">{detail}</section>
+        <section className="ms-inbox-detail" aria-labelledby={detailLabelledBy}>{detail}</section>
       </div>
     </div>
   );
