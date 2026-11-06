@@ -68,12 +68,13 @@ export function useShortcuts(map: Record<string, () => void>, enabled = true) {
 
 /** The two-pane layout of a review screen: the queue and the open item side by side; on a narrow content area (below about 760px) one at a
  *  time, the detail when `showDetail`, with its own way back. Measured on the content width, like Ask and Query. */
-export function InboxLayout({ list, detail, showDetail, detailLabelledBy }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
-  /** The id of the open item's heading, which names the detail region for screen readers. */ detailLabelledBy?: string }) {
+export function InboxLayout({ list, detail, showDetail, detailLabelledBy, listLabelledBy }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
+  /** The id of the open item's heading, which names the detail region for screen readers. */ detailLabelledBy?: string;
+  /** The id of the queue's heading, which names the queue region. */ listLabelledBy?: string }) {
   return (
     <div className="ms-inbox-wrap">
       <div className="ms-inbox" data-detail={showDetail ? "" : undefined}>
-        <div className="ms-inbox-list">{list}</div>
+        <section className="ms-inbox-list" aria-labelledby={listLabelledBy}>{list}</section>
         <section className="ms-inbox-detail" aria-labelledby={detailLabelledBy}>{detail}</section>
       </div>
     </div>

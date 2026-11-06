@@ -521,7 +521,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-inbox:not([data-detail]) .ms-queue-item[data-active] { background: none; box-shadow: none; }  /* nothing is open while the queue shows */
   .ms-inbox .ms-queue-item { padding: 8px 12px; }  /* declared before the queue's own rules: the .ms-inbox prefix outranks them */
   .ms-inbox .ms-queue-meta { flex-wrap: nowrap; overflow: hidden; }
-  .ms-inbox .ms-queue-meta .ms-pill, .ms-inbox .ms-queue-meta .ms-data { flex-shrink: 0; }
+  .ms-inbox .ms-queue-meta .ms-pill, .ms-inbox .ms-queue-meta .ms-queue-age { flex-shrink: 0; }
   .ms-queue-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .ms-queue { list-style: none; margin: 0; padding: 0; }
@@ -534,7 +534,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-title { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .ms-queue-preview { font-size: 13px; color: var(--ms-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-queue-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ms-muted); }
-.ms-queue-meta .ms-data { font-size: 12px; }
+.ms-queue-age { white-space: nowrap; }
 
 .ms-fold[hidden] { display: none; }  /* a folded region stays in the page, for aria-controls, but out of sight */
 .ms-hit { min-height: 24px; }  /* text buttons outside a sentence: at least the 24px target of WCAG 2.5.8 */

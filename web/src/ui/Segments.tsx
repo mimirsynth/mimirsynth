@@ -22,7 +22,7 @@ export function Segments({ value, onChange, data, label }: { value: string; onCh
         <button key={i.value} type="button" role="radio" aria-checked={value === i.value} tabIndex={i.value === focusable ? 0 : -1} className="ms-seg" data-active={value === i.value ? "" : undefined}
           onClick={() => onChange(i.value)} onKeyDown={(e) => move(e, n)}>
           {i.label}
-          {i.count !== undefined && <span className="ms-seg-count">{i.count}</span>}
+          {i.count !== undefined && <><span className="ms-sr-only">, </span><span className="ms-seg-count">{i.count}</span></>}
         </button>
       ))}
     </div>
