@@ -514,8 +514,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-inbox-nav { display: none; }
 .ms-inbox-keys { font-size: 12px; color: var(--ms-muted); }
 .ms-detail-title { margin: 0; font-family: var(--ms-display); font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--ms-ink); }  /* the open proposal's heading: where the focus lands after a decision */
-.ms-detail-title:focus { outline: none; }
-.ms-detail-title:focus-visible { outline: none; text-decoration: underline; text-decoration-color: var(--ms-focus); text-decoration-thickness: 2px; text-underline-offset: 4px; }  /* where the focus landed after a decision, without boxing the heading */
+.ms-detail-title:focus { outline: none !important; }  /* the global focus ring is !important: the underline below is this heading's mark */
+.ms-detail-title:focus-visible { outline: none !important; text-decoration: underline; text-decoration-color: var(--ms-focus); text-decoration-thickness: 2px; text-underline-offset: 4px; }  /* where the focus landed after a decision, without boxing the heading */
 .ms-inbox-actions:empty { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .ms-inbox-keys { display: none; }  /* no keyboard to press them with */

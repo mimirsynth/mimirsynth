@@ -229,6 +229,21 @@ def test_the_queue_checks_what_was_never_checked(client, monkeypatch):  # noqa: 
     assert r["done"] == [fresh] and r["skipped"] == [{"id": dup, "reason": "known"}, {"id": close, "reason": "close"}]
 
 
+def test_sent_sorts_by_its_date(client):  # noqa: F811
+    """«Enviada» is the date it was sent: a proposal imported or backdated (a later id, an earlier date) sorts by the date, not the number."""
+    from datetime import datetime, timedelta, timezone
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    contrib, curator = _brain(client, "inbox-sent")
+    old = _propose(client, "inbox-sent", contrib, "La primera en enviarse")
+    late = _propose(client, "inbox-sent", contrib, "Importada después, con su fecha de antes")
+    with _factory()() as db:
+        db.get(Proposal, late).created_at = datetime.now(timezone.utc) - timedelta(days=30); db.commit()
+    base = "/api/brains/inbox-sent/proposals"
+    ids = [p["id"] for p in client.get(base, params={"sort": "at", "order": "desc"}, headers=curator).json()["items"]]
+    assert ids == [old, late]
+
+
 def test_kind_counts_follow_the_state(client):  # noqa: F811
     """«Añaden 23» beside «7 decided» was the whole brain's count: each kind is also counted inside each state."""
     contrib, curator = _brain(client, "inbox-kinds")

@@ -550,7 +550,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
     </Stack>
     {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary" warn
       alt={{ label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) }}
-      title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un dato caducado?")}
+      title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un hecho que ya no es cierto?")}
       warning={known.verdict === "duplicate"
         ? (known.fact ? t("El brain ya dice algo casi igual: «{{fact}}». Si la apruebas, el grafo tendrá lo mismo dos veces.", { fact: quoted(known.fact.fact) })
           : t("El brain ya dice algo casi igual. Si la apruebas, el grafo tendrá lo mismo dos veces."))
@@ -684,6 +684,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const goes = batch.verb === "approve" ? batch.items.filter((p) => !oneByOne(p)) : batch.items;
   const stays = batch.items.filter((p) => !goes.includes(p));
   const [showGoes, setShowGoes] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (confirm === null) setShowGoes(false); }, [confirm]);
   const bulk = useMutation({ mutationFn: ({ verb, ids }: { verb: "approve" | "reject"; ids: number[] }) => send<{ done: number[]; skipped: { id: number; reason: string }[]; undo_seconds?: number }>("POST", `${ops.base}/bulk`,
       { verb, ids, note: bulkNote }),
@@ -784,14 +785,14 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
           skip={active !== null ? { label: t("Ir a la propuesta abierta"), onSkip: () => { setShowDetail(true); setFocusTo("title"); } } : undefined}
           list={<>
             <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
-            <div className="ms-inbox-bar">
+            <div className="ms-inbox-bar" ref={barRef}>
               {selected.length > 0 ? <>
                 <Text size="sm" fw={600} className="ms-inbox-bar-what" title={selected.some(oneByOne) ? (selected.filter(oneByOne).length === 1 ? t("1 se decide aparte: una corrección, un secreto por revisar, algo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.")
                   : t("{{k}} se deciden una a una: correcciones, secretos por revisar, lo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.", { k: selected.filter(oneByOne).length })) : undefined}>
                   {selected.length === 1 ? t("1 seleccionada") : t("{{n}} seleccionadas", { n: selected.length })}{selected.some(oneByOne) && <span className="ms-inbox-bar-aside"> · {t("{{k}} aparte", { k: selected.filter(oneByOne).length })}</span>}</Text>
                 <Btn size="row" onClick={() => ask("approve")}>{t("Aprobar")}</Btn>
                 <Btn size="row" kind="danger" onClick={() => ask("reject")}>{t("Rechazar")}</Btn>
-                <IconButton icon="close" label={t("Quitar la selección")} onClick={() => setChecked(new Set())} />
+                <IconButton icon="close" label={t("Quitar la selección")} onClick={() => { setChecked(new Set()); setTimeout(() => barRef.current?.querySelector("button")?.focus()); }} />
               </> : <>
                 <Text size="sm" c="dimmed">{t("Por riesgo y antigüedad")}</Text>
                 <Btn size="row" kind="ghost" onClick={() => setChecked(new Set(items.map((p) => p.id)))}>{t("Seleccionar todas")}</Btn>
@@ -801,7 +802,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
             <div className="ms-inbox-scroll" ref={listRef}>
               <QueueList items={queueItems} activeId={active} focusKey={focusKey} onActivate={open} onMove={(id) => { setActive(id); ops.setNote(""); }} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
             </div>
-            <Pager total={queue.data?.total ?? 0} offset={offset} limit={limit} onChange={(p) => setOffset(p.offset)} />
+            {(queue.data?.total ?? 0) > limit && <Pager total={queue.data?.total ?? 0} offset={offset} limit={limit} onChange={(p) => setOffset(p.offset)} />}
           </>}
           detail={<>
             <div className="ms-inbox-body" ref={detailRef}>

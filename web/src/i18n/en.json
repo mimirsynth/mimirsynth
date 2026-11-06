@@ -1903,7 +1903,6 @@
  "» se ha conservado como copia de seguridad; bórralo cuando hayas comprobado que todo está bien (y repuntado los agentes).": "” has been kept as a backup; delete it once you have checked that everything is fine (and repointed the agents).",
  "» seguirán escribiendo en el grafo antiguo; deberás repuntarlos a «": "” will keep writing to the old graph; you will have to repoint them to “",
  "¿Aprobar 1 propuesta?": "Approve 1 proposal?",
- "¿Aprobar algo parecido a un dato caducado?": "Approve something that resembles outdated information?",
  "¿Aprobar un posible duplicado?": "Approve a possible duplicate?",
  "¿Aprobar {{n}} de {{total}}?": "Approve {{n}} of {{total}}?",
  "¿Aprobar {{n}} propuestas?": "Approve {{n}} proposals?",
