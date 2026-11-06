@@ -4,6 +4,8 @@ import { useSearchParams } from "react-router-dom";
 export function useTabParam(initial: string, key = "tab"): [string, (v: string | null) => void] {
   const [sp, setSp] = useSearchParams();
   const value = sp.get(key) ?? initial;
-  const set = (v: string | null) => { const p = new URLSearchParams(sp); !v || v === initial ? p.delete(key) : p.set(key, v); setSp(p, { replace: true }); };
+  // from the address as it is now, not as some earlier render saw it: another control may have changed a parameter since (the
+  // proposals' ?estado=), and a stale copy would put it back
+  const set = (v: string | null) => { const p = new URLSearchParams(window.location.search); if (!v || v === initial) p.delete(key); else p.set(key, v); setSp(p, { replace: true }); };
   return [value, set];
 }

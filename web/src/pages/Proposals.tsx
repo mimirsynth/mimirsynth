@@ -71,7 +71,8 @@ const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debou
 
 /** Estado, filtros, orden y página se resuelven en el servidor (#88): con muchas propuestas se llega a todas y los filtros abarcan el conjunto entero.
  *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza. `statuses` are the state segments it offers, the first one being «all of them». */
-function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, kindsFrom, onOpen, emptyAll, label }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
+function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, kindsFrom, onOpen, emptyAll, label, lead }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
+  /** A selector that goes first on the same row as the state and the kind (the queue's Show). */ lead?: ReactNode;
   /** The table's name for a screen reader. */ label: string;
   statuses: { value: string; label: string; count?: number }[]; kind: string; onKind: (k: string) => void; onOpen: (id: number) => void;
   /** The counts not filtered by kind, which the kind selector counts from. */ kindsFrom?: Counts;
@@ -79,16 +80,20 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
   const { t } = useTranslation();
   const { f, setFilter, sortProps, page, setPage, active, clear } = view;
   const rows = data?.items ?? [];
+  const mixed = new Set(rows.map((p) => p.kind)).size > 1;  // a Kind column only when the rows differ in it
   return (<>
-    <Segments label={t("Estado")} value={status} onChange={onStatus} data={statuses} />
-    <Segments label={t("Tipo")} value={kind} onChange={onKind}
-      data={[{ value: "all", label: t("Todas"), count: kindCounts(kindsFrom, status).all }, { value: "memory", label: t("Añaden"), count: kindCounts(kindsFrom, status).memory },
-        { value: "correction", label: t("Corrigen"), count: kindCounts(kindsFrom, status).correction }]} />
+    <div className="ms-filter-row">
+      {lead}
+      <Segments label={t("Estado")} value={status} onChange={onStatus} data={statuses} />
+      <Segments label={t("Tipo")} value={kind} onChange={onKind}
+        data={[{ value: "all", label: t("Todas"), count: kindCounts(kindsFrom, status).all }, { value: "memory", label: t("Añaden"), count: kindCounts(kindsFrom, status).memory },
+          { value: "correction", label: t("Corrigen"), count: kindCounts(kindsFrom, status).correction }]} />
+    </div>
     <ClearFilters active={active} onClear={clear} />
     <FillArea><DataTable fz="sm" aria-label={label}>
       <DataTable.Thead><DataTable.Tr>
         <ColHead sort={sortProps("id")}>#</ColHead>
-        <ColHead>{t("Tipo")}</ColHead>
+        {mixed && <ColHead>{t("Tipo")}</ColHead>}
         <ColHead sort={sortProps("name")} filter={{ kind: "text", value: f.q, onChange: (v) => setFilter({ q: v }), placeholder: t("Título…") }}>{t("Título")}</ColHead>
         <ColHead sort={sortProps("author")} filter={{ kind: "select", value: f.author, onChange: (v) => setFilter({ author: v }), allLabel: t("Todos los autores"), options: (data?.authors ?? []).map((a) => ({ value: String(a.id), label: a.name })) }}>{t("Autor")}</ColHead>
         <ColHead sort={sortProps("conf")}>{t("Confianza")}</ColHead>
@@ -99,12 +104,12 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
       <DataTable.Tbody>
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
-            <DataTable.Td className="ms-data">#{p.id}</DataTable.Td><DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>
+            <DataTable.Td className="ms-data">#{p.id}</DataTable.Td>{mixed && <DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>}
             <DataTable.Td><Group gap={4} wrap="wrap"><RowOpen onOpen={() => onOpen(p.id)}>{p.purged_at ? t("(texto purgado)") : p.name}</RowOpen><SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td className="ms-data">{fmtNum(p.confidence)}</DataTable.Td>
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td className="ms-data">{fmt(p.created_at)}</DataTable.Td>
             <DataTable.Td>{p.reviewed_at ? <Stack gap={0}><Text size="sm">{decidedBy(p, t)}</Text><Text size="xs" c="dimmed" className="ms-data">{fmt(p.reviewed_at)}</Text></Stack> : "—"}</DataTable.Td>
           </DataTable.Tr>))}
-        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={8}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : status === statuses[0]?.value && kind === "all" ? emptyAll : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
+        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={mixed ? 8 : 7}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : status === statuses[0]?.value && kind === "all" ? emptyAll : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
       </DataTable.Tbody>
     </DataTable></FillArea>
     <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} />
@@ -550,8 +555,8 @@ function ProposalModal({ open, onClose, ops }: { open: number | null; onClose: (
 }
 
 /** A server-paged table of proposals with its own filters: the review history («Decididas») or one's own proposals (`mine`). */
-function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind }: { ops: Ops; mine: boolean; statuses: string[]; first: { value: string; label: string; countKey: string };
-  initialStatus?: string; initialKind?: string }) {
+function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind, lead }: { ops: Ops; mine: boolean; statuses: string[]; first: { value: string; label: string; countKey: string };
+  initialStatus?: string; initialKind?: string; /** Goes first on the row of filters. */ lead?: ReactNode }) {
   const { t } = useTranslation();
   const view = useProposalsView();
   const [status, setStatusRaw] = useState(initialStatus && statuses.includes(initialStatus) ? initialStatus : first.value);
@@ -574,7 +579,7 @@ function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind }
     return <EmptyState>{emptyAll}</EmptyState>;
   return (<>
     <MutationError error={list.error} />
-    <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} kindsFrom={all.data} onOpen={ops.openDetail} emptyAll={emptyAll} label={mine ? t("Mis propuestas") : t("Propuestas decididas")}
+    <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} kindsFrom={all.data} onOpen={ops.openDetail} emptyAll={emptyAll} label={mine ? t("Mis propuestas") : t("Propuestas decididas")} lead={lead}
       statuses={[{ value: first.value, label: first.label, count: cnt.data ? counts[first.countKey] ?? 0 : undefined }, ...statuses.map((k) => ({ value: k, label: t(PLURAL[k]), count: cnt.data ? counts[k] ?? 0 : undefined }))]} />
   </>);
 }
@@ -587,7 +592,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const [, setSp] = useSearchParams();
   const setMode = (m: string) => {  // the view lives in the URL (?estado=decided), so a reload or a shared link opens the same one
     setModeState(m);
-    setSp((p) => { const n = new URLSearchParams(p); if (m === "decided") n.set("estado", "decided"); else n.delete("estado"); return n; }, { replace: true });
+    const n = new URLSearchParams(window.location.search); if (m === "decided") n.set("estado", "decided"); else n.delete("estado"); setSp(n, { replace: true });
   };
   const [kind, setKind] = useState(initialKind ?? "all");
   const [offset, setOffset] = useState(0);
@@ -715,6 +720,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span className="ms-queue-author">{p.author}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
+  const show = <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
+    data={[{ value: "pending", label: t("Pendientes"), count: cnt.data ? counts.pending ?? 0 : undefined }, { value: "decided", label: t("Decididas"), count: cnt.data ? counts.decided ?? 0 : undefined }]} />;
   return (<>
     <SelectField className="ms-only-narrow" aria-label={t("Qué propuestas ver")} allowDeselect={false} comboboxProps={{ withinPortal: true }}
       value={mode === "decided" ? "decided" : `pending:${kind}`}
@@ -724,15 +731,14 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
         { value: "pending:memory", label: withCount(t("Pendientes que añaden"), kindCounts(cnt.data, "pending").memory) },
         { value: "pending:correction", label: withCount(t("Pendientes que corrigen"), kindCounts(cnt.data, "pending").correction) },
         { value: "decided", label: withCount(t("Decididas"), cnt.data ? counts.decided ?? 0 : undefined) }]} />
-    <div className="ms-filter-row ms-only-wide">
-      <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
-        data={[{ value: "pending", label: t("Pendientes"), count: cnt.data ? counts.pending ?? 0 : undefined }, { value: "decided", label: t("Decididas"), count: cnt.data ? counts.decided ?? 0 : undefined }]} />
+    {mode === "pending" && <div className="ms-filter-row ms-only-wide">
+      {show}
       {mode === "pending" && <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
         data={[{ value: "all", label: t("Todas"), count: kindCounts(cnt.data, "pending").all }, { value: "memory", label: t("Añaden"), count: kindCounts(cnt.data, "pending").memory },
           { value: "correction", label: t("Corrigen"), count: kindCounts(cnt.data, "pending").correction }]} />}
-    </div>
-    {mode === "decided" ? <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={initialKind}
-        first={{ value: "decided", label: t("Todas las decididas"), countKey: "decided" }} /> : <>
+    </div>}
+    {mode === "decided" ? <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={initialKind} lead={<div className="ms-only-wide">{show}</div>}
+        first={{ value: "decided", label: t("Todas"), countKey: "decided" }} /> : <>
       {pendingFixes > 0 && kind !== "correction" && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
