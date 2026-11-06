@@ -1,8 +1,0 @@
-{
-  "Crear y aprobar": "Create and approve",
-  "De qué trata, en pocas palabras": "What it is about, in a few words",
-  "Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.": "You are a curator: what you create here is approved without going through the queue and enters the graph. If the detector flags a secret, it waits for a curator like any other.",
-  "Propuesta #{{id}} creada y aprobada.": "Proposal #{{id}} created and approved.",
-  "el decisor dudó": "the decider hesitated",
-  "seguridad del decisor: {{p}}": "decider's certainty: {{p}}"
-}

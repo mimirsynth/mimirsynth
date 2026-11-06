@@ -8,6 +8,45 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-06
+### Changed
+- moving through the review queue shows the next proposal at once instead of a loading blank, the decision buttons stay in place, and after a decision the focus moves to the next proposal's title. (#244)
+- the notice of the last decision retires on its own once there is nothing left to do with it, fits on one line under the decision buttons, and no longer links to the proposal that is already open; «Qué pasa al decidir» opens below its button. (#246)
+- in the review queue, a screen reader reads each entry by its title and the detail by the open proposal, Esc leaves the note and Ctrl+Enter approves from it, the announcement says how to undo, and the note and explanation buttons and the queue checkboxes are at least 24 px. (#247)
+- the proposals screens read in plain words: relations as words, «Crear y aprobar» for a curator with a line saying it skips review, the history's default order marked on its column, and a failed proposal can be rejected instead of only retried. (#249)
+- what the brain already knows reads as evidence: the proposal and the fact it repeats side by side, facts that are only related folded away, and with a likely duplicate or outdated fact, rejecting becomes the main button and leaves its reason as the note. (#251)
+- the review queue fits a phone: a proposal opens at its title instead of mid-page, one selector replaces the rows of segments, and Reject and Approve are 44px tall on touch screens. (#252)
+- the review queue keeps the focus on a narrow screen: an opened proposal takes it on its title, «Back to the queue» returns it to the entry, J/K announce which proposal is open, Enter confirms a non-destructive confirmation, and a confirmation opened with A gives the focus back to the proposal. (#253)
+- the proposals screens read the same everywhere: dates and numbers follow the interface language, the queue's detail leaves out what goes without saying, the Pending/Decided view is kept in the address, and the queue's checkboxes and the history table have proper names. (#254)
+- on a phone the review queue has Previous and Next over the open proposal and more compact entries, and confirmations never cut their buttons' labels: they wrap, and stack full width on a phone. (#256)
+- in the review queue amber marks only what must be looked at (a possible duplicate, a secret to review); a possibly outdated proposal and a low confidence get neutral markers with an icon, and the proposal-and-fact comparison a neutral ground. (#257)
+- the open proposal says each thing once: its own text marks what it adds to the fact it is compared with, the evidence shows only that fact, the text is no longer a card inside a card, and in the queue a pending proposal shows one line on where it comes from. (#258)
+- the review queue is easier to find and to hear: the queue has a heading and a named region, counts are read apart from their labels, the batch bar says how many would be approved apart, and deciding the last proposal says that the previous one opens. (#259)
+- Approve is always the main button in the review queue; with a possible duplicate or outdated match the rejection keeps its reason as a secondary choice, and the confirmation starts on Cancel, so Enter never decides by reflex. (#261)
+- «Decided» reads denser: its selectors take two rows instead of three, and the Kind column only shows when the rows differ in it. Fixed: switching tabs on the proposals page no longer brings back the Pending/Decided view the curator had left. (#263)
+- a warning confirmation in the review queue puts its weight on the safe choices: «Approve anyway» is a quiet button apart (last on a phone), Cancel keeps the focus, and the close button is 44px on touch screens. (#266)
+- what the brain already knows speaks in its own tone: a possible duplicate or outdated match reads as a warning, a fact no longer true is marked «No longer true», both queue markers for them are amber, and the section heading reads as a label. (#267)
+- the review queue and the proposals' history show each author by name, with the address in the tooltip, and the history's author filter and order follow the name. (#268)
+- the proposal's text in the review queue always underlines what it adds to the fact it is read against, with the legend right above it; «Mostly new» is a label, a text that adds nothing says so, and a screen reader hears the words it adds. (#269)
+- the review queue is a single Tab stop, moved with the arrow keys, Home and End; J/K take the focus with them, X checks the entry with the focus, and a «Go to the open proposal» link skips the queue. (#270)
+- the review queue marks a proposal that is very close to something the brain already knows, and the batch approval lists those apart so they are read first. (#271)
+- decided proposals have their own tab, the filters fit one row (Kind shows only when there are both kinds), the selection bar keeps its height, and the shortcut legend fits one line. (#272)
+- the review queue says «Possibly no longer true» like the fact and the rejection, the decision notice and the known-match confirmation name the proposal by its title, the warning dialog's Tab order follows its layout, and the browser tab names the page. (#273)
+- a batch approval leaves aside what is very close to something the brain already knows, its confirmation keeps its buttons in view, and the list of what goes is folded when it is long. (#275)
+- in the review queue the arrow keys, Home and End open the entry they reach, so the entry with the focus is always the open one. (#276)
+- on a phone the review queue keeps each entry's author when a marker is long, Reject and Approve share the decision row with Approve under the right thumb, and the checkboxes and the selection bar's buttons answer at 44px on touch screens. (#277)
+- the proposals' history sorts «Submitted» by date, the warning confirmation says «no longer true» like the rest of the screen, clearing a selection keeps the focus in the queue's bar, and the queue shows a pager only when it needs one. (#278)
+
+### Fixed
+- the proposals screens count what is on screen: the kind numbers follow the chosen state, every option has a number or none does, the review tab does not repeat the pending count, and an empty «My proposals» says so in one sentence. (#248)
+- a proposal is never approved before the brain has been asked what it already knows: Approve waits for that check, A pressed meanwhile is kept, the queue checks the pending proposals that were never checked, and a batch leaves them aside. (#250)
+- a proposal is marked as a possible duplicate only when it says nearly the same as a fact, not when it merely contains its words; something very close is shown side by side with what it adds marked, and rejecting is the main button only for a clear duplicate. (#255)
+- a proposal that adds anything to a fact is no longer called its duplicate; words that say nothing about the content do not count, an identifier counts as one word, and what a proposal adds is underlined as well as tinted. (#260)
+- the decision footer holds still while the brain is checked: Approve keeps its label with a small spinner, and on a phone Reject stays beside Approve, with its reason in its name and note. (#262)
+- the review queue's single-key shortcuts (J/K/A/R/X/N/Z) act only while the focus is in the queue or the open proposal, so a key typed or dictated elsewhere on the page never decides anything (WCAG 2.1.4). (#264)
+- what a proposal adds to a fact is read as a person would: words without accents and by their stem, numbers counting however short, and a mostly new proposal marks what it shares with the fact and is not taken for something that stopped being true. (#265)
+- a proposal that is mostly new against the closest fact is no longer marked «Very close» in the review queue or set apart in a batch; its verdict says it only shares the subject, and a text that repeats a fact no longer true says so. (#274)
+
 ## [0.13.0] - 2026-11-05
 ### Added
 - approving a proposal says beforehand what will happen, waits 10 seconds so it can be undone, and then reports the result of the ingestion; a rejected proposal can be reopened. (#233)
