@@ -590,7 +590,14 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       setBulkNote(""); ops.refresh();
     } });
   const open = (id: number) => { setActive(id); setShowDetail(true); ops.setNote(""); };
-  const move = (step: number) => { const i = items.findIndex((p) => p.id === active); const next = items[i + step]; if (next) open(next.id); };
+  const [moved, setMoved] = useState("");  // what J/K opened, for a screen reader: the focus stays where it was, so nothing else says it
+  const move = (step: number) => {
+    const i = items.findIndex((p) => p.id === active); const next = items[i + step];
+    if (!next) return;
+    open(next.id);
+    setMoved(`#${next.id} · ${next.purged_at ? t("(texto purgado)") : next.name} (${t("{{i}} de {{n}}", { i: i + step + 1, n: items.length })})`);
+  };
+  const back = () => { setShowDetail(false); setFocusKey((k) => k + 1); };  // back to the queue, on the entry that was open
   const advance = (id: number) => {  // after a decision the next one opens, so the curator never goes back to the list
     const i = items.findIndex((p) => p.id === id);
     const next = items[i + 1] ?? items[i - 1];
@@ -606,13 +613,18 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   useEffect(() => {  // one pane at a time (the queue hidden): the proposal just opened is read from its title, not from mid-page
     if (!showDetail || active === null || listRef.current?.getClientRects().length) return;
     detailRef.current?.scrollIntoView({ block: "start" });
+    document.getElementById(`ms-title-${active}`)?.focus({ preventScroll: true });  // the entry that had the focus is hidden now
   }, [showDetail, active]);  // eslint-disable-line react-hooks/exhaustive-deps
   const related = useRelated(ops, d);
   const decide = (verb: "approve" | "reject") => {
     if (!d || d.status !== "pending" || ops.review.isPending || partial) return;
     if (!actions.current?.getClientRects().length) return;  // narrow layout showing the queue: nothing is decided without being seen
     if (verb === "approve" && isChecking(d, related)) { setHeld(d.id); return; }  // approves (or asks) once the brain has answered
-    if (verb === "approve" && (flagged(d) || knownOf(d, related.data?.facts))) { setMasking(true); return; }  // the same confirmation as its button
+    if (verb === "approve" && (flagged(d) || knownOf(d, related.data?.facts))) {  // the same confirmation as its button
+      // opened by a key, nothing has the focus: the title takes it first, so the dialog gives it back there when it closes
+      if (!document.activeElement || document.activeElement === document.body) document.getElementById(`ms-title-${d.id}`)?.focus();
+      setMasking(true); return;
+    }
     const k = verb === "reject" && !flagged(d) ? knownOf(d, related.data?.facts) : null;  // rejecting what the brain knows says why
     ops.review.mutate({ id: d.id, verb, note: k && !ops.note ? knownNote(k, t) : undefined }, { onSuccess: () => advance(d.id) });
   };
@@ -685,6 +697,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
                 <Btn size="row" kind="ghost" onClick={() => setChecked(new Set(items.map((p) => p.id)))}>{t("Seleccionar todas")}</Btn>
               </>}
             </div>
+            <div className="ms-sr-only" role="status" aria-live="polite">{moved}</div>
             <div className="ms-inbox-scroll" ref={listRef}>
               <QueueList items={queueItems} activeId={active} focusKey={focusKey} onActivate={open} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
             </div>
@@ -692,7 +705,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
           </>}
           detail={<>
             <div className="ms-inbox-body" ref={detailRef}>
-              <Btn size="row" kind="ghost" icon="back" className="ms-inbox-back ms-hit" onClick={() => setShowDetail(false)}>{t("Volver a la cola")}</Btn>
+              <Btn size="row" kind="ghost" icon="back" className="ms-inbox-back ms-hit" onClick={back}>{t("Volver a la cola")}</Btn>
               <MutationError error={detail.error} />
               {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}

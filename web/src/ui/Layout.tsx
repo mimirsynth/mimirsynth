@@ -117,7 +117,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
         <MutationError error={error} />
         <div className="ms-confirm-actions">
           <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>
-          <Btn kind={alt ? "secondary" : tone} icon={tone === "danger" ? "trash" : "check"} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
+          <Btn kind={alt ? "secondary" : tone} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!alt && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
           {alt && <Btn kind="primary" icon={alt.icon} loading={busy && running === "alt"} disabled={busy && running !== "alt"} onClick={() => run("alt")} data-autofocus>{alt.label}</Btn>}
         </div>
       </div>
