@@ -264,7 +264,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
         : !inQueue && <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {t("no indicada")}</Text>}</Group>}
     {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
-        : <Text className="ms-prose ms-proposal-text">{paired ? addedTo(d.body, paired.fact).node : d.body}</Text>}
+        : paired ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
     <SecretsNotice found={d.secrets} />
     {context}
     {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
@@ -396,7 +396,7 @@ function FactLine({ f }: { f: RelatedFact }) {
 const STOP_WORDS = `como para desde entre sobre pero tras hasta cuando donde porque aunque mientras según durante este esta estos estas esos esas aquel
 aquella todo toda todos todas otro otra otros otras cada mucho mucha muchos muchas poco poca algo nada también tampoco solo sólo ahora
 antes después luego aquí allí allá está están estaba estaban será serán sido siendo había habían tiene tienen tenía puede pueden hace
-hacen sigue siguen queda quedan their there these those this that with from have been were into than then also some when where which
+hacen sigue siguen queda quedan mismo misma mismos mismas their there these those this that with from have been were into than then also some when where which
 what about will would should could while after before other more most only such very`;
 const fold = (w: string) => w.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
 const STOP = new Set(STOP_WORDS.split(/\s+/).map(fold));
@@ -413,16 +413,32 @@ const stem = (w: string) => {
 /** The word as it is compared, or null when it is not a word of content. */
 const wordKey = (raw: string) => { const w = fold(raw); return (w.length >= 4 || /\d/.test(w)) && !STOP.has(w) ? stem(w) : null; };
 const WORD = /([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/u;
-/** The proposal's text read against a fact: the words it adds marked. When most of it is new, the marks would cover nearly everything,
- *  so they go on what it shares with the fact instead (`mostlyNew`). */
+const words = (text: string) => text.match(new RegExp(WORD.source, "gu")) ?? [];
+/** The proposal's text read against a fact: the words it adds, each once, and the text with every word it adds marked. Always what it
+ *  adds, so a mark means one thing; how much of it is new is the API's word (`mostly_new`), said as a label. */
 function addedTo(text: string, fact: string) {
-  const have = new Set((fact.match(new RegExp(WORD.source, "gu")) ?? []).map(wordKey).filter(Boolean));
+  const have = new Set(words(fact).map(wordKey).filter(Boolean));
   const parts = text.split(WORD);  // the words at odd positions, what lies between them at even ones
-  const kind = parts.map((p, i) => { const k = i % 2 === 1 ? wordKey(p) : null; return k === null ? null : have.has(k) ? "shared" : "added"; });
-  const added = kind.filter((k) => k === "added").length, shared = kind.filter((k) => k === "shared").length;
-  const mostlyNew = added > (added + shared) / 2;
-  const marked = mostlyNew ? "shared" : "added";
-  return { added, shared, mostlyNew, node: <>{parts.map((p, i) => kind[i] === marked ? <mark key={i} className={mostlyNew ? "ms-shared" : "ms-added"}>{p}</mark> : p)}</> };
+  const adds = (w: string) => { const k = wordKey(w); return k !== null && !have.has(k); };
+  const added = new Map<string, string>();  // each word it adds once, as it is written
+  for (const w of words(text)) if (adds(w) && !added.has(wordKey(w)!)) added.set(wordKey(w)!, w);
+  return { words: [...added.values()], node: <>{parts.map((p, i) => i % 2 === 1 && adds(p) ? <mark key={i} className="ms-added">{p}</mark> : p)}</> };
+}
+
+/** The proposal's text read against the fact the brain already says (below, in «Lo que dice el brain»): what it adds marked, with the
+ *  legend right above it, and a screen reader told the words. */
+function AddedText({ d, fact }: { d: Prop; fact: RelatedFact }) {
+  const { t } = useTranslation();
+  const a = addedTo(d.body, fact.fact);
+  return (<Stack gap={6}>
+    <Group gap={8} className="ms-added-legend">
+      {a.words.length === 0 ? <Text size="xs" c="dimmed">{t("El texto no añade nada a lo que dice el brain, abajo: todas sus palabras ya están ahí.")}</Text>
+        : <>{fact.mostly_new && <Pill tone="neutral">{t("Mayormente nuevo")}</Pill>}
+          <Text size="xs" c="dimmed"><mark className="ms-added">{t("Subrayado")}</mark>{" "}{t("lo que añade a lo que dice el brain, abajo.")}
+            <span className="ms-sr">{" "}{t("Añade: {{words}}.", { words: a.words.join(", ") })}</span></Text></>}
+    </Group>
+    <Text className="ms-prose ms-proposal-text">{a.node}</Text>
+  </Stack>);
 }
 
 /** What the brain already knows close to a pending proposal that adds knowledge. When it is a likely duplicate, close to something no
@@ -437,7 +453,6 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const known = q.data ? knownOf(d, facts) : null;
   const paired = pairedFact(d, q.data?.facts);
   const close = facts.filter((f) => (f.relevance === "repeats" || f.relevance === "close") && f.uuid !== paired?.uuid);
-  const adds = paired ? addedTo(d.body, paired.fact) : null;
   const related = facts.filter((f) => f.relevance === "related");
   // the one line to read first. A contradiction cannot be told from the text alone: the closest facts are there to check it.
   const verdict = known?.verdict === "duplicate" ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
@@ -451,11 +466,9 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
     {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
     {verdict && (known ? <Notice tone="warn">{verdict.text}</Notice>
       : <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>)}
-    {paired && adds && <div className="ms-pair">
+    {paired && <div className="ms-pair">
       <Text size="xs" fw={600} c="dimmed">{t("Lo que dice el brain")}</Text>
       <FactLine f={paired} />
-      {adds.mostlyNew ? <Text size="xs" c="dimmed">{t("Mayormente nuevo: en el texto de la propuesta está marcado lo que ya dice este hecho.")}</Text>
-        : adds.added > 0 && <Text size="xs" c="dimmed">{t("En el texto de la propuesta está marcado lo que añade a este hecho.")}</Text>}
     </div>}
     {close.map((f) => <FactLine key={f.uuid} f={f} />)}
     {related.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={more ? "chevronDown" : "chevronRight"} aria-expanded={more} aria-controls={`ms-rel-${d.id}`}
