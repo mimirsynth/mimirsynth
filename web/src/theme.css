@@ -158,7 +158,13 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-empty { color: var(--ms-muted); font-size: 14px; padding: 16px 4px; }
 .ms-confirm { display: flex; flex-direction: column; gap: 12px; }
 .ms-confirm-subject { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
-.ms-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.ms-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.ms-confirm-actions .ms-btn { flex: 0 0 auto; max-width: 100%; }  /* each button keeps its whole label: the row wraps instead of cutting it */
+@media (max-width: 48em) {  /* on a phone the choices stack, full width, the main one on top */
+  .ms-confirm-actions { flex-direction: column-reverse; align-items: stretch; }
+  .ms-confirm-actions .ms-btn { width: 100%; }
+}
+@media (pointer: coarse) { .ms-confirm-actions .ms-btn { --button-height: 44px !important; } }
 .ms-notice .mantine-Alert-title { font-family: var(--ms-display); font-weight: 600; }
 .ms-notice[data-tone="warn"] { border-color: var(--ms-hidromiel); background: color-mix(in srgb, var(--ms-hidromiel) 14%, var(--ms-raised)); }
 .ms-notice[data-tone="danger"] { border-color: var(--ms-invalidado); background: color-mix(in srgb, var(--ms-invalidado) 12%, var(--ms-raised)); }
@@ -491,7 +497,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-inbox-scroll { flex: 1; min-height: 0; overflow: auto; }
 .ms-inbox-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .ms-inbox-actions { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--ms-line); background: var(--ms-raised); }
-.ms-inbox-back { display: none; }
+.ms-inbox-nav { display: none; }
 .ms-inbox-keys { font-size: 12px; color: var(--ms-muted); }
 .ms-detail-title { margin: 0; font-family: var(--ms-display); font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--ms-ink); }  /* the open proposal's heading: where the focus lands after a decision */
 .ms-detail-title:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }
@@ -511,7 +517,12 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 @container (max-width: 760px) {
   .ms-inbox { grid-template-columns: minmax(0, 1fr); }
   .ms-inbox[data-detail] .ms-inbox-list, .ms-inbox:not([data-detail]) .ms-inbox-detail { display: none; }
-  .ms-inbox-back { display: inline-flex; align-self: flex-start; }
+  .ms-inbox-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }  /* back to the queue, or on through it */
+  .ms-inbox:not([data-detail]) .ms-queue-item[data-active] { background: none; box-shadow: none; }  /* nothing is open while the queue shows */
+  .ms-inbox .ms-queue-item { padding: 8px 12px; }  /* declared before the queue's own rules: the .ms-inbox prefix outranks them */
+  .ms-inbox .ms-queue-meta { flex-wrap: nowrap; overflow: hidden; }
+  .ms-inbox .ms-queue-meta .ms-pill, .ms-inbox .ms-queue-meta .ms-data { flex-shrink: 0; }
+  .ms-queue-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .ms-queue { list-style: none; margin: 0; padding: 0; }
 .ms-queue-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--ms-line); }
@@ -528,6 +539,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-fold[hidden] { display: none; }  /* a folded region stays in the page, for aria-controls, but out of sight */
 .ms-hit { min-height: 24px; }  /* text buttons outside a sentence: at least the 24px target of WCAG 2.5.8 */
 .ms-queue-item .ms-check { --checkbox-size: 24px !important; }  /* the queue's checkboxes, at the same minimum target */
+@media (pointer: coarse) { .ms-inbox-nav .ms-iconbtn { --ai-size: 44px !important; } }
 @media (pointer: coarse) { .ms-hit { min-height: 44px; } .ms-queue-item .ms-check { --checkbox-size: 28px !important; } }
 .ms-queue-desc { display: contents; }  /* only groups the description for aria-describedby; the layout is its children's */
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
