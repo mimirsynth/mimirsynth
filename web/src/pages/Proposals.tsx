@@ -11,6 +11,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { fmt, fmtDay, fmtNum, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
+  /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
   created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
   kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
@@ -20,6 +21,8 @@ const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejec
 const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
 const SOURCE: Record<string, string> = { text: T("texto"), message: T("conversación"), json: T("JSON") };
 const LOW_CONFIDENCE = 0.6;  // the same threshold as the review queue's risk order in the API
+/** Who sent it, by name: the address goes in the tooltip. */
+const who = (p: Prop) => p.author_name || p.author;
 const flagged = (p: Prop) => !!p.secrets?.some((f) => f.action === "flagged");
 /** How a person decides one proposal. One with secrets flagged for review is never approved as written: «mask-and-approve» masks them first. */
 type Verb = "approve" | "reject" | "mask-and-approve";
@@ -105,7 +108,7 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
             <DataTable.Td className="ms-data">#{p.id}</DataTable.Td>{mixed && <DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>}
-            <DataTable.Td><Group gap={4} wrap="wrap"><RowOpen onOpen={() => onOpen(p.id)}>{p.purged_at ? t("(texto purgado)") : p.name}</RowOpen><SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td>{p.author}</DataTable.Td><DataTable.Td className="ms-data">{fmtNum(p.confidence)}</DataTable.Td>
+            <DataTable.Td><Group gap={4} wrap="wrap"><RowOpen onOpen={() => onOpen(p.id)}>{p.purged_at ? t("(texto purgado)") : p.name}</RowOpen><SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td><span title={p.author}>{who(p)}</span></DataTable.Td><DataTable.Td className="ms-data">{fmtNum(p.confidence)}</DataTable.Td>
             <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td className="ms-data">{fmt(p.created_at)}</DataTable.Td>
             <DataTable.Td>{p.reviewed_at ? <Stack gap={0}><Text size="sm">{decidedBy(p, t)}</Text><Text size="xs" c="dimmed" className="ms-data">{fmt(p.reviewed_at)}</Text></Stack> : "—"}</DataTable.Td>
           </DataTable.Tr>))}
@@ -265,10 +268,10 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
     <SecretsNotice found={d.secrets} />
     {context}
     {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
-      <Text size="xs" c="dimmed">{t("Enviada por {{who}}", { who: d.author })} · <span className="ms-data">{fmt(d.created_at)}</span> · {[d.source_description, t(SOURCE[d.source] ?? d.source)].filter(Boolean).join(" · ")}</Text>
+      <Text size="xs" c="dimmed">{t("Enviada por {{who}}", { who: who(d) })} · <span className="ms-data">{fmt(d.created_at)}</span> · {[d.source_description, t(SOURCE[d.source] ?? d.source)].filter(Boolean).join(" · ")}</Text>
       <DeciderView d={d} />
     </Stack> : <Steps label={t("Historia de la propuesta")}>
-      <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text>
+      <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed"><span title={d.author}>{who(d)}</span> · {fmt(d.created_at)}</Text>
         <Text size="xs" c="dimmed">{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</Text></Step>
       <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
         {d.review_kind === "direct" && <Text size="xs" c="dimmed">{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</Text>}
@@ -743,7 +746,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><Group gap={4} wrap="nowrap"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</Group></Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><Group gap={4} wrap="nowrap"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</Group></Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
-    meta: <><span className="ms-queue-author">{p.author}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
+    meta: <><span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   const show = <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
     data={[{ value: "pending", label: t("Pendientes"), count: cnt.data ? counts.pending ?? 0 : undefined }, { value: "decided", label: t("Decididas"), count: cnt.data ? counts.decided ?? 0 : undefined }]} />;
