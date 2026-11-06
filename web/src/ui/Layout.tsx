@@ -108,7 +108,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
     try { await (which === "alt" && alt ? alt.onConfirm() : onConfirm()); onClose(); } catch (e) { setError(e); } finally { setBusy(false); setRunning(null); }
   };
   return (
-    <Modal opened={opened} onClose={onClose} title={title}>
+    <Modal opened={opened} onClose={onClose} title={title} size={alt ? "lg" : undefined}>{/* three choices fit on one row */}
       <div className="ms-confirm">
         {warning && <Notice tone={tone === "danger" || warn ? "warn" : "info"}>{warning}</Notice>}
         {subject && <div className="ms-confirm-subject">{subject}</div>}

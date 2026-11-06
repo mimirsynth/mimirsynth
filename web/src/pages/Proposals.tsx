@@ -2,7 +2,7 @@ import { T, locale } from "../i18n";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
+import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
   Pill, QueueList, RowOpen, Segments, SelectField, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
@@ -624,6 +624,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     setMoved(`#${next.id} · ${next.purged_at ? t("(texto purgado)") : next.name} (${t("{{i}} de {{n}}", { i: i + step + 1, n: items.length })})`);
   };
   const back = () => { setShowDetail(false); setFocusKey((k) => k + 1); };  // back to the queue, on the entry that was open
+  const pos = items.findIndex((p) => p.id === active);  // where the open one is in this page of the queue
   const advance = (id: number) => {  // after a decision the next one opens, so the curator never goes back to the list
     const i = items.findIndex((p) => p.id === id);
     const next = items[i + 1] ?? items[i - 1];
@@ -684,7 +685,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}>{t("Posible dato caducado")}</Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="warn">{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
-    meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
+    meta: <><span className="ms-queue-author">{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
     <SelectField className="ms-only-narrow" aria-label={t("Qué propuestas ver")} allowDeselect={false} comboboxProps={{ withinPortal: true }}
@@ -731,7 +732,14 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
           </>}
           detail={<>
             <div className="ms-inbox-body" ref={detailRef}>
-              <Btn size="row" kind="ghost" icon="back" className="ms-inbox-back ms-hit" onClick={back}>{t("Volver a la cola")}</Btn>
+              <div className="ms-inbox-nav">
+                <Btn size="row" kind="ghost" icon="back" className="ms-hit" onClick={back}>{t("Volver a la cola")}</Btn>
+                {pos >= 0 && <Group gap={6} wrap="nowrap">
+                  <Text size="xs" c="dimmed" className="ms-data">{t("{{i}} de {{n}}", { i: offset + pos + 1, n: queue.data?.total ?? items.length })}</Text>
+                  <IconButton icon="chevronLeft" label={t("Anterior")} onClick={() => move(-1)} disabled={pos <= 0} />
+                  <IconButton icon="chevronRight" label={t("Siguiente")} onClick={() => move(1)} disabled={pos >= items.length - 1} />
+                </Group>}
+              </div>
               <MutationError error={detail.error} />
               {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} inQueue context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
