@@ -314,27 +314,36 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
 
 
 RELATED_FACTS = 5
-# How close a known fact is to a proposal, for the reviewer. The score is the embedding similarity, whose scale depends on the model, so
-# «repeats» does not rest on it alone: a fact whose words are in the proposal, in a proposal that says little else, repeats it, whatever
-# the model. The second half matters: a proposal about one night's failed backup contains the words of «the nightly backup goes to the
-# external bucket» and adds what happened, which is new knowledge, not a duplicate.
-REPEATS_SCORE, CLOSE_SCORE, REPEATS_WORDS, COVERS_WORDS = 0.95, 0.85, 0.8, 0.6
-_WORD = re.compile(r"\w{4,}")
+# How close a known fact is to a proposal, for the reviewer. A proposal repeats a fact only when it adds nothing to it: no word of
+# content that the fact does not have. A proposal about one night's failed backup contains the words of «the nightly backup goes to the
+# external bucket» and adds what happened; «the wiki uses PostgreSQL, in the same container» adds where it runs. Both are new knowledge,
+# however close their embeddings are, so the similarity alone never makes a duplicate: it only makes a fact «close».
+REPEATS_SCORE, CLOSE_SCORE, REPEATS_WORDS = 0.95, 0.85, 0.8
+# A word is four characters or more, and an identifier is one word (pve-norte-02, nas01.lab): its pieces are not words of their own.
+_WORD = re.compile(r"\w[\w.-]*\w")
+# Words of four letters or more that say nothing about the content, in the two interface languages. The web marks what a proposal adds
+# with the same list (`web/src/pages/Proposals.tsx`, STOP): keep them together.
+STOP = frozenset("""
+como para desde entre sobre pero tras hasta cuando donde porque aunque mientras según durante este esta estos estas esos esas aquel
+aquella todo toda todos todas otro otra otros otras cada mucho mucha muchos muchas poco poca algo nada también tampoco solo sólo ahora
+antes después luego aquí allí allá está están estaba estaban será serán sido siendo había habían tiene tienen tenía puede pueden hace
+hacen sigue siguen queda quedan their there these those this that with from have been were into than then also some when where which
+what about will would should could while after before other more most only such very
+""".split())
 _RANK = {"repeats": 0, "close": 1, "related": 2}
 
 
 def _words(text: str | None) -> set[str]:
-    return set(_WORD.findall((text or "").lower()))
+    return {w for w in _WORD.findall((text or "").lower()) if len(w) >= 4 and w not in STOP}
 
 
 def relevance(fact: str | None, proposal_words: set[str], score: float | None) -> str:
-    """«repeats»: the proposal says it again (the fact's words are in it and it says little else, or the embeddings are nearly the same);
-    «close»: very similar (the fact's words are in it, but it adds more; or a high similarity); «related»: what the recall brought, no more."""
+    """«repeats»: the proposal says it again and adds nothing (the fact's words, or nearly identical embeddings, and no word of content the
+    fact lacks); «close»: very similar but it adds something, or a high similarity; «related»: what the recall brought, no more."""
     fw = _words(fact)
-    shared = fw & proposal_words
-    contains = len(fw) >= 3 and len(shared) / len(fw) >= REPEATS_WORDS          # the fact's words are in the proposal
-    covers = bool(proposal_words) and len(shared) / len(proposal_words) >= COVERS_WORDS  # and the proposal is mostly the fact
-    if (contains and covers) or (score or 0) >= REPEATS_SCORE:
+    contains = len(fw) >= 3 and len(fw & proposal_words) / len(fw) >= REPEATS_WORDS  # the fact's words are in the proposal
+    adds = bool(proposal_words - fw)                                                   # and it says something the fact does not
+    if (contains or (score or 0) >= REPEATS_SCORE) and not adds:
         return "repeats"
     return "close" if contains or (score or 0) >= CLOSE_SCORE else "related"
 
