@@ -7,11 +7,12 @@ export type QueueItem = { id: number; title: ReactNode; preview?: string; meta?:
 
 /** A review queue: one item is open (the detail beside it), several can be checked for a decision on all of them. Each item is a list
  *  entry with a real button to open it and its own checkbox, so screen readers keep the list structure and the open one is announced
- *  (`aria-current`). The queue is one Tab stop (the open item, or the first): Up/Down, Home/End move the focus between items, and the
- *  page's J/K shortcuts move the open one, the focus with it when it was in the queue (`useShortcuts`). The checkboxes stay out of the Tab
+ *  (`aria-current`). The queue is one Tab stop (the open item, or the first): Up/Down, Home/End open the next item and take the focus to
+ *  it (`onMove`; the open item and the focus are always the same one), and the page's J/K shortcuts do the same (`useShortcuts`). The checkboxes stay out of the Tab
  *  order: the page's X checks the item with the focus, and a checked item says so to a screen reader. */
-export function QueueList({ items, activeId, focusKey, onActivate, checked, onCheck, label }: {
+export function QueueList({ items, activeId, focusKey, onActivate, onMove, checked, onCheck, label }: {
   items: QueueItem[]; activeId: number | null; onActivate: (id: number) => void; checked: Set<number>; onCheck: (id: number, on: boolean) => void; label: string;
+  /** Opens an item reached with the arrow keys, without leaving the queue (on a narrow screen the detail stays hidden). */ onMove?: (id: number) => void;
   /** Bumped to move the focus to the open item (after an undo, for example), so it is not lost when the control that had it goes away. */
   focusKey?: number;
 }) {
@@ -30,7 +31,9 @@ export function QueueList({ items, activeId, focusKey, onActivate, checked, onCh
   const keys: Record<string, (i: number) => number> = { ArrowDown: (i) => i + 1, ArrowUp: (i) => i - 1, Home: () => 0, End: () => items.length - 1 };
   const move = (from: number, key: string) => {
     const next = items[keys[key](items.findIndex((it) => it.id === from))];
-    if (next) refs.current.get(next.id)?.focus();
+    if (!next) return;
+    onMove?.(next.id);
+    refs.current.get(next.id)?.focus();
   };
   const stop = items.some((it) => it.id === activeId) ? activeId : items[0]?.id;  // the queue's one Tab stop
   return (
