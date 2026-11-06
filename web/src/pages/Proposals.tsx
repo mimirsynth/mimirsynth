@@ -449,7 +449,6 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
   const approving = review.isPending && review.variables?.verb !== "reject";
   const decide = (verb: Verb, note?: string) => review.mutateAsync({ id: d.id, verb, note }).then(() => onDecided?.());
   const rejectKnown = known && !secret ? () => decide("reject", ops.note || knownNote(known, t)) : null;  // with its reason as the note
-  const clear = !secret && known?.verdict === "duplicate";  // a clear duplicate: rejecting becomes the main button
   const approve = onApprove ?? (() => { if (!checking) { if (asks) askMask(true); else decide("approve").catch(() => {}); } });
   // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is one fold
   // away, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
@@ -481,9 +480,9 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
           onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
       </Group>
       <Group gap="xs">
-        <Btn kind={clear ? "primary" : "danger"} loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
+        <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
           onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{known && !secret ? knownReject(known, t) : t("Rechazar")}</Btn>
-        <Btn kind={clear ? "secondary" : "primary"} loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
+        <Btn kind="primary" loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
           aria-label={checking ? `${secret ? t("Enmascarar y aprobar") : t("Aprobar")}: ${t("Antes de aprobar, se comprueba lo que el brain ya sabe")}` : undefined}
           onClick={approve} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
@@ -495,7 +494,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
       <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
     </Stack>
     {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary" warn
-      alt={clear ? { label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) } : undefined}
+      alt={{ label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) }}
       title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un dato caducado?")}
       warning={known.verdict === "duplicate"
         ? (known.fact ? t("El brain ya dice algo casi igual: «{{fact}}». Si la apruebas, el grafo tendrá lo mismo dos veces.", { fact: quoted(known.fact.fact) })

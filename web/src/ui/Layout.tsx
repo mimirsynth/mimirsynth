@@ -93,9 +93,9 @@ export function SidePanel({ children, ...rest }: Omit<DrawerProps, "position" | 
 export function ConfirmDialog({ opened, onClose, title, warning, subject, action, tone = "danger", warn, alt, requireText, disabled, onConfirm, children }: {
   opened: boolean; onClose: () => void; title: string; warning?: ReactNode; subject?: ReactNode; action: string;
   tone?: "danger" | "primary"; requireText?: string; disabled?: boolean; onConfirm: () => Promise<unknown>; children?: ReactNode;
-  /** The warning is a caution even though the action is not destructive. */ warn?: boolean;
-  /** The way out the dialog recommends instead of `action`: it becomes the primary button, takes the focus (Enter runs it) and `action`
-   *  turns secondary. */ alt?: { label: string; icon?: IconName; onConfirm: () => Promise<unknown> };
+  /** The warning is a caution even though the action is not destructive: the focus starts on Cancel, so Enter never confirms it by reflex. */ warn?: boolean;
+  /** A second way out, the opposite decision (reject instead of approve): a secondary button beside `action`, which keeps its tone and
+   *  its place, so the main button is the same in every dialog. */ alt?: { label: string; icon?: IconName; onConfirm: () => Promise<unknown> };
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
@@ -116,9 +116,9 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
         {requireText && <TextField label={t("Escribe «{{requireText}}» para confirmar", { requireText: requireText })} value={typed} onChange={(e) => setTyped(e.currentTarget.value)} />}
         <MutationError error={error} />
         <div className="ms-confirm-actions">
-          <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>
-          <Btn kind={alt ? "secondary" : tone} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!alt && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
-          {alt && <Btn kind="primary" icon={alt.icon} loading={busy && running === "alt"} disabled={busy && running !== "alt"} onClick={() => run("alt")} data-autofocus>{alt.label}</Btn>}
+          <Btn kind="ghost" onClick={onClose} data-autofocus={warn ? true : undefined}>{t("Cancelar")}</Btn>
+          {alt && <Btn kind="danger" icon={alt.icon} loading={busy && running === "alt"} disabled={busy && running !== "alt"} onClick={() => run("alt")}>{alt.label}</Btn>}
+          <Btn kind={tone} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!warn && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
         </div>
       </div>
     </Modal>
