@@ -325,7 +325,8 @@ type Ops = {
 /** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
  *  duplicate, a contradiction, or nothing at all, which makes it new knowledge. Only for pending proposals that add knowledge. */
 type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
-  valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related" };
+  valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related";
+  /** More than half of the proposal's words are not in this fact (the API's `mostly_new`). */ mostly_new?: boolean };
 /** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
  *  A key. Opening it also refreshes the verdict the queue ranks by. */
 function useRelated(ops: Ops, d?: Prop) {
@@ -346,7 +347,8 @@ function knownOf(d: Prop | undefined, facts?: RelatedFact[]): Known {
   if (!facts) return d.related_verdict === "duplicate" || d.related_verdict === "stale" ? { verdict: d.related_verdict } : null;
   const dup = facts.find((f) => f.relevance === "repeats" && !f.invalid_at);
   if (dup) return { verdict: "duplicate", fact: dup };
-  const old = facts.find((f) => (f.relevance === "repeats" || f.relevance === "close") && f.invalid_at);
+  // close to something no longer true and saying mostly the same, as the API decides: a mostly new proposal does not put the old fact back
+  const old = facts.find((f) => (f.relevance === "repeats" || (f.relevance === "close" && !f.mostly_new)) && f.invalid_at);
   return old ? { verdict: "stale", fact: old } : null;
 }
 const isKnown = (p: Prop) => p.related_verdict === "duplicate" || p.related_verdict === "stale";
@@ -384,20 +386,39 @@ function FactLine({ f }: { f: RelatedFact }) {
 
 /** The proposal's text with what it adds to a fact marked: its words (four letters or more, as the API counts them) the fact does not
  *  have. `added` says how many, to explain the marks only when there are some. */
-// A word as the API counts it: an identifier (pve-norte-02, nas01.lab) is one word; four characters or more, not one of the words that
-// say nothing about the content. The same list as the API's (`api/mimirsynth/proposals.py`, STOP): keep them together.
-const STOP = new Set(`como para desde entre sobre pero tras hasta cuando donde porque aunque mientras según durante este esta estos estas esos esas aquel
+// A word as the API counts it (`api/mimirsynth/proposals.py`: _WORD, STOP, STEM_ENDS, _stem; keep them together): an identifier
+// (pve-norte-02, nas01.lab) is one word; a word of content is four letters or more, or anything with a digit, and not one of the words
+// that say nothing about the content; words are compared without accents and by a light stem («replica», «replicar»).
+const STOP_WORDS = `como para desde entre sobre pero tras hasta cuando donde porque aunque mientras según durante este esta estos estas esos esas aquel
 aquella todo toda todos todas otro otra otros otras cada mucho mucha muchos muchas poco poca algo nada también tampoco solo sólo ahora
 antes después luego aquí allí allá está están estaba estaban será serán sido siendo había habían tiene tienen tenía puede pueden hace
 hacen sigue siguen queda quedan their there these those this that with from have been were into than then also some when where which
-what about will would should could while after before other more most only such very`.split(/\s+/));
+what about will would should could while after before other more most only such very`;
+const fold = (w: string) => w.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
+const STOP = new Set(STOP_WORDS.split(/\s+/).map(fold));
+const STEM_ENDS = ["aciones", "acion", "amente", "mente", "ando", "iendo", "ados", "adas", "idos", "idas", "ado", "ada", "ido", "ida", "an", "en",
+  "ar", "er", "ir", "es", "s", "a", "o", "e"];
+const stem = (w: string) => {
+  if (!/^\p{L}+$/u.test(w)) return w;  // an identifier or a number stays as it is
+  for (;;) {
+    const end = STEM_ENDS.find((e) => w.endsWith(e) && w.length - e.length >= 4);
+    if (!end) return w;
+    w = w.slice(0, -end.length);
+  }
+};
+/** The word as it is compared, or null when it is not a word of content. */
+const wordKey = (raw: string) => { const w = fold(raw); return (w.length >= 4 || /\d/.test(w)) && !STOP.has(w) ? stem(w) : null; };
 const WORD = /([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/u;
-const isContent = (w: string) => w.length >= 4 && !STOP.has(w.toLowerCase());
+/** The proposal's text read against a fact: the words it adds marked. When most of it is new, the marks would cover nearly everything,
+ *  so they go on what it shares with the fact instead (`mostlyNew`). */
 function addedTo(text: string, fact: string) {
-  const have = new Set((fact.toLowerCase().match(/[\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?/gu) ?? []).filter(isContent));
+  const have = new Set((fact.match(new RegExp(WORD.source, "gu")) ?? []).map(wordKey).filter(Boolean));
   const parts = text.split(WORD);  // the words at odd positions, what lies between them at even ones
-  const isNew = (p: string, i: number) => i % 2 === 1 && isContent(p) && !have.has(p.toLowerCase());
-  return { added: parts.filter(isNew).length, node: <>{parts.map((p, i) => isNew(p, i) ? <mark key={i} className="ms-added">{p}</mark> : p)}</> };
+  const kind = parts.map((p, i) => { const k = i % 2 === 1 ? wordKey(p) : null; return k === null ? null : have.has(k) ? "shared" : "added"; });
+  const added = kind.filter((k) => k === "added").length, shared = kind.filter((k) => k === "shared").length;
+  const mostlyNew = added > (added + shared) / 2;
+  const marked = mostlyNew ? "shared" : "added";
+  return { added, shared, mostlyNew, node: <>{parts.map((p, i) => kind[i] === marked ? <mark key={i} className={mostlyNew ? "ms-shared" : "ms-added"}>{p}</mark> : p)}</> };
 }
 
 /** What the brain already knows close to a pending proposal that adds knowledge. When it is a likely duplicate, close to something no
@@ -428,7 +449,8 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
     {paired && adds && <div className="ms-pair">
       <Text size="xs" fw={600} c="dimmed">{t("Lo que dice el brain")}</Text>
       <FactLine f={paired} />
-      {adds.added > 0 && <Text size="xs" c="dimmed">{t("En el texto de la propuesta está marcado lo que añade a este hecho.")}</Text>}
+      {adds.mostlyNew ? <Text size="xs" c="dimmed">{t("Mayormente nuevo: en el texto de la propuesta está marcado lo que ya dice este hecho.")}</Text>
+        : adds.added > 0 && <Text size="xs" c="dimmed">{t("En el texto de la propuesta está marcado lo que añade a este hecho.")}</Text>}
     </div>}
     {close.map((f) => <FactLine key={f.uuid} f={f} />)}
     {related.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={more ? "chevronDown" : "chevronRight"} aria-expanded={more} aria-controls={`ms-rel-${d.id}`}

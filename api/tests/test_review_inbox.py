@@ -107,7 +107,7 @@ def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
     r = client.get(url, headers=curator).json()
     assert r["facts"] == [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A", "source_uuid": None,
                            "target_uuid": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8,
-                           "relevance": "related"}]
+                           "relevance": "related", "mostly_new": True}]
     assert calls[0][0].startswith("NAS movido") and calls[0][1:] == (5, 0, 0)  # facts only: no fragments, no documents
     assert logged == []  # not an agent's recall: nothing for the recall ratings
     _set(pid, purged_at=__import__("datetime").datetime.now())
@@ -118,7 +118,7 @@ def test_related_facts_say_how_close_they_are():
     """«repeats» does not depend on the embedding model alone: the words of the fact already in the proposal are enough."""
     from mimirsynth.proposals import _words, relevance
     same = _words("La wiki usa PostgreSQL como base de datos")
-    assert same == {"wiki", "postgresql", "base", "datos"}                                       # «como» says nothing about the content
+    assert same == {"wiki", "postgresql", "base", "dato"}                                        # «como» says nothing; «datos» is «dato»
     assert relevance("La wiki usa PostgreSQL como base de datos.", same, 0.6) == "repeats"      # same words, whatever the score
     assert relevance("PostgreSQL es la base de datos de la wiki", same, 0.97) == "repeats"     # nearly the same embedding, nothing added
     words = _words("La wiki usa PostgreSQL como base de datos, en el mismo contenedor")
@@ -126,7 +126,13 @@ def test_related_facts_say_how_close_they_are():
     assert relevance("Nextcloud corre en Eridani", words, 0.9) == "close"
     assert relevance("Nextcloud corre en Eridani", words, 0.7) == "related"
     assert relevance("La wiki", words, 0.5) == "related"                                        # too short to say it repeats
-    assert _words("lxc-registro corre en pve-norte-02") == {"lxc-registro", "corre", "pve-norte-02"}  # an identifier is one word
+    assert _words("lxc-registro corre en pve-norte-02") == {"lxc-registro", "corr", "pve-norte-02"}  # an identifier is one word
+    # other forms of the same words, and accents, do not make a proposal add anything
+    assert relevance("La copia nocturna se replica al bucket externo", _words("Las copias nocturnas se replicán a los buckets externos"), 0.6) == "repeats"
+    assert _words("certificado") == _words("certificados") == _words("Certificádos")
+    # a number is a word of content, however short: a changed one is new
+    assert relevance("pve-norte-01 tiene 128 GB de memoria", _words("pve-norte-01 tiene 64 GB de memoria"), 0.97) == "close"
+    assert relevance("pve-norte-01 tiene 128 GB de memoria", _words("pve-norte-01 tiene 128 GB de memoria"), 0.6) == "repeats"
     # the fact's words are all there, but the proposal says much more: very close, not a duplicate
     told = _words("Fallo de la copia nocturna del 3 de noviembre: la copia nocturna al bucket externo falló por la cuota y se relanzó a mano")
     assert relevance("La copia nocturna se replica al bucket externo", told, 0.7) == "close"
@@ -168,6 +174,7 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}]) == "stale"
     assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}, {"relevance": "repeats", "invalid_at": None}]) == "duplicate"
     assert verdict([{"relevance": "close", "invalid_at": None}, {"relevance": "related", "invalid_at": None}]) == "similar"   # adds to it: not known
+    assert verdict([{"relevance": "close", "invalid_at": "2026-01-01", "mostly_new": True}]) == "related"  # mostly something else: not stale
 
     known = {"fact": "La cabina nas01 movida a la sala sur", "score": 0.6}
     monkeypatch.setattr(ingest, "enabled", lambda: True)
