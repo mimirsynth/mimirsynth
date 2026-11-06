@@ -127,6 +127,7 @@ def test_related_facts_say_how_close_they_are():
     assert relevance("Nextcloud corre en Eridani", words, 0.7) == "related"
     assert relevance("La wiki", words, 0.5) == "related"                                        # too short to say it repeats
     assert _words("lxc-registro corre en pve-norte-02") == {"lxc-registro", "corr", "pve-norte-02"}  # an identifier is one word
+    assert _words("en el mismo contenedor") == {"contenedor"}                                     # «mismo» says nothing either
     # other forms of the same words, and accents, do not make a proposal add anything
     assert relevance("La copia nocturna se replica al bucket externo", _words("Las copias nocturnas se replicán a los buckets externos"), 0.6) == "repeats"
     assert _words("certificado") == _words("certificados") == _words("Certificádos")

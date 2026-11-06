@@ -334,7 +334,7 @@ STOP = frozenset("""
 como para desde entre sobre pero tras hasta cuando donde porque aunque mientras según durante este esta estos estas esos esas aquel
 aquella todo toda todos todas otro otra otros otras cada mucho mucha muchos muchas poco poca algo nada también tampoco solo sólo ahora
 antes después luego aquí allí allá está están estaba estaban será serán sido siendo había habían tiene tienen tenía puede pueden hace
-hacen sigue siguen queda quedan their there these those this that with from have been were into than then also some when where which
+hacen sigue siguen queda quedan mismo misma mismos mismas their there these those this that with from have been were into than then also some when where which
 what about will would should could while after before other more most only such very
 """.split())
 
