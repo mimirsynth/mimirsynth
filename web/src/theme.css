@@ -302,7 +302,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-listcard { display: flex; flex-direction: column; gap: 8px; background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 14px 16px; }
 .ms-listcard[data-clickable], .ms-table [data-clickable] { cursor: pointer; }
 /* the real button that opens a row or a card: it reads as its text, and shows the focus ring */
-.ms-rowopen { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ms-rowopen { min-height: 24px; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }  /* a row's title: the 24px target of WCAG 2.5.8 even on one line */
 .ms-rowopen:hover { text-decoration: underline; text-underline-offset: 2px; }
 .ms-rowopen:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 4px; }
 .ms-rowopen.ms-listcard-title { font-size: 14px; font-weight: 600; color: var(--ms-ink); }  /* a card's title keeps its title look as a button */

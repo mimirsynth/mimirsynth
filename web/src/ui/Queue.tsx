@@ -2,7 +2,8 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Check } from "./Fields";
 
-export type QueueItem = { id: number; title: ReactNode; preview?: string; meta?: ReactNode; tags?: ReactNode };
+export type QueueItem = { id: number; title: ReactNode; preview?: string; meta?: ReactNode; tags?: ReactNode;
+  /** The title as plain text, for the checkbox's name («Seleccionar #3 · …»); without it the checkbox says only the number. */ label?: string };
 
 /** A review queue: one item is open (the detail beside it), several can be checked for a decision on all of them. Each item is a list
  *  entry with a real button to open it and its own checkbox, so screen readers keep the list structure and the open one is announced
@@ -29,7 +30,7 @@ export function QueueList({ items, activeId, focusKey, onActivate, checked, onCh
     <ul className="ms-queue" aria-label={label}>
       {items.map((it) => (
         <li key={it.id} className="ms-queue-item" data-active={it.id === activeId ? "" : undefined} data-checked={checked.has(it.id) ? "" : undefined}>
-          <Check checked={checked.has(it.id)} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={t("Seleccionar #{{id}}", { id: it.id })} />
+          <Check checked={checked.has(it.id)} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={it.label ? t("Seleccionar #{{id}} · {{title}}", { id: it.id, title: it.label }) : t("Seleccionar #{{id}}", { id: it.id })} />
           <button type="button" className="ms-queue-open" aria-current={it.id === activeId ? "true" : undefined}
             aria-labelledby={`ms-q-${it.id}-t`} aria-describedby={it.preview || it.meta || it.tags ? `ms-q-${it.id}-d` : undefined}
             ref={(el) => { if (el) refs.current.set(it.id, el); else refs.current.delete(it.id); }}
