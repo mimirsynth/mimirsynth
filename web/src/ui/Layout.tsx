@@ -93,7 +93,9 @@ export function SidePanel({ children, ...rest }: Omit<DrawerProps, "position" | 
 export function ConfirmDialog({ opened, onClose, title, warning, subject, action, tone = "danger", warn, alt, requireText, disabled, onConfirm, children }: {
   opened: boolean; onClose: () => void; title: string; warning?: ReactNode; subject?: ReactNode; action: string;
   tone?: "danger" | "primary"; requireText?: string; disabled?: boolean; onConfirm: () => Promise<unknown>; children?: ReactNode;
-  /** The warning is a caution even though the action is not destructive: the focus starts on Cancel, so Enter never confirms it by reflex. */ warn?: boolean;
+  /** The warning is a caution even though the action is not destructive: the action becomes the quiet override (no fill, first in the
+   *  row, last when stacked on a phone), the safe choices carry the weight, and the focus starts on Cancel, so Enter never confirms it by
+   *  reflex. */ warn?: boolean;
   /** A second way out, the opposite decision (reject instead of approve): a secondary button beside `action`, which keeps its tone and
    *  its place, so the main button is the same in every dialog. */ alt?: { label: string; icon?: IconName; onConfirm: () => Promise<unknown> };
 }) {
@@ -115,10 +117,10 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
         {children}
         {requireText && <TextField label={t("Escribe «{{requireText}}» para confirmar", { requireText: requireText })} value={typed} onChange={(e) => setTyped(e.currentTarget.value)} />}
         <MutationError error={error} />
-        <div className="ms-confirm-actions">
-          <Btn kind="ghost" onClick={onClose} data-autofocus={warn ? true : undefined}>{t("Cancelar")}</Btn>
+        <div className="ms-confirm-actions" data-warn={warn ? "" : undefined}>
+          <Btn kind={warn ? "secondary" : "ghost"} onClick={onClose} data-autofocus={warn ? true : undefined}>{t("Cancelar")}</Btn>
           {alt && <Btn kind="danger" icon={alt.icon} loading={busy && running === "alt"} disabled={busy && running !== "alt"} onClick={() => run("alt")}>{alt.label}</Btn>}
-          <Btn kind={tone} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!warn && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
+          <Btn kind={warn ? "ghost" : tone} className={warn ? "ms-confirm-override" : undefined} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!warn && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
         </div>
       </div>
     </Modal>

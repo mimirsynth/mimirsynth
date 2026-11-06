@@ -164,7 +164,10 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
   .ms-confirm-actions { flex-direction: column-reverse; align-items: stretch; }
   .ms-confirm-actions .ms-btn { width: 100%; }
 }
-@media (pointer: coarse) { .ms-confirm-actions .ms-btn { --button-height: 44px !important; } }
+@media (pointer: coarse) { .ms-confirm-actions .ms-btn { --button-height: 44px !important; } .ms-modal .mantine-Modal-close { min-width: 44px; min-height: 44px; } }
+/* a warning: the override goes first in the row (away from the safe choices at the right) and, stacked on a phone, last */
+.ms-confirm-actions[data-warn] .ms-confirm-override { order: -1; margin-right: auto; }
+@media (max-width: 48em) { .ms-confirm-actions[data-warn] .ms-confirm-override { margin-right: 0; } }  /* first in order is the bottom of the reversed stack */
 .ms-notice .mantine-Alert-title { font-family: var(--ms-display); font-weight: 600; }
 .ms-notice[data-tone="warn"] { border-color: var(--ms-hidromiel); background: color-mix(in srgb, var(--ms-hidromiel) 14%, var(--ms-raised)); }
 .ms-notice[data-tone="danger"] { border-color: var(--ms-invalidado); background: color-mix(in srgb, var(--ms-invalidado) 12%, var(--ms-raised)); }
