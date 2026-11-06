@@ -347,7 +347,8 @@ type Known = { verdict: "duplicate" | "stale"; fact?: RelatedFact } | null;
 /** The fact a proposal is read against: the one that makes it known, or else the closest current one. None until the facts arrive. */
 function pairedFact(d: Prop, facts?: RelatedFact[]): RelatedFact | undefined {
   if (!facts) return undefined;
-  return knownOf(d, facts)?.fact ?? facts.find((f) => f.relevance === "close" && !f.invalid_at);
+  const near = facts.filter((f) => f.relevance === "close" && !f.invalid_at);  // the one it adds least to first
+  return knownOf(d, facts)?.fact ?? near.find((f) => !f.mostly_new) ?? near[0];
 }
 function knownOf(d: Prop | undefined, facts?: RelatedFact[]): Known {
   if (!d || d.status !== "pending" || d.correction) return null;
@@ -382,7 +383,7 @@ function FactLine({ f }: { f: RelatedFact }) {
       <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
       {f.invalid_at && f.relevance !== "related" ? <Pill size="xs" tone="danger">{t("Ya no es cierto")}</Pill>
         : f.relevance === "repeats" ? <Pill size="xs" tone="neutral">{t("Casi igual")}</Pill>
-        : f.relevance === "close" ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : null}
+        : f.relevance === "close" && !f.mostly_new ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : null}
     </Group>
     <Text size="xs" c="dimmed">
       {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → <span title={f.name}>{humanRelation(f.name)}</span> → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
@@ -436,7 +437,8 @@ function AddedText({ d, fact }: { d: Prop; fact: RelatedFact }) {
   const a = addedTo(d.body, fact.fact);
   return (<Stack gap={6}>
     <Group gap={8} className="ms-added-legend">
-      {a.words.length === 0 ? <Text size="xs" c="dimmed">{t("El texto no añade nada a lo que dice el brain, abajo: todas sus palabras ya están ahí.")}</Text>
+      {a.words.length === 0 ? <Text size="xs" c="dimmed">{fact.invalid_at ? t("El texto repite lo que dice el brain, abajo, y eso ya no es cierto.")
+        : t("El texto no añade ninguna palabra de contenido a lo que dice el brain, abajo.")}</Text>
         : <>{fact.mostly_new && <Pill tone="neutral">{t("Mayormente nuevo")}</Pill>}
           <Text size="xs" c="dimmed"><mark className="ms-added">{t("Subrayado")}</mark>{" "}{t("lo que añade a lo que dice el brain, abajo.")}
             <span className="ms-sr">{" "}{t("Añade: {{words}}.", { words: a.words.join(", ") })}</span></Text></>}
@@ -461,7 +463,8 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   // the one line to read first. A contradiction cannot be told from the text alone: the closest facts are there to check it.
   const verdict = known?.verdict === "duplicate" ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
     : known?.verdict === "stale" ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
-      : paired || close.length ? { icon: "info" as const, text: t("Muy parecido a algo que el brain ya sabe: comprueba qué añade la propuesta.") }
+      : [paired, ...close].some((f) => f && !f.mostly_new) ? { icon: "info" as const, text: t("Muy parecido a algo que el brain ya sabe: comprueba qué añade la propuesta.") }
+        : paired ? { icon: "info" as const, text: t("Mayormente nuevo: comparte el tema con algo que el brain ya sabe, y casi todo lo que dice es nuevo.") }
         : related.length ? { icon: "info" as const, text: t("Nada casi igual en el brain: sería conocimiento nuevo.") } : null;
   return (<section className="ms-related" aria-labelledby={`ms-related-${d.id}`}><Stack gap={8}>
     <Text component="h3" id={`ms-related-${d.id}`} className="ms-section-title">{t("Lo que el brain ya sabe")}</Text>

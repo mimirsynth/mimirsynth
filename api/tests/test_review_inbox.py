@@ -176,6 +176,7 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}, {"relevance": "repeats", "invalid_at": None}]) == "duplicate"
     assert verdict([{"relevance": "close", "invalid_at": None}, {"relevance": "related", "invalid_at": None}]) == "similar"   # adds to it: not known
     assert verdict([{"relevance": "close", "invalid_at": "2026-01-01", "mostly_new": True}]) == "related"  # mostly something else: not stale
+    assert verdict([{"relevance": "close", "invalid_at": None, "mostly_new": True}]) == "related"  # it only shares the subject: not «similar»
 
     known = {"fact": "La cabina nas01 movida a la sala sur", "score": 0.6}
     monkeypatch.setattr(ingest, "enabled", lambda: True)

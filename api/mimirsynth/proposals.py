@@ -402,15 +402,16 @@ def mostly_new(fact: str | None, proposal_words: set[str]) -> bool:
 
 def verdict(facts: list[dict]) -> str:
     """One word for the queue: «duplicate» when a current fact says nearly the same, «stale» when a close one stopped being true,
-    «similar» when a current fact is very close but the proposal adds to it, «related» when there is only something near, «new» when
-    nothing is. Only «duplicate» and «stale» are known (`KNOWN`): kept out of a batch, and asked about before approving."""
+    «similar» when a current fact is very close and the proposal adds a little to it, «related» when there is only something near (or
+    the proposal is mostly new against it), «new» when nothing is. Only «duplicate» and «stale» are known (`KNOWN`): kept out of a batch, and asked about before approving."""
     if any(f["relevance"] == "repeats" and not f.get("invalid_at") for f in facts):
         return "duplicate"
     # close to something no longer true, and saying mostly the same: a proposal that is mostly new (a backup that failed, against «the
     # backup went only to the NAS») does not put the old fact back
     if any(f.get("invalid_at") and (f["relevance"] == "repeats" or (f["relevance"] == "close" and not f.get("mostly_new"))) for f in facts):
         return "stale"
-    if any(f["relevance"] == "close" and not f.get("invalid_at") for f in facts):  # very close to something still true
+    # very close to something still true, and adding little to it: a proposal mostly new against the fact only shares its subject
+    if any(f["relevance"] == "close" and not f.get("invalid_at") and not f.get("mostly_new") for f in facts):
         return "similar"
     return "related" if facts else "new"
 
