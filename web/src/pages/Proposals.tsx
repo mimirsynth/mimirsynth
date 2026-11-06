@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, QueueList, RowOpen, Segments, SelectField, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, QueueList, RowOpen, focusedQueueItem, Segments, SelectField, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -31,8 +31,8 @@ type Verb = "approve" | "reject" | "mask-and-approve";
 function KindPill({ kind }: { kind?: string }) {
   const { t } = useTranslation();
   return kind === "correction"
-    ? <Pill size="xs" tone="warn" strong title={t("Invalida un hecho del grafo")}><Group gap={4} wrap="nowrap"><Icon name="undo" size={12} />{t("Corrige")}</Group></Pill>
-    : <Pill size="xs" tone="neutral" title={t("Añade conocimiento al grafo")}><Group gap={4} wrap="nowrap"><Icon name="plus" size={12} />{t("Añade")}</Group></Pill>;
+    ? <Pill size="xs" tone="warn" strong title={t("Invalida un hecho del grafo")}><span className="ms-pill-row"><Icon name="undo" size={12} />{t("Corrige")}</span></Pill>
+    : <Pill size="xs" tone="neutral" title={t("Añade conocimiento al grafo")}><span className="ms-pill-row"><Icon name="plus" size={12} />{t("Añade")}</span></Pill>;
 }
 
 /** Marker in the list for a proposal the secret detector touched: masked (already safe) or flagged (a person must look). Text and icon, not only colour. */
@@ -41,7 +41,7 @@ function SecretsPill({ found }: { found?: SecretFinding[] }) {
   if (!found?.length) return null;
   const isFlagged = found.some((f) => f.action === "flagged");
   return <Pill size="xs" tone={isFlagged ? "warn" : "neutral"} title={[...new Set(found.map((f) => t(f.label)))].join(", ")}>
-    <Group gap={4} wrap="nowrap"><Icon name="lock" size={12} />{isFlagged ? t("Secreto por revisar") : t("Secreto enmascarado")}</Group></Pill>;
+    <span className="ms-pill-row"><Icon name="lock" size={12} />{isFlagged ? t("Secreto por revisar") : t("Secreto enmascarado")}</span></Pill>;
 }
 
 /** Who decided a proposal, in a word: the curator, the decider, a trusted webhook, or its author on submission. */
@@ -749,15 +749,15 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (id === null) return;
     setChecked((c) => { const n = new Set(c); (on ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
   };
-  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, mode === "pending" && confirm === null && !masking, inboxRef);
+  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(focusedQueueItem() ?? active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, mode === "pending" && confirm === null && !masking, inboxRef);
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
     id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
-      {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}><Group gap={4} wrap="nowrap"><Icon name="copy" size={12} />{t("Posible duplicado")}</Group></Pill>}
-      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><Group gap={4} wrap="nowrap"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</Group></Pill>}
-      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><Group gap={4} wrap="nowrap"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</Group></Pill>}
+      {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
+      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</span></Pill>}
+      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><span className="ms-pill-row"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</span></Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
@@ -787,6 +787,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {queue.data && items.length === 0
         ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={() => setMode("decided")}>{t("Ver las decididas")}</Btn></EmptyState>
         : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading" scopeRef={inboxRef}
+          skip={active !== null ? { label: t("Ir a la propuesta abierta"), onSkip: () => { setShowDetail(true); setFocusTo("title"); } } : undefined}
           list={<>
             <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
             <div className="ms-inbox-bar">

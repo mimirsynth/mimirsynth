@@ -10,7 +10,7 @@ export function Pill({ tone, color, strong, circle, size = "sm", title, children
   { tone?: Tone; color?: string; strong?: boolean; circle?: boolean; size?: "xs" | "sm" | "md"; title?: string; children?: ReactNode; className?: string }) {
   const t: Tone = tone ?? MAP[color ?? ""] ?? "neutral";
   return (
-    <Badge radius="sm" size={size} circle={circle} title={title} data-tone={t} data-strong={strong ? "" : undefined} className={`ms-pill${className ? ` ${className}` : ""}`}>
+    <Badge component="span" radius="sm" size={size} circle={circle} title={title} data-tone={t} data-strong={strong ? "" : undefined} className={`ms-pill${className ? ` ${className}` : ""}`}>
       {children}
     </Badge>
   );
