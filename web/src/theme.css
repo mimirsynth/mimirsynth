@@ -547,7 +547,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-section-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--ms-ink); }
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
 .ms-pair { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; margin: 0; padding: 10px 12px; border-radius: var(--ms-radius);
-  background: color-mix(in srgb, var(--ms-hidromiel) 9%, var(--ms-raised)); }  /* the proposal and the fact it repeats, read one against the other */
+  background: color-mix(in srgb, var(--ms-ink) 5%, var(--ms-raised)); }  /* the proposal and the fact it repeats, read one against the other; neutral: gold is the action's */
 .ms-pair dt { font-size: 12px; font-weight: 600; color: var(--ms-muted); padding-top: 2px; }
 .ms-pair dd { margin: 0; min-width: 0; }
 .ms-added { background: color-mix(in srgb, var(--ms-accent) 22%, transparent); color: inherit; border-radius: 2px; padding: 0 1px; }  /* what the proposal adds to the fact */
