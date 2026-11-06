@@ -109,6 +109,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
     setBusy(true); setRunning(which); setError(null);
     try { await (which === "alt" && alt ? alt.onConfirm() : onConfirm()); onClose(); } catch (e) { setError(e); } finally { setBusy(false); setRunning(null); }
   };
+  const main = <Btn kind={warn ? "ghost" : tone} className={warn ? "ms-confirm-override" : undefined} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!warn && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>;
   return (
     <Modal opened={opened} onClose={onClose} title={title} size={alt ? "lg" : undefined}>{/* three choices fit on one row */}
       <div className="ms-confirm">
@@ -118,9 +119,10 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
         {requireText && <TextField label={t("Escribe «{{requireText}}» para confirmar", { requireText: requireText })} value={typed} onChange={(e) => setTyped(e.currentTarget.value)} />}
         <MutationError error={error} />
         <div className="ms-confirm-actions" data-warn={warn ? "" : undefined}>
+          {warn && main}{/* in the order they are seen on a wide screen, so Tab and a screen reader meet them as they are laid out */}
           <Btn kind={warn ? "secondary" : "ghost"} onClick={onClose} data-autofocus={warn ? true : undefined}>{t("Cancelar")}</Btn>
           {alt && <Btn kind="danger" icon={alt.icon} loading={busy && running === "alt"} disabled={busy && running !== "alt"} onClick={() => run("alt")}>{alt.label}</Btn>}
-          <Btn kind={warn ? "ghost" : tone} className={warn ? "ms-confirm-override" : undefined} icon={tone === "danger" ? "trash" : "check"} data-autofocus={!warn && tone === "primary" && !requireText ? true : undefined} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
+          {!warn && main}
         </div>
       </div>
     </Modal>
@@ -129,6 +131,10 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
 
 /** Cabecera de pantalla: título igual a la entrada del menú, una línea de ayuda y, a la derecha, acciones. */
 export function PageHeader({ title, description, actions, meta }: { title: string; description?: ReactNode; actions?: ReactNode; meta?: ReactNode }) {
+  useEffect(() => {  // the browser tab and its history say which page this is
+    document.title = `${title} · MimirSynth`;
+    return () => { document.title = "MimirSynth"; };
+  }, [title]);
   // `meta`: small things that belong to the title (a type, other names), on its line and wrapping under it on a phone
   return (
     <header className="ms-pagehead">

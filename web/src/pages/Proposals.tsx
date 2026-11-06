@@ -124,7 +124,8 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
 /** The last decision taken here: what happened, what happens next, and the way back. An approval waits `undo_seconds` before ingestion;
  *  after that a single one is followed until it is ingested or failed. `ids` when it was a decision on several at once (`skipped`: how
  *  many of the selected ones were left to decide one at a time). */
-type Decision = { id: number; ids?: number[]; skipped?: number; verb: "approve" | "reject" | "undone"; until: number | null };
+type Decision = { id: number; ids?: number[]; skipped?: number; verb: "approve" | "reject" | "undone"; until: number | null;
+  /** The title of the one proposal decided, so the notice names it as well as its number. */ name?: string };
 /** Whether the last decision can still be taken back: a rejection, or an approval not yet handed to ingestion. */
 const undoable = (last: Decision | null) => !!last && last.verb !== "undone" && (last.ids ?? [last.id]).length > 0
   && (last.verb === "reject" || !last.until || last.until > Date.now());
@@ -146,7 +147,8 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
   const p = useQuery({ queryKey: ["proposal", graph, last?.id, "after"], enabled: follow, queryFn: () => get<Prop>(`${base}/${last!.id}`),
     refetchInterval: (q) => (q.state.data?.status === "approved" ? 2000 : false) });
   if (!last) return null;
-  const id = last.id;
+  // «#12 «Título»»: the messages say «Propuesta #{{id}} …», and the number alone tells the curator little
+  const id = last.name ? `${last.id} «${last.name.length > 60 ? `${last.name.slice(0, 59)}…` : last.name}»` : String(last.id);
   const n = (last.ids ?? [id]).length;
   const s = last.until ? Math.max(1, Math.ceil((last.until - now) / 1000)) : 0;
   let tone: "success" | "danger" | "info" = "success";
@@ -551,6 +553,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
           : t("El brain ya dice algo casi igual. Si la apruebas, el grafo tendrá lo mismo dos veces."))
         : (known.fact ? t("Se parece a «{{fact}}», que dejó de ser cierto el {{date}}. Apruébala solo si vuelve a ser cierto.", { fact: quoted(known.fact.fact), date: fmtDay(known.fact.invalid_at) })
           : t("Se parece a algo que dejó de ser cierto. Apruébala solo si vuelve a ser cierto."))}
+      subject={<><span className="ms-data">#{d.id}</span> · {d.name}</>}
       action={t("Aprobar igualmente")} onConfirm={() => decide("approve")} />}
     <ConfirmDialog opened={secret && (onMasking ? !!masking : ownMasking)} onClose={() => askMask(false)} tone="primary"
       title={t("¿Enmascarar y aprobar la propuesta #{{id}}?", { id: d.id })}
@@ -698,7 +701,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const advance = (id: number) => {  // after a decision the next one opens, so the curator never goes back to the list
     const i = items.findIndex((p) => p.id === id);
     const next = items[i + 1] ?? items[i - 1];
-    if (next && !items[i + 1]) setMoved(t("Era la última de la cola: se abre la anterior, #{{id}}.", { id: next.id }));
+    if (next && !items[i + 1]) setMoved(t("Era la última de la cola: se abre la anterior, #{{id}}.", { id: next.purged_at ? next.id : `${next.id} «${next.name}»` }));
     if (next) { setActive(next.id); ops.setNote(""); setFocusTo("title"); } else setShowDetail(false);
   };
   useEffect(() => {
@@ -754,7 +757,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
     id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
       {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
-      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</span></Pill>}
+      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posiblemente ya no es cierto")}</span></Pill>}
       {p.related_verdict === "similar" && <Pill size="xs" tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><span className="ms-pill-row"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</span></Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
@@ -893,10 +896,10 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [noteKey, setNoteKey] = useState(0);
   const [explain, setExplain] = useState(false);
   const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((id) => send("POST", `${base}/${id}/undo`))),
-    onSuccess: (_, ids) => { setLast({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null }); refresh(); } });
+    onSuccess: (_, ids) => { setLast((prev) => ({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null, name: ids.length === 1 && prev?.id === ids[0] ? prev.name : undefined })); refresh(); } });
   const review = useMutation({ mutationFn: (a: { id: number; verb: Verb; note?: string }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note: a.note ?? note }),
     onMutate: () => undo.reset(),
-    onSuccess: (r, a) => { setNote(""); setLast({ id: a.id, verb: a.verb === "reject" ? "reject" : "approve", until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null }); refresh(); } });
+    onSuccess: (r, a) => { setNote(""); setLast({ id: a.id, verb: a.verb === "reject" ? "reject" : "approve", until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null, name: r.purged_at ? undefined : r.name }); refresh(); } });
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/ingest`), onSuccess: () => { setOpen(null); setTimeout(refresh, 8000); refresh(); } });
   const llm = !!ai.data?.llm.configured;

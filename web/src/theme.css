@@ -166,8 +166,8 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 }
 @media (pointer: coarse) { .ms-confirm-actions .ms-btn { --button-height: 44px !important; } .ms-modal .mantine-Modal-close { min-width: 44px; min-height: 44px; } }
 /* a warning: the override goes first in the row (away from the safe choices at the right) and, stacked on a phone, last */
-.ms-confirm-actions[data-warn] .ms-confirm-override { order: -1; margin-right: auto; }
-@media (max-width: 48em) { .ms-confirm-actions[data-warn] .ms-confirm-override { margin-right: 0; } }  /* first in order is the bottom of the reversed stack */
+.ms-confirm-actions[data-warn] .ms-confirm-override { margin-right: auto; }  /* first in the row (and in the DOM), apart from the safe choices */
+@media (max-width: 48em) { .ms-confirm-actions[data-warn] .ms-confirm-override { margin-right: 0; } }  /* first in the DOM is the bottom of the reversed stack */
 .ms-notice .mantine-Alert-title { font-family: var(--ms-display); font-weight: 600; }
 .ms-notice[data-tone="warn"] { border-color: var(--ms-hidromiel); background: color-mix(in srgb, var(--ms-hidromiel) 14%, var(--ms-raised)); }
 .ms-notice[data-tone="danger"] { border-color: var(--ms-invalidado); background: color-mix(in srgb, var(--ms-invalidado) 12%, var(--ms-raised)); }
@@ -513,7 +513,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-inbox-nav { display: none; }
 .ms-inbox-keys { font-size: 12px; color: var(--ms-muted); }
 .ms-detail-title { margin: 0; font-family: var(--ms-display); font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--ms-ink); }  /* the open proposal's heading: where the focus lands after a decision */
-.ms-detail-title:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }
+.ms-detail-title:focus { outline: none; }
+.ms-detail-title:focus-visible { outline: none; text-decoration: underline; text-decoration-color: var(--ms-focus); text-decoration-thickness: 2px; text-underline-offset: 4px; }  /* where the focus landed after a decision, without boxing the heading */
 .ms-inbox-actions:empty { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .ms-inbox-keys { display: none; }  /* no keyboard to press them with */
