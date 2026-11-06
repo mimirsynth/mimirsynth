@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, QueueList, RowOpen, focusedQueueItem, Segments, SelectField, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, QueueList, RowOpen, focusedQueueItem, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -84,13 +84,15 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
   const { f, setFilter, sortProps, page, setPage, active, clear } = view;
   const rows = data?.items ?? [];
   const mixed = new Set(rows.map((p) => p.kind)).size > 1;  // a Kind column only when the rows differ in it
+  const kinds = kindCounts(kindsFrom, status);
+  const byKind = kind !== "all" || (!!kinds.memory && !!kinds.correction);  // and a Kind filter only when there is something to tell apart
   return (<>
     <div className="ms-filter-row">
       {lead}
       <Segments label={t("Estado")} value={status} onChange={onStatus} data={statuses} />
-      <Segments label={t("Tipo")} value={kind} onChange={onKind}
-        data={[{ value: "all", label: t("Todas"), count: kindCounts(kindsFrom, status).all }, { value: "memory", label: t("Añaden"), count: kindCounts(kindsFrom, status).memory },
-          { value: "correction", label: t("Corrigen"), count: kindCounts(kindsFrom, status).correction }]} />
+      {byKind && <Segments label={t("Tipo")} value={kind} onChange={onKind}
+        data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },
+          { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />}
     </div>
     <ClearFilters active={active} onClear={clear} />
     <FillArea><DataTable fz="sm" aria-label={label}>
@@ -626,19 +628,13 @@ function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind, 
 
 /** «To review»: the pending queue, riskiest and oldest first, beside the open proposal; J/K move, A/R decide and the next one opens;
  *  several can be checked and decided at once (approving skips corrections and secrets to review, which go one at a time). */
-function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?: string; decidedFirst: boolean }) {
+function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: string; /** Goes to the decided ones (their own tab). */ onDecided: () => void }) {
   const { t } = useTranslation();
-  const [mode, setModeState] = useState(decidedFirst ? "decided" : "pending");
-  const [, setSp] = useSearchParams();
-  const setMode = (m: string) => {  // the view lives in the URL (?estado=decided), so a reload or a shared link opens the same one
-    setModeState(m);
-    const n = new URLSearchParams(window.location.search); if (m === "decided") n.set("estado", "decided"); else n.delete("estado"); setSp(n, { replace: true });
-  };
   const [kind, setKind] = useState(initialKind ?? "all");
   const [offset, setOffset] = useState(0);
   const limit = 50;
   const cnt = useQuery({ queryKey: ["proposals", ops.graph, "counts", kind, false], refetchInterval: 15000, queryFn: () => get<Counts>(`${ops.base}/counts`, { kind: kind === "all" ? undefined : kind }) });
-  const queue = useQuery({ queryKey: ["proposals", ops.graph, "queue", kind, offset], enabled: mode === "pending", placeholderData: keepPreviousData, refetchInterval: 15000,
+  const queue = useQuery({ queryKey: ["proposals", ops.graph, "queue", kind, offset], placeholderData: keepPreviousData, refetchInterval: 15000,
     queryFn: () => get<PropList>(ops.base, { status: "pending", kind: kind === "all" ? undefined : kind, sort: "risk", order: "asc", limit, offset }) });
   const items = useMemo(() => queue.data?.items ?? [], [queue.data]);
   const [active, setActive] = useState<number | null>(null);
@@ -669,7 +665,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const ask = (verb: "approve" | "reject") => { setBatch({ verb, items: selected }); setConfirm(verb); };
   const [masking, setMasking] = useState(false);
   const actions = useRef<HTMLDivElement>(null);
-  const footer = mode === "pending" && active !== null;
+  const footer = active !== null;
   const shown = useShown(actions, footer);
   useEffect(() => { ops.setDocked(shown); }, [shown]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => ops.setDocked(false), []);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -751,7 +747,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (id === null) return;
     setChecked((c) => { const n = new Set(c); (on ?? !n.has(id)) ? n.add(id) : n.delete(id); return n; });
   };
-  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(focusedQueueItem() ?? active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, mode === "pending" && confirm === null && !masking, inboxRef);
+  useShortcuts({ j: () => move(1), k: () => move(-1), a: () => decide("approve"), r: () => decide("reject"), x: () => toggle(focusedQueueItem() ?? active), z: () => ops.undoLast(), n: () => { if (d?.status === "pending" && actions.current?.getClientRects().length) ops.openNote(); } }, confirm === null && !masking, inboxRef);
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
@@ -764,42 +760,31 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
-  const show = <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
-    data={[{ value: "pending", label: t("Pendientes"), count: cnt.data ? counts.pending ?? 0 : undefined }, { value: "decided", label: t("Decididas"), count: cnt.data ? counts.decided ?? 0 : undefined }]} />;
+  const kinds = kindCounts(cnt.data, "pending");
   return (<>
-    <SelectField className="ms-only-narrow" aria-label={t("Qué propuestas ver")} allowDeselect={false} comboboxProps={{ withinPortal: true }}
-      value={mode === "decided" ? "decided" : `pending:${kind}`}
-      onChange={(v) => { if (!v) return; if (v === "decided") setMode("decided"); else { setMode("pending"); setKind(v.split(":")[1]); setOffset(0); } }}
-      data={[
-        { value: "pending:all", label: withCount(t("Pendientes"), kindCounts(cnt.data, "pending").all) },
-        { value: "pending:memory", label: withCount(t("Pendientes que añaden"), kindCounts(cnt.data, "pending").memory) },
-        { value: "pending:correction", label: withCount(t("Pendientes que corrigen"), kindCounts(cnt.data, "pending").correction) },
-        { value: "decided", label: withCount(t("Decididas"), cnt.data ? counts.decided ?? 0 : undefined) }]} />
-    {mode === "pending" && <div className="ms-filter-row ms-only-wide">
-      {show}
-      {mode === "pending" && <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
-        data={[{ value: "all", label: t("Todas"), count: kindCounts(cnt.data, "pending").all }, { value: "memory", label: t("Añaden"), count: kindCounts(cnt.data, "pending").memory },
-          { value: "correction", label: t("Corrigen"), count: kindCounts(cnt.data, "pending").correction }]} />}
+    {(kind !== "all" || (!!kinds.memory && !!kinds.correction)) && <div className="ms-filter-row ms-review-filter">  {/* only when there is something to tell apart */}
+      <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
+        data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },
+          { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />
     </div>}
-    {mode === "decided" ? <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={initialKind} lead={<div className="ms-only-wide">{show}</div>}
-        first={{ value: "decided", label: t("Todas"), countKey: "decided" }} /> : <>
       {pendingFixes > 0 && kind !== "correction" && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
-        ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={() => setMode("decided")}>{t("Ver las decididas")}</Btn></EmptyState>
+        ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={onDecided}>{t("Ver las decididas")}</Btn></EmptyState>
         : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading" scopeRef={inboxRef}
           skip={active !== null ? { label: t("Ir a la propuesta abierta"), onSkip: () => { setShowDetail(true); setFocusTo("title"); } } : undefined}
           list={<>
             <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
             <div className="ms-inbox-bar">
               {selected.length > 0 ? <>
-                <Text size="sm" fw={600}>{t("{{n}} seleccionadas", { n: selected.length })}</Text>
-                {selected.some(oneByOne) && <Text size="xs" c="dimmed">{t("{{k}} se aprueban aparte", { k: selected.filter(oneByOne).length })}</Text>}
-                <Btn size="row" icon="check" onClick={() => ask("approve")}>{t("Aprobar las seleccionadas")}</Btn>
-                <Btn size="row" kind="danger" icon="close" onClick={() => ask("reject")}>{t("Rechazar las seleccionadas")}</Btn>
-                <Btn size="row" kind="ghost" onClick={() => setChecked(new Set())}>{t("Quitar la selección")}</Btn>
+                <Text size="sm" fw={600} className="ms-inbox-bar-what" title={selected.some(oneByOne) ? (selected.filter(oneByOne).length === 1 ? t("1 se decide aparte: una corrección, un secreto por revisar, algo que el brain ya sabe o aún no ha comprobado.")
+                  : t("{{k}} se deciden una a una: correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado.", { k: selected.filter(oneByOne).length })) : undefined}>
+                  {selected.length === 1 ? t("1 seleccionada") : t("{{n}} seleccionadas", { n: selected.length })}{selected.some(oneByOne) && <span className="ms-inbox-bar-aside"> · {t("{{k}} aparte", { k: selected.filter(oneByOne).length })}</span>}</Text>
+                <Btn size="row" onClick={() => ask("approve")}>{t("Aprobar")}</Btn>
+                <Btn size="row" kind="danger" onClick={() => ask("reject")}>{t("Rechazar")}</Btn>
+                <IconButton icon="close" label={t("Quitar la selección")} onClick={() => setChecked(new Set())} />
               </> : <>
                 <Text size="sm" c="dimmed">{t("Por riesgo y antigüedad")}</Text>
                 <Btn size="row" kind="ghost" onClick={() => setChecked(new Set(items.map((p) => p.id)))}>{t("Seleccionar todas")}</Btn>
@@ -828,10 +813,9 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             {footer && <div className="ms-inbox-actions" ref={actions}>
               {shown && ops.notice({ openId: active })}
               {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} waiting={partial} onApprove={() => decide("approve")} />
-              <Text className="ms-inbox-keys">{t("Atajos, con el foco en la cola o en la propuesta:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
+              <Text className="ms-inbox-keys" title={t("Actúan con el foco en la cola o en la propuesta abierta.")}>{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
           </>} />}
-    </>}
     <ConfirmDialog opened={confirm !== null} onClose={() => setConfirm(null)} tone={batch.verb === "approve" ? "primary" : "danger"}
       title={batch.verb === "approve"
         ? (stays.length ? t("¿Aprobar {{n}} de {{total}}?", { n: goes.length, total: batch.items.length }) : goes.length === 1 ? t("¿Aprobar 1 propuesta?") : t("¿Aprobar {{n}} propuestas?", { n: goes.length }))
@@ -895,7 +879,9 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const isCurator = ["curator", "admin", "owner"].includes(role);
   const [sp] = useSearchParams();   // ?estado=…&tipo=…: the links of «Needs your attention» and of the summary open the right view, filtered
   const estado = sp.get("estado");
-  const [tab, setTab] = useTabParam("revisar");
+  // without ?tab=, ?estado=decided (an older link) opens the decided ones; choosing a tab drops it
+  const [chosen, setTab] = useTabParam("revisar", "tab", ["estado"]);
+  const tab = sp.get("tab") ? chosen : estado && estado !== "pending" ? "decididas" : "revisar";
   const base = `brains/${graph}/proposals`;
   const ai = useQuery({ queryKey: ["ai-status"], refetchInterval: 60000, queryFn: () => get<Record<string, { configured: boolean }>>("ai-status") });
   const pendingCount = useQuery({ queryKey: ["proposals", graph, "counts", "all", false], enabled: isCurator, refetchInterval: 15000, queryFn: () => get<Counts>(`${base}/counts`) });
@@ -933,10 +919,15 @@ export default function Proposals({ graph, role }: { graph: string; role: string
         ? <Tabs value={tab} onChange={(v) => setTab(v)} keepMounted={false} className="ms-tabs-fill">
             <Tabs.List>
               <Tabs.Tab value="revisar">{t("Por revisar")}{tab !== "revisar" && pendingCount.data ? ` (${pendingCount.data.pending ?? 0})` : ""}</Tabs.Tab>
+              <Tabs.Tab value="decididas">{t("Decididas")}</Tabs.Tab>
               <Tabs.Tab value="mias">{t("Mis propuestas")}</Tabs.Tab>
             </Tabs.List>
             <Tabs.Panel value="revisar" pt="sm" className="ms-tabpanel-col">
-              <ReviewTab ops={ops} initialKind={sp.get("tipo") ?? undefined} decidedFirst={!!estado && estado !== "pending"} />
+              <ReviewTab ops={ops} initialKind={sp.get("tipo") ?? undefined} onDecided={() => setTab("decididas")} />
+            </Tabs.Panel>
+            <Tabs.Panel value="decididas" pt="sm" className="ms-tabpanel-col">
+              <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={sp.get("tipo") ?? undefined}
+                first={{ value: "decided", label: t("Todas"), countKey: "decided" }} />
             </Tabs.Panel>
             <Tabs.Panel value="mias" pt="sm" className="ms-tabpanel-col"><MineTab ops={ops} isCurator={isCurator} /></Tabs.Panel>
           </Tabs>
