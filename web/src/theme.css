@@ -540,6 +540,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-hit { min-height: 24px; }  /* text buttons outside a sentence: at least the 24px target of WCAG 2.5.8 */
 .ms-queue-item .ms-check { --checkbox-size: 24px !important; }  /* the queue's checkboxes, at the same minimum target */
 @media (pointer: coarse) { .ms-inbox-nav .ms-iconbtn { --ai-size: 44px !important; } }
+@media (max-width: 48em) { .ms-reject-why { display: none; } }  /* on a phone «Rechazar» stays beside «Aprobar»: the reason is in its name and in the note */
 @media (pointer: coarse) { .ms-hit { min-height: 44px; } .ms-queue-item .ms-check { --checkbox-size: 28px !important; } }
 .ms-queue-desc { display: contents; }  /* only groups the description for aria-describedby; the layout is its children's */
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */

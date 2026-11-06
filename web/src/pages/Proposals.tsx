@@ -1,7 +1,7 @@
 import { T, locale } from "../i18n";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Group, Stack, Text } from "@mantine/core";
+import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
   Pill, QueueList, RowOpen, Segments, SelectField, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
@@ -349,6 +349,8 @@ const isKnown = (p: Prop) => p.related_verdict === "duplicate" || p.related_verd
 const quoted = (fact: string) => fact.replace(/[\s.]+$/, "");
 /** Rejecting what the brain already knows: the button that says why, and the note it leaves when the curator wrote none. */
 const knownReject = (k: NonNullable<Known>, t: TFunction) => k.verdict === "duplicate" ? t("Rechazar: ya lo sabe") : t("Rechazar: ya no es cierto");
+/** The reason alone, for a button that shows it only where there is room for it. */
+const knownWhy = (k: NonNullable<Known>, t: TFunction) => k.verdict === "duplicate" ? t("ya lo sabe") : t("ya no es cierto");
 const knownNote = (k: NonNullable<Known>, t: TFunction) => k.verdict === "duplicate"
   ? (k.fact ? t("El brain ya lo sabe: «{{fact}}».", { fact: quoted(k.fact.fact) }) : t("El brain ya lo sabe."))
   : (k.fact ? t("Ya no es cierto: «{{fact}}» dejó de serlo el {{date}}.", { fact: quoted(k.fact.fact), date: fmtDay(k.fact.invalid_at) }) : t("Se parece a algo que dejó de ser cierto."));
@@ -481,10 +483,11 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
       </Group>
       <Group gap="xs">
         <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
-          onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{known && !secret ? knownReject(known, t) : t("Rechazar")}</Btn>
-        <Btn kind="primary" loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
+          aria-label={known && !secret ? knownReject(known, t) : undefined}
+          onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{t("Rechazar")}{known && !secret && <span className="ms-reject-why">: {knownWhy(known, t)}</span>}</Btn>
+        <Btn kind="primary" loading={approving} disabled={waiting || (review.isPending && !approving) || (checking && !onApprove)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
           aria-label={checking ? `${secret ? t("Enmascarar y aprobar") : t("Aprobar")}: ${t("Antes de aprobar, se comprueba lo que el brain ya sabe")}` : undefined}
-          onClick={approve} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
+          onClick={approve} icon={checking ? undefined : secret ? "lock" : "check"} leftSection={checking ? <Loader size={14} color="currentColor" /> : undefined}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
     <Stack gap={2} id={`ms-why-${d.id}`} className="ms-fold" hidden={!ops.explain}>
