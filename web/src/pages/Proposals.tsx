@@ -164,19 +164,29 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
 
 /** The last decision on screen, with its way back. It sits in the review footer, under the buttons it answers, when that footer is in
  *  view, and above the work otherwise. It is not a live region: `DecisionLive` speaks for it. */
-function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, onOpen, onClose }: { base: string; graph: string; last: Decision | null; llm: boolean;
-  onUndo: (ids: number[]) => void; undoing: boolean; undoError: unknown; onOpen: (id: number) => void; onClose: () => void }) {
+const RETIRE_MS = 8000;  // a notice with nothing left to do (taken back, or in the graph) goes after this; the live region already said it
+function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, onOpen, onClose, openId, compact }: { base: string; graph: string; last: Decision | null; llm: boolean;
+  onUndo: (ids: number[]) => void; undoing: boolean; undoError: unknown; onOpen: (id: number) => void; onClose: () => void;
+  /** The proposal open beside it: no «Ver la propuesta» for it. */ openId?: number | null;
+  /** Docked under the decision buttons: one line, text and links together. */ compact?: boolean }) {
   const { t } = useTranslation();
   const m = useDecisionText(base, graph, last, llm);
+  const done = !!m && /:(undone|ingested)$/.test(m.phase);
+  useEffect(() => {
+    if (!done) return;
+    const h = setTimeout(onClose, RETIRE_MS);
+    return () => clearTimeout(h);
+  }, [done, m?.phase]);  // eslint-disable-line react-hooks/exhaustive-deps
   if (!m || !last) return null;
   const links = [
     m.undo && <Btn kind="link" loading={undoing} onClick={() => onUndo(last.ids ?? [last.id])}>{t("Deshacer")}</Btn>,
-    m.view && <Btn kind="link" onClick={() => onOpen(last.id)}>{t("Ver la propuesta")}</Btn>,
+    m.view && last.id !== openId && <Btn kind="link" onClick={() => onOpen(last.id)}>{t("Ver la propuesta")}</Btn>,
     <Btn kind="link" onClick={onClose}>{t("Cerrar aviso")}</Btn>,
   ].filter(Boolean);
-  return (<Notice tone={m.tone}><Stack gap={4}><Text size="sm">{m.text}</Text>
-    <Text size="sm">{links.map((l, i) => <Fragment key={i}>{i > 0 && " · "}{l}</Fragment>)}</Text>
-    <MutationError error={undoError} /></Stack></Notice>);
+  const row = links.map((l, i) => <Fragment key={i}>{i > 0 && " · "}{l}</Fragment>);
+  return (<Notice tone={m.tone}>{compact
+    ? <Stack gap={2}><Text size="sm">{m.text} {row}</Text><MutationError error={undoError} /></Stack>
+    : <Stack gap={4}><Text size="sm">{m.text}</Text><Text size="sm">{row}</Text><MutationError error={undoError} /></Stack>}</Notice>);
 }
 
 /** The screen reader's side of the notice: always mounted, because a live region must exist before it changes, and it speaks each step
@@ -272,7 +282,7 @@ type Ops = {
   undo: UseMutationResult<unknown, Error, number[]>; reactivate: UseMutationResult<unknown, Error, number>; retry: UseMutationResult<unknown, Error, number>;
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
   /** The last decision, its notice (for the review footer to dock) and the way to take it back from the keyboard. */
-  last: Decision | null; notice: ReactNode; setDocked: (on: boolean) => void; undoLast: () => void;
+  last: Decision | null; notice: (docked?: { openId: number | null }) => ReactNode; setDocked: (on: boolean) => void; undoLast: () => void;
   /** Bumped by the N key to open the note; whether «Qué pasa al decidir» is unfolded (kept while moving through the queue). */
   noteKey: number; openNote: () => void; explain: boolean; setExplain: (on: boolean) => void;
 };
@@ -316,8 +326,8 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
       ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
       : facts.length ? { icon: "info" as const, text: t("Hechos relacionados: comprueba si la propuesta repite o contradice alguno.") } : null;
   const shown = all ? facts : facts.slice(0, RELATED_SHOWN);
-  return (<Panel withBorder p="sm" className="ms-related"><Stack gap={6}>
-    <Text size="xs" fw={600}>{t("Lo que el brain ya sabe")}</Text>
+  return (<section className="ms-related" aria-labelledby={`ms-related-${d.id}`}><Stack gap={6}>
+    <Text component="h3" id={`ms-related-${d.id}`} className="ms-section-title">{t("Lo que el brain ya sabe")}</Text>
     <MutationError error={q.error} />
     {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
     {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
@@ -334,7 +344,7 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
       </Text>
     </Stack>))}
     {facts.length > RELATED_SHOWN && <Group><Btn kind="link" onClick={() => setAll(!all)}>{all ? t("Ver menos") : t("Ver {{n}} más", { n: facts.length - RELATED_SHOWN })}</Btn></Group>}
-  </Stack></Panel>);
+  </Stack></section>);
 }
 
 /** The decision on a pending proposal: a note, what each button will do, and Reject / Approve (each with its own progress).
@@ -369,12 +379,6 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
       {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
       {d.correction && <Text size="xs" c="dimmed">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: d.correction.invalid_at.slice(0, 10) })}</Text>}
     </Stack>}
-    {ops.explain && <Stack gap={2} id={`ms-why-${d.id}`}>
-      {!d.correction && <Text size="xs" c="dimmed">{ops.llm
-        ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
-        : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>}
-      <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
-    </Stack>}
     <MutationError error={review.error} />
     <Group justify="space-between" gap="xs">
       <Group gap="xs">
@@ -389,6 +393,12 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
           onClick={() => asks ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
+    <Stack gap={2} id={`ms-why-${d.id}`} className="ms-fold" hidden={!ops.explain}>
+      {!d.correction && <Text size="xs" c="dimmed">{ops.llm
+        ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
+        : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>}
+      <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
+    </Stack>
     {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary"
       title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un dato caducado?")}
       warning={known.verdict === "duplicate"
@@ -607,7 +617,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
             </div>
             {footer && <div className="ms-inbox-actions" ref={actions}>
-              {shown && ops.notice}
+              {shown && ops.notice({ openId: active })}
               {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} waiting={partial} />
               <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
@@ -691,7 +701,8 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/ingest`), onSuccess: () => { setOpen(null); setTimeout(refresh, 8000); refresh(); } });
   const llm = !!ai.data?.llm.configured;
-  const notice = <DecisionNotice base={base} graph={graph} last={last} llm={llm} onUndo={(ids) => undo.mutate(ids)} undoing={undo.isPending}
+  const notice = (docked?: { openId: number | null }) => <DecisionNotice base={base} graph={graph} last={last} llm={llm} onUndo={(ids) => undo.mutate(ids)} undoing={undo.isPending}
+    openId={docked?.openId} compact={!!docked}
     undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={(id) => { setOpen(id); setNote(""); }} onClose={() => { setLast(null); undo.reset(); }} />;
   const ops: Ops = { base, graph, isCurator, llm, note, setNote, review, undo, reactivate, retry, setLast, refresh,
     openDetail: (id) => { setOpen(id); setNote(""); }, last, notice, setDocked, noteKey, openNote: () => setNoteKey((k) => k + 1), explain, setExplain,
@@ -704,7 +715,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
         <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Ir a Modelo LLM")}</Btn></Notice>}
       {ai.data && ai.data.llm.configured && !ai.data.decider.configured && <Notice>{t("Sin decisor: las propuestas de colaboradores esperan siempre a un curador.")}</Notice>}
       <DecisionLive base={base} graph={graph} last={last} llm={llm} />
-      {!docked && notice}
+      {!docked && notice()}
       {isCurator
         ? <Tabs value={tab} onChange={(v) => setTab(v)} keepMounted={false} className="ms-tabs-fill">
             <Tabs.List>
