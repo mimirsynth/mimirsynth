@@ -102,7 +102,7 @@ def _blocked_rules(ctx: BrainCtx, text: str) -> list[str]:
 
 
 _AUTHOR = func.coalesce(func.nullif(User.name, ""), User.email)  # a person's name as the history shows it: its filter and its order
-_SORTS = {"id": Proposal.id, "name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id, "decided": Proposal.reviewed_at}  # el id sigue el orden de envío
+_SORTS = {"id": Proposal.id, "name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.created_at, "decided": Proposal.reviewed_at}  # «Enviada» by its date: an imported proposal's id is later than its date
 # the review queue's order: what most needs a person first (corrections, then flagged secrets, then what the brain already knows as
 # nearly the same or as no longer true, then low declared confidence), oldest first inside each group, so nothing waits forever behind
 # newer arrivals
