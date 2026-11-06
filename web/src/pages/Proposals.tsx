@@ -799,7 +799,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
             </div>
             <div className="ms-sr-only" role="status" aria-live="polite">{moved}</div>
             <div className="ms-inbox-scroll" ref={listRef}>
-              <QueueList items={queueItems} activeId={active} focusKey={focusKey} onActivate={open} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
+              <QueueList items={queueItems} activeId={active} focusKey={focusKey} onActivate={open} onMove={(id) => { setActive(id); ops.setNote(""); }} checked={checked} onCheck={(id, on) => toggle(id, on)} label={t("Cola de propuestas pendientes")} />
             </div>
             <Pager total={queue.data?.total ?? 0} offset={offset} limit={limit} onChange={(p) => setOffset(p.offset)} />
           </>}
