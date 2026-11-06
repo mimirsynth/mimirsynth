@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, QueueList, RowOpen, Segments, SelectField, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -59,6 +59,8 @@ type PropList = { total: number; limit: number; offset: number; authors: { id: n
 type Counts = Record<string, number> & { kinds?: Record<string, number>; kinds_in?: Record<string, Record<string, number>>; corrections_pending?: number };
 /** The kind counts inside one state (or «all», «decided»), for a kind selector whose numbers match the state on screen: every option
  *  gets its number, or none does while the counts load. */
+/** A choice and how many it holds, for a list that has no room for a separate count. */
+const withCount = (label: string, n: number | undefined) => n === undefined ? label : `${label} (${n})`;
 const kindCounts = (c: Counts | undefined, status: string) => {
   const k = c?.kinds_in?.[status];
   return { all: k ? (k.memory ?? 0) + (k.correction ?? 0) : undefined, memory: k?.memory, correction: k?.correction };
@@ -600,6 +602,11 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     else document.getElementById(`ms-title-${d.id}`)?.focus();
     setFocusTo(null);
   }, [focusTo, d?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
+  const detailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {  // one pane at a time (the queue hidden): the proposal just opened is read from its title, not from mid-page
+    if (!showDetail || active === null || listRef.current?.getClientRects().length) return;
+    detailRef.current?.scrollIntoView({ block: "start" });
+  }, [showDetail, active]);  // eslint-disable-line react-hooks/exhaustive-deps
   const related = useRelated(ops, d);
   const decide = (verb: "approve" | "reject") => {
     if (!d || d.status !== "pending" || ops.review.isPending || partial) return;
@@ -642,7 +649,15 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
-    <div className="ms-filter-row">
+    <SelectField className="ms-only-narrow" aria-label={t("Qué propuestas ver")} allowDeselect={false} comboboxProps={{ withinPortal: true }}
+      value={mode === "decided" ? "decided" : `pending:${kind}`}
+      onChange={(v) => { if (!v) return; if (v === "decided") setMode("decided"); else { setMode("pending"); setKind(v.split(":")[1]); setOffset(0); } }}
+      data={[
+        { value: "pending:all", label: withCount(t("Pendientes"), kindCounts(cnt.data, "pending").all) },
+        { value: "pending:memory", label: withCount(t("Pendientes que añaden"), kindCounts(cnt.data, "pending").memory) },
+        { value: "pending:correction", label: withCount(t("Pendientes que corrigen"), kindCounts(cnt.data, "pending").correction) },
+        { value: "decided", label: withCount(t("Decididas"), cnt.data ? counts.decided ?? 0 : undefined) }]} />
+    <div className="ms-filter-row ms-only-wide">
       <Segments label={t("Mostrar")} value={mode} onChange={(m) => setMode(m)}
         data={[{ value: "pending", label: t("Pendientes"), count: cnt.data ? counts.pending ?? 0 : undefined }, { value: "decided", label: t("Decididas"), count: cnt.data ? counts.decided ?? 0 : undefined }]} />
       {mode === "pending" && <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
@@ -676,8 +691,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             <Pager total={queue.data?.total ?? 0} offset={offset} limit={limit} onChange={(p) => setOffset(p.offset)} />
           </>}
           detail={<>
-            <div className="ms-inbox-body">
-              <Btn size="row" kind="ghost" icon="back" className="ms-inbox-back" onClick={() => setShowDetail(false)}>{t("Volver a la cola")}</Btn>
+            <div className="ms-inbox-body" ref={detailRef}>
+              <Btn size="row" kind="ghost" icon="back" className="ms-inbox-back ms-hit" onClick={() => setShowDetail(false)}>{t("Volver a la cola")}</Btn>
               <MutationError error={detail.error} />
               {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
