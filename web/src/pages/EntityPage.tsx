@@ -3,10 +3,10 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Btn, DataState, EmptyState, EntityChip, FillArea, MutationError, Notice, Page, PageHeader, Panel, Pill, TextField } from "../ui";
+import { Btn, DataState, EmptyState, EntityChip, FillArea, humanRelation, MutationError, Notice, Page, PageHeader, Panel, Pill, TextField } from "../ui";
 import { fmt, get, send } from "../api";
 import { TypeDialog } from "./TypePicker";
-import EntityMiniGraph, { humanRelation } from "./EntityMiniGraph";
+import EntityMiniGraph from "./EntityMiniGraph";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };

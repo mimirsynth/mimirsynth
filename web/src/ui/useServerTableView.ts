@@ -4,7 +4,9 @@ import type { ColSort, SortDir } from "./ColHead";
 /** Orden, filtros y paginación de una tabla cuyos datos se piden al servidor. Un solo sitio para lo que antes se cableaba a mano en cada pantalla:
  *  los filtros de texto (`debounced`) se envían con 300 ms de espera, cualquier cambio de filtro u orden vuelve a la primera página y pulsar una cabecera
  *  recorre «primer sentido → contrario → sin orden» (`firstDir` fija cuál es el primero de cada columna; por defecto, de mayor a menor). */
-export function useServerTableView<F extends Record<string, string>>(empty: F, opts: { debounced: (keyof F)[]; firstDir?: Record<string, SortDir>; pageSize?: number }) {
+export function useServerTableView<F extends Record<string, string>>(empty: F, opts: { debounced: (keyof F)[]; firstDir?: Record<string, SortDir>; pageSize?: number;
+  /** The server's order when none is chosen, so its column says so (`aria-sort` and the arrow); a click on it turns it around. */
+  defaultSort?: { key: string; dir: SortDir } }) {
   const [f, setF] = useState<F>(empty);
   const [sent, setSent] = useState<F>(empty);
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(null);
@@ -24,11 +26,16 @@ export function useServerTableView<F extends Record<string, string>>(empty: F, o
     const now = Object.fromEntries(Object.entries(p).filter(([k]) => !opts.debounced.includes(k)));
     if (Object.keys(now).length) { setSent((s) => ({ ...s, ...now })); first({}); }
   };
+  const shown = sort ?? opts.defaultSort ?? null;  // the order on screen: the one chosen, or the server's own
   const sortProps = (key: string): ColSort => ({
-    dir: sort?.key === key ? sort.dir : null,
+    dir: shown?.key === key ? shown.dir : null,
     onSort: () => {
       const a: SortDir = opts.firstDir?.[key] ?? "desc"; const b: SortDir = a === "asc" ? "desc" : "asc";
-      setSort((s) => (!s || s.key !== key ? { key, dir: a } : s.dir === a ? { key, dir: b } : null));
+      setSort((s) => {
+        const d = opts.defaultSort;
+        if (!s && d?.key === key) return { key, dir: d.dir === "asc" ? "desc" : "asc" };  // the default order turned around; a second click goes back to it
+        return !s || s.key !== key ? { key, dir: a } : s.dir === a ? { key, dir: b } : null;
+      });
       first({});
     },
   });

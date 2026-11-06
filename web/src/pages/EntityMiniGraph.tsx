@@ -3,14 +3,12 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Btn, CANVAS, GraphCanvas, typeColor, type CanvasLink, type CanvasNode, type GraphCanvasHandle } from "../ui";
+import { Btn, CANVAS, GraphCanvas, humanRelation, typeColor, type CanvasLink, type CanvasNode, type GraphCanvasHandle } from "../ui";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type GroupFacts = { relation: string; direction: "out" | "in"; current: { other: Other }[]; previous: { other: Other }[] };
 export const MINI_NEIGHBORS = 12;  // neighbours drawn; the page already sorts them by current facts, then by facts
 const MINI_LABELS = 3;             // edges whose label is always drawn (those with most facts); the others show it on hover
-/** A relation name as words: `HOSTED_ON` and `HostedOn` read «hosted on». */
-export const humanRelation = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_+/g, " ").trim().toLowerCase();
 
 /** The entity and its neighbours at depth 1 (issue 194), with the Graph's own renderer: the entity in the centre, the neighbours with the
  *  most current facts around it, coloured by type, and one edge per neighbour with its most frequent relation and how many facts join

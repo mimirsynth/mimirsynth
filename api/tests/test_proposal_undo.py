@@ -106,3 +106,33 @@ def test_nothing_to_undo_once_ingested(client):  # noqa: F811
         db.get(Proposal, pid).status = "ingested"
         db.commit()
     assert client.post(f"/api/brains/undo-i/proposals/{pid}/undo", headers=curator).status_code == 409
+
+
+def test_a_failed_proposal_can_be_rejected(client, monkeypatch):  # noqa: F811
+    """A curator gives up on a proposal whose ingestion failed instead of retrying it forever; a retry still waiting is cancelled, and
+    the rejection can be reopened like any other."""
+    from mimirsynth import ingest
+    from mimirsynth.models import Job, Proposal
+    from mimirsynth.store import _factory
+    monkeypatch.setattr(ingest, "enabled", lambda: True)
+    contrib, curator = _brain(client, "undo-f")
+    pid = _propose(client, "undo-f", contrib)
+    url = f"/api/brains/undo-f/proposals/{pid}"
+    client.post(f"{url}/approve", json={}, headers=curator)
+    with _factory()() as db:  # the ingestion failed
+        db.get(Proposal, pid).status = "failed"
+        db.commit()
+    assert client.post(f"{url}/ingest", headers=curator).status_code == 200  # a retry, still waiting
+    with _factory()() as db:
+        db.get(Job, _job(pid).id).status = "running"
+        db.commit()
+    assert client.post(f"{url}/reject", json={}, headers=curator).status_code == 409  # a running retry is left to finish
+    with _factory()() as db:
+        db.get(Job, _job(pid).id).status = "queued"
+        db.commit()
+    assert client.post(f"{url}/reject", json={"note": "no se puede ingerir"}, headers=contrib).status_code == 403
+    r = client.post(f"{url}/reject", json={"note": "no se puede ingerir"}, headers=curator)
+    assert r.status_code == 200 and r.json()["status"] == "rejected" and r.json()["review_note"] == "no se puede ingerir"
+    assert _job(pid).status == "cancelled"
+    assert client.post(f"{url}/reject", json={}, headers=curator).status_code == 409  # already rejected
+    assert client.post(f"{url}/undo", headers=curator).json()["status"] == "pending"
