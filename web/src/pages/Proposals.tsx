@@ -347,19 +347,30 @@ function FactLine({ f }: { f: RelatedFact }) {
   return (<Stack gap={2}>
     <Group gap={6} wrap="nowrap" align="flex-start">
       <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
-      {f.relevance === "repeats" ? <Pill size="xs" tone="warn" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Casi igual")}</Pill>
-        : f.relevance === "close" ? <Pill size="xs" tone="neutral" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Muy parecido")}</Pill> : null}
+      {f.relevance === "repeats" ? <Pill size="xs" tone="warn">{t("Casi igual")}</Pill>
+        : f.relevance === "close" ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : null}
     </Group>
     <Text size="xs" c="dimmed">
       {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → <span title={f.name}>{humanRelation(f.name)}</span> → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
       {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(f.valid_at) })}` : ""}{f.invalid_at ? ` · ${t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) })}` : ""}
+      {f.score != null && <> · {t("similitud")} <span className="ms-data">{fmtNum(f.score)}</span></>}
     </Text>
   </Stack>);
 }
 
-/** What the brain already knows close to a pending proposal that adds knowledge. When it is a likely duplicate, or close to something no
- *  longer true, the proposal and that fact are set side by side, to read one against the other. Other very similar facts follow; facts
- *  that are only related stay folded, so they do not read as evidence. */
+/** The proposal's text with what it adds to a fact marked: its words (four letters or more, as the API counts them) the fact does not
+ *  have. `added` says how many, to explain the marks only when there are some. */
+const WORD = /([\p{L}\p{N}_]+)/u;
+function addedTo(text: string, fact: string) {
+  const have = new Set((fact.toLowerCase().match(/[\p{L}\p{N}_]{4,}/gu) ?? []));
+  const parts = text.split(WORD);  // the words at odd positions, what lies between them at even ones
+  const isNew = (p: string, i: number) => i % 2 === 1 && p.length >= 4 && !have.has(p.toLowerCase());
+  return { added: parts.filter(isNew).length, node: <>{parts.map((p, i) => isNew(p, i) ? <mark key={i} className="ms-added">{p}</mark> : p)}</> };
+}
+
+/** What the brain already knows close to a pending proposal that adds knowledge. When it is a likely duplicate, close to something no
+ *  longer true, or very close to a current fact, the proposal and that fact are set side by side, with what the proposal adds marked, to
+ *  read one against the other. Other very similar facts follow; facts that are only related stay folded, so they do not read as evidence. */
 function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
   const q = useRelated(ops, d);
@@ -367,12 +378,15 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   useEffect(() => setMore(false), [d.id]);
   const facts = q.data?.facts ?? [];
   const known = q.data ? knownOf(d, facts) : null;
-  const close = facts.filter((f) => (f.relevance === "repeats" || f.relevance === "close") && f.uuid !== known?.fact?.uuid);
+  // the fact to read the proposal against: the one that makes it known, or else the closest current one
+  const paired = known?.fact ?? facts.find((f) => f.relevance === "close" && !f.invalid_at);
+  const close = facts.filter((f) => (f.relevance === "repeats" || f.relevance === "close") && f.uuid !== paired?.uuid);
+  const adds = paired ? addedTo(d.body, paired.fact) : null;
   const related = facts.filter((f) => f.relevance === "related");
   // the one line to read first. A contradiction cannot be told from the text alone: the closest facts are there to check it.
   const verdict = known?.verdict === "duplicate" ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
     : known?.verdict === "stale" ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
-      : close.length ? { icon: "info" as const, text: t("Hay algo muy parecido en el brain: comprueba si la propuesta lo repite o lo contradice.") }
+      : paired || close.length ? { icon: "info" as const, text: t("Muy parecido a algo que el brain ya sabe: comprueba qué añade la propuesta.") }
         : related.length ? { icon: "info" as const, text: t("Nada casi igual en el brain: sería conocimiento nuevo.") } : null;
   return (<section className="ms-related" aria-labelledby={`ms-related-${d.id}`}><Stack gap={8}>
     <Text component="h3" id={`ms-related-${d.id}`} className="ms-section-title">{t("Lo que el brain ya sabe")}</Text>
@@ -380,9 +394,10 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
     {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
     {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
     {verdict && <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>}
-    {known?.fact && <dl className="ms-pair" aria-label={t("La propuesta frente a lo que ya sabe el brain")}>
-      <dt>{t("La propuesta")}</dt><dd><Text size="sm" lineClamp={3}>{d.body}</Text></dd>
-      <dt>{t("El brain")}</dt><dd><FactLine f={known.fact} /></dd>
+    {paired && adds && <dl className="ms-pair" aria-label={t("La propuesta frente a lo que ya sabe el brain")}>
+      <dt>{t("La propuesta")}</dt><dd><Text size="sm" lineClamp={4}>{adds.node}</Text>
+        {adds.added > 0 && <Text size="xs" c="dimmed" mt={2}>{t("Marcado: lo que la propuesta añade a ese hecho.")}</Text>}</dd>
+      <dt>{t("El brain")}</dt><dd><FactLine f={paired} /></dd>
     </dl>}
     {close.map((f) => <FactLine key={f.uuid} f={f} />)}
     {related.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={more ? "chevronDown" : "chevronRight"} aria-expanded={more} aria-controls={`ms-rel-${d.id}`}
@@ -410,6 +425,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
   const approving = review.isPending && review.variables?.verb !== "reject";
   const decide = (verb: Verb, note?: string) => review.mutateAsync({ id: d.id, verb, note }).then(() => onDecided?.());
   const rejectKnown = known && !secret ? () => decide("reject", ops.note || knownNote(known, t)) : null;  // with its reason as the note
+  const clear = !secret && known?.verdict === "duplicate";  // a clear duplicate: rejecting becomes the main button
   const approve = onApprove ?? (() => { if (!checking) { if (asks) askMask(true); else decide("approve").catch(() => {}); } });
   // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is one fold
   // away, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
@@ -441,9 +457,9 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
           onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
       </Group>
       <Group gap="xs">
-        <Btn kind={rejectKnown ? "primary" : "danger"} loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
+        <Btn kind={clear ? "primary" : "danger"} loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
           onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{known && !secret ? knownReject(known, t) : t("Rechazar")}</Btn>
-        <Btn kind={rejectKnown ? "secondary" : "primary"} loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
+        <Btn kind={clear ? "secondary" : "primary"} loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
           onClick={approve} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
@@ -454,7 +470,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
       <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
     </Stack>
     {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary" warn
-      alt={{ label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) }}
+      alt={clear ? { label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) } : undefined}
       title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un dato caducado?")}
       warning={known.verdict === "duplicate"
         ? (known.fact ? t("El brain ya dice algo casi igual: «{{fact}}». Si la apruebas, el grafo tendrá lo mismo dos veces.", { fact: quoted(known.fact.fact) })

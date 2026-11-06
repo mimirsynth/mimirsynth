@@ -1797,7 +1797,6 @@
  "seleccionar": "select",
  "sim": "sim",
  "similitud del embedding (0 si solo coincide por texto)": "embedding similarity (0 if it only matches by text)",
- "similitud {{s}}": "similarity {{s}}",
  "sin caducidad": "no expiry",
  "sin cambios": "unchanged",
  "sin clave": "no key",

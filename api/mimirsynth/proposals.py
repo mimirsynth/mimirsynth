@@ -315,8 +315,10 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
 
 RELATED_FACTS = 5
 # How close a known fact is to a proposal, for the reviewer. The score is the embedding similarity, whose scale depends on the model, so
-# «repeats» does not rest on it alone: a fact most of whose words are already in the proposal repeats it, whatever the model.
-REPEATS_SCORE, CLOSE_SCORE, REPEATS_WORDS = 0.95, 0.85, 0.8
+# «repeats» does not rest on it alone: a fact whose words are in the proposal, in a proposal that says little else, repeats it, whatever
+# the model. The second half matters: a proposal about one night's failed backup contains the words of «the nightly backup goes to the
+# external bucket» and adds what happened, which is new knowledge, not a duplicate.
+REPEATS_SCORE, CLOSE_SCORE, REPEATS_WORDS, COVERS_WORDS = 0.95, 0.85, 0.8, 0.6
 _WORD = re.compile(r"\w{4,}")
 _RANK = {"repeats": 0, "close": 1, "related": 2}
 
@@ -326,12 +328,15 @@ def _words(text: str | None) -> set[str]:
 
 
 def relevance(fact: str | None, proposal_words: set[str], score: float | None) -> str:
-    """«repeats»: the proposal says it again (most of the fact's words are in it, or the embeddings are nearly the same); «close»: very
-    similar; «related»: what the recall brought, no more."""
+    """«repeats»: the proposal says it again (the fact's words are in it and it says little else, or the embeddings are nearly the same);
+    «close»: very similar (the fact's words are in it, but it adds more; or a high similarity); «related»: what the recall brought, no more."""
     fw = _words(fact)
-    if (len(fw) >= 3 and len(fw & proposal_words) / len(fw) >= REPEATS_WORDS) or (score or 0) >= REPEATS_SCORE:
+    shared = fw & proposal_words
+    contains = len(fw) >= 3 and len(shared) / len(fw) >= REPEATS_WORDS          # the fact's words are in the proposal
+    covers = bool(proposal_words) and len(shared) / len(proposal_words) >= COVERS_WORDS  # and the proposal is mostly the fact
+    if (contains and covers) or (score or 0) >= REPEATS_SCORE:
         return "repeats"
-    return "close" if (score or 0) >= CLOSE_SCORE else "related"
+    return "close" if contains or (score or 0) >= CLOSE_SCORE else "related"
 
 
 def related_facts(brain, p: Proposal) -> list[dict]:
@@ -350,11 +355,14 @@ def related_facts(brain, p: Proposal) -> list[dict]:
 
 def verdict(facts: list[dict]) -> str:
     """One word for the queue: «duplicate» when a current fact says nearly the same, «stale» when a close one stopped being true,
-    «related» when there is something near, «new» when nothing is."""
+    «similar» when a current fact is very close but the proposal adds to it, «related» when there is only something near, «new» when
+    nothing is. Only «duplicate» and «stale» are known (`KNOWN`): kept out of a batch, and asked about before approving."""
     if any(f["relevance"] == "repeats" and not f.get("invalid_at") for f in facts):
         return "duplicate"
     if any(f["relevance"] in ("repeats", "close") and f.get("invalid_at") for f in facts):
         return "stale"
+    if any(f["relevance"] == "close" for f in facts):
+        return "similar"
     return "related" if facts else "new"
 
 

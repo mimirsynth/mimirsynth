@@ -123,6 +123,10 @@ def test_related_facts_say_how_close_they_are():
     assert relevance("Nextcloud corre en Eridani", words, 0.9) == "close"
     assert relevance("Nextcloud corre en Eridani", words, 0.7) == "related"
     assert relevance("La wiki", words, 0.5) == "related"                                        # too short to say it repeats
+    # the fact's words are all there, but the proposal says much more: very close, not a duplicate
+    told = _words("Fallo de la copia nocturna del 3 de noviembre: la copia nocturna al bucket externo falló por la cuota y se relanzó a mano")
+    assert relevance("La copia nocturna se replica al bucket externo", told, 0.7) == "close"
+    assert relevance("La copia nocturna se replica al bucket externo", told, 0.96) == "repeats"  # unless the embeddings are nearly the same
 
 
 def test_related_facts_are_ordered_by_closeness(client, monkeypatch):  # noqa: F811
@@ -159,6 +163,7 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     assert verdict([{"relevance": "related", "invalid_at": None}]) == "related"
     assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}]) == "stale"
     assert verdict([{"relevance": "close", "invalid_at": "2026-01-01"}, {"relevance": "repeats", "invalid_at": None}]) == "duplicate"
+    assert verdict([{"relevance": "close", "invalid_at": None}, {"relevance": "related", "invalid_at": None}]) == "similar"   # adds to it: not known
 
     known = {"fact": "La cabina nas01 movida a la sala sur", "score": 0.6}
     monkeypatch.setattr(ingest, "enabled", lambda: True)
