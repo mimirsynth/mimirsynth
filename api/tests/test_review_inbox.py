@@ -8,8 +8,8 @@ def _brain(client, slug):  # noqa: F811
     return mk("contributor"), mk("curator")
 
 
-def _propose(client, slug, headers, name, confidence=None):  # noqa: F811
-    body = {"name": name, "body": f"{name}: texto"}
+def _propose(client, slug, headers, name, confidence=None, body=None):  # noqa: F811
+    body = {"name": name, "body": body if body is not None else f"{name}: texto"}
     if confidence is not None:
         body["confidence"] = confidence
     r = client.post(f"/api/brains/{slug}/proposals", json=body, headers=headers)
@@ -117,16 +117,20 @@ def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
 def test_related_facts_say_how_close_they_are():
     """«repeats» does not depend on the embedding model alone: the words of the fact already in the proposal are enough."""
     from mimirsynth.proposals import _words, relevance
-    words = _words("Ampliación. La wiki usa PostgreSQL como base de datos desde marzo")
-    assert relevance("La wiki usa PostgreSQL como base de datos.", words, 0.6) == "repeats"     # same words, whatever the score
-    assert relevance("Nextcloud corre en Eridani", words, 0.97) == "repeats"                    # nearly the same embedding
+    same = _words("La wiki usa PostgreSQL como base de datos")
+    assert same == {"wiki", "postgresql", "base", "datos"}                                       # «como» says nothing about the content
+    assert relevance("La wiki usa PostgreSQL como base de datos.", same, 0.6) == "repeats"      # same words, whatever the score
+    assert relevance("PostgreSQL es la base de datos de la wiki", same, 0.97) == "repeats"     # nearly the same embedding, nothing added
+    words = _words("La wiki usa PostgreSQL como base de datos, en el mismo contenedor")
+    assert relevance("La wiki usa PostgreSQL como base de datos.", words, 0.97) == "close"      # adds where it runs: not a duplicate
     assert relevance("Nextcloud corre en Eridani", words, 0.9) == "close"
     assert relevance("Nextcloud corre en Eridani", words, 0.7) == "related"
     assert relevance("La wiki", words, 0.5) == "related"                                        # too short to say it repeats
+    assert _words("lxc-registro corre en pve-norte-02") == {"lxc-registro", "corre", "pve-norte-02"}  # an identifier is one word
     # the fact's words are all there, but the proposal says much more: very close, not a duplicate
     told = _words("Fallo de la copia nocturna del 3 de noviembre: la copia nocturna al bucket externo falló por la cuota y se relanzó a mano")
     assert relevance("La copia nocturna se replica al bucket externo", told, 0.7) == "close"
-    assert relevance("La copia nocturna se replica al bucket externo", told, 0.96) == "repeats"  # unless the embeddings are nearly the same
+    assert relevance("La copia nocturna se replica al bucket externo", told, 0.96) == "close"    # nearly the same embedding, but it adds
 
 
 def test_related_facts_are_ordered_by_closeness(client, monkeypatch):  # noqa: F811
@@ -135,7 +139,7 @@ def test_related_facts_are_ordered_by_closeness(client, monkeypatch):  # noqa: F
              {"uuid": "c", "fact": "La cabina nas01 movida a la sala sur", "score": 0.6}]
     monkeypatch.setattr(recall, "recall", lambda *a, **k: {"facts": facts})
     contrib, curator = _brain(client, "inbox-rel2")
-    pid = _propose(client, "inbox-rel2", contrib, "Cabina nas01 movida a la sala sur")
+    pid = _propose(client, "inbox-rel2", contrib, "Cabina nas01 movida a la sala sur", body="La cabina nas01, movida a la sala sur")
     r = client.get(f"/api/brains/inbox-rel2/proposals/{pid}/related", headers=curator).json()["facts"]
     assert [(f["uuid"], f["relevance"]) for f in r] == [("c", "repeats"), ("b", "close"), ("a", "related")]
 
@@ -170,7 +174,7 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     monkeypatch.setattr(ingest, "submit_ingest", lambda *a, **k: None)
     monkeypatch.setattr(recall, "recall", lambda brain_id, graph, query, *a, **k: {"facts": [{"uuid": "f", **known}] if "nas01" in query else []})
     contrib, curator = _brain(client, "inbox-known")
-    dup = _propose(client, "inbox-known", contrib, "Cabina nas01 movida a la sala sur")
+    dup = _propose(client, "inbox-known", contrib, "Cabina nas01 movida a la sala sur", body="La cabina nas01, movida a la sala sur")
     low = _propose(client, "inbox-known", contrib, "Algo poco seguro", confidence=0.3)
     fresh = _propose(client, "inbox-known", contrib, "Algo nuevo del todo")
     base = "/api/brains/inbox-known/proposals"
@@ -191,7 +195,7 @@ def test_the_queue_checks_what_was_never_checked(client, monkeypatch):  # noqa: 
     from mimirsynth import ingest, recall
     monkeypatch.setattr(ingest, "enabled", lambda: False)  # arrives without an engine: nothing is checked
     contrib, curator = _brain(client, "inbox-unchecked")
-    dup = _propose(client, "inbox-unchecked", contrib, "Cabina nas02 movida a la sala norte")
+    dup = _propose(client, "inbox-unchecked", contrib, "Cabina nas02 movida a la sala norte", body="La cabina nas02, movida a la sala norte")
     fresh = _propose(client, "inbox-unchecked", contrib, "Algo nuevo del todo")
     base = "/api/brains/inbox-unchecked/proposals"
     assert client.get(f"{base}/{dup}", headers=curator).json()["related_verdict"] == ""

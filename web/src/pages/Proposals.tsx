@@ -377,11 +377,19 @@ function FactLine({ f }: { f: RelatedFact }) {
 
 /** The proposal's text with what it adds to a fact marked: its words (four letters or more, as the API counts them) the fact does not
  *  have. `added` says how many, to explain the marks only when there are some. */
-const WORD = /([\p{L}\p{N}_]+)/u;
+// A word as the API counts it: an identifier (pve-norte-02, nas01.lab) is one word; four characters or more, not one of the words that
+// say nothing about the content. The same list as the API's (`api/mimirsynth/proposals.py`, STOP): keep them together.
+const STOP = new Set(`como para desde entre sobre pero tras hasta cuando donde porque aunque mientras según durante este esta estos estas esos esas aquel
+aquella todo toda todos todas otro otra otros otras cada mucho mucha muchos muchas poco poca algo nada también tampoco solo sólo ahora
+antes después luego aquí allí allá está están estaba estaban será serán sido siendo había habían tiene tienen tenía puede pueden hace
+hacen sigue siguen queda quedan their there these those this that with from have been were into than then also some when where which
+what about will would should could while after before other more most only such very`.split(/\s+/));
+const WORD = /([\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?)/u;
+const isContent = (w: string) => w.length >= 4 && !STOP.has(w.toLowerCase());
 function addedTo(text: string, fact: string) {
-  const have = new Set((fact.toLowerCase().match(/[\p{L}\p{N}_]{4,}/gu) ?? []));
+  const have = new Set((fact.toLowerCase().match(/[\p{L}\p{N}_](?:[\p{L}\p{N}_.-]*[\p{L}\p{N}_])?/gu) ?? []).filter(isContent));
   const parts = text.split(WORD);  // the words at odd positions, what lies between them at even ones
-  const isNew = (p: string, i: number) => i % 2 === 1 && p.length >= 4 && !have.has(p.toLowerCase());
+  const isNew = (p: string, i: number) => i % 2 === 1 && isContent(p) && !have.has(p.toLowerCase());
   return { added: parts.filter(isNew).length, node: <>{parts.map((p, i) => isNew(p, i) ? <mark key={i} className="ms-added">{p}</mark> : p)}</> };
 }
 
