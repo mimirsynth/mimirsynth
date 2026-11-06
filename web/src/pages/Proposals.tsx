@@ -145,8 +145,8 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
     else if (last.verb === "reject") { tone = "info"; step = "reject"; undo = true; text = t("{{n}} propuestas rechazadas: no entra nada en el grafo.", { n }); }
     else if (waiting) { step = "wait"; undo = true; text = t("{{n}} propuestas aprobadas: entran en el grafo dentro de {{s}} s.", { n, s }); }
     else { step = "after"; text = last.until ? t("{{n}} propuestas aprobadas: entrando en el grafo. El resultado de cada una está en «Decididas».", { n }) : t("{{n}} propuestas aprobadas.", { n }); }
-    if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar, algo que el brain ya sabe o ya decidida).");
-    else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar, lo que el brain ya sabe o ya decididas).", { k: last.skipped });
+    if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar, algo que el brain ya sabe o aún no ha comprobado, o ya decidida).");
+    else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado, o ya decididas).", { k: last.skipped });
   } else if (last.verb === "undone") {
     tone = "info"; step = "undone"; view = true; text = t("Propuesta #{{id}} otra vez pendiente.", { id });
   } else if (last.verb === "reject") {
@@ -321,6 +321,12 @@ function knownOf(d: Prop | undefined, facts?: RelatedFact[]): Known {
   return old ? { verdict: "stale", fact: old } : null;
 }
 const isKnown = (p: Prop) => p.related_verdict === "duplicate" || p.related_verdict === "stale";
+/** Approving a proposal that adds knowledge waits until the check of what the brain knows answers: before it, nobody can tell a duplicate.
+ *  A proposal with a secret to review asks anyway, and a check that failed shows its error instead of holding the decision. */
+const isChecking = (d: Prop | undefined, rel: { isPending: boolean }) => !!d && d.status === "pending" && !d.correction && !d.purged_at && !flagged(d) && rel.isPending;
+/** A pending addition never checked against what the brain knows (it arrived without an engine, or the check failed): a batch leaves it
+ *  aside, as the API does, until the queue has checked it. */
+const isUnchecked = (p: Prop, llm: boolean) => llm && p.status === "pending" && p.kind !== "correction" && !p.purged_at && !p.related_verdict;
 function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
   const q = useRelated(ops, d);
@@ -360,18 +366,22 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
 /** The decision on a pending proposal: a note, what each button will do, and Reject / Approve (each with its own progress).
  *  With secrets flagged for review, Approve becomes «Mask and approve», behind a confirmation that names the kinds of secret; `masking`
  *  lets the queue open that confirmation from its A shortcut. */
-function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: Prop; ops: Ops; onDecided?: () => void; masking?: boolean; onMasking?: (on: boolean) => void;
-  /** The whole proposal is still loading: the buttons stay where they are, disabled. */ waiting?: boolean }) {
+function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onApprove }: { d: Prop; ops: Ops; onDecided?: () => void; masking?: boolean; onMasking?: (on: boolean) => void;
+  /** The whole proposal is still loading: the buttons stay where they are, disabled. */ waiting?: boolean;
+  /** The queue's way to approve, the same as its A key: it asks first when it must and moves on to the next proposal. */ onApprove?: () => void }) {
   const { t } = useTranslation();
   const { review } = ops;
   const [ownMasking, setOwnMasking] = useState(false);
   const askMask = onMasking ?? setOwnMasking;
   const secret = flagged(d);
-  const known = knownOf(d, useRelated(ops, d).data?.facts);
+  const rel = useRelated(ops, d);
+  const known = knownOf(d, rel.data?.facts);
+  const checking = isChecking(d, rel);
   const asks = secret || !!known;  // approving asks first: to mask what was flagged, or because the brain already knows it
   const kinds = [...new Set((d.secrets ?? []).filter((f) => f.action === "flagged").map((f) => t(f.label)))].join(", ");
   const approving = review.isPending && review.variables?.verb !== "reject";
   const decide = (verb: Verb) => review.mutateAsync({ id: d.id, verb }).then(() => onDecided?.());
+  const approve = onApprove ?? (() => { if (!checking) { if (asks) askMask(true); else decide("approve").catch(() => {}); } });
   // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is one fold
   // away, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
   const noteId = `ms-note-${d.id}`;
@@ -388,7 +398,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
       description={<span className="ms-inbox-keys"><kbd>{t("Ctrl")}</kbd>+<kbd>{t("Intro")}</kbd> {t("aprueba")} · <kbd>{t("Esc")}</kbd> {t("sale de la nota")}</span>}
       onKeyDown={(e) => {  // the keyboard loop goes on from the note: Esc back to the proposal, Ctrl+Enter approves as A does
         if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); document.getElementById(`ms-title-${d.id}`)?.focus(); }
-        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !waiting && !review.isPending) { e.preventDefault(); if (asks) askMask(true); else decide("approve").catch(() => {}); }
+        else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !waiting && !review.isPending) { e.preventDefault(); approve(); }
       }} />}
     {(secret || d.correction) && <Stack gap={2}>
       {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
@@ -404,8 +414,8 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
       <Group gap="xs">
         <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
           onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
-        <Btn kind="primary" loading={approving} disabled={waiting || (review.isPending && !approving)}
-          onClick={() => asks ? askMask(true) : decide("approve").catch(() => {})} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
+        <Btn kind="primary" loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
+          onClick={approve} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
     <Stack gap={2} id={`ms-why-${d.id}`} className="ms-fold" hidden={!ops.explain}>
@@ -544,7 +554,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const handled = useRef<Decision | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const selected = items.filter((p) => checked.has(p.id));
-  const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p) || isKnown(p);  // never approved in a batch: decided one at a time
+  const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p) || isKnown(p) || isUnchecked(p, ops.llm);  // never approved in a batch: decided one at a time
   const goes = batch.verb === "approve" ? batch.items.filter((p) => !oneByOne(p)) : batch.items;
   const stays = batch.items.filter((p) => !goes.includes(p));
   const bulk = useMutation({ mutationFn: ({ verb, ids }: { verb: "approve" | "reject"; ids: number[] }) => send<{ done: number[]; skipped: { id: number; reason: string }[]; undo_seconds?: number }>("POST", `${ops.base}/bulk`,
@@ -571,9 +581,17 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const decide = (verb: "approve" | "reject") => {
     if (!d || d.status !== "pending" || ops.review.isPending || partial) return;
     if (!actions.current?.getClientRects().length) return;  // narrow layout showing the queue: nothing is decided without being seen
+    if (verb === "approve" && isChecking(d, related)) { setHeld(d.id); return; }  // approves (or asks) once the brain has answered
     if (verb === "approve" && (flagged(d) || knownOf(d, related.data?.facts))) { setMasking(true); return; }  // the same confirmation as its button
     ops.review.mutate({ id: d.id, verb }, { onSuccess: () => advance(d.id) });
   };
+  const [held, setHeld] = useState<number | null>(null);
+  const checking = isChecking(d, related);
+  useEffect(() => {  // an approval asked for while the check ran goes on once it answers, only for the proposal it was asked for
+    if (held === null) return;
+    if (held !== d?.id) setHeld(null);
+    else if (!checking) { setHeld(null); decide("approve"); }
+  }, [held, checking, d?.id]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {  // after an undo the proposal is back in the queue: it opens there and the focus returns to it, not to the page
     const l = ops.last;
     if (!l || l.verb !== "undone" || handled.current === l) return;
@@ -642,7 +660,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
             </div>
             {footer && <div className="ms-inbox-actions" ref={actions}>
               {shown && ops.notice({ openId: active })}
-              {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} waiting={partial} />
+              {d && d.status === "pending" && <><DecisionBlock d={d} ops={ops} onDecided={() => advance(d.id)} masking={masking} onMasking={setMasking} waiting={partial} onApprove={() => decide("approve")} />
               <Text className="ms-inbox-keys">{t("Atajos:")} <kbd>J</kbd>/<kbd>K</kbd> {t("moverse")} · <kbd>A</kbd> {flagged(d) ? t("enmascarar y aprobar") : t("aprobar")} · <kbd>R</kbd> {t("rechazar")} · <kbd>X</kbd> {t("seleccionar")} · <kbd>N</kbd> {t("nota")} · <kbd>Z</kbd> {t("deshacer")}</Text></>}
             </div>}
           </>} />}
@@ -652,8 +670,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
         ? (stays.length ? t("¿Aprobar {{n}} de {{total}}?", { n: goes.length, total: batch.items.length }) : goes.length === 1 ? t("¿Aprobar 1 propuesta?") : t("¿Aprobar {{n}} propuestas?", { n: goes.length }))
         : goes.length === 1 ? t("¿Rechazar 1 propuesta?") : t("¿Rechazar {{n}} propuestas?", { n: goes.length })}
       warning={batch.verb === "approve"
-        ? <>{t("Entran en el grafo dentro de unos segundos, con la opción de deshacerlo mientras tanto.")}{stays.length === 1 ? " " + t("1 no se aprueba así (una corrección, un secreto por revisar o algo que el brain ya sabe): se queda seleccionada para decidirla aparte.")
-          : stays.length ? " " + t("{{k}} no se aprueban así (correcciones, secretos por revisar o lo que el brain ya sabe): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
+        ? <>{t("Entran en el grafo dentro de unos segundos, con la opción de deshacerlo mientras tanto.")}{stays.length === 1 ? " " + t("1 no se aprueba así (una corrección, un secreto por revisar, algo que el brain ya sabe o que aún no ha comprobado): se queda seleccionada para decidirla aparte.")
+          : stays.length ? " " + t("{{k}} no se aprueban así (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
         : t("No entra nada en el grafo; se pueden reabrir después.")}
       subject={<Stack gap={6}>
         <ul className="ms-batch-list" aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>

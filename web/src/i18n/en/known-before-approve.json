@@ -1,0 +1,7 @@
+{
+  "1 no se aprueba así (una corrección, un secreto por revisar, algo que el brain ya sabe o que aún no ha comprobado): se queda seleccionada para decidirla aparte.": "1 is not approved this way (a correction, a secret to review, something the brain already knows or has not checked yet): it stays selected to be decided apart.",
+  "1 se queda para decidirla aparte (una corrección, un secreto por revisar, algo que el brain ya sabe o aún no ha comprobado, o ya decidida).": "1 stays to be decided apart (a correction, a secret to review, something the brain already knows or has not checked yet, or already decided).",
+  "Antes de aprobar, se comprueba lo que el brain ya sabe": "Before approving, what the brain already knows is checked",
+  "{{k}} no se aprueban así (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado): se quedan seleccionadas para decidirlas una a una.": "{{k}} are not approved this way (corrections, secrets to review, what the brain already knows or has not checked yet): they stay selected to be decided one at a time.",
+  "{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado, o ya decididas).": "{{k}} stay to be decided one at a time (corrections, secrets to review, what the brain already knows or has not checked yet, or already decided)."
+}
