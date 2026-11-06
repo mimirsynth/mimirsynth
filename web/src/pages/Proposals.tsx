@@ -245,31 +245,31 @@ function CorrectionDetail({ c, replacement }: { c: Correction; replacement: stri
 }
 
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
-function ProposalBody({ d, context, inQueue }: { d: Prop; context?: ReactNode;
+function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context?: ReactNode;
   /** Shown in the review queue, where every proposal is pending: its state and the usual kind (adding) go without saying. */ inQueue?: boolean }) {
   const { t } = useTranslation();
+  const paired = pairedFact(d, useRelated(ops, d).data?.facts);  // the fact it is read against: its text marks what it adds
   const marks = !inQueue || d.kind === "correction" || d.confidence !== null;
   return (<Stack gap="sm">
     {marks && <Group gap="xs">{(!inQueue || d.kind === "correction") && <KindPill kind={d.kind} />}{!inQueue && <Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>}
       {d.confidence !== null ? <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} <span className="ms-data">{fmtNum(d.confidence)}</span></Text>
         : !inQueue && <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {t("no indicada")}</Text>}</Group>}
     {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
-      : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} /> : <Panel withBorder p="sm"><Text className="ms-prose">{d.body}</Text></Panel>}
+      : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
+        : <Text className="ms-prose ms-proposal-text">{paired ? addedTo(d.body, paired.fact).node : d.body}</Text>}
     <SecretsNotice found={d.secrets} />
     {context}
-    <Steps>
+    {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
+      <Text size="xs" c="dimmed">{t("Enviada por {{who}}", { who: d.author })} · <span className="ms-data">{fmt(d.created_at)}</span> · {[d.source_description, t(SOURCE[d.source] ?? d.source)].filter(Boolean).join(" · ")}</Text>
+      <DeciderView d={d} />
+    </Stack> : <Steps>
       <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed">{d.author} · {fmt(d.created_at)}</Text>
         <Text size="xs" c="dimmed">{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</Text></Step>
       <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
         {d.review_kind === "direct" && <Text size="xs" c="dimmed">{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</Text>}
         {d.review_kind === "webhook" && <Text size="xs" c="dimmed">{t("Aprobada al llegar por un webhook de confianza ·")} {fmt(d.reviewed_at)}</Text>}
         {d.review_kind === "human" && <Text size="xs" c="dimmed">{d.status === "rejected" ? t("Rechazada") : t("Aprobada")} {d.reviewer ? t("por {{who}} ·", { who: d.reviewer }) : t("por un curador ·")} {fmt(d.reviewed_at)}{d.review_note ? ` · «${d.review_note}»` : ""}</Text>}
-        {d.decision && !d.decision.error && <Stack gap={2}>
-          <Text size="xs" c="dimmed">{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: fmtNum(d.decision.threshold) })}</Text>
-          <Text size="xs" c="dimmed">{t("· ¿Es factual? {{answer}} (confianza {{prob}})", { answer: d.decision.factual.letter === "A" ? t("sí") : t("no"), prob: fmtNum(d.decision.factual.prob) })}</Text>
-          <Text size="xs" c="dimmed">{t("· Acción: {{action}} (confianza {{prob}})", { action: [t("aprobar"), t("revisar"), t("rechazar")][d.decision.action.index], prob: fmtNum(d.decision.action.prob) })}</Text>
-          <Text size="xs" fw={600}>{d.decision.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}: {d.decision.note}</Text></Stack>}
-        {d.decision?.error && <Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: d.decision.engine, error: d.decision.error })}</Notice>}
+        <DeciderView d={d} />
         {!d.review_kind && !d.decision && d.status === "pending" && <Text size="xs" c="dimmed">{t("Pendiente de un curador.")}</Text>}
         {!d.review_kind && !d.decision && d.status !== "pending" && d.review_note && <Text size="xs" c="dimmed">{d.review_note}</Text>}
       </Step>
@@ -289,8 +289,20 @@ function ProposalBody({ d, context, inQueue }: { d: Prop; context?: ReactNode;
         {d.status === "pending" && <Text size="xs" c="dimmed">{t("Cuando se apruebe.")}</Text>}
         {d.status === "rejected" && <Text size="xs" c="dimmed">{t("No entra en el grafo.")}</Text>}
       </Step>}
-    </Steps>
+    </Steps>}
   </Stack>);
+}
+
+/** What the decider said about a proposal, when it looked at it: its model and threshold, its two answers and its verdict. */
+function DeciderView({ d }: { d: Prop }) {
+  const { t } = useTranslation();
+  if (d.decision?.error) return <Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: d.decision.engine, error: d.decision.error })}</Notice>;
+  if (!d.decision) return null;
+  return (<Stack gap={2}>
+    <Text size="xs" c="dimmed">{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: fmtNum(d.decision.threshold) })}</Text>
+    <Text size="xs" c="dimmed">{t("· ¿Es factual? {{answer}} (confianza {{prob}})", { answer: d.decision.factual.letter === "A" ? t("sí") : t("no"), prob: fmtNum(d.decision.factual.prob) })}</Text>
+    <Text size="xs" c="dimmed">{t("· Acción: {{action}} (confianza {{prob}})", { action: [t("aprobar"), t("revisar"), t("rechazar")][d.decision.action.index], prob: fmtNum(d.decision.action.prob) })}</Text>
+    <Text size="xs" fw={600}>{d.decision.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}: {d.decision.note}</Text></Stack>);
 }
 
 /** Everything a screen of this page needs to decide: shared so the queue, the history and one's own proposals act the same way. */
@@ -312,13 +324,18 @@ type RelatedFact = { uuid: string; fact: string; name: string; source: string; t
 /** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
  *  A key. Opening it also refreshes the verdict the queue ranks by. */
 function useRelated(ops: Ops, d?: Prop) {
-  const on = !!d && d.status === "pending" && !d.correction && !d.purged_at;
+  const on = ops.isCurator && !!d && d.status === "pending" && !d.correction && !d.purged_at;
   return useQuery({ queryKey: ["proposal", ops.graph, d?.id, "related"], enabled: on, staleTime: 60_000,
     queryFn: () => get<{ facts: RelatedFact[] }>(`${ops.base}/${d!.id}/related`) });
 }
 /** «duplicate» when a current fact says nearly the same, «stale» when a close one stopped being true (as the API decides); with the
  *  fact that makes it so, for the confirmation to quote. Until the facts arrive, the verdict stored with the proposal. */
 type Known = { verdict: "duplicate" | "stale"; fact?: RelatedFact } | null;
+/** The fact a proposal is read against: the one that makes it known, or else the closest current one. None until the facts arrive. */
+function pairedFact(d: Prop, facts?: RelatedFact[]): RelatedFact | undefined {
+  if (!facts) return undefined;
+  return knownOf(d, facts)?.fact ?? facts.find((f) => f.relevance === "close" && !f.invalid_at);
+}
 function knownOf(d: Prop | undefined, facts?: RelatedFact[]): Known {
   if (!d || d.status !== "pending" || d.correction) return null;
   if (!facts) return d.related_verdict === "duplicate" || d.related_verdict === "stale" ? { verdict: d.related_verdict } : null;
@@ -378,8 +395,7 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   useEffect(() => setMore(false), [d.id]);
   const facts = q.data?.facts ?? [];
   const known = q.data ? knownOf(d, facts) : null;
-  // the fact to read the proposal against: the one that makes it known, or else the closest current one
-  const paired = known?.fact ?? facts.find((f) => f.relevance === "close" && !f.invalid_at);
+  const paired = pairedFact(d, q.data?.facts);
   const close = facts.filter((f) => (f.relevance === "repeats" || f.relevance === "close") && f.uuid !== paired?.uuid);
   const adds = paired ? addedTo(d.body, paired.fact) : null;
   const related = facts.filter((f) => f.relevance === "related");
@@ -394,11 +410,11 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
     {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
     {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
     {verdict && <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>}
-    {paired && adds && <dl className="ms-pair" aria-label={t("La propuesta frente a lo que ya sabe el brain")}>
-      <dt>{t("La propuesta")}</dt><dd><Text size="sm" lineClamp={4}>{adds.node}</Text>
-        {adds.added > 0 && <Text size="xs" c="dimmed" mt={2}>{t("Marcado: lo que la propuesta añade a ese hecho.")}</Text>}</dd>
-      <dt>{t("El brain")}</dt><dd><FactLine f={paired} /></dd>
-    </dl>}
+    {paired && adds && <div className="ms-pair">
+      <Text size="xs" fw={600} c="dimmed">{t("Lo que dice el brain")}</Text>
+      <FactLine f={paired} />
+      {adds.added > 0 && <Text size="xs" c="dimmed">{t("En el texto de la propuesta está marcado lo que añade a este hecho.")}</Text>}
+    </div>}
     {close.map((f) => <FactLine key={f.uuid} f={f} />)}
     {related.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={more ? "chevronDown" : "chevronRight"} aria-expanded={more} aria-controls={`ms-rel-${d.id}`}
       onClick={() => setMore(!more)}>{related.length === 1 ? t("1 hecho solo relacionado") : t("{{n}} hechos solo relacionados", { n: related.length })}</Btn></Group>}
@@ -514,7 +530,7 @@ function ProposalModal({ open, onClose, ops }: { open: number | null; onClose: (
     <Modal opened={open !== null} onClose={onClose} title={d ? `#${d.id} · ${d.purged_at ? t("(texto purgado)") : d.name}` : t("Propuesta")} size="lg" centered>
       <MutationError error={detail.error} />
       {d && <Stack gap="sm">
-        <ProposalBody d={d} context={ops.isCurator && d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} />
+        <ProposalBody d={d} ops={ops} context={ops.isCurator && d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} />
         <AfterActions d={d} ops={ops} />
         {ops.isCurator && d.status === "pending" && <DecisionBlock d={d} ops={ops} onDecided={onClose} />}
       </Stack>}
@@ -741,7 +757,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
                 </Group>}
               </div>
               <MutationError error={detail.error} />
-              {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} inQueue context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
+              {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} ops={ops} inQueue context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
                 : <EmptyState>{t("Cargando…")}</EmptyState>}
             </div>
             {footer && <div className="ms-inbox-actions" ref={actions}>
