@@ -2,6 +2,9 @@ import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { typeColor } from "./palette";
 
+/** A relation name as words: `HOSTED_ON` and `HostedOn` read «hosted on». Where it is shown, the name as written goes in its tooltip. */
+export const humanRelation = (name: string) => name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/_+/g, " ").trim().toLowerCase();
+
 /** An entity, named the same way everywhere it appears: a chip with the colour of its type (a dot and the edge) and its name as written.
  *  The type is the chip's tooltip and part of its accessible name, so colour is never the only signal. With `to` it is a link; the
  *  entity of the page itself (`current`) is plain, never a link to where you already are. */

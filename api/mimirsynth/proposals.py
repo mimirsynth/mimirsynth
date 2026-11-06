@@ -187,9 +187,10 @@ def get_proposal(pid: int, ctx: BrainCtx = Depends(contributor)):
     return _out(p, full=True)
 
 
-def _review(ctx: BrainCtx, pid: int, status: str, note: str) -> dict:
+def _review(ctx: BrainCtx, pid: int, status: str, note: str, also: tuple[str, ...] = ()) -> dict:
+    """A person's decision on a pending proposal (or one in `also`)."""
     p = _get(ctx, pid)
-    if p.status != "pending":
+    if p.status != "pending" and p.status not in also:
         raise HTTPException(409, f"la propuesta ya está {p.status}")
     p.status, p.reviewer_id, p.reviewed_at, p.review_note, p.review_kind = status, ctx.user.id, datetime.now(timezone.utc), note, "human"
     ctx.db.commit()
@@ -256,6 +257,20 @@ def retry_ingest(pid: int, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)
 
 @router.post("/{pid}/reject")
 def reject(pid: int, body: ReviewIn, ctx: BrainCtx = Depends(curator)):
+    """Rejects a pending proposal, or one whose ingestion failed and that the curator gives up on instead of retrying. For a failed one,
+    a retry still waiting is cancelled, and one already running wins: what it writes is corrected by invalidating its facts."""
+    p = _get(ctx, pid)
+    if p.status == "failed":
+        key = f"proposal.ingest:{pid}"
+        ctx.db.execute(update(Job).where(Job.dedupe_key == key, Job.status == "queued")
+                       .values(status="cancelled", finished_at=datetime.now(timezone.utc), error="propuesta rechazada por un curador"))
+        if ctx.db.scalar(select(Job.id).where(Job.dedupe_key == key, Job.status == "running")):
+            ctx.db.rollback()
+            raise HTTPException(409, "la ingesta se está reintentando: espera a que termine")
+        out = _review(ctx, pid, "rejected", body.note, also=("failed",))
+        from . import notify
+        notify.resolve("ingest.failed", f"proposal:{pid}")  # nothing is left to fix
+        return out
     return _review(ctx, pid, "rejected", body.note)
 
 

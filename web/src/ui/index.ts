@@ -29,7 +29,7 @@ export { SecretReveal } from "./SecretReveal";
 export { Steps, Step } from "./Steps";
 export { RuleList } from "./RuleList";
 export { HIDROMIEL, PIZARRA, NODE_PALETTE, HALO_PALETTE, CANVAS, typeColor } from "./palette";
-export { EntityChip } from "./EntityChip";
+export { EntityChip, humanRelation } from "./EntityChip";
 export { FilePicker } from "./FilePicker";
 export { Legend, LegendSection, LegendItem } from "./Legend";
 export { GraphCanvas, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "./GraphCanvas";

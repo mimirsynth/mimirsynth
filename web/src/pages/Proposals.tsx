@@ -2,7 +2,7 @@ import { T, locale } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -64,7 +64,7 @@ const kindCounts = (c: Counts | undefined, status: string) => {
 };
 const PLURAL: Record<string, string> = { pending: T("Pendientes"), approved: T("Aprobadas"), rejected: T("Rechazadas"), failed: T("Fallidas"), ingested: T("Ingeridas") };
 type View = ReturnType<typeof useProposalsView>;
-const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debounced: ["q"], firstDir: { name: "asc", author: "asc" } });
+const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debounced: ["q"], firstDir: { name: "asc", author: "asc" }, defaultSort: { key: "at", dir: "desc" } });
 
 /** Estado, filtros, orden y página se resuelven en el servidor (#88): con muchas propuestas se llega a todas y los filtros abarcan el conjunto entero.
  *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza. `statuses` are the state segments it offers, the first one being «all of them». */
@@ -228,7 +228,7 @@ function CorrectionDetail({ c, replacement }: { c: Correction; replacement: stri
     <Panel withBorder p="sm"><Stack gap={4}>
       <Text size="xs" fw={600}>{t("Hecho que se invalida")}</Text>
       <Text className="ms-prose">{c.fact.fact}</Text>
-      <Text size="xs" c="dimmed">{c.fact.source} → {c.fact.name} → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: c.fact.valid_at.slice(0, 10) })}` : ""} · <code>{c.fact_uuid}</code></Text>
+      <Text size="xs" c="dimmed">{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: c.fact.valid_at.slice(0, 10) })}` : ""} · <code>{c.fact_uuid}</code></Text>
     </Stack></Panel>
     <Panel withBorder p="sm"><Stack gap={4}>
       <Text size="xs" fw={600}>{t("Motivo")}</Text><Text className="ms-prose">{c.reason}</Text>
@@ -349,7 +349,7 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
           : f.relevance === "close" ? <Pill size="xs" tone="neutral" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Muy parecido")}</Pill> : null}
       </Group>
       <Text size="xs" c="dimmed">
-        {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → {f.name} → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
+        {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → <span title={f.name}>{humanRelation(f.name)}</span> → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
         {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: f.valid_at.slice(0, 10) })}` : ""}{f.invalid_at ? ` · ${t("ya no es cierto: invalidado el {{date}}", { date: f.invalid_at.slice(0, 10) })}` : ""}
       </Text>
     </Stack>))}
@@ -432,12 +432,14 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting }: { d: 
 /** The actions on a decided proposal: retry or start its ingestion, reopen or undo the approval, reactivate a corrected fact. */
 function AfterActions({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
-  const { retry, undo, reactivate } = ops;
+  const { retry, undo, reactivate, review } = ops;
   if (!ops.isCurator) return null;
   return (<>
     {(d.status === "failed" || d.status === "approved") && <Group justify="flex-end">
       <MutationError error={retry.error} />
-      <Btn kind="primary" loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn></Group>}
+      {d.status === "failed" && <MutationError error={review.error} />}
+      {d.status === "failed" && <Btn kind="secondary" loading={review.isPending} disabled={retry.isPending} onClick={() => review.mutate({ id: d.id, verb: "reject" })}>{t("Rechazar")}</Btn>}
+      <Btn kind="primary" disabled={review.isPending} loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn></Group>}
     {((d.status === "rejected" && !d.purged_at) || (d.status === "approved" && d.kind !== "correction")) && <Group justify="flex-end">
       <MutationError error={undo.error} />
       <Btn kind="secondary" loading={undo.isPending} onClick={() => undo.mutate([d.id])} icon="undo">{d.status === "rejected" ? t("Reabrir") : t("Deshacer la aprobación")}</Btn></Group>}
@@ -594,7 +596,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
       {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}>{t("Posible duplicado")}</Pill>}
       {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}>{t("Posible dato caducado")}</Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="warn">{t("confianza {{c}}", { c: p.confidence })}</Pill>}
-      {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={p.decision.note}>{t("el decisor dudó · {{p}}", { p: p.decision.action?.prob })}</Pill>}</>,
+      {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: p.decision.action.prob }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span>{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   return (<>
@@ -682,16 +684,17 @@ function MineTab({ ops, isCurator }: { ops: Ops; isCurator: boolean }) {
       <Btn size="row" kind="ghost" onClick={() => setFormOpen((o) => !o)}>{formOpen ? t("Ocultar el formulario") : t("Mostrar el formulario")}</Btn>
     </Group>
     {formOpen && <Panel withBorder p="sm"><Stack gap="xs">
-      <TextField size="xs" label={t("Título")} placeholder={t("Migración de la base de datos a PostgreSQL 17")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
+      <TextField size="xs" label={t("Título")} placeholder={t("De qué trata, en pocas palabras")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
       <TextArea size="xs" autosize minRows={3} label={t("Contenido")} placeholder={t("Qué ha pasado o qué hay que recordar, con fecha y nombres exactos.")} value={body} onChange={(e) => setBody(e.currentTarget.value)} />
+      {isCurator && <Text size="xs" c="dimmed">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
       <Group align="flex-end">
         <NumberField size="xs" label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={170} />
-        <Btn kind="primary" disabled={!name || !body} loading={submit.isPending} onClick={() => submit.mutate()} icon="plus">{isCurator ? t("Añadir") : t("Proponer")}</Btn>
+        <Btn kind="primary" disabled={!name || !body} loading={submit.isPending} onClick={() => submit.mutate()} icon="plus">{isCurator ? t("Crear y aprobar") : t("Proponer")}</Btn>
       </Group>
       <MutationError error={submit.error} />
       {sentProp && <Notice tone="success">{sentProp.status === "pending"
         ? t("Propuesta #{{id}} enviada: queda pendiente de un curador.", { id: sentProp.id })
-        : t("Propuesta #{{id}} añadida y aprobada.", { id: sentProp.id })}</Notice>}
+        : t("Propuesta #{{id}} creada y aprobada.", { id: sentProp.id })}</Notice>}
       {sentProp && <SecretsNotice found={sentProp.secrets} />}
     </Stack></Panel>}
     <HistoryTable ops={ops} mine={true} statuses={["pending", "approved", "ingested", "rejected", "failed"]} first={{ value: "all", label: t("Todas"), countKey: "all" }} />
