@@ -14,6 +14,6 @@ type Props = Omit<ButtonProps, "variant" | "color" | "size"> & ComponentPropsWit
 export function Btn({ kind = "secondary", size, className, icon, style, ...rest }: Props) {
   const row = size === "row";
   const vars = kind === "link" ? {} : ({ "--button-height": row ? "28px" : "36px", "--button-padding-x": row ? "10px" : "14px", "--button-fz": row ? "12px" : "14px" } as CSSProperties);
-  return <Button {...(rest as any)} size="sm" leftSection={icon ? <Icon name={icon} size={row ? 14 : 16} /> : undefined} variant={kind === "primary" ? "filled" : kind === "link" || kind === "ghost" ? "subtle" : "default"}
+  return <Button {...(rest as any)} size="sm" leftSection={icon ? <Icon name={icon} size={row ? 14 : 16} /> : (rest as any).leftSection} variant={kind === "primary" ? "filled" : kind === "link" || kind === "ghost" ? "subtle" : "default"}
     data-kind={kind} data-compact={row ? "" : undefined} style={{ ...vars, ...style }} className={`ms-btn${className ? ` ${className}` : ""}`} />;
 }
