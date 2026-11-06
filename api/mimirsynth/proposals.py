@@ -3,6 +3,7 @@
 Una aportación aprobada queda lista para ingerir (extracción con Graphiti); eso es el paso siguiente.
 """
 import re
+import unicodedata
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
@@ -319,8 +320,14 @@ RELATED_FACTS = 5
 # external bucket» and adds what happened; «the wiki uses PostgreSQL, in the same container» adds where it runs. Both are new knowledge,
 # however close their embeddings are, so the similarity alone never makes a duplicate: it only makes a fact «close».
 REPEATS_SCORE, CLOSE_SCORE, REPEATS_WORDS = 0.95, 0.85, 0.8
-# A word is four characters or more, and an identifier is one word (pve-norte-02, nas01.lab): its pieces are not words of their own.
-_WORD = re.compile(r"\w[\w.-]*\w")
+# A word of content is four letters or more, or anything with a digit (14, 128, 3): a changed number is often what a proposal adds. An
+# identifier is one word (pve-norte-02, nas01.lab): its pieces are not words of their own. Words are compared without accents and by a
+# light stem, so «replica» and «replicar», «certificado» and «certificados» are the same word.
+_WORD = re.compile(r"\w(?:[\w.-]*\w)?")
+# Endings taken off a word to compare it, the longest first; the stem keeps at least four letters. Light on purpose: it has to agree in
+# the web (`web/src/pages/Proposals.tsx`, STEM_ENDS), and it only has to tell that two forms are the same word.
+STEM_ENDS = ("aciones", "acion", "amente", "mente", "ando", "iendo", "ados", "adas", "idos", "idas", "ado", "ada", "ido", "ida", "an", "en",
+             "ar", "er", "ir", "es", "s", "a", "o", "e")
 # Words of four letters or more that say nothing about the content, in the two interface languages. The web marks what a proposal adds
 # with the same list (`web/src/pages/Proposals.tsx`, STOP): keep them together.
 STOP = frozenset("""
@@ -330,11 +337,36 @@ antes después luego aquí allí allá está están estaba estaban será serán 
 hacen sigue siguen queda quedan their there these those this that with from have been were into than then also some when where which
 what about will would should could while after before other more most only such very
 """.split())
+
+
+def _fold(word: str) -> str:
+    """Lower case, without accents."""
+    return "".join(c for c in unicodedata.normalize("NFKD", word.lower()) if not unicodedata.combining(c))
+
+
+def _stem(word: str) -> str:
+    """The word without its endings, taken off until none is left (an identifier or a number stays as it is): «copias», «copia» → «copi»."""
+    if not word.isalpha():
+        return word
+    while True:
+        end = next((e for e in STEM_ENDS if word.endswith(e) and len(word) - len(e) >= 4), None)
+        if not end:
+            return word
+        word = word[: -len(end)]
+
+
+_STOP = frozenset(_fold(w) for w in STOP)
 _RANK = {"repeats": 0, "close": 1, "related": 2}
 
 
 def _words(text: str | None) -> set[str]:
-    return {w for w in _WORD.findall((text or "").lower()) if len(w) >= 4 and w not in STOP}
+    """The words of content of a text, folded and stemmed, to compare it with another one."""
+    out = set()
+    for w in _WORD.findall(text or ""):
+        w = _fold(w)
+        if (len(w) >= 4 or any(c.isdigit() for c in w)) and w not in _STOP:
+            out.add(_stem(w))
+    return out
 
 
 def relevance(fact: str | None, proposal_words: set[str], score: float | None) -> str:
@@ -358,8 +390,14 @@ def related_facts(brain, p: Proposal) -> list[dict]:
     out = recall_mod.recall(brain.id, brain.graph_name, query, RELATED_FACTS, 0, 4000, n_docs=0)
     keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "valid_at", "invalid_at", "status", "score")
     words = _words(query)
-    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score"))} for f in out.get("facts", [])]
+    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score")), "mostly_new": mostly_new(f.get("fact"), words)}
+             for f in out.get("facts", [])]
     return sorted(facts, key=lambda f: (_RANK[f["relevance"]], -(f["score"] or 0)))  # what it repeats first, then the closest
+
+
+def mostly_new(fact: str | None, proposal_words: set[str]) -> bool:
+    """More than half of the proposal's words of content are not in the fact: it says something else, however close they are."""
+    return bool(proposal_words) and len(proposal_words - _words(fact)) > len(proposal_words) / 2
 
 
 def verdict(facts: list[dict]) -> str:
@@ -368,9 +406,11 @@ def verdict(facts: list[dict]) -> str:
     nothing is. Only «duplicate» and «stale» are known (`KNOWN`): kept out of a batch, and asked about before approving."""
     if any(f["relevance"] == "repeats" and not f.get("invalid_at") for f in facts):
         return "duplicate"
-    if any(f["relevance"] in ("repeats", "close") and f.get("invalid_at") for f in facts):
+    # close to something no longer true, and saying mostly the same: a proposal that is mostly new (a backup that failed, against «the
+    # backup went only to the NAS») does not put the old fact back
+    if any(f.get("invalid_at") and (f["relevance"] == "repeats" or (f["relevance"] == "close" and not f.get("mostly_new"))) for f in facts):
         return "stale"
-    if any(f["relevance"] == "close" for f in facts):
+    if any(f["relevance"] == "close" and not f.get("invalid_at") for f in facts):  # very close to something still true
         return "similar"
     return "related" if facts else "new"
 
