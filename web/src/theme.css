@@ -158,7 +158,8 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-empty { color: var(--ms-muted); font-size: 14px; padding: 16px 4px; }
 .ms-confirm { display: flex; flex-direction: column; gap: 12px; }
 .ms-confirm-subject { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
-.ms-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.ms-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+  position: sticky; bottom: calc(-1 * var(--mb-padding, 16px)); z-index: 1; margin-bottom: calc(-1 * var(--mb-padding, 16px)); padding: 10px 0 var(--mb-padding, 16px); background: var(--ms-raised); }  /* always in view: a long list scrolls under it */
 .ms-confirm-actions .ms-btn { flex: 0 0 auto; max-width: 100%; }  /* each button keeps its whole label: the row wraps instead of cutting it */
 @media (max-width: 48em) {  /* on a phone the choices stack, full width, the main one on top */
   .ms-confirm-actions { flex-direction: column-reverse; align-items: stretch; }

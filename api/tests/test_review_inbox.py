@@ -207,6 +207,7 @@ def test_the_queue_checks_what_was_never_checked(client, monkeypatch):  # noqa: 
     contrib, curator = _brain(client, "inbox-unchecked")
     dup = _propose(client, "inbox-unchecked", contrib, "Cabina nas02 movida a la sala norte", body="La cabina nas02, movida a la sala norte")
     fresh = _propose(client, "inbox-unchecked", contrib, "Algo nuevo del todo")
+    close = _propose(client, "inbox-unchecked", contrib, "Cabina nas03 en la sala norte", body="La cabina nas03 está en la sala norte, en el edificio principal")
     base = "/api/brains/inbox-unchecked/proposals"
     assert client.get(f"{base}/{dup}", headers=curator).json()["related_verdict"] == ""
 
@@ -216,14 +217,16 @@ def test_the_queue_checks_what_was_never_checked(client, monkeypatch):  # noqa: 
     assert r["done"] == [] and r["skipped"] == [{"id": dup, "reason": "unchecked"}]               # nobody knows yet whether it repeats
 
     known = {"uuid": "f", "fact": "La cabina nas02 movida a la sala norte", "score": 0.6}
-    monkeypatch.setattr(recall, "recall", lambda brain_id, graph, query, *a, **k: {"facts": [known] if "nas02" in query else []})
+    near = {"uuid": "g", "fact": "La cabina nas03 está en la sala norte", "score": 0.6}
+    monkeypatch.setattr(recall, "recall", lambda brain_id, graph, query, *a, **k: {"facts": [known] if "nas02" in query else [near] if "nas03" in query else []})
     assert client.get(base, params={"status": "pending"}, headers=contrib).json()["items"][0]["related_verdict"] == ""  # only a curator's queue checks
     items = client.get(base, params={"status": "pending", "sort": "risk"}, headers=curator).json()["items"]  # checked after it answers
-    assert {p["id"] for p in items} == {dup, fresh}
+    assert {p["id"] for p in items} == {dup, fresh, close}
     verdicts = {p["id"]: p["related_verdict"] for p in client.get(base, params={"status": "pending", "sort": "risk", "order": "asc"}, headers=curator).json()["items"]}
-    assert verdicts == {dup: "duplicate", fresh: "new"}
-    r = client.post(f"{base}/bulk", json={"verb": "approve", "ids": [dup, fresh]}, headers=curator).json()
-    assert r["done"] == [fresh] and r["skipped"] == [{"id": dup, "reason": "known"}]
+    assert verdicts == {dup: "duplicate", fresh: "new", close: "similar"}
+    r = client.post(f"{base}/bulk", json={"verb": "approve", "ids": [dup, fresh, close]}, headers=curator).json()
+    # what is very close to a current fact is read before it is approved: left aside, like what the brain already knows
+    assert r["done"] == [fresh] and r["skipped"] == [{"id": dup, "reason": "known"}, {"id": close, "reason": "close"}]
 
 
 def test_kind_counts_follow_the_state(client):  # noqa: F811

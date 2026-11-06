@@ -161,8 +161,8 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
     else if (last.verb === "reject") { tone = "info"; step = "reject"; undo = true; text = t("{{n}} propuestas rechazadas: no entra nada en el grafo.", { n }); }
     else if (waiting) { step = "wait"; undo = true; text = t("{{n}} propuestas aprobadas: entran en el grafo dentro de {{s}} s.", { n, s }); }
     else { step = "after"; text = last.until ? t("{{n}} propuestas aprobadas: entrando en el grafo. El resultado de cada una está en «Decididas».", { n }) : t("{{n}} propuestas aprobadas.", { n }); }
-    if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar, algo que el brain ya sabe o aún no ha comprobado, o ya decidida).");
-    else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado, o ya decididas).", { k: last.skipped });
+    if (last.skipped === 1) text += " " + t("1 se queda para decidirla aparte (una corrección, un secreto por revisar, algo que el brain ya sabe, tiene muy parecido o aún no ha comprobado, o ya decidida).");
+    else if (last.skipped) text += " " + t("{{k}} se quedan para decidirlas una a una (correcciones, secretos por revisar, lo que el brain ya sabe, tiene muy parecido o aún no ha comprobado, o ya decididas).", { k: last.skipped });
   } else if (last.verb === "undone") {
     tone = "info"; step = "undone"; view = true; text = t("Propuesta #{{id}} otra vez pendiente.", { id });
   } else if (last.verb === "reject") {
@@ -679,11 +679,12 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const handled = useRef<Decision | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const selected = items.filter((p) => checked.has(p.id));
-  const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p) || isKnown(p) || isUnchecked(p, ops.llm);  // never approved in a batch: decided one at a time
+  // never approved in a batch: decided one at a time (what is very close to a current fact too: it is read before it is approved)
+  const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p) || isKnown(p) || p.related_verdict === "similar" || isUnchecked(p, ops.llm);
   const goes = batch.verb === "approve" ? batch.items.filter((p) => !oneByOne(p)) : batch.items;
   const stays = batch.items.filter((p) => !goes.includes(p));
-  const close = batch.verb === "approve" ? goes.filter((p) => p.related_verdict === "similar") : [];  // approved too, but named apart: worth a read first
-  const plain = goes.filter((p) => !close.includes(p));
+  const [showGoes, setShowGoes] = useState(false);
+  useEffect(() => { if (confirm === null) setShowGoes(false); }, [confirm]);
   const bulk = useMutation({ mutationFn: ({ verb, ids }: { verb: "approve" | "reject"; ids: number[] }) => send<{ done: number[]; skipped: { id: number; reason: string }[]; undo_seconds?: number }>("POST", `${ops.base}/bulk`,
       { verb, ids, note: bulkNote }),
     onSuccess: (r, { verb }) => {
@@ -785,8 +786,8 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
             <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
             <div className="ms-inbox-bar">
               {selected.length > 0 ? <>
-                <Text size="sm" fw={600} className="ms-inbox-bar-what" title={selected.some(oneByOne) ? (selected.filter(oneByOne).length === 1 ? t("1 se decide aparte: una corrección, un secreto por revisar, algo que el brain ya sabe o aún no ha comprobado.")
-                  : t("{{k}} se deciden una a una: correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado.", { k: selected.filter(oneByOne).length })) : undefined}>
+                <Text size="sm" fw={600} className="ms-inbox-bar-what" title={selected.some(oneByOne) ? (selected.filter(oneByOne).length === 1 ? t("1 se decide aparte: una corrección, un secreto por revisar, algo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.")
+                  : t("{{k}} se deciden una a una: correcciones, secretos por revisar, lo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.", { k: selected.filter(oneByOne).length })) : undefined}>
                   {selected.length === 1 ? t("1 seleccionada") : t("{{n}} seleccionadas", { n: selected.length })}{selected.some(oneByOne) && <span className="ms-inbox-bar-aside"> · {t("{{k}} aparte", { k: selected.filter(oneByOne).length })}</span>}</Text>
                 <Btn size="row" onClick={() => ask("approve")}>{t("Aprobar")}</Btn>
                 <Btn size="row" kind="danger" onClick={() => ask("reject")}>{t("Rechazar")}</Btn>
@@ -827,15 +828,14 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
         ? (stays.length ? t("¿Aprobar {{n}} de {{total}}?", { n: goes.length, total: batch.items.length }) : goes.length === 1 ? t("¿Aprobar 1 propuesta?") : t("¿Aprobar {{n}} propuestas?", { n: goes.length }))
         : goes.length === 1 ? t("¿Rechazar 1 propuesta?") : t("¿Rechazar {{n}} propuestas?", { n: goes.length })}
       warning={batch.verb === "approve"
-        ? <>{t("Entran en el grafo dentro de unos segundos, con la opción de deshacerlo mientras tanto.")}{stays.length === 1 ? " " + t("1 no se aprueba así (una corrección, un secreto por revisar, algo que el brain ya sabe o que aún no ha comprobado): se queda seleccionada para decidirla aparte.")
-          : stays.length ? " " + t("{{k}} no se aprueban así (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
+        ? <>{t("Entran en el grafo dentro de unos segundos, con la opción de deshacerlo mientras tanto.")}{stays.length === 1 ? " " + t("1 no se aprueba así (una corrección, un secreto por revisar, algo que el brain ya sabe, tiene muy parecido o aún no ha comprobado): se queda seleccionada para decidirla aparte.")
+          : stays.length ? " " + t("{{k}} no se aprueban así (correcciones, secretos por revisar, lo que el brain ya sabe, tiene muy parecido o aún no ha comprobado): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
         : t("No entra nada en el grafo; se pueden reabrir después.")}
       subject={<Stack gap={6}>
-        {plain.length > 0 && <ul className="ms-batch-list" aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>
-          {plain.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul>}
-        {close.length > 0 && <><Text size="xs" c="dimmed" id="ms-batch-close">{close.length === 1 ? t("También se aprueba, y es muy parecida a algo que el brain ya sabe: revisa qué añade antes.")
-          : t("También se aprueban, y son muy parecidas a algo que el brain ya sabe: revisa qué añaden antes.")}</Text>
-          <ul className="ms-batch-list" aria-labelledby="ms-batch-close">{close.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul></>}
+        {goes.length > 3 && <Group><Btn kind="link" className="ms-hit" icon={showGoes ? "chevronDown" : "chevronRight"} aria-expanded={showGoes} aria-controls="ms-batch-goes"
+          onClick={() => setShowGoes(!showGoes)}>{batch.verb === "approve" ? t("Ver cuáles se aprueban ({{n}})", { n: goes.length }) : t("Ver cuáles se rechazan ({{n}})", { n: goes.length })}</Btn></Group>}
+        {goes.length > 0 && <ul className="ms-batch-list" id="ms-batch-goes" hidden={goes.length > 3 && !showGoes} aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>
+          {goes.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul>}
         {stays.length > 0 && <><Text size="xs" c="dimmed">{t("Se quedan para decidirlas aparte:")}</Text>
           <ul className="ms-batch-list" data-muted="">{stays.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul></>}
       </Stack>}
