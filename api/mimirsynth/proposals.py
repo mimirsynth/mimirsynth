@@ -113,8 +113,9 @@ BULK_MAX = 200
 
 
 @router.get("")
-def list_proposals(status: str | None = None, kind: str | None = None, q: str = Query("", max_length=200), author: int | None = None, sort: str = "at", order: str = "desc",
-                   limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0), mine: bool = False, ctx: BrainCtx = Depends(contributor)):
+def list_proposals(bg: BackgroundTasks, status: str | None = None, kind: str | None = None, q: str = Query("", max_length=200), author: int | None = None,
+                   sort: str = "at", order: str = "desc", limit: int = Query(50, ge=1, le=500), offset: int = Query(0, ge=0), mine: bool = False,
+                   ctx: BrainCtx = Depends(contributor)):
     """Los curadores ven todas; un colaborador solo las suyas. Paginado en el servidor (#88): `total` cuenta lo que pasa los filtros
     y `authors` lista los autores visibles para el filtro de la columna. `kind` keeps only memories or only corrections. `status=decided`
     keeps everything but the pending ones (the review history); `mine` only the caller's own; `sort=risk` is the review queue's order."""
@@ -144,6 +145,8 @@ def list_proposals(status: str | None = None, kind: str | None = None, q: str = 
     else:
         keys = ((_SORTS[sort].asc() if order == "asc" else _SORTS[sort].desc()).nulls_last(), Proposal.id.desc())
     rows = ctx.db.scalars(base.order_by(*keys).limit(limit).offset(offset)).all()
+    if status == "pending" and allows(ctx.role, "curator") and ingest.enabled() and ctx.db.scalar(select(func.count()).select_from(_unchecked(ctx.brain.id).subquery())):
+        bg.add_task(check_unchecked, ctx.brain.id)  # the queue ranks by what the brain knows: what was never checked is checked now
     return {"total": total, "limit": limit, "offset": offset, "authors": [{"id": i, "name": n} for i, n in authors], "items": [_out(p) for p in rows]}
 
 
@@ -298,6 +301,8 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
             skipped.append({"id": pid, "reason": "secret"}); continue
         if body.verb == "approve" and p.related_verdict in KNOWN:
             skipped.append({"id": pid, "reason": "known"}); continue
+        if body.verb == "approve" and unchecked(p):
+            skipped.append({"id": pid, "reason": "unchecked"}); continue
         _review(ctx, pid, "approved" if body.verb == "approve" else "rejected", body.note)
         if body.verb == "approve" and ingest.enabled():
             ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(p), ctx.user.id, delay=UNDO_SECONDS)
@@ -368,6 +373,38 @@ def check_related(pid: int) -> None:
             return
         p.related_verdict = v
         db.commit()
+
+
+def unchecked(p: Proposal) -> bool:
+    """A pending proposal that adds knowledge whose closeness to what the brain knows was never checked (it arrived without an extraction
+    engine, before the check existed, or the check failed): nobody can tell yet whether it repeats something, so a batch leaves it aside.
+    Without an extraction engine nothing reaches the graph, so there is nothing to wait for."""
+    return p.status == "pending" and p.kind != "correction" and not p.purged_at and not p.related_verdict and ingest.enabled()
+
+
+def _unchecked(brain_id: int):
+    return select(Proposal.id).where(Proposal.brain_id == brain_id, Proposal.status == "pending", Proposal.kind != "correction",
+                                     Proposal.purged_at.is_(None), func.coalesce(Proposal.related_verdict, "") == "")
+
+
+UNCHECKED_BATCH = 100  # checked per pass; the next look at the queue goes on with the rest
+_checking: set[int] = set()  # brains with a pass running, so opening the queue twice does not check the same proposals twice
+
+
+def check_unchecked(brain_id: int) -> None:
+    """In the background, when a curator opens the queue: checks the pending proposals whose verdict is missing, oldest first, so the
+    queue's order and the batch know about all of them, not only about those someone opened."""
+    from .store import _factory
+    if brain_id in _checking:
+        return
+    _checking.add(brain_id)
+    try:
+        with _factory()() as db:
+            ids = db.scalars(_unchecked(brain_id).order_by(Proposal.created_at.asc(), Proposal.id.asc()).limit(UNCHECKED_BATCH)).all()
+        for pid in ids:
+            check_related(pid)
+    finally:
+        _checking.discard(brain_id)
 
 
 @router.get("/{pid}/related")

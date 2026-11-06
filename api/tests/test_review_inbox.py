@@ -63,9 +63,10 @@ def test_risk_order_decided_and_mine(client):  # noqa: F811
 
 
 def test_bulk_decisions(client, monkeypatch):  # noqa: F811
-    from mimirsynth import ingest, proposals
+    from mimirsynth import ingest, proposals, recall
     monkeypatch.setattr(ingest, "enabled", lambda: True)
     monkeypatch.setattr(ingest, "ingest_proposal", lambda pid, ctx: None)
+    monkeypatch.setattr(recall, "recall", lambda *a, **k: {"facts": []})  # the brain knows nothing close: new knowledge, checked on arrival
     contrib, curator = _brain(client, "inbox-b")
     a = _propose(client, "inbox-b", contrib, "a")
     b = _propose(client, "inbox-b", contrib, "b")
@@ -177,6 +178,33 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     known["fact"] = "Otra cosa distinta"                                                              # the graph changed since
     client.get(f"{base}/{dup}/related", headers=curator)
     assert client.get(f"{base}/{dup}", headers=curator).json()["related_verdict"] == "related"        # opening it refreshes the verdict
+
+
+def test_the_queue_checks_what_was_never_checked(client, monkeypatch):  # noqa: F811
+    """A pending proposal whose closeness to what the brain knows was never checked (it arrived without an extraction engine, or the check
+    failed) is left aside by a batch approval, and opening the queue checks it, so its order and the batch know about it."""
+    from mimirsynth import ingest, recall
+    monkeypatch.setattr(ingest, "enabled", lambda: False)  # arrives without an engine: nothing is checked
+    contrib, curator = _brain(client, "inbox-unchecked")
+    dup = _propose(client, "inbox-unchecked", contrib, "Cabina nas02 movida a la sala norte")
+    fresh = _propose(client, "inbox-unchecked", contrib, "Algo nuevo del todo")
+    base = "/api/brains/inbox-unchecked/proposals"
+    assert client.get(f"{base}/{dup}", headers=curator).json()["related_verdict"] == ""
+
+    monkeypatch.setattr(ingest, "enabled", lambda: True)  # the engine is configured afterwards
+    monkeypatch.setattr(ingest, "submit_ingest", lambda *a, **k: None)
+    r = client.post(f"{base}/bulk", json={"verb": "approve", "ids": [dup]}, headers=curator).json()
+    assert r["done"] == [] and r["skipped"] == [{"id": dup, "reason": "unchecked"}]               # nobody knows yet whether it repeats
+
+    known = {"uuid": "f", "fact": "La cabina nas02 movida a la sala norte", "score": 0.6}
+    monkeypatch.setattr(recall, "recall", lambda brain_id, graph, query, *a, **k: {"facts": [known] if "nas02" in query else []})
+    assert client.get(base, params={"status": "pending"}, headers=contrib).json()["items"][0]["related_verdict"] == ""  # only a curator's queue checks
+    items = client.get(base, params={"status": "pending", "sort": "risk"}, headers=curator).json()["items"]  # checked after it answers
+    assert {p["id"] for p in items} == {dup, fresh}
+    verdicts = {p["id"]: p["related_verdict"] for p in client.get(base, params={"status": "pending", "sort": "risk", "order": "asc"}, headers=curator).json()["items"]}
+    assert verdicts == {dup: "duplicate", fresh: "new"}
+    r = client.post(f"{base}/bulk", json={"verb": "approve", "ids": [dup, fresh]}, headers=curator).json()
+    assert r["done"] == [fresh] and r["skipped"] == [{"id": dup, "reason": "known"}]
 
 
 def test_kind_counts_follow_the_state(client):  # noqa: F811
