@@ -90,30 +90,35 @@ export function SidePanel({ children, ...rest }: Omit<DrawerProps, "position" | 
  * `onConfirm` devuelve la promesa de la mutación (`mutateAsync`): el diálogo muestra su carga y su error y se cierra al acabar.
  * `requireText` pide escribir ese texto para habilitar la acción (borrados de grandes cosas).
  */
-export function ConfirmDialog({ opened, onClose, title, warning, subject, action, tone = "danger", requireText, disabled, onConfirm, children }: {
+export function ConfirmDialog({ opened, onClose, title, warning, subject, action, tone = "danger", warn, alt, requireText, disabled, onConfirm, children }: {
   opened: boolean; onClose: () => void; title: string; warning?: ReactNode; subject?: ReactNode; action: string;
   tone?: "danger" | "primary"; requireText?: string; disabled?: boolean; onConfirm: () => Promise<unknown>; children?: ReactNode;
+  /** The warning is a caution even though the action is not destructive. */ warn?: boolean;
+  /** The way out the dialog recommends instead of `action`: it becomes the primary button, takes the focus (Enter runs it) and `action`
+   *  turns secondary. */ alt?: { label: string; icon?: IconName; onConfirm: () => Promise<unknown> };
 }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [typed, setTyped] = useState("");
   useEffect(() => { if (opened) { setBusy(false); setError(null); setTyped(""); } }, [opened]);
-  const run = async () => {
-    setBusy(true); setError(null);
-    try { await onConfirm(); onClose(); } catch (e) { setError(e); } finally { setBusy(false); }
+  const [running, setRunning] = useState<"action" | "alt" | null>(null);
+  const run = async (which: "action" | "alt" = "action") => {
+    setBusy(true); setRunning(which); setError(null);
+    try { await (which === "alt" && alt ? alt.onConfirm() : onConfirm()); onClose(); } catch (e) { setError(e); } finally { setBusy(false); setRunning(null); }
   };
   return (
     <Modal opened={opened} onClose={onClose} title={title}>
       <div className="ms-confirm">
-        {warning && <Notice tone={tone === "danger" ? "warn" : "info"}>{warning}</Notice>}
+        {warning && <Notice tone={tone === "danger" || warn ? "warn" : "info"}>{warning}</Notice>}
         {subject && <div className="ms-confirm-subject">{subject}</div>}
         {children}
         {requireText && <TextField label={t("Escribe «{{requireText}}» para confirmar", { requireText: requireText })} value={typed} onChange={(e) => setTyped(e.currentTarget.value)} />}
         <MutationError error={error} />
         <div className="ms-confirm-actions">
           <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>
-          <Btn kind={tone} icon={tone === "danger" ? "trash" : "check"} loading={busy} disabled={disabled || (!!requireText && typed !== requireText)} onClick={run}>{action}</Btn>
+          <Btn kind={alt ? "secondary" : tone} icon={tone === "danger" ? "trash" : "check"} loading={busy && running !== "alt"} disabled={disabled || (!!requireText && typed !== requireText) || (busy && running === "alt")} onClick={() => run()}>{action}</Btn>
+          {alt && <Btn kind="primary" icon={alt.icon} loading={busy && running === "alt"} disabled={busy && running !== "alt"} onClick={() => run("alt")} data-autofocus>{alt.label}</Btn>}
         </div>
       </div>
     </Modal>
