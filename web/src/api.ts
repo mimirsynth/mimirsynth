@@ -52,3 +52,8 @@ export type Brain = { slug: string; name: string; description: string; graph_nam
 export type Me = { id: number; name: string; email: string | null; is_admin: boolean; auth_mode: string; avatar?: string; account_url?: string; has_password?: boolean; must_change_password?: boolean; totp_enabled?: boolean; must_setup_2fa?: boolean; locale?: string };
 
 export const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) : "—");
+/** A day (a fact's validity, a correction's date), in the same short form as `fmt` without the time. Read in UTC: these are calendar
+ *  dates, and a time zone behind UTC would otherwise show the day before. */
+export const fmtDay = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(locale(), { dateStyle: "short", timeZone: "UTC" }) : "—");
+/** A number as the interface language writes it (0,6 in Spanish, 0.6 in English). */
+export const fmtNum = (n?: number | null) => (n === null || n === undefined ? "—" : n.toLocaleString(locale(), { maximumFractionDigits: 2 }));
