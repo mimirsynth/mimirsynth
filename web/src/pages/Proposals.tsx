@@ -347,7 +347,7 @@ function FactLine({ f }: { f: RelatedFact }) {
   return (<Stack gap={2}>
     <Group gap={6} wrap="nowrap" align="flex-start">
       <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
-      {f.relevance === "repeats" ? <Pill size="xs" tone="warn">{t("Casi igual")}</Pill>
+      {f.relevance === "repeats" ? <Pill size="xs" tone="neutral">{t("Casi igual")}</Pill>
         : f.relevance === "close" ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : null}
     </Group>
     <Text size="xs" c="dimmed">
@@ -681,9 +681,9 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const queueItems: QueueItem[] = items.map((p) => ({
     id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
-      {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}>{t("Posible duplicado")}</Pill>}
-      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}>{t("Posible dato caducado")}</Pill>}
-      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="warn">{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</Pill>}
+      {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}><Group gap={4} wrap="nowrap"><Icon name="copy" size={12} />{t("Posible duplicado")}</Group></Pill>}
+      {p.related_verdict === "stale" && <Pill size="xs" tone="neutral" title={t("Se parece a algo que dejó de ser cierto")}><Group gap={4} wrap="nowrap"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</Group></Pill>}
+      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><Group gap={4} wrap="nowrap"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</Group></Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span className="ms-queue-author">{p.author}</span><span className="ms-data" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
