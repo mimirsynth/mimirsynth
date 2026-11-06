@@ -484,6 +484,7 @@
  "la fuente de subidas no se elimina": "the uploads source cannot be removed",
  "la fuente no es una wiki": "the source is not a wiki",
  "la fusión falló: {{e}}": "the merge failed: {{e}}",
+ "la ingesta se está reintentando: espera a que termine": "the ingestion is being retried: wait for it to finish",
  "la ingesta ya ha empezado: lo que entre en el grafo se corrige invalidando sus hechos": "the ingestion has already started: whatever reaches the graph is corrected by invalidating its facts",
  "la instancia ya tiene un administrador": "the instance already has an administrator",
  "la parte supera el tamaño máximo": "the part exceeds the maximum size",
