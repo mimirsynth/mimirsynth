@@ -39,7 +39,7 @@ class ReviewIn(BaseModel):
 
 def _out(p: Proposal, full: bool = False) -> dict:
     d = {"id": p.id, "name": p.name, "source": p.source, "source_description": p.source_description, "confidence": p.confidence,
-         "status": p.status, "author": p.author.email or p.author.name, "created_at": p.created_at, "reviewed_at": p.reviewed_at,
+         "status": p.status, "author": p.author.email or p.author.name, "author_name": p.author.name or p.author.email, "created_at": p.created_at, "reviewed_at": p.reviewed_at,
          "reviewer": (p.reviewer.email or p.reviewer.name) if p.reviewer else None,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
@@ -101,7 +101,7 @@ def _blocked_rules(ctx: BrainCtx, text: str) -> list[str]:
     return []
 
 
-_AUTHOR = func.coalesce(User.email, User.name)
+_AUTHOR = func.coalesce(func.nullif(User.name, ""), User.email)  # a person's name as the history shows it: its filter and its order
 _SORTS = {"id": Proposal.id, "name": Proposal.name, "author": _AUTHOR, "conf": Proposal.confidence, "at": Proposal.id, "decided": Proposal.reviewed_at}  # el id sigue el orden de envío
 # the review queue's order: what most needs a person first (corrections, then flagged secrets, then what the brain already knows as
 # nearly the same or as no longer true, then low declared confidence), oldest first inside each group, so nothing waits forever behind

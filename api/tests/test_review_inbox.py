@@ -186,6 +186,7 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     fresh = _propose(client, "inbox-known", contrib, "Algo nuevo del todo")
     base = "/api/brains/inbox-known/proposals"
     items = {p["id"]: p for p in client.get(base, params={"status": "pending"}, headers=curator).json()["items"]}
+    assert all(p["author_name"] for p in items.values())                                              # a name to show, the address apart
     assert items[dup]["related_verdict"] == "duplicate" and items[fresh]["related_verdict"] == "new"   # checked after it arrived
     assert [p["id"] for p in client.get(base, params={"status": "pending", "sort": "risk", "order": "asc"}, headers=curator).json()["items"]] == [dup, low, fresh]
     r = client.post(f"{base}/bulk", json={"verb": "approve", "ids": [dup, fresh]}, headers=curator).json()
