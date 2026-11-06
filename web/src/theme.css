@@ -502,7 +502,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-inbox:focus, .ms-inbox:focus-visible { outline: none !important; }  /* focused only to scope the shortcuts after a click on plain text: its parts show their own focus */
 .ms-inbox { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); gap: 12px; flex: 1; min-height: 0; }
 .ms-inbox-list, .ms-inbox-detail { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); background: var(--ms-raised); overflow: hidden; }
-.ms-inbox-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-bottom: 1px solid var(--ms-line); background: var(--ms-thead); font-size: 13px; }
+.ms-inbox-bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px 8px; min-height: 49px; padding: 6px 12px; border-bottom: 1px solid var(--ms-line); background: var(--ms-thead); font-size: 13px; }
+.ms-inbox-bar > :first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }  /* one line, the same height selected or not: the words give way, the buttons stay */
+@media (max-width: 30em) { .ms-review-filter .ms-segments-label { display: none; } .ms-review-filter .ms-seg { padding: 0 10px; } }  /* on a phone the three kinds fit one row; the group keeps its name for screen readers */
+.ms-inbox-bar-aside { color: var(--ms-muted); font-weight: 400; }
+@media (max-width: 30em) { .ms-inbox-bar-aside { display: none; } }  /* on a phone the count alone: the confirmation says which go apart */
 .ms-inbox-scroll { flex: 1; min-height: 0; overflow: auto; }
 .ms-inbox-body { flex: 1; min-height: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .ms-inbox-actions { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--ms-line); background: var(--ms-raised); }
@@ -515,9 +519,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-inbox-keys { display: none; }  /* no keyboard to press them with */
   .ms-inbox-actions .ms-btn:not([data-kind="link"]) { --button-height: 44px !important; }  /* the decision is the thumb's main target; Btn sets its height inline */
 }
-.ms-only-narrow { display: none; }
 @media (max-width: 48em) {  /* on a phone the page scrolls as a whole: the decision (and the notice docked in it) stays at the bottom, in thumb reach */
-  .ms-only-narrow { display: block; } .ms-only-wide { display: none; }  /* one selector instead of rows of segments */
   .ms-inbox-body { scroll-margin-top: calc(var(--app-shell-header-offset, 52px) + 8px); }  /* opened at its top, below the fixed header */
   .ms-tabs-fill > .mantine-Tabs-panel:has(.ms-inbox), .ms-inbox-detail, .ms-inbox-body { overflow: visible; }
   .ms-inbox-actions { position: sticky; bottom: 0; z-index: 2; border-radius: 0 0 var(--ms-radius) var(--ms-radius); }
