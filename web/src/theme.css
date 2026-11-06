@@ -533,8 +533,9 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-inbox-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }  /* back to the queue, or on through it */
   .ms-inbox:not([data-detail]) .ms-queue-item[data-active] { background: none; box-shadow: none; }  /* nothing is open while the queue shows */
   .ms-inbox .ms-queue-item { padding: 8px 12px; }  /* declared before the queue's own rules: the .ms-inbox prefix outranks them */
-  .ms-inbox .ms-queue-meta { flex-wrap: nowrap; overflow: hidden; }
-  .ms-inbox .ms-queue-meta .ms-pill, .ms-inbox .ms-queue-meta .ms-queue-age { flex-shrink: 0; }
+  .ms-inbox .ms-queue-meta .ms-pill, .ms-inbox .ms-queue-meta .ms-queue-age { flex-shrink: 0; }  /* a long marker sends the author and age to the next line, never to nothing */
+  .ms-inbox-actions .ms-decide { flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; }  /* Reject and Approve share the row: Approve under the right thumb */
+  .ms-inbox-actions .ms-decide .ms-btn { width: 100%; }
   .ms-queue-author { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 .ms-queue { list-style: none; margin: 0; padding: 0; }
@@ -554,7 +555,12 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-item .ms-check { --checkbox-size: 24px !important; }  /* the queue's checkboxes, at the same minimum target */
 @media (pointer: coarse) { .ms-inbox-nav .ms-iconbtn { --ai-size: 44px !important; } }
 @media (max-width: 48em) { .ms-reject-why { display: none; } }  /* on a phone «Rechazar» stays beside «Aprobar»: the reason is in its name and in the note */
-@media (pointer: coarse) { .ms-hit { min-height: 44px; } .ms-queue-item .ms-check { --checkbox-size: 28px !important; } }
+@media (pointer: coarse) {
+  .ms-hit { min-height: 44px; } .ms-queue-item .ms-check { --checkbox-size: 28px !important; }
+  .ms-queue-check { min-width: 44px; min-height: 44px; margin: -8px; }  /* the box stays 28px; the touch reaches 44px around it */
+  .ms-inbox-bar { min-height: 57px; gap: 6px; } .ms-inbox-bar .ms-btn { --button-height: 44px !important; } .ms-inbox-bar .ms-iconbtn { --ai-size: 44px !important; }  /* the bar's actions at the thumb's size, the same height either way */
+}
+.ms-queue-check { display: inline-grid; place-items: center; cursor: pointer; }
 .ms-queue-desc { display: contents; }  /* only groups the description for aria-describedby; the layout is its children's */
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
 .ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); }  /* a section of the detail, ruled off like the rest, not a card inside its card */

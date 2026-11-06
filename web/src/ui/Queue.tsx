@@ -40,7 +40,9 @@ export function QueueList({ items, activeId, focusKey, onActivate, onMove, check
     <ul className="ms-queue" aria-label={label} ref={list}>
       {items.map((it) => (
         <li key={it.id} className="ms-queue-item" data-qid={it.id} data-active={it.id === activeId ? "" : undefined} data-checked={checked.has(it.id) ? "" : undefined}>
-          <Check checked={checked.has(it.id)} tabIndex={-1} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={it.label ? t("Seleccionar #{{id}} · {{title}}", { id: it.id, title: it.label }) : t("Seleccionar #{{id}}", { id: it.id })} />
+          <label className="ms-queue-check">{/* a touch anywhere around the box checks it */}
+            <Check checked={checked.has(it.id)} tabIndex={-1} onChange={(e) => onCheck(it.id, e.currentTarget.checked)} aria-label={it.label ? t("Seleccionar #{{id}} · {{title}}", { id: it.id, title: it.label }) : t("Seleccionar #{{id}}", { id: it.id })} />
+          </label>
           <button type="button" className="ms-queue-open" aria-current={it.id === activeId ? "true" : undefined} tabIndex={it.id === stop ? 0 : -1}
             aria-labelledby={`ms-q-${it.id}-t`} aria-describedby={`ms-q-${it.id}-d`}
             ref={(el) => { if (el) refs.current.set(it.id, el); else refs.current.delete(it.id); }}
