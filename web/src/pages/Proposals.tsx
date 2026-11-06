@@ -1,5 +1,6 @@
 import { T, locale } from "../i18n";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
   Pill, QueueList, RowOpen, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
@@ -288,7 +289,7 @@ function ProposalBody({ d, context }: { d: Prop; context?: ReactNode }) {
 /** Everything a screen of this page needs to decide: shared so the queue, the history and one's own proposals act the same way. */
 type Ops = {
   base: string; graph: string; isCurator: boolean; llm: boolean; note: string; setNote: (v: string) => void;
-  review: UseMutationResult<Prop & { undo_seconds?: number }, Error, { id: number; verb: Verb }>;
+  review: UseMutationResult<Prop & { undo_seconds?: number }, Error, { id: number; verb: Verb; note?: string }>;
   undo: UseMutationResult<unknown, Error, number[]>; reactivate: UseMutationResult<unknown, Error, number>; retry: UseMutationResult<unknown, Error, number>;
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
   /** The last decision, its notice (for the review footer to dock) and the way to take it back from the keyboard. */
@@ -301,7 +302,6 @@ type Ops = {
  *  duplicate, a contradiction, or nothing at all, which makes it new knowledge. Only for pending proposals that add knowledge. */
 type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
   valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related" };
-const RELATED_SHOWN = 3;  // the closest ones; the rest behind «Ver N más»
 /** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
  *  A key. Opening it also refreshes the verdict the queue ranks by. */
 function useRelated(ops: Ops, d?: Prop) {
@@ -321,45 +321,66 @@ function knownOf(d: Prop | undefined, facts?: RelatedFact[]): Known {
   return old ? { verdict: "stale", fact: old } : null;
 }
 const isKnown = (p: Prop) => p.related_verdict === "duplicate" || p.related_verdict === "stale";
+/** A fact quoted inside a sentence: its own final stop goes, so «…» is not followed by a second one. */
+const quoted = (fact: string) => fact.replace(/[\s.]+$/, "");
+/** Rejecting what the brain already knows: the button that says why, and the note it leaves when the curator wrote none. */
+const knownReject = (k: NonNullable<Known>, t: TFunction) => k.verdict === "duplicate" ? t("Rechazar: ya lo sabe") : t("Rechazar: ya no es cierto");
+const knownNote = (k: NonNullable<Known>, t: TFunction) => k.verdict === "duplicate"
+  ? (k.fact ? t("El brain ya lo sabe: «{{fact}}».", { fact: quoted(k.fact.fact) }) : t("El brain ya lo sabe."))
+  : (k.fact ? t("Ya no es cierto: «{{fact}}» dejó de serlo el {{date}}.", { fact: quoted(k.fact.fact), date: (k.fact.invalid_at ?? "").slice(0, 10) }) : t("Se parece a algo que dejó de ser cierto."));
 /** Approving a proposal that adds knowledge waits until the check of what the brain knows answers: before it, nobody can tell a duplicate.
  *  A proposal with a secret to review asks anyway, and a check that failed shows its error instead of holding the decision. */
 const isChecking = (d: Prop | undefined, rel: { isPending: boolean }) => !!d && d.status === "pending" && !d.correction && !d.purged_at && !flagged(d) && rel.isPending;
 /** A pending addition never checked against what the brain knows (it arrived without an engine, or the check failed): a batch leaves it
  *  aside, as the API does, until the queue has checked it. */
 const isUnchecked = (p: Prop, llm: boolean) => llm && p.status === "pending" && p.kind !== "correction" && !p.purged_at && !p.related_verdict;
+/** One fact the brain knows: its text (struck through when no longer true) with how close it is, then who it joins and its dates. */
+function FactLine({ f }: { f: RelatedFact }) {
+  const { t } = useTranslation();
+  return (<Stack gap={2}>
+    <Group gap={6} wrap="nowrap" align="flex-start">
+      <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
+      {f.relevance === "repeats" ? <Pill size="xs" tone="warn" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Casi igual")}</Pill>
+        : f.relevance === "close" ? <Pill size="xs" tone="neutral" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Muy parecido")}</Pill> : null}
+    </Group>
+    <Text size="xs" c="dimmed">
+      {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → <span title={f.name}>{humanRelation(f.name)}</span> → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
+      {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: f.valid_at.slice(0, 10) })}` : ""}{f.invalid_at ? ` · ${t("ya no es cierto: invalidado el {{date}}", { date: f.invalid_at.slice(0, 10) })}` : ""}
+    </Text>
+  </Stack>);
+}
+
+/** What the brain already knows close to a pending proposal that adds knowledge. When it is a likely duplicate, or close to something no
+ *  longer true, the proposal and that fact are set side by side, to read one against the other. Other very similar facts follow; facts
+ *  that are only related stay folded, so they do not read as evidence. */
 function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
   const q = useRelated(ops, d);
-  const [all, setAll] = useState(false);
-  useEffect(() => setAll(false), [d.id]);
+  const [more, setMore] = useState(false);
+  useEffect(() => setMore(false), [d.id]);
   const facts = q.data?.facts ?? [];
-  const close = (f: RelatedFact) => f.relevance === "repeats" || f.relevance === "close";
-  // the one line to read first: a likely duplicate, something close that stopped being true, or only related facts. A contradiction
-  // cannot be told from the text alone: the closest facts are there to check it.
-  const verdict = facts.some((f) => f.relevance === "repeats" && !f.invalid_at)
-    ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
-    : facts.some((f) => close(f) && f.invalid_at)
-      ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
-      : facts.length ? { icon: "info" as const, text: t("Hechos relacionados: comprueba si la propuesta repite o contradice alguno.") } : null;
-  const shown = all ? facts : facts.slice(0, RELATED_SHOWN);
-  return (<section className="ms-related" aria-labelledby={`ms-related-${d.id}`}><Stack gap={6}>
+  const known = q.data ? knownOf(d, facts) : null;
+  const close = facts.filter((f) => (f.relevance === "repeats" || f.relevance === "close") && f.uuid !== known?.fact?.uuid);
+  const related = facts.filter((f) => f.relevance === "related");
+  // the one line to read first. A contradiction cannot be told from the text alone: the closest facts are there to check it.
+  const verdict = known?.verdict === "duplicate" ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
+    : known?.verdict === "stale" ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
+      : close.length ? { icon: "info" as const, text: t("Hay algo muy parecido en el brain: comprueba si la propuesta lo repite o lo contradice.") }
+        : related.length ? { icon: "info" as const, text: t("Nada casi igual en el brain: sería conocimiento nuevo.") } : null;
+  return (<section className="ms-related" aria-labelledby={`ms-related-${d.id}`}><Stack gap={8}>
     <Text component="h3" id={`ms-related-${d.id}`} className="ms-section-title">{t("Lo que el brain ya sabe")}</Text>
     <MutationError error={q.error} />
     {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
     {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
     {verdict && <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>}
-    {shown.map((f) => (<Stack key={f.uuid} gap={2}>
-      <Group gap={6} wrap="nowrap" align="flex-start">
-        <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
-        {f.relevance === "repeats" ? <Pill size="xs" tone="warn" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Casi igual")}</Pill>
-          : f.relevance === "close" ? <Pill size="xs" tone="neutral" title={t("similitud {{s}}", { s: f.score ?? "—" })}>{t("Muy parecido")}</Pill> : null}
-      </Group>
-      <Text size="xs" c="dimmed">
-        {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → <span title={f.name}>{humanRelation(f.name)}</span> → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
-        {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: f.valid_at.slice(0, 10) })}` : ""}{f.invalid_at ? ` · ${t("ya no es cierto: invalidado el {{date}}", { date: f.invalid_at.slice(0, 10) })}` : ""}
-      </Text>
-    </Stack>))}
-    {facts.length > RELATED_SHOWN && <Group><Btn kind="link" onClick={() => setAll(!all)}>{all ? t("Ver menos") : t("Ver {{n}} más", { n: facts.length - RELATED_SHOWN })}</Btn></Group>}
+    {known?.fact && <dl className="ms-pair" aria-label={t("La propuesta frente a lo que ya sabe el brain")}>
+      <dt>{t("La propuesta")}</dt><dd><Text size="sm" lineClamp={3}>{d.body}</Text></dd>
+      <dt>{t("El brain")}</dt><dd><FactLine f={known.fact} /></dd>
+    </dl>}
+    {close.map((f) => <FactLine key={f.uuid} f={f} />)}
+    {related.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={more ? "chevronDown" : "chevronRight"} aria-expanded={more} aria-controls={`ms-rel-${d.id}`}
+      onClick={() => setMore(!more)}>{related.length === 1 ? t("1 hecho solo relacionado") : t("{{n}} hechos solo relacionados", { n: related.length })}</Btn></Group>}
+    {related.length > 0 && <Stack gap={8} id={`ms-rel-${d.id}`} className="ms-fold" hidden={!more}>{related.map((f) => <FactLine key={f.uuid} f={f} />)}</Stack>}
   </Stack></section>);
 }
 
@@ -380,7 +401,8 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
   const asks = secret || !!known;  // approving asks first: to mask what was flagged, or because the brain already knows it
   const kinds = [...new Set((d.secrets ?? []).filter((f) => f.action === "flagged").map((f) => t(f.label)))].join(", ");
   const approving = review.isPending && review.variables?.verb !== "reject";
-  const decide = (verb: Verb) => review.mutateAsync({ id: d.id, verb }).then(() => onDecided?.());
+  const decide = (verb: Verb, note?: string) => review.mutateAsync({ id: d.id, verb, note }).then(() => onDecided?.());
+  const rejectKnown = known && !secret ? () => decide("reject", ops.note || knownNote(known, t)) : null;  // with its reason as the note
   const approve = onApprove ?? (() => { if (!checking) { if (asks) askMask(true); else decide("approve").catch(() => {}); } });
   // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is one fold
   // away, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
@@ -412,9 +434,9 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
           onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
       </Group>
       <Group gap="xs">
-        <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
-          onClick={() => decide("reject").catch(() => {})} icon="close">{t("Rechazar")}</Btn>
-        <Btn kind="primary" loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
+        <Btn kind={rejectKnown ? "primary" : "danger"} loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
+          onClick={() => (rejectKnown ? rejectKnown() : decide("reject")).catch(() => {})} icon="close">{known && !secret ? knownReject(known, t) : t("Rechazar")}</Btn>
+        <Btn kind={rejectKnown ? "secondary" : "primary"} loading={approving || checking} disabled={waiting || (review.isPending && !approving)} title={checking ? t("Antes de aprobar, se comprueba lo que el brain ya sabe") : undefined}
           onClick={approve} icon={secret ? "lock" : "check"}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
@@ -424,12 +446,13 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
         : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>}
       <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
     </Stack>
-    {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary"
+    {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary" warn
+      alt={{ label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) }}
       title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un dato caducado?")}
       warning={known.verdict === "duplicate"
-        ? (known.fact ? t("El brain ya dice algo casi igual: «{{fact}}». Si la apruebas, el grafo tendrá lo mismo dos veces.", { fact: known.fact.fact })
+        ? (known.fact ? t("El brain ya dice algo casi igual: «{{fact}}». Si la apruebas, el grafo tendrá lo mismo dos veces.", { fact: quoted(known.fact.fact) })
           : t("El brain ya dice algo casi igual. Si la apruebas, el grafo tendrá lo mismo dos veces."))
-        : (known.fact ? t("Se parece a «{{fact}}», que dejó de ser cierto el {{date}}. Apruébala solo si vuelve a ser cierto.", { fact: known.fact.fact, date: (known.fact.invalid_at ?? "").slice(0, 10) })
+        : (known.fact ? t("Se parece a «{{fact}}», que dejó de ser cierto el {{date}}. Apruébala solo si vuelve a ser cierto.", { fact: quoted(known.fact.fact), date: (known.fact.invalid_at ?? "").slice(0, 10) })
           : t("Se parece a algo que dejó de ser cierto. Apruébala solo si vuelve a ser cierto."))}
       action={t("Aprobar igualmente")} onConfirm={() => decide("approve")} />}
     <ConfirmDialog opened={secret && (onMasking ? !!masking : ownMasking)} onClose={() => askMask(false)} tone="primary"
@@ -583,7 +606,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     if (!actions.current?.getClientRects().length) return;  // narrow layout showing the queue: nothing is decided without being seen
     if (verb === "approve" && isChecking(d, related)) { setHeld(d.id); return; }  // approves (or asks) once the brain has answered
     if (verb === "approve" && (flagged(d) || knownOf(d, related.data?.facts))) { setMasking(true); return; }  // the same confirmation as its button
-    ops.review.mutate({ id: d.id, verb }, { onSuccess: () => advance(d.id) });
+    const k = verb === "reject" && !flagged(d) ? knownOf(d, related.data?.facts) : null;  // rejecting what the brain knows says why
+    ops.review.mutate({ id: d.id, verb, note: k && !ops.note ? knownNote(k, t) : undefined }, { onSuccess: () => advance(d.id) });
   };
   const [held, setHeld] = useState<number | null>(null);
   const checking = isChecking(d, related);
@@ -738,7 +762,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [explain, setExplain] = useState(false);
   const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((id) => send("POST", `${base}/${id}/undo`))),
     onSuccess: (_, ids) => { setLast({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null }); refresh(); } });
-  const review = useMutation({ mutationFn: (a: { id: number; verb: Verb }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note }),
+  const review = useMutation({ mutationFn: (a: { id: number; verb: Verb; note?: string }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note: a.note ?? note }),
     onMutate: () => undo.reset(),
     onSuccess: (r, a) => { setNote(""); setLast({ id: a.id, verb: a.verb === "reject" ? "reject" : "approve", until: r.undo_seconds ? Date.now() + r.undo_seconds * 1000 : null }); refresh(); } });
   const reactivate = useMutation({ mutationFn: (id: number) => send("POST", `${base}/${id}/reactivate`), onSuccess: refresh });
