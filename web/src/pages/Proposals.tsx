@@ -680,6 +680,8 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
   const oneByOne = (p: Prop) => p.kind === "correction" || flagged(p) || isKnown(p) || isUnchecked(p, ops.llm);  // never approved in a batch: decided one at a time
   const goes = batch.verb === "approve" ? batch.items.filter((p) => !oneByOne(p)) : batch.items;
   const stays = batch.items.filter((p) => !goes.includes(p));
+  const close = batch.verb === "approve" ? goes.filter((p) => p.related_verdict === "similar") : [];  // approved too, but named apart: worth a read first
+  const plain = goes.filter((p) => !close.includes(p));
   const bulk = useMutation({ mutationFn: ({ verb, ids }: { verb: "approve" | "reject"; ids: number[] }) => send<{ done: number[]; skipped: { id: number; reason: string }[]; undo_seconds?: number }>("POST", `${ops.base}/bulk`,
       { verb, ids, note: bulkNote }),
     onSuccess: (r, { verb }) => {
@@ -757,6 +759,7 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
       {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
       {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posible dato caducado")}</span></Pill>}
+      {p.related_verdict === "similar" && <Pill size="xs" tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><span className="ms-pill-row"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</span></Pill>}
       {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
@@ -838,8 +841,11 @@ function ReviewTab({ ops, initialKind, decidedFirst }: { ops: Ops; initialKind?:
           : stays.length ? " " + t("{{k}} no se aprueban así (correcciones, secretos por revisar, lo que el brain ya sabe o aún no ha comprobado): se quedan seleccionadas para decidirlas una a una.", { k: stays.length }) : ""}</>
         : t("No entra nada en el grafo; se pueden reabrir después.")}
       subject={<Stack gap={6}>
-        <ul className="ms-batch-list" aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>
-          {goes.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul>
+        {plain.length > 0 && <ul className="ms-batch-list" aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>
+          {plain.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul>}
+        {close.length > 0 && <><Text size="xs" c="dimmed" id="ms-batch-close">{close.length === 1 ? t("También se aprueba, y es muy parecida a algo que el brain ya sabe: revisa qué añade antes.")
+          : t("También se aprueban, y son muy parecidas a algo que el brain ya sabe: revisa qué añaden antes.")}</Text>
+          <ul className="ms-batch-list" aria-labelledby="ms-batch-close">{close.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul></>}
         {stays.length > 0 && <><Text size="xs" c="dimmed">{t("Se quedan para decidirlas aparte:")}</Text>
           <ul className="ms-batch-list" data-muted="">{stays.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul></>}
       </Stack>}
