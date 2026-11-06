@@ -288,7 +288,8 @@ class BulkIn(BaseModel):
 def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
     """One decision for several proposals the curator selected. Each is decided as if alone (same audit, same 10 s grace before ingestion);
     what cannot be decided this way is skipped and said why: not pending any more, or, for approving, a correction, a proposal with a
-    secret to review or one the brain already knows (nearly the same, or no longer true), which a person decides one at a time."""
+    secret to review, one the brain already knows (nearly the same, or no longer true) or one very close to a current fact, which a person
+    reads and decides one at a time."""
     done, skipped = [], []
     for pid in dict.fromkeys(body.ids):
         p = ctx.db.get(Proposal, pid)
@@ -302,6 +303,8 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
             skipped.append({"id": pid, "reason": "secret"}); continue
         if body.verb == "approve" and p.related_verdict in KNOWN:
             skipped.append({"id": pid, "reason": "known"}); continue
+        if body.verb == "approve" and p.related_verdict == "similar":  # adds a little to a current fact: read it before approving
+            skipped.append({"id": pid, "reason": "close"}); continue
         if body.verb == "approve" and unchecked(p):
             skipped.append({"id": pid, "reason": "unchecked"}); continue
         _review(ctx, pid, "approved" if body.verb == "approve" else "rejected", body.note)
