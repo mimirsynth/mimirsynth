@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { Check } from "./Fields";
 
 export type QueueItem = { id: number; title: ReactNode; preview?: string; meta?: ReactNode; tags?: ReactNode;
@@ -48,8 +48,9 @@ export function QueueList({ items, activeId, focusKey, onActivate, checked, onCh
 }
 
 /** Single-key shortcuts for a screen (J/K, A/R…). They never fire while the person types in a field or with a modifier held, and only
- *  while `enabled` (for instance, not with a dialog open). */
-export function useShortcuts(map: Record<string, () => void>, enabled = true) {
+ *  while `enabled` (for instance, not with a dialog open). With `scope`, only while the focus is inside it (WCAG 2.1.4): a key typed or
+ *  dictated anywhere else on the page never decides anything. */
+export function useShortcuts(map: Record<string, () => void>, enabled = true, scope?: RefObject<HTMLElement | null>) {
   const ref = useRef(map);
   ref.current = map;
   useEffect(() => {
@@ -58,6 +59,7 @@ export function useShortcuts(map: Record<string, () => void>, enabled = true) {
       if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
       const el = e.target instanceof HTMLElement ? e.target : null;
       if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName) || el.closest("[role=dialog]"))) return;
+      if (scope && !(scope.current && document.activeElement && scope.current.contains(document.activeElement))) return;
       const fn = ref.current[e.key.toLowerCase()];
       if (fn) { e.preventDefault(); fn(); }
     };
@@ -68,12 +70,13 @@ export function useShortcuts(map: Record<string, () => void>, enabled = true) {
 
 /** The two-pane layout of a review screen: the queue and the open item side by side; on a narrow content area (below about 760px) one at a
  *  time, the detail when `showDetail`, with its own way back. Measured on the content width, like Ask and Query. */
-export function InboxLayout({ list, detail, showDetail, detailLabelledBy, listLabelledBy }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
+export function InboxLayout({ list, detail, showDetail, detailLabelledBy, listLabelledBy, scopeRef }: { list: ReactNode; detail: ReactNode; showDetail: boolean;
+  /** The area a screen's shortcuts act in (`useShortcuts`' scope): a click anywhere in it, even on plain text, puts the focus there. */ scopeRef?: RefObject<HTMLDivElement | null>;
   /** The id of the open item's heading, which names the detail region for screen readers. */ detailLabelledBy?: string;
   /** The id of the queue's heading, which names the queue region. */ listLabelledBy?: string }) {
   return (
     <div className="ms-inbox-wrap">
-      <div className="ms-inbox" data-detail={showDetail ? "" : undefined}>
+      <div className="ms-inbox" data-detail={showDetail ? "" : undefined} ref={scopeRef} tabIndex={scopeRef ? -1 : undefined}>
         <section className="ms-inbox-list" aria-labelledby={listLabelledBy}>{list}</section>
         <section className="ms-inbox-detail" aria-labelledby={detailLabelledBy}>{detail}</section>
       </div>

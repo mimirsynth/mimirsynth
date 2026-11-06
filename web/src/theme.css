@@ -491,6 +491,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-batch-list[data-muted] { color: var(--ms-muted); }
 .ms-filter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }  /* the selectors of a view on one line; they wrap when narrow */
 .ms-inbox-wrap { container-type: inline-size; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ms-inbox:focus, .ms-inbox:focus-visible { outline: none !important; }  /* focused only to scope the shortcuts after a click on plain text: its parts show their own focus */
 .ms-inbox { display: grid; grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr); gap: 12px; flex: 1; min-height: 0; }
 .ms-inbox-list, .ms-inbox-detail { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); background: var(--ms-raised); overflow: hidden; }
 .ms-inbox-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-bottom: 1px solid var(--ms-line); background: var(--ms-thead); font-size: 13px; }

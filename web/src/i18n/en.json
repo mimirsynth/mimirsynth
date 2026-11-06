@@ -130,7 +130,6 @@
  "Aprobar {{n}} resúmenes": "Approve {{n}} summaries",
  "Aquí aparecen hechos vigentes que no pueden ser ciertos a la vez: el mismo sujeto con destinos distintos en una relación de un solo valor, como un equipo en dos salas. Abre cada grupo y quédate solo con el hecho que sigue siendo cierto, o marca los que ya no lo son: se invalidan, siempre queda alguno vigente y se puede deshacer desde el historial del vocabulario. Si no es una contradicción, pulsa «No es una contradicción» y el grupo deja de salir hasta que llegue un hecho nuevo; si la relación admite varios valores, desmárcala en Ontología.": "Current facts that cannot all be true at once: the same subject with different targets in a single-valued relation, such as a machine in two rooms. Open each group and keep only the fact that is still true, or tick the ones that no longer are: they are invalidated, at least one always stays current, and it can be undone from the vocabulary history. If it is not a contradiction, press «Not a contradiction» and the group stops showing until a new fact arrives; if the relation holds several values, unmark it in Ontology.",
  "Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) o": "Drag files here (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) or",
- "Atajos:": "Shortcuts:",
  "Auditoría": "Audit",
  "Automático": "Automatic",
  "Automático (reducido)": "Automatic (reduced)",
