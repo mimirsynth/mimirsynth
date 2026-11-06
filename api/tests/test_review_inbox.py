@@ -177,3 +177,15 @@ def test_what_the_brain_knows_ranks_the_queue_and_stays_out_of_the_batch(client,
     known["fact"] = "Otra cosa distinta"                                                              # the graph changed since
     client.get(f"{base}/{dup}/related", headers=curator)
     assert client.get(f"{base}/{dup}", headers=curator).json()["related_verdict"] == "related"        # opening it refreshes the verdict
+
+
+def test_kind_counts_follow_the_state(client):  # noqa: F811
+    """«Añaden 23» beside «7 decided» was the whole brain's count: each kind is also counted inside each state."""
+    contrib, curator = _brain(client, "inbox-kinds")
+    a = _propose(client, "inbox-kinds", contrib, "Una")
+    _propose(client, "inbox-kinds", contrib, "Otra")
+    client.post(f"/api/brains/inbox-kinds/proposals/{a}/reject", json={}, headers=curator)
+    c = client.get("/api/brains/inbox-kinds/proposals/counts", headers=curator).json()
+    assert c["kinds"]["memory"] == 2
+    assert c["kinds_in"]["pending"] == {"correction": 0, "memory": 1} and c["kinds_in"]["decided"]["memory"] == 1
+    assert c["kinds_in"]["rejected"]["memory"] == 1 and c["kinds_in"]["all"]["memory"] == 2 and c["kinds_in"]["approved"]["memory"] == 0
