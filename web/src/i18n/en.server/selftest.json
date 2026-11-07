@@ -1,0 +1,7 @@
+{
+ "Comprobaciones de recuperación por hora": "Retrievability checks per hour",
+ "Comprobar que lo ingerido se recupera": "Check that what is ingested can be retrieved",
+ "Comprobar que se recupera lo ingerido": "Check that what was ingested is retrievable",
+ "Propuestas por brain y hora que se comprueban; las demás se quedan sin comprobar y lo dicen.": "Proposals per brain and hour that are checked; the rest stay unchecked and say so.",
+ "Tras ingerir una propuesta, se hace al recall una pregunta de control por cada hecho nuevo (hasta 5) y se marca la propuesta si alguno no sale entre los primeros. Cada pregunta es un embedding.": "After a proposal is ingested, the recall is asked one control question per new fact (up to 5), and the proposal is flagged if one does not come back among the first. Each question is one embedding."
+}

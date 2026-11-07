@@ -60,7 +60,8 @@ HEALTH = (("coverage", "Share of the reference queries' expected texts that the 
           ("noise", "Mean items the recall returns for a vague or off-topic question"),
           ("redundancy", "Share of current facts that repeat another current fact between the same entities (0-1)"),
           ("contradictions", "Possible contradictions in the functional relations"),
-          ("stale_facts", "Current facts past their relation's shelf life"))
+          ("stale_facts", "Current facts past their relation's shelf life"),
+          ("retrievable", "Share of the proposals ingested in the last 30 days whose new facts came back to a control question (0-1)"))
 
 _SLUGS: dict[int, str] = {}                  # brain id -> slug, refreshed on each scrape (a brain's slug can change)
 _GRAPH: tuple[float, dict[str, dict]] = (0.0, {})  # (when, slug -> sizes)

@@ -17,6 +17,7 @@ Una memoria que solo acumula acaba siendo un registro de todo lo que se dijo alg
 | **Ruido** | Elementos (hechos, fragmentos y pasajes) que el recall devuelve de media ante una pregunta vaga o fuera de tema: un conjunto integrado (un saludo, una sola palabra, «vale, sigue con lo que estábamos haciendo», en castellano e inglés) más las consultas de referencia que no esperan nada. La proporción que no devolvió nada y el tamaño del contexto están en el API. | 0 |
 | **Redundancia** | Proporción de hechos vigentes que repiten otro hecho vigente **entre las mismas dos entidades**: el mismo texto, o embeddings muy cercanos (coseno de 0,93 o más) **con los mismos números e identificadores**. «La wiki usa PostgreSQL 14» y «… 16» son un cambio, no una repetición. Con más de 3.000 hechos candidatos se estima sobre los más recientes y lo dice. | Más baja |
 | **Contradicciones abiertas** | Posibles contradicciones en las relaciones funcionales, como las cuenta [[Contradicciones]]. Vacía si ninguna relación es funcional. | Más baja |
+| **Propuestas que se recuperan** | Proporción de las propuestas ingeridas en los últimos 30 días cuyos hechos nuevos salieron todos al hacerles su pregunta de control (ver [[Propuestas]] → Se recupera tras ingerirla). Vacía si no se comprobó ninguna. | Más alta |
 | **Hechos a revisar** | Hechos vigentes pasados de la vida útil de su relación, como los cuenta [[Calidad del contenido]] → A revisar. Vacía si ninguna relación tiene vida útil. | Más baja |
 
 ## Cómo se mide

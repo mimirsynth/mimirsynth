@@ -17,6 +17,7 @@ A memory that only accumulates becomes a log of everything that was ever said, n
 | **Noise** | Mean items (facts, fragments and passages) the recall returns for a vague or off-topic question: a built-in set (a greeting, a single word, «ok, go on with what we were doing», in English and Spanish) plus the reference queries that expect nothing. The share that returned nothing and the size of the context are in the API. | 0 |
 | **Redundancy** | Share of current facts that repeat another current fact **between the same two entities**: the same text, or very close embeddings (cosine 0.93 or more) **with the same numbers and identifiers**. «The wiki uses PostgreSQL 14» and «… 16» are a change, not a repeat. With more than 3,000 candidate facts, it is estimated on the most recent ones and says so. | Lower |
 | **Open contradictions** | Possible contradictions in the functional relations, as [[Contradictions]] counts them. Empty if no relation is functional. | Lower |
+| **Proposals that are retrievable** | Share of the proposals ingested in the last 30 days whose new facts all came back to their control question (see [[Proposals]] → Retrievable after ingesting). Empty if none was checked. | Higher |
 | **Facts to review** | Current facts past their relation's shelf life, as [[Content quality]] → To review counts them. Empty if no relation has a shelf life. | Lower |
 
 ## How it is measured
