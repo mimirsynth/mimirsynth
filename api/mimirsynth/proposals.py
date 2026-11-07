@@ -31,6 +31,7 @@ class ProposalIn(BaseModel):
     source_description: str = Field("", max_length=255)
     reference_time: datetime | None = None
     confidence: float | None = Field(None, ge=0, le=1)
+    origin: str | None = Field(None, pattern="^(agent|auto)$", description="agent: an agent chose to write it; auto: captured automatically. Empty: auto. Never above the token's max_trust (#298).")
     claims: list[claims_mod.ClaimIn] = Field(default_factory=list, max_length=claims_mod.MAX,
                                              description="Structured claims next to the text (#295): compared with what the brain knows when sent.")
 
@@ -45,7 +46,7 @@ def _out(p: Proposal, full: bool = False) -> dict:
          "reviewer": (p.reviewer.email or p.reviewer.name) if p.reviewer else None,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
-         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "claims": p.claims, "category": p.category or "", "purged_at": p.purged_at}
+         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "claims": p.claims, "category": p.category or "", "origin": p.origin or "", "purged_at": p.purged_at}
     d["body"] = p.body if full else p.body[:300]
     return d
 
@@ -71,8 +72,9 @@ def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalI
                                     language(request), labels=", ".join(labels[r] for r in rules)))
     checked = _claims(ctx, request, body)
     tok = getattr(request.state, "token", None)
+    from .trust import effective_origin
     return store(ctx.db, ctx.brain, ctx.user, body, name, text, in_name, in_body, allows(ctx.role, "curator"), bg.add_task,
-                 token_id=tok.id if tok else None, claims=checked)
+                 token_id=tok.id if tok else None, claims=checked, origin=effective_origin(body.origin, tok))
 
 
 def _claims(ctx: BrainCtx, request: Request, body: ProposalIn) -> list[dict] | None:
@@ -102,14 +104,14 @@ def _claims(ctx: BrainCtx, request: Request, body: ProposalIn) -> list[dict] | N
 
 
 def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list, in_body: list, direct: bool, later,
-          token_id: int | None = None, how: str = "direct", claims: list[dict] | None = None) -> Proposal:
+          token_id: int | None = None, how: str = "direct", claims: list[dict] | None = None, origin: str = "") -> Proposal:
     """Saves a proposal whose name and text already went through the secret detector (`in_name`, `in_body`: its findings). `direct`
     approves it, unless the detector flagged something; otherwise the decider triages it, through `later` (a background task)."""
     found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
     direct = direct and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
     p = Proposal(brain_id=brain.id, author_id=user.id, token_id=token_id, name=name[:255], body=text, source=body.source,
                  source_description=body.source_description, reference_time=body.reference_time, confidence=body.confidence,
-                 status="approved" if direct else "pending", secret_findings=found or None, claims=claims)
+                 status="approved" if direct else "pending", secret_findings=found or None, claims=claims, origin=origin)
     if direct:
         p.reviewer_id, p.reviewed_at, p.review_kind = user.id, datetime.now(timezone.utc), how
     db.add(p); db.commit()

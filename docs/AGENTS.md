@@ -35,6 +35,9 @@ A contributor ends up `pending`; a curator, `approved` and ingested right away. 
 
 Do not store passwords or tokens: store **where** they are kept (for example, which password manager). Anything shaped like a credential is masked before it is stored or, if the brain blocks them, the proposal is rejected with a 422 saying which type of secret it is (see «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md)). Over MCP, `remember` does the same. The answer says which types were masked or flagged (`secrets_notice` in the HTTP response, an extra sentence in the `remember` result), never the value.
 
+### Say where it comes from
+A proposal can say `origin`: `agent` when an agent chose to store it, `auto` when an automatic process captured it. Without it, it counts as `auto`, the lowest trust. A token created for an automatic capture caps it at `auto` whatever the client says. With *Weigh facts by their origin* on, facts weigh by it in the recall (see «Trust and age» in the wiki's Recall and ingestion).
+
 ### Structured claims: say what it replaces
 Free text is extracted on its own, so a repeat in other words becomes a second current fact and a new value can leave the old one current. Next to `body`, a proposal (REST or `remember`) can carry up to 20 **claims**: `subject`, `relation` (as the brain's ontology names it), `value`, and optionally `valid_from` and `supersedes` (the uuid of the current fact it replaces, as `recall` or `facts_about` give it).
 ```json

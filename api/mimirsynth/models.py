@@ -219,6 +219,7 @@ class ApiToken(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # empty: never expires (#133)
     scopes: Mapped[list | None] = mapped_column(JSON, nullable=True)  # recall | documents | propose; empty: all of them
     replaced_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the token that took its place when it was rotated
+    max_trust: Mapped[str] = mapped_column(String(8), default="agent", server_default="agent")  # the most its proposals can claim (#298): agent | auto
     expiry_warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user: Mapped[User] = relationship()
 
@@ -248,6 +249,7 @@ class Proposal(Base):
     kind: Mapped[str] = mapped_column(String(16), default="memory", server_default="memory")  # memory | correction (#109)
     correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the correction of a fact: see corrections.py
     claims: Mapped[list | None] = mapped_column(JSON, nullable=True)  # structured claims with their verdict and what was applied (#295): claims.py
+    origin: Mapped[str] = mapped_column(String(8), default="", server_default="")  # person | agent | auto; empty: before #298 or internal
     category: Mapped[str] = mapped_column(String(32), default="", server_default="")  # what produced it, to measure its precision (#300): curator.<pass>
     # what the brain already knows close to it, for the review queue: "" not checked yet | new | related | duplicate (a current fact
     # says nearly the same) | stale (it resembles a fact that stopped being true); set after submission, refreshed when opened

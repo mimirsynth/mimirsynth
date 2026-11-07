@@ -31,6 +31,21 @@ Si otros brains le prestan su memoria a este ([[Federación]]), el recall tambi�
 ### El índice de texto de episodios
 Copia el texto de los episodios de FalkorDB a PostgreSQL, troceado, con vectores y búsqueda de texto completo. Se mantiene al día solo con la sincronización periódica; los curadores pueden forzarlo con **Reindexar ahora** en [[Preguntar]]. Se puede **reconstruir** siempre desde el grafo.
 
+### Confianza y antigüedad
+Cada hecho del JSON del recall dice su **nivel de confianza** (`trust`), según de dónde vino, de más a menos:
+- **verified**: una sonda lo comprobó ([[Hechos verificables]]);
+- **human**: lo aprobó una persona o lo escribió en la aplicación;
+- **agent**: un agente decidió guardarlo (`origin: "agent"`);
+- **auto**: se capturó de forma automática, o el cliente no lo dijo.
+
+Un token fija lo máximo que pueden declarar sus propuestas (marcar *Para una captura automática* al crearlo lo deja en `auto`), y el `origin` que envía un cliente solo puede bajarlo. Los hechos anteriores a esto no tienen nivel.
+
+Dos ajustes, los dos **desactivados por defecto** en Administración → Recuerdo (recall), cambian el orden:
+- **Pesar los hechos por su origen**: un hecho de un agente pesa *Peso de un hecho escrito por un agente* (0,95) y uno automático *Peso de un hecho capturado automáticamente* (0,85).
+- **Envejecer los hechos según su relación**: un hecho vigente de una relación con vida útil pierde peso poco a poco, hasta el *Peso de un hecho a revisar* al acabar su vida útil, en vez de todo de golpe al final.
+
+Simúlalos con las [[Consultas de referencia]] antes de activarlos.
+
 ## Ingesta y trabajos
 | Ajuste | Por defecto | Rango | Qué hace |
 |---|---|---|---|
