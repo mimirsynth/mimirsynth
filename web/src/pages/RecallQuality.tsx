@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { fmt, get, send } from "../api";
 import { Btn, Check, DataTable, EmptyState, MutationError, Notice, StatCard, StatGrid } from "../ui";
+import ReplayRuns from "./ReplayRuns";
 
 type Counts = { useful: number; irrelevant: number; incorrect: number };
 type Quality = { days: number; recalls: number; rated_recalls: number; ratings: number; by_kind: Record<string, Counts>;
@@ -71,6 +72,7 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
       {canAdmin && rp.data && <Check checked={rp.data.enabled} onChange={(e) => sample.mutate(e.currentTarget.checked)} label={t("Guardar una muestra de consultas para repetirlas")}
         description={t("Guarda las últimas {{max}} consultas reales (con los secretos enmascarados, durante {{days}} días) para repetirlas con otra configuración antes de cambiarla. Llevan los prompts de las personas: actívalo solo si hace falta. Al desmarcarlo se borran. Ahora hay {{n}}.", { max: rp.data.max, days: rp.data.days, n: rp.data.samples })} />}
       <MutationError error={sample.error} />
+      {canAdmin && rp.data?.enabled && <ReplayRuns graph={graph} samples={rp.data.samples} />}
     </Stack>
   );
 }
