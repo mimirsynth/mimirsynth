@@ -31,6 +31,21 @@ If other brains lend their memory to this one ([[Federation]]), recall also quer
 ### The episode text index
 It copies the text of the episodes from FalkorDB to PostgreSQL, chunked, with vectors and full-text search. It is kept up to date only by the periodic synchronisation; curators can force it with **Reindex now** in [[Ask]]. It can always be **rebuilt** from the graph.
 
+### Trust and age
+Every fact in the recall's JSON says its **trust tier** (`trust`), from where it came, highest first:
+- **verified**: a probe checked it ([[Verifiable facts]]);
+- **human**: a person approved it or wrote it in the application;
+- **agent**: an agent chose to store it (`origin: "agent"`);
+- **auto**: captured automatically, or a client that did not say.
+
+A token sets the most its proposals can claim (*For an automatic capture* when it is created makes it `auto`), and the `origin` a client sends can only lower it. Facts from before this have no tier.
+
+Two settings, both **off by default** under Administration → Recall, change the order:
+- **Weigh facts by their origin**: an agent's fact weighs *Weight of a fact written by an agent* (0.95) and an automatic one *Weight of a fact captured automatically* (0.85).
+- **Age facts by their relation**: a current fact of a relation with a shelf life loses weight little by little, down to *Weight of a fact to review* when its shelf life ends, instead of all at once at the end.
+
+Simulate them with the [[Reference queries]] before turning them on.
+
 ## Ingestion and jobs
 | Setting | Default | Range | What it does |
 |---|---|---|---|

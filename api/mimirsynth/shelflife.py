@@ -81,7 +81,7 @@ def forget(brain_id: int) -> None:
         _CACHE.pop(brain_id, None)
 
 
-def mark(brain_id: int, facts: list[dict], amap: dict | None = None) -> list[dict]:
+def mark(brain_id: int, facts: list[dict], amap: dict | None = None, decay: bool | None = None) -> list[dict]:
     """Marks the recall's own current facts that are to review (`stale_since`) and lowers their score. Returns them reordered. A brain
     without shelf lives costs nothing here once they are cached; with them, one query for the confirmations of the facts returned."""
     lives = cached_lives(brain_id)
@@ -101,7 +101,8 @@ def mark(brain_id: int, facts: list[dict], amap: dict | None = None) -> list[dic
                 f["score"] = round(f["score"] * weight, 4)
     if any(f.get("stale_since") for f in own):
         facts = sorted(facts, key=lambda f: -(f.get("score") or 0))
-    return facts
+    from .trust import apply_decay   # gradual, before the shelf life ends, when the decay is on (#298)
+    return apply_decay(facts, lives, conf, amap, decay)
 
 
 def scan(db, brain: Brain, limit: int = 500) -> dict:

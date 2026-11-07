@@ -33,6 +33,7 @@ def main() -> int:
     ap.add_argument("--confidence", type=float)
     ap.add_argument("--source", default="text", choices=["text", "message", "json"])
     ap.add_argument("--description", default="claude-code")
+    ap.add_argument("--origin", default="agent", choices=["agent", "auto"], help="agent: the agent chose to store it; auto: captured automatically")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     url, brain = cfg("url").rstrip("/"), cfg("brain")
@@ -40,7 +41,7 @@ def main() -> int:
     if not (url and brain and token):
         print("falta configuración: url, brain y write_token (o token)", file=sys.stderr)
         return 2
-    payload = {"name": a.title, "body": a.content, "source": a.source, "source_description": a.description}
+    payload = {"name": a.title, "body": a.content, "source": a.source, "source_description": a.description, "origin": a.origin}
     if a.confidence is not None:
         payload["confidence"] = a.confidence
     if a.dry_run:

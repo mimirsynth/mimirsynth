@@ -50,6 +50,7 @@ export default function TokensPanel({ brain, brains }: { brain?: string; brains:
   const [role, setRole] = useState<string | null>("reader");
   const [days, setDays] = useState<string | null>(null);
   const [scopes, setScopes] = useState<string[]>(SCOPES.map((s) => s.value));
+  const [auto, setAuto] = useState(false);
   const [fresh, setFresh] = useState<{ token: string; note?: string; title?: string } | null>(null);
   const [ask, setAsk] = useState<Tok | null>(null);
   const [rotating, setRotating] = useState<Tok | null>(null);
@@ -60,7 +61,7 @@ export default function TokensPanel({ brain, brains }: { brain?: string; brains:
   const daysValue = days ?? (dayOptions.find((o) => o.value === "90") ?? dayOptions[dayOptions.length - 1])?.value ?? null;
   const refresh = () => qc.invalidateQueries({ queryKey: key });
   const create = useMutation({
-    mutationFn: () => send<{ token: string }>("POST", `brains/${slug}/tokens`, { name: name.trim(), role, scopes, days: daysValue === "never" ? null : Number(daysValue) }),
+    mutationFn: () => send<{ token: string }>("POST", `brains/${slug}/tokens`, { name: name.trim(), role, scopes, days: daysValue === "never" ? null : Number(daysValue), max_trust: auto ? "auto" : "agent" }),
     onSuccess: (r) => { setFresh({ token: r.token }); setName(""); refresh(); } });
   const revoke = useMutation({ mutationFn: (t: Tok) => send("DELETE", `brains/${t.brain_slug ?? brain}/tokens/${t.id}`), onSuccess: refresh });
   const rotate = useMutation({
@@ -126,6 +127,8 @@ export default function TokensPanel({ brain, brains }: { brain?: string; brains:
         <Text size="xs" c="dimmed">{t("Alcance:")}</Text>
         {SCOPES.map((s) => <Check key={s.value} label={t(s.label)} description={t(s.help)} checked={scopes.includes(s.value)} onChange={(e) => toggle(s.value, e.currentTarget.checked)} />)}
       </Group>
+      <Check label={t("Para una captura automática")} checked={auto} onChange={(e) => setAuto(e.currentTarget.checked)}
+        description={t("Para un hook que guarda lo que pasa en una sesión sin que nadie lo decida: lo que proponga cuenta siempre como capturado automáticamente, la confianza más baja, aunque diga otra cosa.")} />
       {cap > 0 && <Text size="xs" c="dimmed">{t("En esta instancia un token caduca como mucho a los {{n}} días.", { n: cap })}</Text>}
       <MutationError error={create.error} />
     </Stack>

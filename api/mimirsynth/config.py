@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     health_staleness_max: float = 0.0  # notify when the share of outdated results is above this (#292); 0: never
     health_noise_max: float = 0.0  # notify when the noise (items per vague question) is above this (#292); 0: never
     health_redundancy_max: float = 0.0  # notify when the redundancy is above this (#292); 0: never
+    recall_trust: str = "no"  # weigh facts by where they came from (#298): yes | no
+    recall_trust_agent: float = 0.95  # weight of a fact an agent chose to write (#298)
+    recall_trust_auto: float = 0.85  # weight of a fact captured automatically (#298)
+    recall_decay: str = "no"  # facts of relations with a shelf life lose weight as they age (#298): yes | no
     recall_stale_weight: float = 0.6  # weight in the recall of a fact past its relation's shelf life (#114)
     summary_engine: str = ""  # LLM engine (by name) that rewrites the poor entity summaries in Content quality (#201); empty: the default engine
     answer_engine: str = ""  # LLM engine (by name) that writes the answers of Ask (#126); empty: the default engine

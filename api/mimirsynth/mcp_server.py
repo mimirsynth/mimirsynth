@@ -47,6 +47,7 @@ TOOLS = [
          "source_description": {"type": "string", "maxLength": 255, "description": "De dónde viene (por ejemplo, el agente o la sesión)."},
          "reference_time": {"type": "string", "format": "date-time", "description": "Cuándo ocurrió (ISO 8601); por defecto, ahora."},
          "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que es cierto."},
+         "origin": {"type": "string", "enum": ["agent", "auto"], "description": "agent: decidiste guardarlo tú; auto: lo captura un proceso automático (un hook). Sin indicar cuenta como auto, la confianza más baja."},
          "claims": {"type": "array", "maxItems": 20, "description": "Opcional: lo que afirma, en forma estructurada. Cada afirmación se compara con lo que la memoria ya sabe: si repite un hecho vigente se registra como confirmación en vez de duplicarlo, y con `supersedes` sustituye a un hecho que ya no es cierto.",
                     "items": {"type": "object", "properties": {
                         "subject": {"type": "string", "maxLength": 255, "description": "La entidad de la que se habla, por su nombre."},

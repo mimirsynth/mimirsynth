@@ -69,6 +69,10 @@ Guide: [[Recall and ingestion]]
 | Setting | Key | Default | Range or values | Description |
 |---|---|---|---|---|
 | Weight of a fact to review | `recall_stale_weight` | `0.6` | 0–1 | A current fact past its relation's shelf life weighs this much in the recall (and is marked «not confirmed since …»). 1: the same as the others. |
+| Weigh facts by their origin | `recall_trust` | `no` | `no` (No) / `yes` (Yes) | A fact an agent wrote or that was captured automatically weighs less in the recall than one a person approved or a system verified (weights below). Simulate it first with the reference queries. |
+| Weight of a fact written by an agent | `recall_trust_agent` | `0.95` | 0–1 | How much a fact an agent chose to store weighs in the recall, with «Weigh facts by their origin». 1: the same as a person's. |
+| Weight of a fact captured automatically | `recall_trust_auto` | `0.85` | 0–1 | How much a fact captured automatically (a hook, or a client that does not say its origin) weighs, with «Weigh facts by their origin». |
+| Age facts by their relation | `recall_decay` | `no` | `no` (No) / `yes` (Yes) | A current fact of a relation with a shelf life loses weight little by little as it ages, from 1 when confirmed down to the weight of a fact to review when its shelf life ends, instead of all at once at the end. Simulate it first with the reference queries. |
 | Minimum similarity of a passage | `doc_min_similarity` | `0.66` | 0–1 | Minimum cosine for a document passage to enter the recall. It depends on the embedding model; with nomic-embed-text, 0.66. |
 | Minimum similarity of a fact or a fragment | `recall_min_similarity` | `0.55` | 0–1 | Minimum cosine for a graph fact or an episode fragment to enter the recall; if nothing reaches it, the recall comes back empty instead of filling up with the least distant. A fragment sharing two terms with the query enters with 0.08 less. It depends on the embedding model: calibrate it with the reference queries. 0: no threshold. |
 | Document passages per recall | `doc_passages` | `2` | 0–10 | Maximum number of document passages that accompany the facts in each recall. |

@@ -77,6 +77,7 @@ class TokenIn(BaseModel):
     role: str = "reader"
     scopes: list[str] | None = Field(None, description="recall, documents, propose; empty: all of them")
     days: int | None = Field(None, ge=1, le=3650, description="days until it expires; empty: it never expires")
+    max_trust: str = Field("agent", pattern="^(agent|auto)$", description="the most its proposals can claim (#298): auto for a hook that captures automatically")
 
 
 def _scopes(v: list[str] | None) -> list[str] | None:
@@ -93,10 +94,11 @@ def _max_days(days: int | None) -> None:
         raise HTTPException(400, f"en esta instancia un token caduca como mucho a los {cap} días")
 
 
-def _new_token(db, user_id: int, brain_id: int, name: str, role: str, scopes: list[str] | None, days: int | None) -> tuple[ApiToken, str]:
+def _new_token(db, user_id: int, brain_id: int, name: str, role: str, scopes: list[str] | None, days: int | None,
+               max_trust: str = "agent") -> tuple[ApiToken, str]:
     raw = "mst_" + secrets.token_urlsafe(32)
     t = ApiToken(user_id=user_id, brain_id=brain_id, name=name, role=role, prefix=raw[:10], token_hash=hash_token(raw), scopes=scopes,
-                 expires_at=now() + timedelta(days=days) if days else None)
+                 expires_at=now() + timedelta(days=days) if days else None, max_trust=max_trust)
     db.add(t); db.commit()
     return t, raw
 
@@ -105,7 +107,7 @@ def token_out(t: ApiToken) -> dict:
     """What a list of tokens shows: its scopes, when it expires, and whether a rotation replaced it (it works until its grace ends)."""
     return {"id": t.id, "name": t.name, "role": t.role, "prefix": t.prefix, "created_at": t.created_at, "last_used_at": t.last_used_at,
             "scopes": list(t.scopes) if t.scopes is not None else list(SCOPES), "all_scopes": t.scopes is None,
-            "expires_at": aware(t.expires_at), "expired": token_expired(t), "replaced_by": t.replaced_by}
+            "expires_at": aware(t.expires_at), "expired": token_expired(t), "replaced_by": t.replaced_by, "max_trust": t.max_trust or "agent"}
 
 
 @router.post("/tokens", status_code=201)
@@ -116,8 +118,8 @@ def create_token(body: TokenIn, ctx: BrainCtx = Depends(reader)):
         raise HTTPException(403, "no puedes crear un token con más rol que el tuyo")
     scopes = _scopes(body.scopes)
     _max_days(body.days)
-    t, raw = _new_token(ctx.db, ctx.user.id, ctx.brain.id, body.name, body.role, scopes, body.days)
-    audit(ctx.db, ctx.user, "token.create", ctx.brain, name=body.name, role=body.role, scopes=scopes, days=body.days)
+    t, raw = _new_token(ctx.db, ctx.user.id, ctx.brain.id, body.name, body.role, scopes, body.days, body.max_trust)
+    audit(ctx.db, ctx.user, "token.create", ctx.brain, name=body.name, role=body.role, scopes=scopes, days=body.days, max_trust=body.max_trust)
     return {**token_out(t), "token": raw}  # el token solo se muestra ahora
 
 
@@ -148,7 +150,7 @@ def rotate_token(token_id: int, body: RotateIn, ctx: BrainCtx = Depends(reader))
     cap = appsettings.get("token_max_days")
     if cap and (days is None or days > cap):  # the instance's maximum applies to the new one
         days = cap
-    new, raw = _new_token(ctx.db, t.user_id, t.brain_id, t.name, t.role, t.scopes, days)
+    new, raw = _new_token(ctx.db, t.user_id, t.brain_id, t.name, t.role, t.scopes, days, t.max_trust or "agent")
     grace_end = now() + timedelta(hours=body.grace_hours)
     t.replaced_by = new.id
     t.expires_at = min(aware(t.expires_at), grace_end) if t.expires_at else grace_end

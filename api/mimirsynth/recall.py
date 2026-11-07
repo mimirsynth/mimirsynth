@@ -423,7 +423,7 @@ def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n
 
 def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunks: int = 4, max_chars: int = 6000,
            embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
-           min_sim: float | None = None, min_similarity: float | None = None) -> dict:
+           min_sim: float | None = None, min_similarity: float | None = None, trust: bool | None = None, decay: bool | None = None) -> dict:
     """`min_sim`: the documents' threshold, to simulate one without changing the setting. `min_similarity`: the threshold of the facts
     and the episode fragments (#281); empty, the instance's `recall_min_similarity`; 0, none."""
     t0 = time.time()
@@ -460,9 +460,11 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         facts = fuse(flists, lambda f: (f["fact"] or "").strip().lower(), weights)
         chunks = fuse(clists, lambda c: (c.get("origin"), c["id"]), weights)[:n_chunks]
     from . import shelflife
-    facts = shelflife.mark(brain_id, facts, amap)  # past its relation's shelf life: weighs less and says so (#114)
+    facts = shelflife.mark(brain_id, facts, amap, **({"decay": decay} if decay is not None else {}))  # past its relation's shelf life: weighs less and says so (#114); decay (#298)
     from . import verify
     facts = verify.mark(brain_id, facts)  # checked against a live system: its state and when (#293)
+    from . import trust as trust_mod
+    facts = trust_mod.mark(brain_id, facts, trust)  # where it came from: its tier, and its weight when that is on (#298)
     cur = [f for f in facts if f["status"] != "invalidated"][:n_facts]
     old = [f for f in facts if f["status"] == "invalidated"][: max(2, n_facts // 3)]
     t2 = time.time()

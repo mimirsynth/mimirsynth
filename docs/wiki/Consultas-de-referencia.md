@@ -53,6 +53,8 @@ Se conservan las **20 últimas ejecuciones** de cada brain.
 ## Simular
 Escribe uno o varios umbrales de similitud en **Umbrales a simular** (por ejemplo `0,68 0,70 0,72`, hasta 6), elige en **Umbral** si son los de los pasajes o los de los hechos y fragmentos, y pulsa **Simular**: se hace una ejecución por umbral, **sin cambiar el ajuste**. Compáralas y, cuando hayas elegido, pon el valor de *Similitud mínima de un pasaje* o de *Similitud mínima de un hecho o un fragmento* en Administración → Recuerdo (recall) ([[Recuerdo e ingesta]]). Para el umbral de los hechos, incluye entre las consultas algunas vagas (como «vale, sigue») que no esperen nada y apunta como **no debe traer** lo que traen hoy.
 
+Por el API, una ejecución también puede simular el peso por origen y el envejecimiento por relación, activados o no, sin cambiarlos: `POST /api/brains/{slug}/refqueries/runs` con `{"params": {"trust": true, "decay": true}}` ([[Recuerdo e ingesta]]).
+
 ## Cómo se comparan las ejecuciones
 - Cada ejecución se compara con la anterior hecha con los **ajustes en vigor**; las simulaciones nunca sirven de base.
 - Solo cuenta lo que está en **las dos ejecuciones**: las mismas consultas y los mismos textos. Añadir, borrar o editar una consulta nunca aparece como un empeoramiento.

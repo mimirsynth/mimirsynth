@@ -35,6 +35,9 @@ Un colaborador queda en estado `pending`; un curador, `approved` e ingerida al m
 
 No guardes contraseñas ni tokens: guarda **dónde** están (por ejemplo, en qué gestor de contraseñas). Lo que tenga forma de credencial se enmascara antes de guardarse o, si el brain lo bloquea, la propuesta se rechaza con un 422 que dice qué tipo de secreto es (ver «Secretos» en [ARCHITECTURE.md](ARCHITECTURE.md)). Por MCP, `remember` aplica lo mismo. La respuesta dice qué tipos se enmascararon o se marcaron (`secrets_notice` en la respuesta HTTP, una frase más en el resultado de `remember`), nunca el valor.
 
+### Di de dónde viene
+Una propuesta puede decir `origin`: `agent` cuando un agente decidió guardarla, `auto` cuando la capturó un proceso automático. Sin él, cuenta como `auto`, la confianza más baja. Un token creado para una captura automática la deja en `auto` diga lo que diga el cliente. Con *Pesar los hechos por su origen* activado, los hechos pesan según él en el recall (ver «Confianza y antigüedad» en Recuerdo e ingesta de la wiki).
+
 ### Afirmaciones estructuradas: di qué sustituye
 El texto libre se extrae por su cuenta, así que una repetición con otras palabras acaba siendo un segundo hecho vigente y un valor nuevo puede dejar vigente el anterior. Junto a `body`, una propuesta (REST o `remember`) puede llevar hasta 20 **afirmaciones** (`claims`): `subject`, `relation` (como la nombra la ontología del brain), `value` y, opcionalmente, `valid_from` y `supersedes` (el uuid del hecho vigente al que sustituye, como lo dan `recall` o `facts_about`).
 ```json

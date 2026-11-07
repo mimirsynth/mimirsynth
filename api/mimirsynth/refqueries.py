@@ -58,6 +58,8 @@ class Params(BaseModel):
     docs: int | None = Field(None, ge=0, le=6)
     facts: int | None = Field(None, ge=0, le=30)
     chunks: int | None = Field(None, ge=0, le=15)
+    trust: bool | None = None  # simulate the trust weighting on or off (#298)
+    decay: bool | None = None  # simulate the decay by relation on or off (#298)
 
 
 class RunIn(BaseModel):
@@ -332,7 +334,8 @@ def _job_run(ctx: "jobs.JobCtx", p: dict) -> dict:
             try:
                 out = recall(bid, graph, q["query"], params.get("facts", 8), params.get("chunks", 4), 6000, n_docs=params.get("docs"),
                              lang=lang, min_sim=params.get("min_sim"),
-                             min_similarity=params.get("min_similarity"), **({"sources": src} if src else {}))
+                             min_similarity=params.get("min_similarity"), trust=params.get("trust"), decay=params.get("decay"),
+                             **({"sources": src} if src else {}))
                 results.append(evaluate(q, out))
             except Exception as e:  # noqa: BLE001  (una consulta que falla no tumba la ejecución)
                 log.warning("consulta de referencia %s falló: %s", q["id"], e)
