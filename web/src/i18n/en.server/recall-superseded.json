@@ -1,0 +1,5 @@
+{
+ "> Puede estar superado: «{{fact}}» dejó de ser cierto el {{date}}.": "> May be superseded: «{{fact}}» stopped being true on {{date}}.",
+ "Ahora: «{{now}}».": "Now: «{{now}}».",
+ "[sustituye a «{{old}}»]": "[replaces «{{old}}»]"
+}

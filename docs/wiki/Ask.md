@@ -21,7 +21,7 @@ Here you try **recall**: the same thing an agent does when it queries the memory
 
 ## What it returns
 - **Facts:** the most similar to the question, current and invalidated (invalidated ones struck through with their date range), only above the *Minimum similarity of a fact or a fragment* (which also applies to episode fragments). Each shows its similarity. If nothing reaches it, Ask says so.
-- **Episode fragments:** pieces of the episodes' **original text**, found by meaning and by words. They recover details extraction may have lost.
+- **Episode fragments:** pieces of the episodes' **original text**, found by meaning and by words. They recover details extraction may have lost. A fragment of an episode that stated something no longer true is marked **May be superseded**, with what stopped being true and what is true now, and goes last; the fact that replaced it appears among the facts with «replaces …».
 - **Document passages:** the passages of indexed documents that recall brought, each with its title and similarity. There are at most as many as the brain's *Document passages per recall* (2 by default), only above the *Minimum similarity of a passage*, and the same text found in two documents is shown once (see [[Recall and ingestion]]).
 - **Injected context:** the final block of text, with a copy button. It is what an agent would receive: current facts, the evolution of the facts of the mentioned entities and the cited document passages.
 - **Timings:** total milliseconds and broken down (embedding, facts, fragments).
