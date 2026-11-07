@@ -2,7 +2,7 @@ import { applyInstanceDefault, setLanguage, type Lang } from "./i18n";
 import { T } from "./i18n";
 import { useTranslation } from "react-i18next";
 import { AppShell, Burger, Center, Group, Stack, Text, Title } from "@mantine/core";
-import { Avatar, Btn, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState } from "./ui";
+import { Avatar, Btn, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState, ErrorBoundary } from "./ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { lazy, Suspense, useEffect, useState } from "react";
@@ -154,6 +154,7 @@ export default function App() {
         </div>
       </AppShell.Navbar>
       <AppShell.Main>
+        <ErrorBoundary resetKey={`${loc.pathname}|${brain}`}>
         <Suspense fallback={<EmptyState>{t("Cargando…")}</EmptyState>}>
         <Routes>
           <Route path="/admin" element={<Admin me={me.data} brain={brain} setBrain={setBrain} />} />
@@ -182,6 +183,7 @@ export default function App() {
             : <Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}
         </Routes>
         </Suspense>
+        </ErrorBoundary>
       </AppShell.Main>
     </AppShell>
   );

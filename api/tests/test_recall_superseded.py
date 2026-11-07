@@ -42,6 +42,7 @@ def test_marking_moves_the_fragment_last_and_puts_the_replacement_first(monkeypa
     assert chunks[1]["superseded"] == [{"uuid": "old", "fact": OLD["fact"], "invalid_at": OLD["invalid_at"], "replaced_by": [{"uuid": "new", "fact": NEW["fact"]}]}]
     assert [f["uuid"] for f in cur] == ["new", "db"] and cur[0]["replaces"] == OLD["fact"]
     assert [f["uuid"] for f in old] == ["old"]                                              # what the fragment states and is no longer true
+    assert cur[0]["similarity"] is None and old[0]["similarity"] is None                     # they join by their link, not by closeness: no number
     ctx = R.build_context(cur + old, chunks, 6000)
     assert "- La wiki corre en vega, 10.0.0.9 (desde 2026-06-01) [sustituye a «La wiki corre en altair, 10.0.0.5»]" in ctx
     assert "> Puede estar superado: «La wiki corre en altair, 10.0.0.5» dejó de ser cierto el 2026-06-01. Ahora: «La wiki corre en vega, 10.0.0.9»." in ctx

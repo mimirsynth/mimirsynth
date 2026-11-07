@@ -71,7 +71,7 @@ curl -s -X POST "$URL/api/brains/my-brain/recall" \
   -d '{"query": "where does the production database run now?"}'
 ```
 The response includes:
-- `facts`: the most similar facts (current and invalidated, with dates), each with its `similarity` to the question (cosine, 0–1).
+- `facts`: the most similar facts (current and invalidated, with dates), each with its `similarity` to the question (cosine, 0–1). A fact that joins because it replaces one no longer true, or because a fragment or passage in the result states it and it is no longer true, comes by that link and not by closeness: its `similarity` is `null`.
 - `chunks`: fragments of the episodes' original text, each with its `similarity`. A fragment of an episode whose facts stopped being true carries `superseded` (each fact no longer true, when it stopped, and the current facts in `replaced_by`) and goes last; in `context` it reads «> May be superseded: … Now: …». A current fact that replaces one carries `replaces`.
 - `documents`: the cited document passages, if any, each with `source_updated_at` (when its page was last updated). A passage that states a fact no longer true carries `superseded`, as fragments do, and goes last.
 - `context`: **the block of text ready to inject into the prompt**.
