@@ -172,6 +172,18 @@ def _origin(x: dict, lang: str) -> str:
     return tr(" · de «{{origin}}»", lang, origin=x["origin"]) if x.get("origin") else ""
 
 
+def _superseded_note(c: dict, lang: str) -> str:
+    """Under a fragment whose episode stated something no longer true: what stopped being true, when, and what is true now (#282)."""
+    lines = []
+    for s in c.get("superseded") or []:
+        line = tr("> Puede estar superado: «{{fact}}» dejó de ser cierto el {{date}}.", lang, fact=s["fact"], date=_fmt_date(s["invalid_at"]))
+        now = [r["fact"] for r in s.get("replaced_by") or []]
+        if now:
+            line += " " + tr("Ahora: «{{now}}».", lang, now="» · «".join(now))
+        lines.append(line)
+    return "\n" + "\n".join(lines) if lines else ""
+
+
 def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passages: list[dict] | None = None, lang: str = "es") -> str:
     """El contexto para el agente. Los encabezados van en el idioma de quien consulta; los hechos y los textos, tal como se guardaron."""
     parts, size = [], 0
@@ -191,6 +203,8 @@ def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passage
             line = (tr("- {{fact}} (desde {{date}}; sin confirmar desde {{since}})", lang, fact=f["fact"], date=_fmt_date(f["valid_at"] or f["created_at"]),
                        since=_fmt_date(f["stale_since"])) if f.get("stale_since")
                     else tr("- {{fact}} (desde {{date}})", lang, fact=f["fact"], date=_fmt_date(f["valid_at"] or f["created_at"])))
+            if f.get("replaces"):
+                line += " " + tr("[sustituye a «{{old}}»]", lang, old=f["replaces"])
             if not add(line + _origin(f, lang)):
                 break
     if old:
@@ -201,7 +215,7 @@ def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passage
     if chunks:
         add(tr("## Fragmentos de episodios", lang))
         for c in chunks:
-            if not add(f"### [{_fmt_date(c['valid_at'])}] {c['name']}{_origin(c, lang)}\n{c['text'].strip()}"):
+            if not add(f"### [{_fmt_date(c['valid_at'])}] {c['name']}{_origin(c, lang)}\n{c['text'].strip()}{_superseded_note(c, lang)}"):
                 break
     block = docs_block(passages or [], lang)
     if block and parts and size + len(block) > max_chars:  # la sección documental tiene su reserva: se recortan antes los fragmentos
@@ -229,6 +243,106 @@ def search_chunks(brain_id: int, qvec: list[float], query: str, n: int, min_sim:
     hits = index.search(brain_id, qvec, query, k=n * 2 if min_sim > 0 else n, recency=recency_weight(query))
     terms = query_terms(query)
     return [c for c in hits if relevant(c.get("text") or "", c.get("similarity"), terms, min_sim)][:n]
+
+
+SUPERSEDING_MAX = 3      # current facts a recall pulls in because they replace something it returned (#282)
+SUPERSEDED_OLD_MAX = 3   # facts no longer true it adds because a returned fragment still states them
+_SAME_TIME = 60          # seconds: Graphiti gives the fact it invalidates, as `invalid_at`, the `valid_at` of the fact that contradicts it
+_CANDIDATES = 300        # current facts of the entities involved that are looked at to find the replacement
+
+
+def _close_in_time(a, b) -> bool:
+    x, y = parse_ts(a), parse_ts(b)
+    return bool(x and y and abs((x - y).total_seconds()) <= _SAME_TIME)
+
+
+def replacements(old: dict, candidates: list[dict]) -> list[dict]:
+    """The current facts that replace `old`, best first. When a newer fact contradicts one, Graphiti invalidates the old one with the
+    newer one's `valid_at` as its `invalid_at`, and the two share an entity. So a current fact that shares an entity with `old` and
+    starts when it stopped is its replacement; failing that, one of the same relation that shares an entity and starts after."""
+    ends = {old.get("source_uuid"), old.get("target_uuid")} - {None}
+    found = []
+    for c in candidates:
+        if c.get("uuid") == old.get("uuid") or c.get("status") != "current" or not ends & {c.get("source_uuid"), c.get("target_uuid")}:
+            continue
+        if _close_in_time(c.get("valid_at"), old.get("invalid_at")):
+            found.append((0, c))
+        elif c.get("name") == old.get("name"):
+            start, end = parse_ts(c.get("valid_at")), parse_ts(old.get("invalid_at"))
+            if start and end and start >= end:
+                found.append((1, c))
+    return [c for _, c in sorted(found, key=lambda x: x[0])]
+
+
+def _facts(res, amap: dict | None) -> list[dict]:
+    out = rows(res)
+    for f in out:
+        f["name"] = resolve(f["name"], amap)
+        f["status"] = fact_status(f["valid_at"], f["invalid_at"], f["expired_at"])
+    return out
+
+
+def superseded(graph_name: str, episodes: set[str], gone: list[dict], amap: dict | None = None) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
+    """What stopped being true behind a recall (#282): the facts no longer true that were learned from `episodes` (by episode), and
+    the current facts that replace those and the ones in `gone` (by the uuid of the fact they replace). Two queries to the graph."""
+    g = graph(graph_name)
+    from_eps = [f for f in _facts(g.query(
+        "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NOT NULL AND any(e IN r.episodes WHERE e IN $eps) "
+        f"RETURN {FACT_RETURN} LIMIT 100", {"eps": sorted(episodes)}), amap) if f["status"] == "invalidated"] if episodes else []
+    olds = {f["uuid"]: f for f in [*from_eps, *gone] if f.get("uuid")}
+    if not olds:
+        return {}, {}
+    ents = sorted({u for f in olds.values() for u in (f.get("source_uuid"), f.get("target_uuid")) if u})
+    cands = _facts(g.query("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE (a.uuid IN $u OR b.uuid IN $u) AND r.invalid_at IS NULL "
+                           f"AND r.expired_at IS NULL RETURN {FACT_RETURN} LIMIT {_CANDIDATES}", {"u": ents}), amap)
+    by_episode: dict[str, list[dict]] = {}
+    for f in from_eps:
+        for e in f.get("episodes") or []:
+            if e in episodes:
+                by_episode.setdefault(e, []).append(f)
+    return by_episode, {u: replacements(f, cands)[:2] for u, f in olds.items()}
+
+
+def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs: dict, amap: dict | None) -> tuple[list[dict], list[dict], list[dict]]:
+    """A fragment of an episode whose facts stopped being true says so, with what is true now, and goes after the others; the facts
+    that replace them, and those that replace a fact no longer true in the result, join the current facts first (#282). A fact that
+    replaces another is fetched by its link to it, not by its similarity, so the threshold does not apply to it. `graphs`: the graph
+    of each origin (None: the brain's own)."""
+    cur, old = list(cur), list(old)
+    have = {(f.get("origin"), f.get("uuid")) for f in cur + old if f.get("uuid")}
+    added_now = added_old = 0
+    for origin, gname in graphs.items():
+        mine = [c for c in chunks if c.get("origin") == origin and c.get("episode_uuid")]
+        gone = [f for f in old if f.get("origin") == origin]
+        if not mine and not gone:
+            continue
+        try:
+            by_episode, repl = superseded(gname, {c["episode_uuid"] for c in mine}, gone, amap if origin is None else None)
+        except Exception as e:  # noqa: BLE001  (without it the recall is what it was before)
+            log.warning("recall: no se pudo comprobar lo superado en %s: %s", gname, e)
+            continue
+        tag = {"origin": origin} if origin else {}
+        olds = [*gone]
+        for c in mine:
+            facts = by_episode.get(c["episode_uuid"], [])
+            if facts:
+                c["superseded"] = [{"uuid": f["uuid"], "fact": f["fact"], "invalid_at": f["invalid_at"],
+                                    "replaced_by": [{"uuid": r["uuid"], "fact": r["fact"]} for r in repl.get(f["uuid"], [])]} for f in facts[:3]]
+            for f in facts:
+                olds.append(f)
+                if (origin, f["uuid"]) not in have and added_old < SUPERSEDED_OLD_MAX:
+                    old.append({**f, **tag}); have.add((origin, f["uuid"])); added_old += 1
+        front = []
+        for f in olds:
+            for r in repl.get(f.get("uuid"), []):
+                known = next((x for x in cur if x.get("origin") == origin and x.get("uuid") == r["uuid"]), None)
+                if known is not None:
+                    known.setdefault("replaces", f["fact"])
+                elif (origin, r["uuid"]) not in have and added_now < SUPERSEDING_MAX:
+                    front.append({**r, **tag, "replaces": f["fact"]}); have.add((origin, r["uuid"])); added_now += 1
+        cur = front + cur
+    chunks = sorted(chunks, key=lambda c: bool(c.get("superseded")))   # stable: the order of the rest does not change
+    return chunks, cur, old
 
 
 def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n_chunks: int, min_sim: float) -> tuple[list[dict], list[dict]]:
@@ -283,6 +397,10 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     facts = shelflife.mark(brain_id, facts, amap)  # past its relation's shelf life: weighs less and says so (#114)
     cur = [f for f in facts if f["status"] != "invalidated"][:n_facts]
     old = [f for f in facts if f["status"] == "invalidated"][: max(2, n_facts // 3)]
+    ts = time.time()
+    graphs = {None: graph_name, **{s.slug: s.graph_name for s in sources if s.scope in ("graph", "both")}}
+    chunks, cur, old = mark_superseded(chunks, cur, old, graphs, amap)
+    t_superseded = time.time() - ts
     t2 = time.time()
     t3 = time.time()
     passages, docs_state = [], "off"
@@ -303,5 +421,5 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         "min_similarity": graph_min,
         **({"federated": fed} if sources else {}),
         "context": build_context(keep, chunks, max_chars, passages, lang),
-        "ms": {"embed": round((t1 - t0) * 1000), "facts": round((t2 - t1) * 1000), "chunks": round((t3 - t2) * 1000), "docs_wait": round((t4 - t3) * 1000), "total": round((t4 - t0) * 1000)},
+        "ms": {"embed": round((t1 - t0) * 1000), "facts": round((t2 - t1) * 1000), "chunks": round((t3 - t2) * 1000), "docs_wait": round((t4 - t3) * 1000), "superseded": round(t_superseded * 1000), "total": round((t4 - t0) * 1000)},
     }

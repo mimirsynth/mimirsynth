@@ -72,7 +72,7 @@ curl -s -X POST "$URL/api/brains/my-brain/recall" \
 ```
 The response includes:
 - `facts`: the most similar facts (current and invalidated, with dates), each with its `similarity` to the question (cosine, 0–1).
-- `chunks`: fragments of the episodes' original text, each with its `similarity`.
+- `chunks`: fragments of the episodes' original text, each with its `similarity`. A fragment of an episode whose facts stopped being true carries `superseded` (each fact no longer true, when it stopped, and the current facts in `replaced_by`) and goes last; in `context` it reads «> May be superseded: … Now: …». A current fact that replaces one carries `replaces`.
 - `documents`: the cited document passages, if any.
 - `context`: **the block of text ready to inject into the prompt**.
 - `federated`: only when other brains lend to this one, the state of each of them (`ok`, `error`, `off`).

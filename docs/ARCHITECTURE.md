@@ -80,7 +80,7 @@ Neither the audit log, the logs nor the API store or return the detected value: 
 A query combines, without calling an LLM:
 
 1. **Facts** (current and historical) from the graph, by embedding similarity, only those above a minimum similarity (`recall_min_similarity`): the graph always returns the nearest facts, also when none is about the question, so a vague question gets nothing rather than noise.
-2. **Fragments of the original episode text**, by vectors and full text, with the same threshold (a fragment that shares two terms with the question enters with a little less, as document passages do).
+2. **Fragments of the original episode text**, by vectors and full text, with the same threshold (a fragment that shares two terms with the question enters with a little less, as document passages do). A fragment of an episode whose facts stopped being true is marked «may be superseded», with what stopped being true and what is true now, and goes after the others; the current fact that replaced it joins the facts even if the question did not bring it. The replacement is found from how Graphiti invalidates: the old fact's `invalid_at` is the `valid_at` of the newer fact that contradicts it, and the two share an entity (failing that, a current fact of the same relation, sharing an entity, that starts later). The same is done for the facts no longer true that the question brings.
 3. **Document passages**, with a budget and a maximum time.
 4. Reciprocal rank fusion (RRF) with a recency weight, and a block with the evolution of the facts of the queried entities.
 

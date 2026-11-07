@@ -80,7 +80,7 @@ Ni la auditoría, ni los logs, ni la API guardan o devuelven el valor detectado:
 Una consulta combina, sin llamar a un LLM:
 
 1. **Hechos** vigentes e históricos del grafo, por similitud de embedding, solo los que pasan una similitud mínima (`recall_min_similarity`): el grafo siempre devuelve los hechos más cercanos, también cuando ninguno trata de la pregunta, así que una pregunta vaga no recibe nada en vez de ruido.
-2. **Fragmentos del texto original** de los episodios, por vectores y texto completo, con el mismo umbral (un fragmento que comparte dos términos con la pregunta entra con algo menos, como los pasajes de documentos).
+2. **Fragmentos del texto original** de los episodios, por vectores y texto completo, con el mismo umbral (un fragmento que comparte dos términos con la pregunta entra con algo menos, como los pasajes de documentos). Un fragmento de un episodio cuyos hechos dejaron de ser ciertos sale marcado «puede estar superado», con lo que dejó de ser cierto y lo que es cierto ahora, y va detrás de los demás; el hecho vigente que lo sustituyó se suma a los hechos aunque la pregunta no lo trajera. El sustituto se encuentra por cómo invalida Graphiti: el `invalid_at` del hecho viejo es el `valid_at` del hecho nuevo que lo contradice, y los dos comparten una entidad (a falta de eso, un hecho vigente de la misma relación, que comparta entidad y empiece después). Lo mismo se hace con los hechos que dejaron de ser ciertos que trae la pregunta.
 3. **Pasajes de documentos**, con presupuesto y tiempo máximo.
 4. Fusión por rango recíproco (RRF) con peso por recencia, y un bloque con la evolución de los hechos de las entidades consultadas.
 
