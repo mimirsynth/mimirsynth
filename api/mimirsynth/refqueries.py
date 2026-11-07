@@ -54,6 +54,7 @@ class ImportIn(BaseModel):
 class Params(BaseModel):
     """Lo que se simula. Vacío = los ajustes en vigor."""
     min_sim: float | None = Field(None, ge=0, le=1)
+    min_similarity: float | None = Field(None, ge=0, le=1)  # the facts' and fragments' threshold (#281)
     docs: int | None = Field(None, ge=0, le=6)
     facts: int | None = Field(None, ge=0, le=30)
     chunks: int | None = Field(None, ge=0, le=15)
@@ -62,6 +63,7 @@ class Params(BaseModel):
 class RunIn(BaseModel):
     params: Params = Field(default_factory=Params)
     sweep: list[float] = Field(default_factory=list, max_length=6)  # varios umbrales: una ejecución por cada uno
+    sweep_of: str = Field("min_sim", pattern="^(min_sim|min_similarity)$")  # which threshold: the passages' or the facts' and fragments'
 
 
 def _q_out(q: RefQuery) -> dict:
@@ -182,7 +184,7 @@ def import_queries(body: ImportIn, ctx: BrainCtx = Depends(curator)):
 def start_run(body: RunIn, ctx: BrainCtx = Depends(curator)):
     if not _count(ctx):
         raise HTTPException(409, "el brain no tiene consultas de referencia")
-    sets = [{**body.params.model_dump(exclude_none=True), "min_sim": s} for s in sorted(set(body.sweep))] or [body.params.model_dump(exclude_none=True)]
+    sets = [{**body.params.model_dump(exclude_none=True), body.sweep_of: s} for s in sorted(set(body.sweep))] or [body.params.model_dump(exclude_none=True)]
     runs = [submit_run(ctx.brain.id, p, "manual", ctx.user.id) for p in sets]
     audit(ctx.db, ctx.user, "refquery.run", ctx.brain, runs=runs, params=sets)
     return {"runs": runs}
@@ -329,7 +331,8 @@ def _job_run(ctx: "jobs.JobCtx", p: dict) -> dict:
             ctx.progress(n - 1, len(queries), q["query"][:80])
             try:
                 out = recall(bid, graph, q["query"], params.get("facts", 8), params.get("chunks", 4), 6000, n_docs=params.get("docs"),
-                             lang=lang, min_sim=params.get("min_sim"), **({"sources": src} if src else {}))
+                             lang=lang, min_sim=params.get("min_sim"),
+                             min_similarity=params.get("min_similarity"), **({"sources": src} if src else {}))
                 results.append(evaluate(q, out))
             except Exception as e:  # noqa: BLE001  (una consulta que falla no tumba la ejecución)
                 log.warning("consulta de referencia %s falló: %s", q["id"], e)

@@ -51,7 +51,7 @@ Los textos pasan por el detector de secretos del brain, así que guardar un hech
 Se conservan las **20 últimas ejecuciones** de cada brain.
 
 ## Simular
-Escribe uno o varios umbrales de similitud de los pasajes en **Umbrales a simular** (por ejemplo `0,68 0,70 0,72`, hasta 6) y pulsa **Simular**: se hace una ejecución por umbral, **sin cambiar el ajuste**. Compáralas y, cuando hayas elegido, pon el valor de *Similitud mínima de un pasaje* en Administración → Recuerdo (recall) ([[Recuerdo e ingesta]]).
+Escribe uno o varios umbrales de similitud en **Umbrales a simular** (por ejemplo `0,68 0,70 0,72`, hasta 6), elige en **Umbral** si son los de los pasajes o los de los hechos y fragmentos, y pulsa **Simular**: se hace una ejecución por umbral, **sin cambiar el ajuste**. Compáralas y, cuando hayas elegido, pon el valor de *Similitud mínima de un pasaje* o de *Similitud mínima de un hecho o un fragmento* en Administración → Recuerdo (recall) ([[Recuerdo e ingesta]]). Para el umbral de los hechos, incluye entre las consultas algunas vagas (como «vale, sigue») que no esperen nada y apunta como **no debe traer** lo que traen hoy.
 
 ## Cómo se comparan las ejecuciones
 - Cada ejecución se compara con la anterior hecha con los **ajustes en vigor**; las simulaciones nunca sirven de base.

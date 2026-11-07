@@ -70,6 +70,7 @@ Guide: [[Recall and ingestion]]
 |---|---|---|---|---|
 | Weight of a fact to review | `recall_stale_weight` | `0.6` | 0–1 | A current fact past its relation's shelf life weighs this much in the recall (and is marked «not confirmed since …»). 1: the same as the others. |
 | Minimum similarity of a passage | `doc_min_similarity` | `0.66` | 0–1 | Minimum cosine for a document passage to enter the recall. It depends on the embedding model; with nomic-embed-text, 0.66. |
+| Minimum similarity of a fact or a fragment | `recall_min_similarity` | `0.55` | 0–1 | Minimum cosine for a graph fact or an episode fragment to enter the recall; if nothing reaches it, the recall comes back empty instead of filling up with the least distant. A fragment sharing two terms with the query enters with 0.08 less. It depends on the embedding model: calibrate it with the reference queries. 0: no threshold. |
 | Document passages per recall | `doc_passages` | `2` | 0–10 | Maximum number of document passages that accompany the facts in each recall. |
 | Engine for «Answer» | `answer_engine` | — | text | Name of the LLM engine that writes the cited answers of Ask. The most capable one is best. Empty: the default LLM engine. |
 | Answers per person and hour | `answer_per_hour` | `30` | 0–1000 | How many written answers each person may ask for in each brain per hour. Each one is a call to the engine. 0: no limit. |

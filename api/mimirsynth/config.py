@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     doc_text_max_mb: int = 100  # texto extraído máximo por documento
     doc_min_similarity: float = 0.66  # coseno mínimo para que un pasaje entre en el recall (calibrado con nomic-embed-text; depende del modelo de embeddings)
     doc_passages: int = 2  # pasajes documentales máximos en el recall
+    recall_min_similarity: float = 0.55  # cosine a graph fact or an episode fragment needs to enter the recall (#281); 0: no threshold
     recall_stale_weight: float = 0.6  # weight in the recall of a fact past its relation's shelf life (#114)
     summary_engine: str = ""  # LLM engine (by name) that rewrites the poor entity summaries in Content quality (#201); empty: the default engine
     answer_engine: str = ""  # LLM engine (by name) that writes the answers of Ask (#126); empty: the default engine

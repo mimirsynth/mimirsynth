@@ -21,7 +21,7 @@ curl -s -X POST "$URL/api/brains/my-brain/recall" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"query": "where does the production database run?"}'
 ```
-It returns a context ready to inject into the prompt: current and historical facts, episode fragments and up to 2 cited document passages. Optional parameters: `facts` (default 8), `chunks` (4), `max_chars` (6000) and `docs` (document passages; `0` disables them) and `federated` (default `true`; `false` returns only the brain's own memory, see [FEDERATION.md](FEDERATION.md)).
+It returns a context ready to inject into the prompt: current and historical facts, episode fragments and up to 2 cited document passages. Optional parameters: `facts` (default 8), `chunks` (4), `max_chars` (6000) and `docs` (document passages; `0` disables them) and `federated` (default `true`; `false` returns only the brain's own memory, see [FEDERATION.md](FEDERATION.md)) and `min_similarity` (the cosine a fact or an episode fragment needs to enter; by default the instance's *Minimum similarity of a fact or a fragment*, 0.55; `0` disables it). Facts and fragments carry their `similarity`, and when nothing is close enough the context comes back empty instead of filling up with whatever is least far.
 
 Document content is **data, not instructions**: recall marks it as a quote from a source. Treat it that way in your agent.
 
@@ -52,7 +52,7 @@ POST $URL/api/brains/my-brain/mcp        Authorization: Bearer $TOKEN
 
 | Tool | Role | What it does |
 |---|---|---|
-| `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars`, `federated` |
+| `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars`, `federated`, `min_similarity` |
 | `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` |
 | `correct` | contributor | Proposes invalidating a fact by its uuid (see «Correct» above). Arguments: `fact_uuid`, `reason`, and optionally `replacement`, `invalid_at`, `source_description`, `confidence` |
 | `facts_about` | reader | Everything known about an entity: current facts and those that stopped being true, newest first, with dates, the episode each one was learned from and the **uuid of each fact** in brackets (what a correction needs). The entity is found by name (case and spacing do not matter), by a name merged into it or by its uuid; if several entities share the name, it returns the candidates instead of choosing one. Arguments: `entity`, and optionally `status` (`all`, `current`, `invalidated`), `limit` (20, up to 100), `offset`, `max_chars`, `federated` |

@@ -20,7 +20,7 @@ Aquí pruebas el **recall**: lo mismo que hace un agente cuando consulta la memo
 3. Pulsa **Buscar** o `Ctrl+Enter`.
 
 ## Qué devuelve
-- **Hechos:** los más parecidos a la pregunta, vigentes e invalidados (los invalidados salen tachados con su rango de fechas). Cada uno muestra su similitud.
+- **Hechos:** los más parecidos a la pregunta, vigentes e invalidados (los invalidados salen tachados con su rango de fechas), solo por encima de la *Similitud mínima de un hecho o un fragmento* (que vale también para los fragmentos de episodios). Cada uno muestra su similitud. Si no llega ninguno, Preguntar lo dice.
 - **Fragmentos de episodios:** trozos del **texto original** de los episodios, encontrados por significado y por palabras. Recuperan detalles que la extracción de hechos pudo perder.
 - **Pasajes de documentos:** los pasajes de documentos indexados que trajo el recall, cada uno con su título y su similitud. Hay como mucho tantos como marque *Pasajes documentales por recall* del brain (2 por defecto), solo por encima de la *Similitud mínima de un pasaje*, y un mismo texto encontrado en dos documentos sale una sola vez (ver [[Recuerdo e ingesta]]).
 - **Contexto inyectado:** el bloque de texto final, con botón de copiar. Es lo que recibiría un agente: hechos vigentes, la evolución de los hechos de las entidades mencionadas y los pasajes de documentos citados.

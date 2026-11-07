@@ -18,7 +18,8 @@ type Run = { id: number; status: string; reason: string; params: Record<string, 
 
 const KIND: Record<string, string> = { any: T("cualquiera"), fact: T("hecho"), chunk: T("fragmento"), doc: T("documento") };
 const DOCS = [{ value: "any", label: T("Da igual") }, { value: "yes", label: T("Debe haber pasajes de documentos") }, { value: "no", label: T("No debe haber pasajes de documentos") }];
-const PARAM: Record<string, string> = { min_sim: T("umbral"), docs: T("pasajes"), facts: T("hechos"), chunks: T("fragmentos") };
+const PARAM: Record<string, string> = { min_sim: T("umbral"), min_similarity: T("umbral de hechos y fragmentos"), docs: T("pasajes"), facts: T("hechos"), chunks: T("fragmentos") };
+const SWEEP_OF = [{ value: "min_sim", label: T("De los pasajes") }, { value: "min_similarity", label: T("De los hechos y fragmentos") }];
 const REASON: Record<string, string> = { "embedding.before": T("antes del cambio de modelo"), "embedding.switched": T("tras el cambio de modelo") };
 const empty: RefQuery = { query: "", expect: [], avoid: [], docs: null, note: "" };
 
@@ -88,11 +89,12 @@ export default function RefQueries({ graph }: { graph: string }) {
   const [edit, setEdit] = useState<RefQuery | null>(null);
   const [del, setDel] = useState<RefQuery | null>(null);
   const [sweep, setSweep] = useState("");
+  const [sweepOf, setSweepOf] = useState("min_sim");
   const [open, setOpen] = useState<number | null>(null);
   const detail = useQuery({ queryKey: ["refqueries", graph, "run", open], enabled: open !== null, queryFn: () => get<Run>(`brains/${graph}/refqueries/runs/${open}`) });
   const refresh = () => qc.invalidateQueries({ queryKey: ["refqueries", graph] });
   const values = sweep.split(/[\s;]+/).map((x) => Number(x.replace(",", "."))).filter((x) => !Number.isNaN(x) && x > 0 && x <= 1);
-  const run = useMutation({ mutationFn: (sw: number[]) => send("POST", `brains/${graph}/refqueries/runs`, { sweep: sw }), onSuccess: refresh });
+  const run = useMutation({ mutationFn: (sw: number[]) => send("POST", `brains/${graph}/refqueries/runs`, { sweep: sw, sweep_of: sweepOf }), onSuccess: refresh });
   const remove = useMutation({ mutationFn: (q: RefQuery) => send("DELETE", `brains/${graph}/refqueries/${q.id}`), onSuccess: refresh });
   const imp = useMutation({ mutationFn: async (f: File) => { const data = JSON.parse(await f.text()); return send<{ added: number; skipped: number }>("POST", `brains/${graph}/refqueries/import`, { items: Array.isArray(data) ? data : data.items }); },
     onSuccess: refresh });
@@ -109,6 +111,7 @@ export default function RefQueries({ graph }: { graph: string }) {
       <Group gap="xs" align="flex-end">
         <Btn kind="primary" icon="play" disabled={!items.length} loading={run.isPending && !run.variables?.length} onClick={() => run.mutate([])}>{t("Ejecutar")}</Btn>
         <TextField label={t("Umbrales a simular")} placeholder="0,68 0,70 0,72" w={200} value={sweep} onChange={(e) => setSweep(e.currentTarget.value)} />
+        <SelectField label={t("Umbral")} w={220} data={SWEEP_OF.map((d) => ({ ...d, label: t(d.label) }))} value={sweepOf} onChange={(v) => v && setSweepOf(v)} allowDeselect={false} />
         <Btn icon="search" disabled={!items.length || !values.length} loading={run.isPending && !!run.variables?.length} onClick={() => run.mutate(values)}>{t("Simular")}</Btn>
         <Btn icon="plus" onClick={() => setEdit(empty)}>{t("Nueva consulta")}</Btn>
         <FilePicker label={t("Importar")} accept=".json,application/json" loading={imp.isPending} onFiles={(fl) => imp.mutate(fl[0])} />

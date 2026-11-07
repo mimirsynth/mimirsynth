@@ -163,7 +163,7 @@ def answer(body: AnswerIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx 
         raise HTTPException(429, "el brain ha agotado su presupuesto de IA de este mes: las respuestas redactadas esperan al mes que viene")
     try:
         out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
-                     lang=lang, **federated_kwargs(ctx, body))
+                     lang=lang, min_similarity=body.min_similarity, **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
     from . import ratings

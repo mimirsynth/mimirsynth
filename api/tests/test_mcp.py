@@ -55,14 +55,14 @@ def test_mcp_auth_and_isolation(client):  # noqa: F811
 def test_mcp_recall_tool(client, monkeypatch):  # noqa: F811
     tok = _token(client, "mcp4", "reader")
     seen = {}
-    def fake(brain_id, graph, query, facts, chunks, max_chars, n_docs=None, lang="es"):
-        seen.update(graph=graph, query=query, facts=facts, docs=n_docs)
+    def fake(brain_id, graph, query, facts, chunks, max_chars, n_docs=None, lang="es", min_similarity=None):
+        seen.update(graph=graph, query=query, facts=facts, docs=n_docs, min_similarity=min_similarity)
         return {"context": "## Hechos\n- Nextcloud corre en Notus", "facts": [], "chunks": []}
     monkeypatch.setattr(mcp_server, "recall", fake)
     c = TestClient(app)
-    r = rpc(c, "mcp4", "tools/call", {"name": "recall", "arguments": {"query": "dónde corre Nextcloud", "facts": 3, "docs": 0}}, token=tok).json()["result"]
+    r = rpc(c, "mcp4", "tools/call", {"name": "recall", "arguments": {"query": "dónde corre Nextcloud", "facts": 3, "docs": 0, "min_similarity": 0.6}}, token=tok).json()["result"]
     assert r["isError"] is False and "Notus" in r["content"][0]["text"]
-    assert seen == {"graph": "mcp4", "query": "dónde corre Nextcloud", "facts": 3, "docs": 0}  # el brain sale del token, no de los argumentos
+    assert seen == {"graph": "mcp4", "query": "dónde corre Nextcloud", "facts": 3, "docs": 0, "min_similarity": 0.6}  # el brain sale del token, no de los argumentos
     bad = rpc(c, "mcp4", "tools/call", {"name": "recall", "arguments": {"query": ""}}, token=tok).json()["result"]
     assert bad["isError"] is True and "query" in bad["content"][0]["text"]  # error para el modelo, no del protocolo
     monkeypatch.setattr(mcp_server, "recall", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("FalkorDB caído")))

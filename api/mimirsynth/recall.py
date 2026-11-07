@@ -69,6 +69,7 @@ def search_facts(graph_name: str, qvec: list[float], limit: int, amap: dict | No
         f["name"] = resolve(f["name"], amap)
         f["status"] = fact_status(f["valid_at"], f["invalid_at"], f["expired_at"])
         f["score"] = round(float(f["score"]), 4)
+        f["similarity"] = round(2 * float(f["score"]) - 1, 4)   # the cosine: `score` is (1 + cosine) / 2, the scale the graph returns
         out.append(f)
     return out
 
@@ -86,19 +87,32 @@ def _cut(text: str, n: int) -> str:
     return text[: cut + 1 if cut > n // 2 else n].rstrip() + " […]"
 
 
+WORDS_LEEWAY = 0.08   # a text sharing two or more terms with the query enters with this much less similarity
+
+
+def query_terms(query: str) -> list[str]:
+    return [t for t in index._tsquery(query).split(" | ") if t]
+
+
+def relevant(text: str, sim: float | None, terms: list[str], min_sim: float) -> bool:
+    """Similarity at or above the threshold, or a little less when the text also shares two or more terms with the query. A text whose
+    similarity is unknown passes: the threshold only judges what it can measure."""
+    if min_sim <= 0 or sim is None or sim >= min_sim:
+        return True
+    return sim >= min_sim - WORDS_LEEWAY and sum(1 for t in terms if re.search(rf"\b{re.escape(t)}", text.lower())) >= 2
+
+
 def pick_passages(hits: list[dict], query: str, n: int, min_sim: float) -> list[dict]:
-    """Se queda con pasajes realmente relevantes: similitud ≥ umbral, o algo menos si además coinciden ≥2 términos de la consulta.
-    Mejor no devolver nada que meter ruido en cada prompt. Un pasaje con el mismo texto que otro ya elegido (el mismo contenido en dos
-    documentos, o en el brain y en un origen prestado) se salta: con un presupuesto de 2, un duplicado se comería la mitad."""
-    terms = [t for t in index._tsquery(query).split(" | ") if t]
+    """Se queda con pasajes realmente relevantes (ver `relevant`): mejor no devolver nada que meter ruido en cada prompt. Un pasaje con
+    el mismo texto que otro ya elegido (el mismo contenido en dos documentos, o en el brain y en un origen prestado) se salta: con un
+    presupuesto de 2, un duplicado se comería la mitad."""
+    terms = query_terms(query)
     out, seen = [], set()
     for h in hits:
         key = " ".join(h["text"].lower().split())
         if key in seen:
             continue
-        sim = h.get("similarity", 0.0)
-        overlap = sum(1 for t in terms if re.search(rf"\b{re.escape(t)}", h["text"].lower()))
-        if sim >= min_sim or (sim >= min_sim - 0.08 and overlap >= 2):
+        if relevant(h["text"], h.get("similarity", 0.0), terms, min_sim):
             out.append({**h, "text": _cut(h["text"], DOC_CHARS)}); seen.add(key)
         if len(out) >= n:
             break
@@ -196,20 +210,44 @@ def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passage
     return "\n".join(parts + ([block] if block else []))
 
 
-def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n_chunks: int) -> tuple[list[dict], list[dict]]:
+def _similarity(f: dict) -> float | None:
+    """A fact's cosine with the query; derived from its `score` when it does not carry it."""
+    if f.get("similarity") is not None:
+        return f["similarity"]
+    return round(2 * f["score"] - 1, 4) if isinstance(f.get("score"), (int, float)) else None
+
+
+def keep_facts(facts: list[dict], min_sim: float) -> list[dict]:
+    """The facts close enough to the query (#281): the graph always returns the nearest ones, also when none is about it."""
+    return facts if min_sim <= 0 else [f for f in facts if (s := _similarity(f)) is None or s >= min_sim]
+
+
+def search_chunks(brain_id: int, qvec: list[float], query: str, n: int, min_sim: float) -> list[dict]:
+    """The best `n` episode fragments that pass the threshold (#281). It asks for twice as many, since some may not pass."""
+    if n <= 0:
+        return []
+    hits = index.search(brain_id, qvec, query, k=n * 2 if min_sim > 0 else n, recency=recency_weight(query))
+    terms = query_terms(query)
+    return [c for c in hits if relevant(c.get("text") or "", c.get("similarity"), terms, min_sim)][:n]
+
+
+def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n_chunks: int, min_sim: float) -> tuple[list[dict], list[dict]]:
     """Hechos y fragmentos de un brain que presta su grafo. Solo contenido: sin embeddings. Los alias son los de ese brain."""
     from .store import _factory
     with _factory()() as db:
         amap = alias_map(db, src.brain_id)
-    facts = [{**f, "origin": src.slug} for f in search_facts(src.graph_name, qvec, n_facts * 3, amap)]
-    chunks = [{**c, "origin": src.slug} for c in index.search(src.brain_id, qvec, query, k=n_chunks, recency=recency_weight(query))] if n_chunks > 0 else []
+    facts = [{**f, "origin": src.slug} for f in keep_facts(search_facts(src.graph_name, qvec, n_facts * 3, amap), min_sim)]
+    chunks = [{**c, "origin": src.slug} for c in search_chunks(src.brain_id, qvec, query, n_chunks, min_sim)]
     return facts, chunks
 
 
 def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunks: int = 4, max_chars: int = 6000,
            embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
-           min_sim: float | None = None) -> dict:
+           min_sim: float | None = None, min_similarity: float | None = None) -> dict:
+    """`min_sim`: the documents' threshold, to simulate one without changing the setting. `min_similarity`: the threshold of the facts
+    and the episode fragments (#281); empty, the instance's `recall_min_similarity`; 0, none."""
     t0 = time.time()
+    graph_min = float(appsettings.get("recall_min_similarity") if min_similarity is None else min_similarity)
     from .usage import scope
     with scope(brain_id, "recall"):
         qvec = (embedder or get_embedder()).embed([query])[0]
@@ -222,9 +260,9 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     with _factory()() as db:
         amap = alias_map(db, brain_id)
     tf = time.time()
-    facts = search_facts(graph_name, qvec, n_facts * 3, amap)
+    facts = keep_facts(search_facts(graph_name, qvec, n_facts * 3, amap), graph_min)
     tc = time.time()
-    chunks = index.search(brain_id, qvec, query, k=n_chunks, recency=recency_weight(query))
+    chunks = search_chunks(brain_id, qvec, query, n_chunks, graph_min)
     t_chunks = time.time() - tc
     fed = []   # estado de cada origen prestado
     flists, clists = [facts], [chunks]
@@ -232,7 +270,7 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         if src.scope not in ("graph", "both"):
             continue
         try:
-            f, c = _federated_graph(src, qvec, query, n_facts, n_chunks)
+            f, c = _federated_graph(src, qvec, query, n_facts, n_chunks, graph_min)
             flists.append(f); clists.append(c); fed.append({"slug": src.slug, "name": src.name, "scope": src.scope, "state": "ok"})
         except Exception as e:  # noqa: BLE001  (un origen caído no tumba la consulta)
             log.warning("federación: grafo de %s no disponible: %s", src.slug, e)
@@ -262,6 +300,7 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     metrics.recall_done(brain_id, {"embed": t1 - t0, "facts": tc - tf, "chunks": t_chunks, "total": t4 - t0}, docs_state)
     return {
         "query": query, "facts": keep, "chunks": chunks, "documents": passages, "documents_state": docs_state, "index": index.enabled(),
+        "min_similarity": graph_min,
         **({"federated": fed} if sources else {}),
         "context": build_context(keep, chunks, max_chars, passages, lang),
         "ms": {"embed": round((t1 - t0) * 1000), "facts": round((t2 - t1) * 1000), "chunks": round((t3 - t2) * 1000), "docs_wait": round((t4 - t3) * 1000), "total": round((t4 - t0) * 1000)},
