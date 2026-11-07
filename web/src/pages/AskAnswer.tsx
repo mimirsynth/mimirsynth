@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Link } from "react-router-dom";
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { ApiError, langHeaders } from "../api";
 import { translateServer } from "../i18n";
 import { Btn, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
@@ -40,9 +40,11 @@ async function streamAnswer(graph: string, body: unknown, on: (ev: Record<string
 
 /** Ask → Answer (issue 126): a written answer from the recall, every claim cited to its evidence. */
 /** `trigger`: each increment writes an answer to `query` (Ask owns the button and Ctrl/⌘+Enter, in the same place as «Buscar»).
+ *  `answered`: the last increment acted on, kept by Ask so it outlives this view. Coming back to «Responder» mounts this again with a count
+ *  already answered, which must not write by itself; a press made just before it mounted (Ctrl/⌘+Enter right after choosing the mode) must.
  *  `onBusy` tells Ask when it is writing. An answer to an earlier question says so. */
-export default function AskAnswer({ graph, query, facts, chunks, trigger, onBusy }:
-  { graph: string; query: string; facts: number; chunks: number; trigger: number; onBusy?: (busy: boolean) => void }) {
+export default function AskAnswer({ graph, query, facts, chunks, trigger, answered, onBusy }:
+  { graph: string; query: string; facts: number; chunks: number; trigger: number; answered: MutableRefObject<number>; onBusy?: (busy: boolean) => void }) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<Source[] | null>(null);
   const [text, setText] = useState("");
@@ -52,9 +54,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, onBusy
   const [asked, setAsked] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => { onBusy?.(busy); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
-  // Only a new press answers: coming back to «Responder» mounts this again with the last count, which must not write by itself.
-  const seen = useRef(trigger);
-  useEffect(() => { if (trigger !== seen.current) { seen.current = trigger; if (query.trim()) void go(); } }, [trigger]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (trigger !== answered.current) { answered.current = trigger; if (query.trim()) void go(); } }, [trigger]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { abort.current?.abort(); onBusy?.(false); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const label = (ref: string) => {
     const n = ref.slice(1);
@@ -90,12 +90,13 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, onBusy
   const cited = new Set(done?.citations ?? []);
   return (
     <Stack gap="xs">
-      {(busy || asked !== null) && <Group gap="xs">
+      {/* The live region is there from the start and only its text changes, so each answer is announced. */}
+      <Group gap="xs">
         {busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Parar")}</Btn>}
-        {asked !== null && <Text size="sm" role="status">{t("Respuesta a «{{q}}»", { q: asked })}</Text>}
+        <Text size="sm" role="status">{asked !== null ? t("Respuesta a «{{q}}»", { q: asked }) : ""}</Text>
         {asked !== null && asked !== query.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}
         {done?.ms !== undefined && <Text size="xs" c="dimmed">{t("{{ms}} ms", { ms: done.ms })}</Text>}
-      </Group>}
+      </Group>
       <Text size="xs" c="dimmed">{t("Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.")}</Text>
       <MutationError error={error} />
       {sources && (text ? <Notice tone="info" title={t("Respuesta")}><Text size="sm" className="ms-prose">{parts}</Text></Notice>
