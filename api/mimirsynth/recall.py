@@ -189,8 +189,10 @@ def _superseded_note(c: dict, lang: str) -> str:
     return "\n" + "\n".join(lines) if lines else ""
 
 
-def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passages: list[dict] | None = None, lang: str = "es") -> str:
-    """El contexto para el agente. Los encabezados van en el idioma de quien consulta; los hechos y los textos, tal como se guardaron."""
+def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passages: list[dict] | None = None, lang: str = "es",
+                  cards: list[dict] | None = None) -> str:
+    """El contexto para el agente. Los encabezados van en el idioma de quien consulta; los hechos y los textos, tal como se guardaron.
+    The current-state cards (#294), when there are any, go first."""
     parts, size = [], 0
 
     def add(line: str) -> bool:
@@ -200,6 +202,11 @@ def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passage
         parts.append(line); size += len(line) + 1
         return True
 
+    if cards:
+        from .statecard import context_lines
+        for line in context_lines(cards, lang):
+            if not add(line):
+                break
     cur = [f for f in facts if f["status"] != "invalidated"]
     old = [f for f in facts if f["status"] == "invalidated"]
     if cur:
@@ -423,7 +430,8 @@ def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n
 
 def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunks: int = 4, max_chars: int = 6000,
            embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
-           min_sim: float | None = None, min_similarity: float | None = None, trust: bool | None = None, decay: bool | None = None) -> dict:
+           min_sim: float | None = None, min_similarity: float | None = None, trust: bool | None = None, decay: bool | None = None,
+           state_card: bool | None = None) -> dict:
     """`min_sim`: the documents' threshold, to simulate one without changing the setting. `min_similarity`: the threshold of the facts
     and the episode fragments (#281); empty, the instance's `recall_min_similarity`; 0, none."""
     t0 = time.time()
@@ -486,12 +494,18 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     t_superseded = time.time() - ts
     t4 = time.time()
     keep = cur + old
+    from . import statecard
+    try:
+        cards = statecard.for_recall(brain_id, graph(graph_name), query, cur, amap, state_card)   # the present first (#294)
+    except Exception:  # noqa: BLE001  (a card that fails leaves the recall as it was)
+        log.warning("no se pudo leer el estado actual para el recall", exc_info=True)
+        cards = []
     from . import metrics
     metrics.recall_done(brain_id, {"embed": t1 - t0, "facts": tc - tf, "chunks": t_chunks, "total": t4 - t0}, docs_state)
     return {
         "query": query, "facts": keep, "chunks": chunks, "documents": passages, "documents_state": docs_state, "index": index.enabled(),
         "min_similarity": graph_min,
         **({"federated": fed} if sources else {}),
-        "context": build_context(keep, chunks, max_chars, passages, lang),
+        "context": build_context(keep, chunks, max_chars, passages, lang, cards), **({"state": cards} if cards else {}),
         "ms": {"embed": round((t1 - t0) * 1000), "facts": round((t2 - t1) * 1000), "chunks": round((t3 - t2) * 1000), "docs_wait": round(t_docs_wait * 1000), "superseded": round(t_superseded * 1000), "total": round((t4 - t0) * 1000)},
     }

@@ -69,6 +69,7 @@ Guide: [[Recall and ingestion]]
 | Setting | Key | Default | Range or values | Description |
 |---|---|---|---|---|
 | Weight of a fact to review | `recall_stale_weight` | `0.6` | 0–1 | A current fact past its relation's shelf life weighs this much in the recall (and is marked «not confirmed since …»). 1: the same as the others. |
+| Answer first with the current state | `recall_state_card` | `no` | `no` (No) / `yes` (Yes) | For a question about the present, the recall starts with the current state of the entities it is about (the current value of each relation) before any other fact or fragment. A question about the past does not get it. Simulate it first with the reference queries. |
 | Weigh facts by their origin | `recall_trust` | `no` | `no` (No) / `yes` (Yes) | A fact an agent wrote or that was captured automatically weighs less in the recall than one a person approved or a system verified (weights below). Simulate it first with the reference queries. |
 | Weight of a fact written by an agent | `recall_trust_agent` | `0.95` | 0–1 | How much a fact an agent chose to store weighs in the recall, with «Weigh facts by their origin». 1: the same as a person's. |
 | Weight of a fact captured automatically | `recall_trust_auto` | `0.85` | 0–1 | How much a fact captured automatically (a hook, or a client that does not say its origin) weighs, with «Weigh facts by their origin». |

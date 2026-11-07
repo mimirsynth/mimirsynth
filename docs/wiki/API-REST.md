@@ -24,7 +24,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | | `POST /index/sync` | curador |
 | **Resumen** | `GET /overview` · `GET /overview/activity` | lector |
 | **Episodios** | `GET /episodes/sources` · `GET /episodes` · `GET /episodes/{uuid}` | lector |
-| **Hechos** | `GET /facts/relations` · `GET /facts` · `GET /timeline` · `GET /entities/{uuid}` · `GET /entities` | lector |
+| **Hechos** | `GET /facts/relations` · `GET /facts` · `GET /timeline` · `GET /entities/{uuid}` · `GET /entities` · `GET /entities/{uuid}/state` | lector |
 | | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` · `PUT/DELETE /facts/{uuid}/probe` | curador |
 | **Grafo y consulta** | `GET /graph` · `POST /query` | lector |
 | **Propuestas** | `POST /proposals/corrections` · `GET/POST /proposals` · `GET /proposals/counts` · `GET /proposals/{pid}` | colaborador |
