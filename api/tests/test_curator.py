@@ -135,7 +135,7 @@ def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa:
     from mimirsynth.store import _factory
     assert client.post("/api/brains", json={"slug": "cu4", "name": "CU4", "graph_name": repeated}).status_code == 201
     s = client.get("/api/brains/cu4/curator/settings").json()
-    assert s["passes"] == {"contradictions": True, "redundancy": False}                      # off until an administrator turns it on
+    assert s["passes"] == {"contradictions": True, "redundancy": False, "obsolescence": False}                      # off until an administrator turns it on
     pv = client.post("/api/brains/cu4/curator/preview?pass=redundancy").json()
     assert pv["count"] == 1                                                                     # PostgreSQL 14 / 16 is a change, not a repeat
     f = pv["findings"][0]
@@ -148,3 +148,30 @@ def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa:
         p = db.get(Proposal, run["proposals"][0])
         assert p.category == "curator.redundancy" and p.name.startswith("Curador: repite") and sorted(c["supersedes"] for c in p.claims) == ["r1", "r3"]
     assert client.post("/api/brains/cu4/curator/preview?pass=redundancy").json()["count"] == 0     # pending: not proposed twice
+
+
+@needs_falkor
+def test_the_obsolescence_pass_proposes_facts_past_their_shelf_life(client, repeated, monkeypatch):  # noqa: F811
+    from mimirsynth import ingest
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "cu5", "name": "CU5", "graph_name": repeated}).status_code == 201
+    assert client.post("/api/brains/cu5/curator/preview?pass=obsolescence").json()["count"] == 0          # no shelf life: nothing
+    client.post("/api/brains/cu5/vocab/relations", json={"name": "RunsOn", "description": "Dónde corre algo", "shelf_life_days": 365})
+    pv = client.post("/api/brains/cu5/curator/preview?pass=obsolescence").json()
+    olds = sorted(f["replace"][0]["uuid"] for f in pv["findings"])
+    assert olds == ["r1", "r3", "r4", "r5"] and all(f["keep"] is None for f in pv["findings"])           # the 2026 ones are within it
+    assert pv["findings"][0]["why"].startswith("not confirmed since")
+    client.put("/api/brains/cu5/curator/settings", json={"enabled": True, "batch": 10, "passes": {"contradictions": False, "obsolescence": True}})
+    client.post("/api/brains/cu5/curator/run")
+    run = client.get("/api/brains/cu5/curator/runs").json()["items"][0]
+    assert run["findings"] == {"obsolescence": 4} and len(run["proposals"]) == 4
+    with _factory()() as db:
+        p = db.get(Proposal, run["proposals"][0])
+        assert p.category == "curator.obsolescence" and p.name.startswith("Curador: sin confirmar") and p.claims[0]["verdict"] == "replaces"
+    monkeypatch.setattr(ingest, "enabled", lambda: False)                                    # no LLM: it still applies
+    client.post(f"/api/brains/cu5/proposals/{p.id}/approve", json={})
+    ingest.ingest_proposal(p.id)
+    gone = p.claims[0]["supersedes"]
+    from mimirsynth import db as dbm
+    assert dbm.client().select_graph(repeated).query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.invalid_at", {"u": gone}).result_set[0][0]
