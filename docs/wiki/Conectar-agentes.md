@@ -73,7 +73,7 @@ curl -s -X POST "$URL/api/brains/mi-brain/recall" \
 La respuesta incluye:
 - `facts`: los hechos más parecidos (vigentes e invalidados, con fechas), cada uno con su `similarity` con la pregunta (coseno, 0–1).
 - `chunks`: fragmentos del texto original de los episodios, cada uno con su `similarity`. Un fragmento de un episodio cuyos hechos dejaron de ser ciertos lleva `superseded` (cada hecho que ya no es cierto, cuándo dejó de serlo y los vigentes en `replaced_by`) y va al final; en `context` se lee «> Puede estar superado: … Ahora: …». Un hecho vigente que sustituye a otro lleva `replaces`.
-- `documents`: los pasajes de documentos citados, si los hay.
+- `documents`: los pasajes de documentos citados, si los hay, cada uno con `source_updated_at` (cuándo se actualizó su página por última vez). Un pasaje que dice un hecho que ya no es cierto lleva `superseded`, como los fragmentos, y va al final.
 - `context`: **el bloque de texto listo para inyectar en el prompt**.
 - `federated`: solo cuando otros brains prestan a este, el estado de cada uno (`ok`, `error`, `off`).
 - `min_similarity`: el umbral aplicado a hechos y fragmentos.
