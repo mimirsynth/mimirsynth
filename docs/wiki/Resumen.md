@@ -22,6 +22,9 @@ Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita
 ## Lo que ha cambiado
 Al lado, para las mismas personas, **Lo que ha cambiado** dice qué se ha movido en el brain en las **últimas 24 horas** o en los **últimos 7 días** (a elegir): hechos nuevos, hechos invalidados, documentos añadidos y propuestas recibidas y decididas. Cada línea abre su página. Son los mismos recuentos del resumen por correo de [[Mi cuenta]], que se los envía a quien los quiera sin abrir la aplicación. Las líneas a cero no salen.
 
+## Salud de la memoria
+Debajo, para las mismas personas, **Salud de la memoria** muestra la última medición diaria del brain: cobertura de las consultas de referencia, resultados con algo desactualizado, ruido, redundancia, contradicciones abiertas y hechos a revisar, cada una con el valor de una semana antes. **Medir ahora** vuelve a medir. Qué significa cada cifra está en [[Salud de la memoria]].
+
 ## Primeros pasos (instancia nueva)
 Un administrador de la instancia que abre la página de inicio cuando **todavía no existe ningún brain** ve en su lugar **Primeros pasos**. El botón **Crea tu primer brain** abre el diálogo para crearlo en Administración ([[Administrar brains y miembros]]), y una breve lista enlaza con cada pantalla:
 1. **Crea un brain:** un dominio de conocimiento aislado, con su grafo, su ontología, sus miembros y sus tokens.

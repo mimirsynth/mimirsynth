@@ -40,6 +40,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Facts to review** | `GET /review/stale` · `POST /review/stale/{uuid}/confirm` | curator |
 | **Contradictions** | `GET /conflicts` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{did}` · `POST /conflicts/resolve` | curator |
 | **Reference queries** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{qid}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{rid}` | curator |
+| **Memory health** | `GET /health` · `POST /health/run` | curator |
 | **Federation** | `GET /grants` | reader |
 | | `POST /grants` · `PATCH/DELETE /grants/{gid}` | administrator |
 | **Jobs** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | reader |

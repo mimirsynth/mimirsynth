@@ -51,6 +51,7 @@ scrape_configs:
 | `mimirsynth_notify_deliveries` | `status` | Notification deliveries `pending` or `failed`: if they grow, nobody is getting the alerts |
 | `mimirsynth_brain_entities`, `mimirsynth_brain_episodes` | `brain` | Size of each brain's graph |
 | `mimirsynth_brain_facts` | `brain`, `state` | Facts `current` or `invalidated` |
+| `mimirsynth_health_coverage`, `mimirsynth_health_staleness`, `mimirsynth_health_noise`, `mimirsynth_health_redundancy`, `mimirsynth_health_contradictions`, `mimirsynth_health_stale_facts` | `brain` | The last daily [[Memory health]] measurement of each brain (shares from 0 to 1, noise in items, the last two in facts). A number that was not measured (no reference queries, no functional relation…), or a brain not measured in the last two days, has no value |
 | `mimirsynth_info` | `version` | Always 1; the label is the running version |
 
 The size of the graphs is counted in the background **at most every 5 minutes**, so a large graph never slows a scrape; right after a start it is missing until the first count ends. Whether PostgreSQL and FalkorDB answer is not here: that is what `/api/health` is for.
@@ -78,6 +79,9 @@ groups:
       - alert: MimirSynthDeliveriesFailing
         expr: mimirsynth_notify_deliveries{status="failed"} > 0
         annotations: {summary: "Some notifications could not be delivered"}
+      - alert: MimirSynthCoverageDropped
+        expr: mimirsynth_health_coverage < 0.8
+        annotations: {summary: "The recall of {{ $labels.brain }} finds less than 80 % of what its reference queries expect"}
 ```
 
 ## Grafana

@@ -51,6 +51,7 @@ scrape_configs:
 | `mimirsynth_notify_deliveries` | `status` | Envíos de notificaciones `pending` (pendientes) o `failed` (fallidos): si crecen, nadie está recibiendo los avisos |
 | `mimirsynth_brain_entities`, `mimirsynth_brain_episodes` | `brain` | Tamaño del grafo de cada brain |
 | `mimirsynth_brain_facts` | `brain`, `state` | Hechos `current` (vigentes) o `invalidated` (invalidados) |
+| `mimirsynth_health_coverage`, `mimirsynth_health_staleness`, `mimirsynth_health_noise`, `mimirsynth_health_redundancy`, `mimirsynth_health_contradictions`, `mimirsynth_health_stale_facts` | `brain` | La última medición diaria de la [[Salud de la memoria]] de cada brain (proporciones de 0 a 1, el ruido en elementos, las dos últimas en hechos). Una cifra que no se midió (sin consultas de referencia, sin relaciones funcionales…), o un brain sin medir en los dos últimos días, no tiene valor |
 | `mimirsynth_info` | `version` | Siempre 1; la etiqueta es la versión en marcha |
 
 El tamaño de los grafos se cuenta en segundo plano **como mucho cada 5 minutos**, para que un grafo grande nunca retrase una consulta; justo después de arrancar falta hasta que termina el primer recuento. Si PostgreSQL y FalkorDB responden no está aquí: para eso está `/api/health`.
@@ -78,6 +79,9 @@ groups:
       - alert: MimirSynthDeliveriesFailing
         expr: mimirsynth_notify_deliveries{status="failed"} > 0
         annotations: {summary: "Hay notificaciones que no se han podido enviar"}
+      - alert: MimirSynthCoverageDropped
+        expr: mimirsynth_health_coverage < 0.8
+        annotations: {summary: "El recall de {{ $labels.brain }} encuentra menos del 80 % de lo que esperan sus consultas de referencia"}
 ```
 
 ## Grafana

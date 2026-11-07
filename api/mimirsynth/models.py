@@ -597,6 +597,24 @@ class FactConfirmation(Base):
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
+class HealthRun(Base):
+    """One measurement of a brain's memory health (#292): at most one per brain and day, so a restart never measures twice. `metrics`
+    holds the numbers (see health.py); a run measured again the same day replaces them."""
+    __tablename__ = "health_runs"
+    __table_args__ = (UniqueConstraint("brain_id", "day", name="uq_health_runs_day"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)  # UTC
+    status: Mapped[str] = mapped_column(String(12), default="queued")  # queued | running | done | error
+    reason: Mapped[str] = mapped_column(String(16), default="daily")  # daily | manual
+    metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class RecallLog(Base):
     """What a recall returned (#110), so that each item can be rated with its `rid` for a short time. The query is kept as a hash and
     a length; its text only if the brain chooses to, and only for a short time."""

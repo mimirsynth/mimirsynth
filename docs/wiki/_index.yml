@@ -27,6 +27,7 @@ sidebar:
   - Cypher query
   - Proposals
   - Content quality
+  - Memory health
   - Vocabulary
   - Contradictions
   - Jobs
@@ -109,6 +110,7 @@ home:
       es: 'El contenido:'
     pages:
     - Content quality
+    - Memory health
     - Merge duplicates
     - Contradictions
     - Type corrector

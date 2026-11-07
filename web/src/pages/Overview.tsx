@@ -1,11 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { fmt, get, Overview as O } from "../api";
+import { fmt, fmtDay, fmtNum, get, send, Overview as O } from "../api";
 import { AreaChart, BarList, Btn, Donut, Page, Panel, Pill, StatCard, DataState, PageHeader, FillArea, HIDROMIEL, PIZARRA, StatGrid, ColGrid, EmptyState, Section, Segments } from "../ui";
-import { T } from "../i18n";
+import { T, locale } from "../i18n";
 import type { Attention } from "./Quality";
 
 type Activity = {
@@ -72,6 +72,60 @@ function WhatChanged({ graph }: { graph: string }) {
   );
 }
 
+type HealthMetrics = {
+  coverage: number | null; expected?: number; found?: number; reference_queries?: number;
+  staleness: number | null; stale_results?: number; noise: number | null; noise_queries?: number;
+  redundancy: number | null; redundant_facts?: number; current_facts?: number; redundancy_sampled?: boolean;
+  contradictions: number | null; stale_facts: number | null; failed: string[]; probes_paused?: boolean;
+};
+type HealthRun = { id: number; day: string; status: string; metrics: HealthMetrics | null; finished_at: string | null };
+type Health = { items: HealthRun[]; latest: HealthRun | null; measuring: boolean };
+
+/** The parts of a measurement that can fail on their own, as the sentence «Could not measure: …» names them. */
+const HEALTH_PARTS: Record<string, string> = {
+  probes: T("las preguntas de prueba"), redundancy: T("la redundancia"), contradictions: T("las contradicciones"), stale_facts: T("los hechos a revisar"),
+};
+
+const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 }));
+
+/** Memory health (issue 292): the last daily measurement, each number with the one of a week before. Only for those who curate. */
+function MemoryHealth({ graph }: { graph: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["health", graph], queryFn: () => get<Health>(`brains/${graph}/health`, { days: 30 }), staleTime: 60000,
+    refetchInterval: (query) => (query.state.data?.measuring ? 5000 : false) });
+  const run = useMutation({ mutationFn: () => send("POST", `brains/${graph}/health/run`), onSettled: () => qc.invalidateQueries({ queryKey: ["health", graph] }) });
+  const last = q.data?.latest;
+  const m = last?.metrics;
+  const before = last && q.data?.items.filter((r) => r.status === "done" && r.metrics && Date.parse(r.day) <= Date.parse(last.day) - 7 * 86400000).slice(-1)[0]?.metrics;
+  const ago = (v: string) => t("hace 7 días: {{value}}", { value: v });
+  const measuring = q.data?.measuring || run.isPending;
+  return (
+    <Section title={t("Salud de la memoria")} hint={t("Se mide sola una vez al día. Las cifras se explican en la wiki, en «Salud de la memoria».")}>
+      <Stack gap="sm">
+        <Group justify="space-between" gap="xs">
+          <Text size="sm" c="dimmed">{last ? t("Medida el {{day}}.", { day: fmtDay(last.day) }) : q.data ? t("Todavía no hay ninguna medición.") : ""}</Text>
+          <Btn size="row" icon="refresh" loading={measuring} disabled={measuring} onClick={() => run.mutate()}>{measuring ? t("Midiendo…") : t("Medir ahora")}</Btn>
+        </Group>
+        {!q.data ? <DataState query={q} /> : m && (
+          <StatGrid>
+            <StatCard label={t("Cobertura")} value={pct(m.coverage)}
+              hint={m.coverage === null ? t("sin consultas de referencia con textos esperados") : before ? ago(pct(before.coverage)) : t("{{found}} de {{expected}} textos esperados", { found: m.found ?? 0, expected: m.expected ?? 0 })} />
+            <StatCard label={t("Resultados con algo desactualizado")} value={pct(m.staleness)}
+              hint={m.staleness === null ? t("sin consultas de referencia") : before ? ago(pct(before.staleness)) : t("{{n}} de {{total}} consultas de referencia", { n: m.stale_results ?? 0, total: m.reference_queries ?? 0 })} />
+            <StatCard label={t("Ruido")} value={fmtNum(m.noise)} hint={before ? ago(fmtNum(before.noise)) : t("elementos por pregunta vaga; lo ideal es 0")} />
+            <StatCard label={t("Redundancia")} value={pct(m.redundancy)}
+              hint={before ? ago(pct(before.redundancy)) : m.redundancy_sampled ? t("unos {{n}} hechos repiten otro (estimado)", { n: m.redundant_facts ?? 0 }) : t("{{n}} hechos repiten otro", { n: m.redundant_facts ?? 0 })} />
+            <StatCard label={t("Contradicciones abiertas")} value={fmtNum(m.contradictions)} hint={m.contradictions === null ? t("ninguna relación es funcional") : before ? ago(fmtNum(before.contradictions)) : undefined} />
+            <StatCard label={t("Hechos a revisar")} value={fmtNum(m.stale_facts)} hint={m.stale_facts === null ? t("ninguna relación tiene vida útil") : before ? ago(fmtNum(before.stale_facts)) : undefined} />
+          </StatGrid>)}
+        {m?.probes_paused && <Text size="sm" c="dimmed">{t("Las preguntas de prueba no se hicieron: el brain ha llegado a su presupuesto de IA.")}</Text>}
+        {!!m?.failed.length && <Text size="sm" c="dimmed">{t("No se pudo medir: {{parts}}.", { parts: m.failed.map((p) => t(HEALTH_PARTS[p] ?? p)).join(", ") })}</Text>}
+      </Stack>
+    </Section>
+  );
+}
+
 export default function Overview({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
   const q = useQuery({ queryKey: ["overview", graph], queryFn: () => get<O>("overview", { graph }) });
@@ -86,6 +140,7 @@ export default function Overview({ graph, role }: { graph: string; role: string 
       <PageHeader title={t("Resumen")} description={<>{t("Estado del brain «{{graph}}»: volumen de conocimiento, actividad por semanas y lo más conectado.", { graph })}{data.last_episode && <> {t("Último episodio: {{name}} · {{date}}.", { name: data.last_episode.name, date: fmt(data.last_episode.created_at) })}</>}</>} />
       <FillArea><Stack gap="md">
       {["curator", "admin", "owner"].includes(role) && <ColGrid min={320}><NeedsAttention graph={graph} /><WhatChanged graph={graph} /></ColGrid>}
+      {["curator", "admin", "owner"].includes(role) && <MemoryHealth graph={graph} />}
       <StatGrid>
         <StatCard label={t("Episodios")} value={data.episodes} hint={a ? t("+{{episodes}} esta semana", { episodes: last(a.episodes) }) : t("memoria episódica")} />
         <StatCard label={t("Entidades")} value={data.entities} />
