@@ -35,8 +35,8 @@ function NeedsAttention({ graph }: { graph: string }) {
   return (
     <Section title={t("Necesita tu atención")}>
       {!q.data ? <DataState query={q} /> : lines.length ? <Stack gap={6}>{lines.map((l) => (
-        <Group key={l.key} gap="xs" wrap="nowrap"><Pill size="sm" tone="warn">{q.data[l.key]}</Pill>
-          <Btn kind="link" component={Link} to={l.to}>{t(l.label)}</Btn></Group>))}</Stack>
+        <div key={l.key} className="ms-countrow"><span><Pill size="sm" tone="warn">{q.data[l.key]}</Pill></span>
+          <Btn kind="link" component={Link} to={l.to}>{t(l.label)}</Btn></div>))}</Stack>
         : <Text size="sm" c="dimmed">{t("Nada necesita tu atención.")}</Text>}
     </Section>
   );
@@ -64,8 +64,8 @@ function WhatChanged({ graph }: { graph: string }) {
       <Stack gap="xs">
         <Segments label={t("Periodo")} value={days} onChange={setDays} data={[{ value: "1", label: t("Últimas 24 h") }, { value: "7", label: t("Últimos 7 días") }]} />
         {!q.data ? <DataState query={q} /> : lines.length ? <Stack gap={6}>{lines.map((l) => (
-          <Group key={l.key} gap="xs" wrap="nowrap"><Pill size="sm">{q.data[l.key] as number}</Pill>
-            <Btn kind="link" component={Link} to={l.to}>{t(l.label)}</Btn></Group>))}</Stack>
+          <div key={l.key} className="ms-countrow"><span><Pill size="sm">{q.data[l.key] as number}</Pill></span>
+            <Btn kind="link" component={Link} to={l.to}>{t(l.label)}</Btn></div>))}</Stack>
           : <Text size="sm" c="dimmed">{days === "1" ? t("Nada nuevo en las últimas 24 horas.") : t("Nada nuevo en los últimos 7 días.")}</Text>}
       </Stack>
     </Section>

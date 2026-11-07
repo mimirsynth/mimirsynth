@@ -574,3 +574,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-added-legend .ms-added { padding: 0 2px; }  /* the legend's key, the same mark as in the text below it */
 .ms-related .ms-fact-old { color: var(--ms-invalidado); text-decoration: line-through; }  /* no longer true: struck through, as in the entity lists */
 .ms-related a:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }
+
+/* A count and what it counts: the counts share one column, so the labels line up whatever the digits, and a long label wraps instead of being cut */
+.ms-countrow { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr); align-items: start; column-gap: 8px; }
+.ms-countrow > span { display: flex; justify-content: flex-end; }
+.ms-countrow > a, .ms-countrow > button { white-space: normal; text-align: left; justify-self: start; }
