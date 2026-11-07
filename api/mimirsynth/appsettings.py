@@ -73,6 +73,8 @@ REGISTRY: list[Def] = [
     Def("doc_search_timeout", "recall", "Tiempo máximo de la búsqueda documental", "Si tarda más, el recall responde sin documentos.", "float", "s", 0.1, 10),
     Def("index_sync_minutes", "recall", "Sincronización del índice de texto", "Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada.", "int", "min", 0, 1440),
     Def("summary_engine", "ingest", "Motor para revisar resúmenes", "Nombre del motor LLM que reescribe los resúmenes pobres de las entidades en Calidad del contenido → Resúmenes. Vacío: el motor LLM predeterminado.", "str"),
+    Def("ingest_selftest", "ingest", "Comprobar que lo ingerido se recupera", "Tras ingerir una propuesta, se hace al recall una pregunta de control por cada hecho nuevo (hasta 5) y se marca la propuesta si alguno no sale entre los primeros. Cada pregunta es un embedding.", "choice", choices=(("yes", "Sí"), ("no", "No"))),
+    Def("ingest_selftest_per_hour", "ingest", "Comprobaciones de recuperación por hora", "Propuestas por brain y hora que se comprueban; las demás se quedan sin comprobar y lo dicen.", "int", "", 1, 10000),
     Def("ingest_retries", "ingest", "Reintentos de la ingesta", "Intentos cuando el modelo responde con límite de tasa o un error transitorio.", "int", "", 1, 20),
     Def("reindex_batch", "ingest", "Lote al cambiar de modelo de embeddings", "Textos por lote al recalcular los vectores con otro modelo. Más pequeño reparte mejor la carga en el proveedor.", "int", "textos", 1, 512),
     Def("reindex_pause", "ingest", "Pausa entre lotes al cambiar de modelo", "Segundos de espera entre lotes para respetar el límite de tasa del proveedor. Con un 429 se espera además lo que indique Retry-After.", "float", "s", 0, 600),

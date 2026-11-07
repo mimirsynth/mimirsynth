@@ -14,7 +14,9 @@ import { fmt, fmtDay, fmtNum, get, send } from "../api";
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
   created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
-  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null };
+  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null;
+  /** Whether its new facts came back to a control question after ingesting (issue 296). */
+  selftest?: { checked_at: string; retrievable?: boolean | null; skipped?: string; error?: string; results?: { fact_uuid: string; fact: string; question: string; found: boolean; rank: number | null; outranked_by: string[] }[] } | null };
 /** A structured claim of the proposal, compared with the brain's current facts when it was sent, and what approving it did. */
 type Claim = { subject: string; relation: string; value: string; valid_from: string | null; supersedes: string | null;
   verdict: "new" | "confirms" | "replaces" | "may_replace"; facts: { uuid: string; fact: string; target: string; valid_at: string | null }[];
@@ -286,6 +288,19 @@ function ClaimsDetail({ claims }: { claims: Claim[] }) {
   </Stack>);
 }
 
+/** Whether what was ingested can be found again: each new fact and its control question (issue 296). */
+function SelfTest({ s }: { s: NonNullable<Prop["selftest"]> }) {
+  const { t } = useTranslation();
+  if (s.skipped) return <Text size="xs" c="dimmed">{t("Sin comprobar si se recupera: este brain ya hizo todas las comprobaciones de esta hora.")}</Text>;
+  if (s.error) return <Text size="xs" c="dimmed">{t("No se pudo comprobar si se recupera: {{e}}", { e: s.error })}</Text>;
+  if (s.retrievable === null || s.retrievable === undefined) return null;
+  if (s.retrievable) return <Text size="xs" c="dimmed">{t("Comprobado: cada hecho nuevo sale al preguntar por él.")}</Text>;
+  return (<Notice tone="warn" title={t("Ingerida, pero no se recupera")}><Stack gap={4}>
+    {(s.results ?? []).filter((r) => !r.found).map((r) => <Text key={r.fact_uuid} size="xs">«{r.fact}» {t("no sale al preguntar «{{q}}».", { q: r.question })}{r.outranked_by.length ? ` ${t("Salen antes: {{v}}.", { v: r.outranked_by.map((x) => `«${x}»`).join(", ") })}` : ""}</Text>)}
+    <Text size="xs" c="dimmed">{t("Para arreglarlo: reescribe el hecho con el nombre con que se pregunta, añade un alias a la entidad o invalida los hechos que lo tapan.")}</Text>
+  </Stack></Notice>);
+}
+
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
 function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context?: ReactNode;
   /** Shown in the review queue, where every proposal is pending: its state and the usual kind (adding) go without saying. */ inQueue?: boolean }) {
@@ -329,6 +344,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
         {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error || t("error sin detalle")}{" "}
           <Btn kind="link" component={Link} to="/trabajos">{t("Ver los trabajos")}</Btn> · <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Revisar el modelo LLM")}</Btn></Notice>}
         {d.status === "approved" && <Text size="xs" c="dimmed">{t("Pendiente de ingestar.")}</Text>}
+        {d.status === "ingested" && d.selftest && <SelfTest s={d.selftest} />}
         {d.status === "pending" && <Text size="xs" c="dimmed">{t("Cuando se apruebe.")}</Text>}
         {d.status === "rejected" && <Text size="xs" c="dimmed">{t("No entra en el grafo.")}</Text>}
       </Step>}
