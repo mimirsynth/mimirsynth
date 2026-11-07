@@ -13,6 +13,8 @@ type Settings = { enabled: boolean; passes: Record<string, boolean>; batch: numb
 type Run = { id: number; day: string; status: string; reason: string; error: string; finished_at: string | null; findings: Record<string, number>;
   proposals: number[]; sample?: Record<string, Finding[]> };
 
+const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades") };
+
 const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha") };
 
 /** One finding: the fact the curator keeps and the ones it would replace, the evidence a person looks at before confirming. */
@@ -33,24 +35,28 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
   const s = useQuery({ queryKey: ["curator", graph, "settings"], queryFn: () => get<Settings>(`brains/${graph}/curator/settings`) });
   const runs = useQuery({ queryKey: ["curator", graph, "runs"], queryFn: () => get<{ items: Run[] }>(`brains/${graph}/curator/runs`),
     refetchInterval: (q) => (q.state.data?.items.some((r) => r.status === "queued" || r.status === "running") ? 4000 : false) });
-  const preview = useMutation({ mutationFn: () => send<{ count: number; findings: Finding[]; batch: number }>("POST", `brains/${graph}/curator/preview`) });
-  const save = useMutation({ mutationFn: (enabled: boolean) => send("PUT", `brains/${graph}/curator/settings`, { enabled, passes: s.data?.passes, batch: s.data?.batch }), onSuccess: refresh });
+  const preview = useMutation({ mutationFn: (pass: string) => send<{ count: number; findings: Finding[]; batch: number }>("POST", `brains/${graph}/curator/preview`, undefined, { pass }) });
+  const save = useMutation({ mutationFn: (c: { enabled?: boolean; passes?: Record<string, boolean> }) => send("PUT", `brains/${graph}/curator/settings`,
+    { enabled: c.enabled ?? s.data?.enabled, passes: { ...s.data?.passes, ...c.passes }, batch: s.data?.batch }), onSuccess: refresh });
   const run = useMutation({ mutationFn: () => send("POST", `brains/${graph}/curator/run`), onSettled: refresh });
   const decide = useMutation({ mutationFn: ({ id, verb }: { id: number; verb: "confirm" | "discard" }) => send("POST", `brains/${graph}/curator/runs/${id}/${verb}`), onSuccess: refresh });
-  const p = s.data?.precision.contradictions;
   const waiting = runs.data?.items.filter((r) => r.status === "waiting") ?? [];
   return (
     <Stack gap="sm">
-      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Por ahora busca contradicciones claras en las relaciones funcionales: se queda con el valor más reciente.")}</Notice>
+      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales y hechos repetidos entre las mismas entidades; en los dos casos se queda con el más reciente.")}</Notice>
       {s.data && <Group gap="md">
-        {isAdmin ? <Check checked={s.data.enabled} onChange={(e) => save.mutate(e.currentTarget.checked)} label={t("Activar el curador en este brain")}
+        {isAdmin ? <Check checked={s.data.enabled} onChange={(e) => save.mutate({ enabled: e.currentTarget.checked })} label={t("Activar el curador en este brain")}
           description={t("Si una pasada fuera a proponer más de {{n}} cambios a la vez, espera a que alguien mire una muestra y la confirme.", { n: s.data.batch })} />
           : <Text size="sm">{s.data.enabled ? t("El curador está activado en este brain.") : t("El curador está desactivado; lo activa un administrador del brain.")}</Text>}
       </Group>}
-      {p && <Text size="xs" c="dimmed">{p.precision === null ? t("Todavía no se ha decidido ninguna propuesta del curador.")
-        : t("Precisión de las contradicciones: {{pct}} de sus propuestas aprobadas ({{a}} aprobadas, {{r}} rechazadas, {{w}} pendientes).", { pct: `${Math.round(p.precision * 100)} %`, a: p.approved, r: p.rejected, w: p.pending })}</Text>}
+      {s.data && Object.entries(PASS).map(([id, label]) => { const p = s.data.precision[id]; return (
+        <Group key={id} gap="md" align="flex-start">
+          <Check checked={!!s.data.passes[id]} disabled={!isAdmin} onChange={(e) => save.mutate({ passes: { [id]: e.currentTarget.checked } })} label={t(label)}
+            description={!p || p.precision === null ? t("Todavía no se ha decidido ninguna de sus propuestas.")
+              : t("Precisión: {{pct}} de sus propuestas aprobadas ({{a}} aprobadas, {{r}} rechazadas, {{w}} pendientes).", { pct: `${Math.round(p.precision * 100)} %`, a: p.approved, r: p.rejected, w: p.pending })} />
+          <Btn size="row" icon="search" loading={preview.isPending && preview.variables === id} onClick={() => preview.mutate(id)}>{t("Ver qué propondría")}</Btn>
+        </Group>); })}
       <Group gap="xs">
-        <Btn icon="search" loading={preview.isPending} onClick={() => preview.mutate()}>{t("Ver qué propondría")}</Btn>
         <Btn icon="refresh" loading={run.isPending} onClick={() => run.mutate()}>{t("Ejecutar ahora")}</Btn>
         <Btn kind="link" component={Link} to="/propuestas?estado=pending">{t("Ir a las propuestas")}</Btn>
       </Group>

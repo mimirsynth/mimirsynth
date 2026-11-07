@@ -97,8 +97,54 @@ def test_a_small_batch_is_proposed_and_approving_applies_it(client, graph, monke
 
 def test_settings_are_for_administrators_and_known_passes(client):  # noqa: F811
     client.post("/api/brains", json={"slug": "cu3", "name": "CU3"})
-    assert client.put("/api/brains/cu3/curator/settings", json={"enabled": True, "passes": {"noise": True}}).status_code == 422
+    assert client.put("/api/brains/cu3/curator/settings", json={"enabled": True, "passes": {"noise": True}}).status_code == 422   # not a pass yet
     tok = client.post("/api/brains/cu3/tokens", json={"name": "c", "role": "curator"}).json()["token"]
     h = {"Authorization": f"Bearer {tok}"}
     assert client.get("/api/brains/cu3/curator/settings", headers=h).status_code == 200
     assert client.put("/api/brains/cu3/curator/settings", headers=h, json={"enabled": True}).status_code == 403
+
+
+@pytest.fixture()
+def repeated(monkeypatch):
+    from mimirsynth import db as dbm
+    from mimirsynth.config import settings
+    monkeypatch.setattr(settings, "falkor_host", FALKOR)
+    dbm.client.cache_clear()
+    c = dbm.client()
+    name = GRAPH + "-rep"
+    if name in c.list_graphs():
+        c.select_graph(name).delete()
+    g = c.select_graph(name)
+    g.query("CREATE (:Entity {uuid:'vw', name:'Vaultwarden'}), (:Entity {uuid:'al', name:'altair'}), (:Entity {uuid:'pg', name:'PostgreSQL'})")
+    for u, s, t, fact, vec, when in (("r1", "vw", "al", "Vaultwarden runs on altair", [1, 0, 0], "2025-01-01T00:00:00Z"),
+                                     ("r2", "vw", "al", "Vaultwarden is hosted on altair", [0.99, 0.05, 0], "2026-01-01T00:00:00Z"),
+                                     ("r3", "al", "vw", "altair hosts Vaultwarden", [0.98, 0.1, 0], "2025-06-01T00:00:00Z"),
+                                     ("r4", "vw", "al", "Vaultwarden is backed up from altair", [0.2, 0.9, 0], "2025-01-01T00:00:00Z"),
+                                     ("r5", "vw", "pg", "Vaultwarden uses PostgreSQL 14", [0, 0, 1], "2025-01-01T00:00:00Z"),
+                                     ("r6", "vw", "pg", "Vaultwarden uses PostgreSQL 16", [0, 0, 1], "2026-01-01T00:00:00Z")):
+        g.query("MATCH (a:Entity {uuid:$s}), (b:Entity {uuid:$t}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'RUNS_ON', fact:$f, valid_at:$w, "
+                "created_at:$w, fact_embedding: vecf32($v)}]->(b)", {"s": s, "t": t, "u": u, "f": fact, "v": vec, "w": when})
+    yield name
+    g.delete()
+    dbm.client.cache_clear()
+
+
+@needs_falkor
+def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa: F811
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "cu4", "name": "CU4", "graph_name": repeated}).status_code == 201
+    s = client.get("/api/brains/cu4/curator/settings").json()
+    assert s["passes"] == {"contradictions": True, "redundancy": False}                      # off until an administrator turns it on
+    pv = client.post("/api/brains/cu4/curator/preview?pass=redundancy").json()
+    assert pv["count"] == 1                                                                     # PostgreSQL 14 / 16 is a change, not a repeat
+    f = pv["findings"][0]
+    assert f["keep"]["uuid"] == "r2" and sorted(x["uuid"] for x in f["replace"]) == ["r1", "r3"]
+    client.put("/api/brains/cu4/curator/settings", json={"enabled": True, "passes": {"contradictions": False, "redundancy": True}})
+    client.post("/api/brains/cu4/curator/run")
+    run = client.get("/api/brains/cu4/curator/runs").json()["items"][0]
+    assert run["status"] == "done" and run["findings"] == {"redundancy": 1} and len(run["proposals"]) == 1
+    with _factory()() as db:
+        p = db.get(Proposal, run["proposals"][0])
+        assert p.category == "curator.redundancy" and p.name.startswith("Curador: repite") and sorted(c["supersedes"] for c in p.claims) == ["r1", "r3"]
+    assert client.post("/api/brains/cu4/curator/preview?pass=redundancy").json()["count"] == 0     # pending: not proposed twice
