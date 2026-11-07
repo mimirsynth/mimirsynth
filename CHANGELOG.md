@@ -8,6 +8,14 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-11-07
+### Added
+- the recall leaves out facts and episode fragments that are not close enough to the question (setting *Minimum similarity of a fact or a fragment*, 0.55 by default, or `min_similarity` per request), so a vague question gets an empty context instead of noise; every fact and fragment says its similarity, and reference queries can simulate this threshold. (#281) (#283)
+- an episode fragment that states something no longer true is marked «may be superseded», with what stopped being true and what is true now, and goes after the others; the current fact that replaced it joins the recall even when the question did not bring it. (#282) (#284)
+
+### Fixed
+- an episode fragment found only by its words now shows its real similarity in Ask and in the API, instead of its full-text rank. (#281) (#283)
+
 ## [0.13.1] - 2026-11-06
 ### Changed
 - moving through the review queue shows the next proposal at once instead of a loading blank, the decision buttons stay in place, and after a decision the focus moves to the next proposal's title. (#244)
