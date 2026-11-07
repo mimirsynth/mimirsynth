@@ -1,4 +1,0 @@
-{
- "Guarda las últimas {{max}} consultas reales (con los secretos enmascarados, durante {{days}} días) para repetirlas con otra configuración antes de cambiarla. Llevan los prompts de las personas: actívalo solo si hace falta. Al desmarcarlo se borran. Ahora hay {{n}}.": "Keeps the last {{max}} real queries (with secrets masked, for {{days}} days) to replay them with another configuration before changing it. They carry people's prompts: turn it on only if needed. Unticking it deletes them. There are {{n}} now.",
- "Guardar una muestra de consultas para repetirlas": "Keep a sample of queries to replay them"
-}
