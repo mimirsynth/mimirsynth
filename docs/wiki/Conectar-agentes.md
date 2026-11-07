@@ -71,7 +71,7 @@ curl -s -X POST "$URL/api/brains/mi-brain/recall" \
   -d '{"query": "¿dónde corre la base de datos de producción ahora?"}'
 ```
 La respuesta incluye:
-- `facts`: los hechos más parecidos (vigentes e invalidados, con fechas), cada uno con su `similarity` con la pregunta (coseno, 0–1).
+- `facts`: los hechos más parecidos (vigentes e invalidados, con fechas), cada uno con su `similarity` con la pregunta (coseno, 0–1). Un hecho que entra porque sustituye a otro que ya no es cierto, o porque lo dice un fragmento o un pasaje del resultado y ya no es cierto, llega por ese vínculo y no por cercanía: su `similarity` es `null`.
 - `chunks`: fragmentos del texto original de los episodios, cada uno con su `similarity`. Un fragmento de un episodio cuyos hechos dejaron de ser ciertos lleva `superseded` (cada hecho que ya no es cierto, cuándo dejó de serlo y los vigentes en `replaced_by`) y va al final; en `context` se lee «> Puede estar superado: … Ahora: …». Un hecho vigente que sustituye a otro lleva `replaces`.
 - `documents`: los pasajes de documentos citados, si los hay, cada uno con `source_updated_at` (cuándo se actualizó su página por última vez). Un pasaje que dice un hecho que ya no es cierto lleva `superseded`, como los fragmentos, y va al final.
 - `context`: **el bloque de texto listo para inyectar en el prompt**.

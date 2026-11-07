@@ -362,7 +362,7 @@ def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs
     """A fragment of an episode, or a document passage, that states something no longer true says so, with what is true now, and goes
     after the others; the facts that replace them, and those that replace a fact no longer true in the result, join the current facts
     first (#282, #286). A fact that replaces another is fetched by its link to it, not by its similarity, so the threshold does not
-    apply to it. `graphs`: the graph of each origin (None: the brain's own); `brains`: the brain of each origin whose passages are
+    apply to it; like a fact no longer true that a fragment or passage states, it joins with `similarity` None. `graphs`: the graph of each origin (None: the brain's own); `brains`: the brain of each origin whose passages are
     checked (a brain that lends only its documents has no graph here)."""
     cur, old, passages = list(cur), list(old), list(passages or [])
     have = {(f.get("origin"), f.get("uuid")) for f in cur + old if f.get("uuid")}
@@ -391,7 +391,7 @@ def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs
             for f in facts:
                 olds.append(f)
                 if (origin, f["uuid"]) not in have and added_old < SUPERSEDED_OLD_MAX:
-                    old.append({**f, **tag}); have.add((origin, f["uuid"])); added_old += 1
+                    old.append({**f, **tag, "similarity": _similarity(f)}); have.add((origin, f["uuid"])); added_old += 1
         front = []
         for f in olds:
             for r in repl.get(f.get("uuid"), []):
@@ -399,7 +399,7 @@ def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs
                 if known is not None:
                     known.setdefault("replaces", f["fact"])
                 elif (origin, r["uuid"]) not in have and added_now < SUPERSEDING_MAX:
-                    front.append({**r, **tag, "replaces": f["fact"]}); have.add((origin, r["uuid"])); added_now += 1
+                    front.append({**r, **tag, "replaces": f["fact"], "similarity": _similarity(r)}); have.add((origin, r["uuid"])); added_now += 1
         cur = front + cur
 
     def last(x: dict) -> bool:   # stable: the order of the rest does not change

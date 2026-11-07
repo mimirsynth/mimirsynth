@@ -11,7 +11,7 @@ import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
 
-type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score: number; similarity?: number; origin?: string; replaces?: string };
+type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score?: number; similarity?: number | null; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
 const entityLink = (uuid: string, origin?: string) => `/entidad/${uuid}${origin ? `?origen=${origin}` : ""}`;
 type Superseded = { uuid: string; fact: string; invalid_at: string | null; replaced_by: { uuid: string; fact: string }[] }[];
@@ -19,7 +19,8 @@ type Chunk = { id: number; origin?: string; name: string; text: string; valid_at
 type Passage = { document_id: number; chunk_idx: number; title: string; text: string; similarity: number; origin?: string; superseded?: Superseded;
   source_updated_at?: string | null; last_seen_at?: string | null };
 type Res = { recall_id?: string; query: string; facts: Fact[]; chunks: Chunk[]; documents?: Passage[]; documents_state?: string; context: string; index: boolean; min_similarity?: number; ms: Record<string, number> };
-const sim = (x: { similarity?: number | null; score: number }) => (x.similarity ?? x.score).toFixed(2);
+/** «0.42», or null for what joins the recall by its link to a fact no longer true rather than by its closeness to the question. */
+const simValue = (x: { similarity?: number | null; score?: number }) => { const v = x.similarity ?? x.score; return typeof v === "number" ? v.toFixed(2) : null; };
 type Mark = "expect" | "avoid";
 type Rating = "useful" | "irrelevant" | "incorrect";
 type Scope = "brain" | "all";
@@ -69,6 +70,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const sync = useMutation({ mutationFn: () => send<any>("POST", `brains/${graph}/index/sync`), onSuccess: () => status.refetch() });
   const canSync = ["curator", "admin", "owner"].includes(role);
   const r = run.data;
+  const sim = (x: { similarity?: number | null; score?: number }) => { const v = simValue(x); return v === null ? null : `${t("sim")} ${v}`; };
+  /** The fragment or passage of the result that states a fact no longer true: why that fact joined without a similarity. */
+  const statedBy = (f: Fact) => [...(r?.chunks ?? []).map((c) => ({ origin: c.origin, name: c.name, gone: c.superseded })),
+    ...(r?.documents ?? []).map((p) => ({ origin: p.origin, name: p.title, gone: p.superseded }))]
+    .find((x) => x.origin === f.origin && x.gone?.some((s) => s.uuid === f.uuid))?.name;
   // Marcar un resultado como «debe salir» o «sobra» para guardarla como consulta de referencia. Se guarda el principio del texto.
   const toggle = (key: string, mark: Mark, item: Item) => setMarks((m) => {
     const n = { ...m };
@@ -125,18 +131,19 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
               <ListCard key={f.uuid} invalid={f.status === "invalidated"} actions={<Group gap="xs" wrap="nowrap">{rateBtns(`f:${f.uuid}`, "fact", f.uuid, !f.origin)}{markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}</Group>}
                 tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
                   <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
-                meta={<>{t("sim")} {sim(f)} · {fmt(f.valid_at)}{f.invalid_at ? ` → ${fmt(f.invalid_at)}` : ""}
-                  {f.replaces && <> · {t("sustituye a «{{old}}»", { old: f.replaces })}</>}</>}>{f.fact}</ListCard>))}
+                meta={<>{sim(f) ? `${sim(f)} · ` : ""}{fmt(f.valid_at)}{f.invalid_at ? ` → ${fmt(f.invalid_at)}` : ""}
+                  {f.replaces ? <> · {sim(f) ? t("sustituye a «{{old}}»", { old: f.replaces }) : t("entra porque sustituye a «{{old}}»", { old: f.replaces })}</>
+                    : !sim(f) && <> · {statedBy(f) ? t("entra porque lo dice «{{src}}»", { src: statedBy(f) }) : t("entra sin similitud con la pregunta")}</>}</>}>{f.fact}</ListCard>))}
             <Title order={5} mt="xs">{t("Fragmentos de episodios (")}{r.chunks.length})</Title>
             {r.chunks.map((c) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={`${fmt(c.valid_at)} · sim ${sim(c)}`}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmt(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
                 actions={<Group gap="xs" wrap="nowrap">{rateBtns(`c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, false)}{markBtns(`c:${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" })}</Group>}
                 tags={supersededPill(c.superseded)} meta={supersededMeta(c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={5} mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
               {r.documents.map((p) => (
                 <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
-                  aside={`${t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) })} · sim ${p.similarity.toFixed(2)}`}
+                  aside={[t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
                   tags={supersededPill(p.superseded)} meta={supersededMeta(p.superseded)}
                   actions={<Group gap="xs" wrap="nowrap">{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
             </>}

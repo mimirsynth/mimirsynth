@@ -13,6 +13,7 @@ export { AreaChart, BarList, Donut } from "./Charts";
 export { SERIES } from "./palette";
 export type { AreaSeries, BarItem, Slice } from "./Charts";
 export { Avatar } from "./Avatar";
+export { ErrorBoundary } from "./ErrorBoundary";
 export { Pager } from "./Pager";
 export { ColHead } from "./ColHead";
 export type { ColFilter, ColSort, SortDir } from "./ColHead";
