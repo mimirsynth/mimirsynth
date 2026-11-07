@@ -76,6 +76,7 @@ def test_probes_verify_refute_and_show_in_the_recall(client, graph, tmp_path):  
     assert client.post("/api/brains/vf/probes/run").status_code == 202                 # inline in tests
     probes = {p["fact_uuid"]: p for p in client.get("/api/brains/vf/probes").json()["items"]}
     assert probes["f1"]["state"] == "verified" and probes["f2"]["state"] == "refuted" and probes["f2"]["value"] == "pve2"
+    assert probes["f1"]["fact"] == "Vaultwarden corre en altair" and probes["f1"]["source_uuid"] == "vw"         # what it checks, to read it
     with _factory()() as db:
         assert db.query(FactConfirmation).filter(FactConfirmation.fact_uuid == "f1").one()
         p = db.query(Proposal).filter(Proposal.category == "verifier.refuted").one()

@@ -213,6 +213,8 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-tl-item::before { content: ""; position: absolute; left: -22px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--ms-accent); border: 2px solid var(--ms-surface); }
 .ms-tl-item[data-event="invalidated"]::before { background: var(--ms-invalidado); }
 .ms-tl-body { flex: 1; min-width: 0; }  /* the text of a fact wraps and leaves room for its action, also on a phone */
+.ms-tl-row { display: flex; gap: var(--mantine-spacing-xs); justify-content: space-between; align-items: flex-start; }
+@media (max-width: 48em) { .ms-tl-row { flex-direction: column; } }  /* on a phone a fact's actions go under its text, which keeps the width */
 .ms-relhead { font-weight: 600; }
 .ms-relhead-self { color: var(--ms-accent); }  /* the entity of the page, marked as the current one */
 .ms-relhead-rel { color: var(--ms-muted); font-weight: 400; }
