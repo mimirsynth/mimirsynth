@@ -17,7 +17,7 @@ They are in **Ask → Reference queries**, for **curators and above** (see [[Rol
 
 Each list takes up to 50 texts of up to 500 characters. **Edit** and **Delete** are on every row; deleting a query does not change the results of earlier runs.
 
-You can also build them from [[Ask]]: after a search, mark results as **Expected** or **Extra** and press **Save as reference query**; the form opens already filled in.
+You can also build them from [[Ask]]: after a search, turn on **Mark for a reference query**, mark results as **Expected** or **Extra** and press **Save as reference query**; the form opens already filled in.
 
 The texts go through the brain's secret detector, so saving a graph fact as an expected text never copies a credential: depending on the brain's setting the secret is masked or the query is refused.
 
