@@ -5,6 +5,7 @@ import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
   Pill, QueueList, RowOpen, focusedQueueItem, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
+import ProposalCategories from "./ProposalCategories";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -956,12 +957,14 @@ export default function Proposals({ graph, role }: { graph: string; role: string
         ? <Tabs value={tab} onChange={(v) => setTab(v)} keepMounted={false} className="ms-tabs-fill">
             <Tabs.List>
               <Tabs.Tab value="revisar">{t("Por revisar")}{tab !== "revisar" && pendingCount.data ? ` (${pendingCount.data.pending ?? 0})` : ""}</Tabs.Tab>
+              <Tabs.Tab value="categorias">{t("Por categorías")}</Tabs.Tab>
               <Tabs.Tab value="decididas">{t("Decididas")}</Tabs.Tab>
               <Tabs.Tab value="mias">{t("Mis propuestas")}</Tabs.Tab>
             </Tabs.List>
             <Tabs.Panel value="revisar" pt="sm" className="ms-tabpanel-col">
               <ReviewTab ops={ops} initialKind={sp.get("tipo") ?? undefined} onDecided={() => setTab("decididas")} />
             </Tabs.Panel>
+            <Tabs.Panel value="categorias" pt="sm" className="ms-tabpanel-col"><ProposalCategories graph={graph} isAdmin={["admin", "owner"].includes(role)} /></Tabs.Panel>
             <Tabs.Panel value="decididas" pt="sm" className="ms-tabpanel-col">
               <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={sp.get("tipo") ?? undefined}
                 first={{ value: "decided", label: t("Todas"), countKey: "decided" }} />

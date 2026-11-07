@@ -46,6 +46,8 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | | `PUT /curator/settings` | administrator |
 | **Verifiable facts** | `GET /verifiers` · `GET /probes` · `POST /probes/run` | curator |
 | | `PUT /verifiers/{vid}` | administrator |
+| **Review by category** | `GET /review/categories` · `POST /review/categories/{cat}/decide` | curator |
+| | `PUT /review/categories/{cat}/auto` | administrator |
 | **Federation** | `GET /grants` | reader |
 | | `POST /grants` · `PATCH/DELETE /grants/{gid}` | administrator |
 | **Jobs** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | reader |

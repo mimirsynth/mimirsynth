@@ -44,7 +44,7 @@ brain_router = APIRouter(prefix="/api/brains/{slug}/changes")
 curator = brain_access("curator")
 FREQUENCIES = ("daily", "weekly")
 PERIOD = {"daily": timedelta(days=1), "weekly": timedelta(days=7)}
-WAITING = ("proposals", "corrections", "doc_errors", "conflicts", "stale")   # what a curator is waiting on: compared with the last summary
+WAITING = ("proposals", "corrections", "doc_errors", "conflicts", "stale", "categories")   # what a curator is waiting on: compared with the last summary
 RETRY = (timedelta(minutes=10), timedelta(hours=1), timedelta(hours=6), timedelta(days=1))   # waits after 1, 2, 3, 4+ failures
 ALERT_AFTER = 5
 ROUND_SECONDS = 600
@@ -100,6 +100,11 @@ def _waiting(db: Session, brain: Brain, user: User, role: str) -> dict:
     out = {"proposals": sum(n for n, _ in memory), "corrections": sum(n for k, n, _ in rows if k == "correction"),
            "oldest_days": (now() - oldest).days if oldest else None,
            "doc_errors": db.scalar(select(func.count()).select_from(Document).where(Document.brain_id == brain.id, Document.status == "error"))}
+    from .categories import category_of   # what the curator and the verifiers proposed, apart (#299)
+    by: dict[str, int] = {}
+    for p in db.scalars(select(Proposal).where(Proposal.brain_id == brain.id, Proposal.status == "pending", Proposal.category != "")):
+        by[category_of(p)] = by.get(category_of(p), 0) + 1
+    out["categories"] = by or None
     ctx = BrainCtx(brain=brain, user=user, role=role, db=db)
     for name, fn in (("conflicts", _conflicts), ("stale", _stale)):
         try:
@@ -167,6 +172,9 @@ def render(user: User, sections: list[dict], since: datetime, frequency: str, la
                                  if old else tr("Propuestas por revisar: {{n}}", lang, n=w["proposals"])) + _link("/propuestas", slug))
         if w.get("corrections"):
             lines.append("- " + tr("Correcciones por revisar: {{n}}", lang, n=w["corrections"]) + _link("/propuestas", slug))
+        if w.get("categories"):
+            lines.append("- " + tr("Propuestas por categoría: {{v}}", lang, v=", ".join(f"{k} {n}" for k, n in sorted(w["categories"].items())))
+                         + _link("/propuestas?tab=categorias", slug))
         if w.get("doc_errors"):
             lines.append("- " + tr("Documentos con errores: {{n}}", lang, n=w["doc_errors"]) + _link("/conocimiento", slug))
         if w.get("conflicts"):

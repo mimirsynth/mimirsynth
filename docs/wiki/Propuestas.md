@@ -67,6 +67,13 @@ Una propuesta que envía un agente o el API puede llevar **afirmaciones** junto 
 
 Una vez aplicada, cada afirmación dice cuándo. La guía de agentes (`docs/AGENTS.md`) explica cómo enviarlas.
 
+## Por categorías
+**Por categorías** agrupa lo pendiente según lo que lo produjo: las contradicciones del curador, los hechos que contradice un verificador, las correcciones, los posibles duplicados, las propuestas parecidas a algo que ya no es cierto y las nuevas. Cada categoría muestra cuántas hay pendientes, una muestra y su **precisión**: la parte de sus propuestas que aprobaron personas, sobre las últimas 50 que decidieron.
+
+Después de mirar la muestra, **Aprobar la categoría** o **Rechazar la categoría** decide todas sus propuestas pendientes, hasta 200. Las que tienen un secreto por revisar y las correcciones se quedan para decidirlas una a una. Una aprobación espera los 10 segundos de siempre antes de la ingesta.
+
+**Aprobación automática.** Un administrador del brain puede marcar **Aprobar esta categoría automáticamente**, pero solo cuando la categoría se lo ha ganado: al menos 20 decisiones de personas y una precisión del 95 % (ajustable por el API). Desde entonces sus propuestas se aprueban en pocos minutos, como «automática» en el historial y en la auditoría, y se pueden deshacer como cualquier otra. Las aprobaciones automáticas nunca cuentan para la precisión. Si la precisión de las decisiones de personas baja del mínimo, la categoría vuelve a ser manual y lo avisa la notificación **autoapprove.disabled**. Nada que haya marcado el detector de secretos se aprueba así. El resumen por correo lista por categoría las propuestas del curador y de los verificadores, con un enlace aquí.
+
 ## Secretos en las propuestas
 Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `remember` del MCP), su título y su contenido pasan por el **detector de secretos**: claves de nube y de proveedores de IA, tokens, claves privadas, JWT, cabeceras `Authorization`, contraseñas en URLs… Algunos hallazgos son **seguros**; un valor de aspecto aleatorio asignado a `password`, `secret` o `token` es solo **posible**. Lo que pasa depende de la política del brain (Administración → Brain → **Secretos**):
 
