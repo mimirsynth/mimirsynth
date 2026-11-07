@@ -188,3 +188,54 @@ def test_redundancy_on_a_real_graph(monkeypatch):
         assert sampled["redundant_facts"] == 2 and sampled["redundancy_sampled"] is True
     finally:
         g.delete()
+
+
+# --- notification on a threshold ---------------------------------------------------------------
+
+def test_a_coverage_drop_counts_only_the_texts_in_both_runs(monkeypatch):
+    from mimirsynth.config import settings
+    monkeypatch.setattr(settings, "health_coverage_drop", 0.05)
+    prev = {"coverage_items": {"a": 1, "b": 1, "c": 1, "d": 1}}
+    added = {"coverage_items": {"a": 1, "b": 1, "c": 1, "d": 1, "new1": 0, "new2": 0}}   # two new queries not found yet: no drop
+    assert H.coverage_drop(added, prev) == (1.0, 1.0, 4) and H.crossings(added, prev) == []
+    lost = {"coverage_items": {"a": 1, "b": 1, "c": 1, "d": 0}}
+    assert H.coverage_drop(lost, prev) == (1.0, 0.75, 4)
+    assert H.crossings(lost, prev) == ["la cobertura ha bajado del 100 % al 75 % sobre los 4 textos esperados que estaban en las dos mediciones"]
+    assert H.crossings(lost, None) == [] and H.coverage_drop({"coverage_items": {"x": 1}}, prev) is None
+    monkeypatch.setattr(settings, "health_coverage_drop", 0.0)                       # 0: never
+    assert H.crossings(lost, prev) == []
+
+
+def test_absolute_thresholds_are_off_until_set(monkeypatch):
+    from mimirsynth.config import settings
+    m = {"coverage": 0.5, "staleness": 0.3, "redundancy": 0.2, "noise": 2.5}
+    assert H.crossings(m, None) == []
+    for k, v in (("health_coverage_min", 0.8), ("health_staleness_max", 0.25), ("health_redundancy_max", 0.1), ("health_noise_max", 1.0)):
+        monkeypatch.setattr(settings, k, v)
+    assert H.crossings(m, None) == ["la cobertura es del 50 %, por debajo del 80 %",
+                                    "el 30 % de las consultas de referencia trae algo desactualizado, más del 25 %",
+                                    "el 20 % de los hechos vigentes repite otro, más del 10 %",
+                                    "una pregunta vaga trae de media 2.5 elementos, más de 1"]
+    assert H.crossings({"coverage": None, "staleness": None, "redundancy": None, "noise": None}, None) == []   # not measured
+
+
+def test_a_measurement_that_degrades_notifies_and_one_that_recovers_closes_it(client, fakes, monkeypatch):  # noqa: F811
+    from mimirsynth.config import settings
+    from mimirsynth.models import Notification
+    monkeypatch.setattr(settings, "health_coverage_drop", 0.05)
+    bid = _brain(client, "hs5")
+    client.post("/api/brains/hs5/refqueries", json={"query": "Where does Vaultwarden run?", "expect": [{"text": "altair"}]})
+    client.post("/api/brains/hs5/health/run")                                     # today: found
+    with _factory()() as db:                                                     # it becomes yesterday's measurement
+        r = db.query(HealthRun).filter(HealthRun.brain_id == bid).one()
+        r.day = H._today() - timedelta(days=1)
+        db.commit()
+    monkeypatch.setattr(R, "recall", lambda *a, **k: _out())                      # today the recall stops finding it
+    client.post("/api/brains/hs5/health/run")
+    with _factory()() as db:
+        n = db.query(Notification).filter(Notification.event == "health.degraded", Notification.key == "health:hs5").one()
+        assert n.resolved_at is None and n.brain_id == bid and "100 % al 0 %" in n.body and "HS5" in n.title
+    monkeypatch.setattr(R, "recall", lambda *a, **k: _out([{"fact": "Vaultwarden runs on altair", "status": "current"}]))
+    client.post("/api/brains/hs5/health/run")                                     # measured again today: back to normal
+    with _factory()() as db:
+        assert db.query(Notification).filter(Notification.event == "health.degraded", Notification.key == "health:hs5").one().resolved_at

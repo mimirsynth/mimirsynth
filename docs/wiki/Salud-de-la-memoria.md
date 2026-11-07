@@ -27,6 +27,13 @@ Una memoria que solo acumula acaba siendo un registro de todo lo que se dijo alg
 - No se escribe nada en el grafo.
 - Las mediciones se guardan 400 días.
 
+## Aviso
+Tras cada medición, el evento **health.degraded** de las [[Notificaciones]] salta cuando:
+- **la cobertura baja** al menos *Salud de la memoria: avisar si la cobertura baja* (5 puntos por defecto) respecto a la medición anterior. Solo se comparan los textos esperados que están en las dos mediciones, así que añadir, editar o borrar una consulta de referencia nunca cuenta como bajada;
+- o una cifra cruza su umbral: *cobertura mínima*, *resultados desactualizados máximos*, *ruido máximo* o *redundancia máxima*. Están desactivados (0) hasta que los fijas.
+
+Los umbrales están en Administración → Ajustes → Notificaciones ([[Referencia de ajustes]]). El aviso dice qué cruzó y se cierra solo cuando una medición posterior vuelve a estar dentro.
+
 ## Cómo leerla
 - **La cobertura baja** tras una actualización o un cambio de modelo: ejecuta las [[Consultas de referencia]] para ver qué textos esperados dejaron de salir, y simula un umbral.
 - **Crecen los resultados desactualizados**: revisa [[Calidad del contenido]] → A revisar y las contradicciones; los hechos que dejaron de ser ciertos es mejor invalidarlos (o corregirlos) que dejarlos vigentes.
