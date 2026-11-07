@@ -1,7 +1,0 @@
-{
- "Al aprobarla se archiva: sale del recall, sigue en el grafo y se puede restaurar:": "When approved it is archived: it leaves the recall, stays in the graph and can be restored:",
- "Archiva": "Archives",
- "Archivados ({{n}})": "Archived ({{n}})",
- "Archivar lo que nunca se recupera": "Archive what is never recalled",
- "Siguen en el grafo, pero el recall no los trae salvo que se pida. Restaurar uno lo devuelve al recall.": "They stay in the graph, but the recall does not bring them unless asked. Restoring one puts it back in the recall."
-}
