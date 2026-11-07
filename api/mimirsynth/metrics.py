@@ -54,7 +54,15 @@ AI_SECONDS = Histogram("mimirsynth_ai_request_seconds", "Time of the calls to AI
 AI_TOKENS = Counter("mimirsynth_ai_tokens", "Tokens sent to (in) and received from (out) AI engines", ["kind", "model", "direction"],
                     registry=REGISTRY)
 
-_SLUGS: dict[int, str] = {}                    # brain id -> slug, refreshed on each scrape (a brain's slug can change)
+# The memory health of each brain (#292), from its last measurement of the last two days: a brain not measured since has no value.
+HEALTH = (("coverage", "Share of the reference queries' expected texts that the recall finds (0-1)"),
+          ("staleness", "Share of the reference queries whose recall brings something marked as possibly outdated (0-1)"),
+          ("noise", "Mean items the recall returns for a vague or off-topic question"),
+          ("redundancy", "Share of current facts that repeat another current fact between the same entities (0-1)"),
+          ("contradictions", "Possible contradictions in the functional relations"),
+          ("stale_facts", "Current facts past their relation's shelf life"))
+
+_SLUGS: dict[int, str] = {}                  # brain id -> slug, refreshed on each scrape (a brain's slug can change)
 _GRAPH: tuple[float, dict[str, dict]] = (0.0, {})  # (when, slug -> sizes)
 _GRAPH_LOCK = threading.Lock()
 _refreshing = False
@@ -250,7 +258,15 @@ class _Stored:
             for status, n in db.execute(select(NotifyDelivery.status, func.count()).where(NotifyDelivery.status.in_(("pending", "failed")))
                                         .group_by(NotifyDelivery.status)).all():
                 deliveries.add_metric([status], n)
+            from . import health
+            measured = health.latest(db)
         yield from (jobs, oldest, props, waiting, docs, deliveries)
+        for key, text in HEALTH:
+            g = GaugeMetricFamily(f"mimirsynth_health_{key}", text, labels=["brain"])
+            for bid, m in sorted(measured.items()):
+                if isinstance(m.get(key), (int, float)):
+                    g.add_metric([slugs.get(bid, str(bid))], m[key])
+            yield g
 
 
 REGISTRY.register(_Stored())

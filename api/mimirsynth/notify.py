@@ -298,6 +298,8 @@ async def worker(version: str = "0.0.0") -> None:
                 from . import reembed, usage
                 await asyncio.to_thread(reembed.check_orphan)
                 await asyncio.to_thread(usage.resume)  # proposals that waited for a budget that no longer stops them
+                from . import health
+                await asyncio.to_thread(health.due)  # once a day per brain, keyed by the day in the database (#292)
             if t - last_conflicts >= 86400:
                 last_conflicts = t
                 from . import conflicts, memory

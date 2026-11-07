@@ -58,6 +58,9 @@ Escribe uno o varios umbrales de similitud en **Umbrales a simular** (por ejempl
 - Solo cuenta lo que está en **las dos ejecuciones**: las mismas consultas y los mismos textos. Añadir, borrar o editar una consulta nunca aparece como un empeoramiento.
 - Una ejecución **empeora** si un texto esperado que salía deja de salir, aparece un falso positivo nuevo o la sección de documentos de una consulta se pone al revés.
 
+## Salud de la memoria
+Las consultas de referencia del brain también se ejecutan una vez al día en la [[Salud de la memoria]]: su **cobertura** es la proporción de sus textos esperados que encuentra el recall, y las consultas que no esperan nada cuentan para su **ruido**. Esa medición diaria no añade una ejecución a esta lista.
+
 ## Durante un cambio de modelo de embeddings
 Cuando se cambia el modelo de embeddings (Administración → Embeddings → **Reindexar**, ver [[Proveedores de IA]]), cada brain con consultas de referencia las ejecuta solo dos veces: cuando empiezan a calcularse los vectores nuevos, todavía con el modelo anterior, como base (marcada «antes del cambio de modelo»), y cuando termina el cambio («tras el cambio de modelo»).
 

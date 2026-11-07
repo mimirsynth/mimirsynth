@@ -58,6 +58,9 @@ Write one or more similarity thresholds in **Thresholds to simulate** (for examp
 - Only what is in **both runs** counts: the same queries and the same texts. Adding, deleting or editing a query never shows up as worse.
 - A run is **worse** if an expected text that appeared no longer does, a new false positive appears, or a query's documents section turns the wrong way round.
 
+## Memory health
+The brain's reference queries are also run once a day by [[Memory health]]: its **coverage** is the share of their expected texts the recall finds, and the queries that expect nothing count towards its **noise**. That daily measurement does not add a run to this list.
+
 ## During an embedding model change
 When the embedding model is changed (Administration → Embeddings → **Reindex**, see [[AI providers]]), every brain with reference queries runs them on its own twice: when the new vectors start being computed, still with the previous model, as the baseline (marked «before the model change»), and when the switch finishes («after the model change»).
 

@@ -22,6 +22,9 @@ Lines at zero are hidden, and when nothing is waiting it says «Nothing needs yo
 ## What changed
 Next to it, for the same people, **What changed** says what moved in the brain over the **last 24 hours** or the **last 7 days** (you choose): new facts, invalidated facts, documents added, and proposals received and decided. Each line opens its page. They are the same counts as the [[My account]] email summary, which sends them to whoever wants them without opening the application. Lines at zero are hidden.
 
+## Memory health
+Below, for the same people, **Memory health** shows the last daily measurement of the brain: coverage of the reference queries, results with something outdated, noise, redundancy, open contradictions and facts to review, each with the value of a week before. **Measure now** measures again. See [[Memory health]] for what each number means.
+
 ## First steps (new instance)
 An instance administrator who opens the home page while **no brain exists yet** sees **First steps** instead. The **Create your first brain** button opens the dialog to create it under Administration ([[Brains and members]]), and a short checklist links to each screen:
 1. **Create a brain:** an isolated knowledge domain, with its own graph, ontology, members and tokens.
