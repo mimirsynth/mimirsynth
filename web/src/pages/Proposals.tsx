@@ -19,7 +19,7 @@ type Prop = { id: number; name: string; body: string; source: string; source_des
   selftest?: { checked_at: string; retrievable?: boolean | null; skipped?: string; error?: string; results?: { fact_uuid: string; fact: string; question: string; found: boolean; rank: number | null; outranked_by: string[] }[] } | null };
 /** A structured claim of the proposal, compared with the brain's current facts when it was sent, and what approving it did. */
 type Claim = { subject: string; relation: string; value: string; valid_from: string | null; supersedes: string | null;
-  verdict: "new" | "confirms" | "replaces" | "may_replace"; facts: { uuid: string; fact: string; target: string; valid_at: string | null }[];
+  verdict: "new" | "confirms" | "replaces" | "may_replace" | "archives"; facts: { uuid: string; fact: string; target: string; valid_at: string | null }[];
   applied?: { action: string; facts: (string | { uuid: string; op: number })[]; invalid_at?: string; at: string } };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
 type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
@@ -268,6 +268,7 @@ const CLAIM_VERDICT: Record<Claim["verdict"], { label: string; tone: Tone; facts
   confirms: { label: T("Confirma un hecho vigente"), tone: "success", facts: T("Al aprobarla se registra como confirmación de:") },
   replaces: { label: T("Sustituye hechos"), tone: "warn", facts: T("Al aprobarla, tras ingerirla, se invalidan:") },
   may_replace: { label: T("Parece sustituir"), tone: "neutral", facts: T("Hay otros valores vigentes en esa relación; no se tocan:") },
+  archives: { label: T("Archiva"), tone: "neutral", facts: T("Al aprobarla se archiva: sale del recall, sigue en el grafo y se puede restaurar:") },
 };
 
 /** The proposal's structured claims (issue 295): each with what the brain knew when it was sent and what approving it does or did. */

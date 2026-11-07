@@ -147,6 +147,12 @@ def apply(db, graph, brain, p, user) -> dict:
                     gone.append({"uuid": f["uuid"], "op": op.id})
             c["applied"] = {"action": "supersede", "facts": gone, "invalid_at": when, "at": now.isoformat()}
             done["superseded"] += [g["uuid"] for g in gone]
+        elif c.get("verdict") == "archives":   # out of the recall, reversible, the graph untouched (#297)
+            from . import archive
+            ok = _current(graph, c["archive"]) is not None and archive.put(db, brain.id, c["archive"], user.id if user else None, p.id,
+                                                                            (p.decision or {}).get("curator", {}).get("why", ""))
+            c["applied"] = {"action": "archive", "facts": [c["archive"]] if ok else [], "at": now.isoformat()}
+            done.setdefault("archived", []).extend([c["archive"]] if ok else [])
         else:
             c["applied"] = {"action": "none", "at": now.isoformat()}
     p.claims = claims

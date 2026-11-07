@@ -20,6 +20,8 @@ Y, también desactivado por defecto, el **ruido**: hechos vigentes que no dicen 
 - Una relación genérica (`RELATES_TO`, `MENTIONS`…) cuyo texto no añade nada a sus dos entidades.
 - Un cambio contado como suceso («X se migró a Y») cuando otro hecho vigente entre las mismas entidades ya dice el resultado. Si es la única huella del cambio, se conserva.
 
+Y, también desactivados por defecto, **hechos que nunca se recuperan**: hechos vigentes que ningún recall ha traído en los últimos 180 días (`archive_days`, ajustable por el API), aprendidos antes de eso y que nunca confirmó una persona ni una sonda. Aprobar uno lo **archiva**: sigue en el grafo sin cambios, pero el recall lo deja fuera salvo que se pida (`archived: true` en `POST /recall` o en el `recall` del MCP). La lista **Archivados** de esta pestaña restaura cualquiera con un clic. Cada recall registrado anota cuándo salieron sus hechos, y esta pasada solo propone cuando el brain lleva vigilado el periodo completo; antes, cualquier hecho antiguo parecería sin usar.
+
 Cada pasada tiene su casilla y su precisión, que dice cuánto fiarse de ella.
 
 ## Se detiene si baja la cobertura

@@ -35,8 +35,9 @@ log = logging.getLogger("mimirsynth.curator")
 router = APIRouter(prefix="/api/brains/{slug}/curator")
 curator = brain_access("curator")
 KIND = "curator.run"
-PASSES = ("contradictions", "redundancy", "obsolescence", "noise")
-DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False}, "batch": 5}
+PASSES = ("contradictions", "redundancy", "obsolescence", "noise", "archive")
+DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False, "archive": False},
+           "batch": 5, "archive_days": 180}
 MAX_REDUNDANT = 3000   # candidate facts whose embeddings the redundancy pass reads per run (the most recent first)
 MAX_FINDINGS = 200   # per run: what is past it waits for the next one
 SAMPLE = 10
@@ -61,7 +62,7 @@ def _pending_targets(db, brain_id: int) -> set[str]:
     """Facts a pending proposal already asks to replace: not proposed twice."""
     out = set()
     for claims in db.scalars(select(Proposal.claims).where(Proposal.brain_id == brain_id, Proposal.status == "pending", Proposal.claims.is_not(None))):
-        out |= {c.get("supersedes") for c in claims or [] if c.get("supersedes")}
+        out |= {c.get("supersedes") or c.get("archive") for c in claims or [] if c.get("supersedes") or c.get("archive")}
     return out
 
 
@@ -232,7 +233,19 @@ def coverage_stop(brain_id: int) -> str | None:
             "no propone nada hasta que la cobertura se recupere o se revise")
 
 
-FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence, "noise": noise}
+def archive_pass(brain_id: int) -> list[dict]:
+    """Findings of the archive pass (#297): current facts not recalled in `archive_days`, never confirmed, proposed for archiving."""
+    from . import archive
+    with _factory()() as db:
+        b = db.get(Brain, brain_id)
+        days = int(config(b).get("archive_days") or DEFAULT["archive_days"])
+        found = archive.candidates(db, b, days, _pending_targets(db, brain_id), MAX_FINDINGS)
+    return [{"pass": "archive", "subject": f["source"], "relation": f["name"], "keep": None,
+             "replace": [{k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}], "why": f"not recalled in {days} days and never confirmed"}
+            for f in found]
+
+
+FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence, "noise": noise, "archive": archive_pass}
 
 
 def precision(db, brain_id: int, pass_: str) -> dict:
@@ -273,11 +286,16 @@ def propose(brain_id: int, findings: list[dict]) -> list[int]:
             keep = f.get("keep") or {}   # the obsolescence pass keeps nothing: the fact just stops being current
             raw = [{"subject": f["subject"], "relation": f["relation"], "value": keep.get("target") or x["target"], "valid_from": keep.get("valid_at"),
                     "supersedes": x["uuid"]} for x in f["replace"]]
-            try:
-                checked = claims_mod.check(g, raw, amap, functional)
-            except claims_mod.ClaimError:   # a fact stopped being current since the pass read it
-                continue
-            name = (f"Curador: ruido «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "noise"
+            if f["pass"] == "archive":   # nothing replaces it: it only leaves the recall
+                checked = [{**{k: c[k] for k in ("subject", "relation", "value", "valid_from")}, "supersedes": None, "archive": x["uuid"],
+                            "verdict": "archives", "facts": [x]} for c, x in zip(raw, f["replace"])]
+            else:
+                try:
+                    checked = claims_mod.check(g, raw, amap, functional)
+                except claims_mod.ClaimError:   # a fact stopped being current since the pass read it
+                    continue
+            name = (f"Curador: archivar «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "archive"
+                    else f"Curador: ruido «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "noise"
                     else f"Curador: repite «{(keep.get('fact') or '')[:200]}»" if f["pass"] == "redundancy"
                     else f"Curador: sin confirmar «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "obsolescence"
                     else f"Curador: «{f['subject']}» {f['relation']} → {keep.get('target')}")[:255]
@@ -386,6 +404,7 @@ class SettingsIn(BaseModel):
     enabled: bool
     passes: dict[str, bool] = Field(default_factory=dict)
     batch: int = Field(DEFAULT["batch"], ge=1, le=100)
+    archive_days: int = Field(DEFAULT["archive_days"], ge=30, le=3650)
 
 
 def _run_out(db, r: CuratorRun, full: bool = False) -> dict:
@@ -407,7 +426,8 @@ def set_settings(body: SettingsIn, ctx: BrainCtx = Depends(admin_of_brain)):
     unknown = set(body.passes) - set(PASSES)
     if unknown:
         raise HTTPException(422, f"pasadas desconocidas: {', '.join(sorted(unknown))}")
-    ctx.brain.curator = {"enabled": body.enabled, "passes": {**DEFAULT["passes"], **body.passes}, "batch": body.batch, "by": ctx.user.id}
+    ctx.brain.curator = {"enabled": body.enabled, "passes": {**DEFAULT["passes"], **body.passes}, "batch": body.batch,
+                         "archive_days": body.archive_days, "by": ctx.user.id}
     ctx.db.commit()
     audit(ctx.db, ctx.user, "curator.settings", ctx.brain, enabled=body.enabled, passes=body.passes, batch=body.batch)
     return get_settings(ctx)

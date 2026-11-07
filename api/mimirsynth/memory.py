@@ -28,6 +28,7 @@ class RecallIn(BaseModel):
     docs: int | None = Field(None, ge=0, le=6, description="pasajes documentales máximos; 0 = sin documentos; vacío = el valor por defecto de la instancia")
     federated: bool = Field(True, description="incluir lo que otros brains prestan a este (federación); false = solo lo propio")
     min_similarity: float | None = Field(None, ge=0, le=1, description="cosine a fact or an episode fragment needs to enter; empty: the instance's setting; 0: no threshold (#281)")
+    archived: bool = Field(False, description="include the facts curators archived because nobody recalled them (#297)")
 
 
 def docs_for(request: Request, body: "RecallIn") -> int | None:
@@ -46,7 +47,7 @@ def federated_kwargs(ctx: BrainCtx, body: "RecallIn") -> dict:
 def do_recall(body: RecallIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(reader)):
     try:
         out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
-                     lang=language(request), min_similarity=body.min_similarity, **federated_kwargs(ctx, body))
+                     lang=language(request), min_similarity=body.min_similarity, **({"archived": True} if body.archived else {}), **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
     from . import ratings

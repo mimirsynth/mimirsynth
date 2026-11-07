@@ -668,6 +668,31 @@ class CuratorRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class FactRecall(Base):
+    """When the recall last brought a fact of the brain (#297): what «never recalled» is measured against."""
+    __tablename__ = "fact_recalls"
+    __table_args__ = (UniqueConstraint("brain_id", "fact_uuid", name="uq_fact_recalls_fact"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    fact_uuid: Mapped[str] = mapped_column(String(64))
+    first_recalled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_recalled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    count: Mapped[int] = mapped_column(Integer, default=1)
+
+
+class FactArchive(Base):
+    """An archived fact (#297): it stays in the graph, untouched, and the recall leaves it out unless asked. Deleting the row restores it."""
+    __tablename__ = "fact_archive"
+    __table_args__ = (UniqueConstraint("brain_id", "fact_uuid", name="uq_fact_archive_fact"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    fact_uuid: Mapped[str] = mapped_column(String(64))
+    archived_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    proposal_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reason: Mapped[str] = mapped_column(String(300), default="")
+
+
 class ReplayRun(Base):
     """A shadow replay of a brain's recall sample with a candidate configuration (#291): its parameters and what would differ."""
     __tablename__ = "replay_runs"

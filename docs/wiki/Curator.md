@@ -20,6 +20,8 @@ And, also off by default, **noise**: current facts that say nothing useful, by f
 - A generic relation (`RELATES_TO`, `MENTIONS`…) whose text adds nothing beyond its two entities.
 - A change told as an event («X was moved to Y») when another current fact between the same entities already states the result. If it is the only trace of the change, it is kept.
 
+And, also off by default, **facts never recalled**: current facts that no recall brought in the last 180 days (`archive_days`, adjustable through the API), learned before that, never confirmed by a person or a probe. Approving one **archives** it: it stays in the graph untouched, but the recall leaves it out unless asked (`archived: true` in `POST /recall` or the MCP `recall`). The **Archived** list in this tab restores any of them with one click. Every logged recall notes when its facts came back, and this pass only proposes once the brain has been tracked for the whole period; before that, every old fact would look unused.
+
 Each pass has its own checkbox and its own precision, which says how far to trust it.
 
 ## It stops if coverage falls

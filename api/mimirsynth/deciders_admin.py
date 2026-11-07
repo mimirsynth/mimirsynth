@@ -119,8 +119,8 @@ def triage_proposal(pid: int) -> None:
     from datetime import datetime, timezone
     with _factory()() as db:
         d, p = default_decider(db), db.get(Proposal, pid)
-        from .claims import replaces
-        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings) or p.kind == "correction" or replaces(p):
+        from .claims import actions_only, replaces
+        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings) or p.kind == "correction" or replaces(p) or actions_only(p):
             return  # a flagged possible secret is decided by a person (#116); a correction or a claim that replaces facts, always (#109, #295)
         brain = db.get(Brain, p.brain_id)
         try:

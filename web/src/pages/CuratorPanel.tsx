@@ -13,7 +13,7 @@ type Settings = { enabled: boolean; passes: Record<string, boolean>; batch: numb
 type Run = { id: number; day: string; status: string; reason: string; error: string; finished_at: string | null; findings: Record<string, number>;
   proposals: number[]; sample?: Record<string, Finding[]> };
 
-const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil"), noise: T("Ruido: hechos que no dicen nada útil") };
+const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil"), noise: T("Ruido: hechos que no dicen nada útil"), archive: T("Archivar lo que nunca se recupera") };
 
 const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha"), stopped: T("detenida") };
 
@@ -26,6 +26,27 @@ function FindingRow({ f }: { f: Finding }) {
       : <Text size="xs" c="dimmed">{t("Pasado de su vida útil y sin confirmar.")}</Text>}
     {f.replace.map((r) => <Text key={r.uuid} size="xs" c="dimmed">{t("Se invalidaría:")} «{r.fact}» {r.valid_at && <span className="ms-data">({fmtDay(r.valid_at)})</span>}</Text>)}
   </Stack></Panel>);
+}
+
+type ArchivedFact = { fact_uuid: string; fact: string | null; source: string | null; source_uuid: string | null; archived_at: string; reason: string };
+
+/** The facts archived because nobody recalled them (issue 297): out of the recall, untouched in the graph, restored with one click. */
+function Archived({ graph }: { graph: string }) {
+  const { t } = useTranslation();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ["archived", graph], queryFn: () => get<{ items: ArchivedFact[] }>(`brains/${graph}/archive`) });
+  const restore = useMutation({ mutationFn: (u: string) => send("DELETE", `brains/${graph}/archive/${u}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["archived", graph] }) });
+  const items = q.data?.items ?? [];
+  if (!items.length) return null;
+  return (<Stack gap={4}>
+    <Text size="sm" fw={600}>{t("Archivados ({{n}})", { n: items.length })}</Text>
+    <Text size="xs" c="dimmed">{t("Siguen en el grafo, pero el recall no los trae salvo que se pida. Restaurar uno lo devuelve al recall.")}</Text>
+    {items.map((a) => <Group key={a.fact_uuid} justify="space-between" gap="xs" wrap="nowrap">
+      <Text size="xs">{a.fact ? `«${a.fact}»` : a.fact_uuid}{a.source_uuid && <> · <Link to={`/entidad/${a.source_uuid}`}>{a.source}</Link></>} · {fmtDay(a.archived_at)}</Text>
+      <Btn size="row" icon="undo" loading={restore.isPending && restore.variables === a.fact_uuid} onClick={() => restore.mutate(a.fact_uuid)}>{t("Restaurar")}</Btn>
+    </Group>)}
+    <MutationError error={restore.error} />
+  </Stack>);
 }
 
 /** The scheduled curator (issue 300): what its passes would propose, the runs waiting for a person, and how often curators agreed. */
@@ -44,7 +65,7 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
   const waiting = runs.data?.items.filter((r) => r.status === "waiting") ?? [];
   return (
     <Stack gap="sm">
-      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales, hechos repetidos entre las mismas entidades, hechos pasados de su vida útil y ruido; cada pasada se activa por separado. Si la cobertura de las consultas de referencia baja tras aprobar sus propuestas, se detiene y avisa.")}</Notice>
+      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales, hechos repetidos entre las mismas entidades, hechos pasados de su vida útil, ruido y hechos que nunca se recuperan (los archiva); cada pasada se activa por separado. Si la cobertura de las consultas de referencia baja tras aprobar sus propuestas, se detiene y avisa.")}</Notice>
       {s.data && <Group gap="md">
         {isAdmin ? <Check checked={s.data.enabled} onChange={(e) => save.mutate({ enabled: e.currentTarget.checked })} label={t("Activar el curador en este brain")}
           description={t("Si una pasada fuera a proponer más de {{n}} cambios a la vez, espera a que alguien mire una muestra y la confirme.", { n: s.data.batch })} />
@@ -72,6 +93,7 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
         <Group gap="xs"><Btn kind="primary" loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, verb: "confirm" })}>{t("Crear las propuestas")}</Btn>
           <Btn loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, verb: "discard" })}>{t("Descartar")}</Btn></Group>
       </Stack></Panel>)}
+      <Archived graph={graph} />
       {!!runs.data?.items.length && <Stack gap={4}>
         <Text size="sm" fw={600}>{t("Últimas ejecuciones")}</Text>
         {runs.data.items.filter((r) => r.status !== "waiting").slice(0, 10).map((r) => <Text key={r.id} size="xs" c="dimmed">

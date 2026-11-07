@@ -431,7 +431,7 @@ def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n
 def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunks: int = 4, max_chars: int = 6000,
            embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
            min_sim: float | None = None, min_similarity: float | None = None, trust: bool | None = None, decay: bool | None = None,
-           state_card: bool | None = None) -> dict:
+           state_card: bool | None = None, archived: bool = False) -> dict:
     """`min_sim`: the documents' threshold, to simulate one without changing the setting. `min_similarity`: the threshold of the facts
     and the episode fragments (#281); empty, the instance's `recall_min_similarity`; 0, none."""
     t0 = time.time()
@@ -467,6 +467,9 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         weights = [1.0] + [FED_WEIGHT] * (len(flists) - 1)
         facts = fuse(flists, lambda f: (f["fact"] or "").strip().lower(), weights)
         chunks = fuse(clists, lambda c: (c.get("origin"), c["id"]), weights)[:n_chunks]
+    if not archived:   # archived facts stay out unless asked for (#297)
+        from . import archive
+        facts = archive.leave_out(brain_id, facts)
     from . import shelflife
     facts = shelflife.mark(brain_id, facts, amap, **({"decay": decay} if decay is not None else {}))  # past its relation's shelf life: weighs less and says so (#114); decay (#298)
     from . import verify
