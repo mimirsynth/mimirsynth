@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Link } from "react-router-dom";
-import { Fragment, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, langHeaders } from "../api";
 import { translateServer } from "../i18n";
 import { Btn, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
@@ -39,14 +39,23 @@ async function streamAnswer(graph: string, body: unknown, on: (ev: Record<string
 }
 
 /** Ask → Answer (issue 126): a written answer from the recall, every claim cited to its evidence. */
-export default function AskAnswer({ graph, query, facts, chunks }: { graph: string; query: string; facts: number; chunks: number }) {
+/** `trigger`: each increment writes an answer to `query` (Ask owns the button and Ctrl/⌘+Enter, in the same place as «Buscar»).
+ *  `onBusy` tells Ask when it is writing. An answer to an earlier question says so. */
+export default function AskAnswer({ graph, query, facts, chunks, trigger, onBusy }:
+  { graph: string; query: string; facts: number; chunks: number; trigger: number; onBusy?: (busy: boolean) => void }) {
   const { t } = useTranslation();
   const [sources, setSources] = useState<Source[] | null>(null);
   const [text, setText] = useState("");
   const [done, setDone] = useState<Done | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [asked, setAsked] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  useEffect(() => { onBusy?.(busy); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Only a new press answers: coming back to «Responder» mounts this again with the last count, which must not write by itself.
+  const seen = useRef(trigger);
+  useEffect(() => { if (trigger !== seen.current) { seen.current = trigger; if (query.trim()) void go(); } }, [trigger]);  // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { abort.current?.abort(); onBusy?.(false); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const label = (ref: string) => {
     const n = ref.slice(1);
     return ref[0] === "F" ? t("hecho {{n}}", { n }) : ref[0] === "E" ? t("episodio {{n}}", { n }) : t("doc {{n}}", { n });
@@ -54,7 +63,7 @@ export default function AskAnswer({ graph, query, facts, chunks }: { graph: stri
   const go = async () => {
     abort.current?.abort();
     const ctl = new AbortController(); abort.current = ctl;
-    setSources(null); setText(""); setDone(null); setError(null); setBusy(true);
+    setSources(null); setText(""); setDone(null); setError(null); setBusy(true); setAsked(query.trim());
     try {
       await streamAnswer(graph, { query, facts, chunks }, (ev) => {
         if (ev.type === "sources") setSources(ev.sources as Source[]);
@@ -81,18 +90,19 @@ export default function AskAnswer({ graph, query, facts, chunks }: { graph: stri
   const cited = new Set(done?.citations ?? []);
   return (
     <Stack gap="xs">
-      <Group gap="xs">
-        <Btn kind="primary" disabled={!query} loading={busy} onClick={() => void go()}>{t("Responder")}</Btn>
+      {(busy || asked !== null) && <Group gap="xs">
         {busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Parar")}</Btn>}
+        {asked !== null && <Text size="sm" role="status">{t("Respuesta a «{{q}}»", { q: asked })}</Text>}
+        {asked !== null && asked !== query.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}
         {done?.ms !== undefined && <Text size="xs" c="dimmed">{t("{{ms}} ms", { ms: done.ms })}</Text>}
-      </Group>
+      </Group>}
       <Text size="xs" c="dimmed">{t("Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.")}</Text>
       <MutationError error={error} />
       {sources && (text ? <Notice tone="info" title={t("Respuesta")}><Text size="sm" className="ms-prose">{parts}</Text></Notice>
         : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
       {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
       {!!sources?.length && <>
-        <Title order={6} mt="xs">{t("Pruebas ({{n}})", { n: sources.length })}</Title>
+        <Title order={2} size="h6" mt="xs">{t("Pruebas ({{n}})", { n: sources.length })}</Title>
         {sources.map((s) => {
           const to = sourceLink(s);
           return (
