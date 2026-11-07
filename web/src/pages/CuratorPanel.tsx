@@ -13,9 +13,9 @@ type Settings = { enabled: boolean; passes: Record<string, boolean>; batch: numb
 type Run = { id: number; day: string; status: string; reason: string; error: string; finished_at: string | null; findings: Record<string, number>;
   proposals: number[]; sample?: Record<string, Finding[]> };
 
-const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil") };
+const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil"), noise: T("Ruido: hechos que no dicen nada útil") };
 
-const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha") };
+const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha"), stopped: T("detenida") };
 
 /** One finding: the fact the curator keeps and the ones it would replace, the evidence a person looks at before confirming. */
 function FindingRow({ f }: { f: Finding }) {
@@ -44,7 +44,7 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
   const waiting = runs.data?.items.filter((r) => r.status === "waiting") ?? [];
   return (
     <Stack gap="sm">
-      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales, hechos repetidos entre las mismas entidades y hechos pasados de su vida útil; cada pasada se activa por separado.")}</Notice>
+      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales, hechos repetidos entre las mismas entidades, hechos pasados de su vida útil y ruido; cada pasada se activa por separado. Si la cobertura de las consultas de referencia baja tras aprobar sus propuestas, se detiene y avisa.")}</Notice>
       {s.data && <Group gap="md">
         {isAdmin ? <Check checked={s.data.enabled} onChange={(e) => save.mutate({ enabled: e.currentTarget.checked })} label={t("Activar el curador en este brain")}
           description={t("Si una pasada fuera a proponer más de {{n}} cambios a la vez, espera a que alguien mire una muestra y la confirme.", { n: s.data.batch })} />

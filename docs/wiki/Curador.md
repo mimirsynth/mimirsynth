@@ -14,7 +14,16 @@ Y, cuando lo marca un administrador (está desactivado por defecto), **hechos re
 
 Y, también desactivados por defecto, **hechos pasados de su vida útil**: los hechos vigentes que lista Calidad del contenido → A revisar (relaciones con vida útil, sin confirmar a tiempo), los más atrasados primero. Cada uno se convierte en una propuesta para invalidarlo. Rechazar la propuesta, o confirmar el hecho en A revisar, lo conserva.
 
-Cada pasada tiene su casilla y su precisión. El ruido viene después ([#300](https://github.com/mimirsynth/mimirsynth/issues/300)).
+Y, también desactivado por defecto, el **ruido**: hechos vigentes que no dicen nada útil, según cuatro reglas conservadoras a propósito.
+- Un extremo es un comodín y no una cosa del mundo («it», «esto», «algo»…).
+- Un extremo es la propia memoria («el grafo», «la memoria», «episodio», «hecho»…). No cuentan nombres que pueden ser cosas reales, como «node» (Node.js), «memory» (RAM) o «edge».
+- Una relación genérica (`RELATES_TO`, `MENTIONS`…) cuyo texto no añade nada a sus dos entidades.
+- Un cambio contado como suceso («X se migró a Y») cuando otro hecho vigente entre las mismas entidades ya dice el resultado. Si es la única huella del cambio, se conserva.
+
+Cada pasada tiene su casilla y su precisión, que dice cuánto fiarse de ella.
+
+## Se detiene si baja la cobertura
+Antes de proponer nada, el curador mira la [[Salud de la memoria]]. Si la cobertura de las consultas de referencia bajó más de *Salud de la memoria: avisar si la cobertura baja* respecto a la medición anterior, y entre medias se aprobaron propuestas suyas, ese día no propone nada. La ejecución termina **detenida**, con las cifras, y lo avisa la notificación **curator.stopped**.
 
 ## Activarlo
 Está **desactivado por defecto**. Un administrador del brain marca **Activar el curador en este brain**. Desde entonces se ejecuta una vez al día (el día es la clave de la ejecución: un reinicio nunca lo ejecuta dos veces), y **Ejecutar ahora** lo lanza al momento. **Ver qué propondría** lo muestra sin crear nada.

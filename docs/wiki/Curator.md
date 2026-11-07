@@ -14,7 +14,16 @@ And, once an administrator ticks it (it is off by default), **repeated facts**: 
 
 And, also off by default, **facts past their shelf life**: the current facts that Content quality → To review lists (relations with a shelf life, not confirmed in time), the longest overdue first. Each one becomes a proposal to invalidate it. Rejecting the proposal, or confirming the fact in To review, keeps it.
 
-Each pass has its own checkbox and its own precision. Noise comes next ([#300](https://github.com/mimirsynth/mimirsynth/issues/300)).
+And, also off by default, **noise**: current facts that say nothing useful, by four deliberately conservative rules.
+- One end is a placeholder, not a thing of the world («it», «esto», «something»…).
+- One end is the memory itself («the graph», «la memoria», «episode», «fact»…). Names that can be real things, such as «node» (Node.js), «memory» (RAM) or «edge», do not count.
+- A generic relation (`RELATES_TO`, `MENTIONS`…) whose text adds nothing beyond its two entities.
+- A change told as an event («X was moved to Y») when another current fact between the same entities already states the result. If it is the only trace of the change, it is kept.
+
+Each pass has its own checkbox and its own precision, which says how far to trust it.
+
+## It stops if coverage falls
+Before proposing anything, the curator looks at [[Memory health]]. If the reference queries' coverage fell more than *Memory health: notify when coverage falls* since the previous measurement, and some of its proposals were approved in between, it proposes nothing that day. The run ends **stopped**, with the numbers, and the **curator.stopped** notification says so.
 
 ## Turning it on
 It is **off by default**. A brain administrator ticks **Turn on the curator in this brain**. From then on it runs once a day (the day is the run's key: a restart never runs it twice), and **Run now** runs it at once. **See what it would propose** shows it without creating anything.
