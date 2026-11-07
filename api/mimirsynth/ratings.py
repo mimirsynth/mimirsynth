@@ -78,11 +78,13 @@ def log(ctx: BrainCtx, query: str, out: dict, bg=None, body=None, via: str = "ht
     except Exception:  # noqa: BLE001  (the sample fails open, like the log)
         log_.warning("no se pudo preparar la muestra de un recall", exc_info=True)
         sample = None
-    for fn, arg in ((_write, row), *(((replay.write, sample),) if sample else ())):
+    from . import archive   # when each of its own facts was last recalled (#297)
+    own = [i["id"] for i in items if i["kind"] == "fact" and not i.get("origin")]
+    for fn, args in ((_write, (row,)), *(((replay.write, (sample,)),) if sample else ()), *(((archive.touch, (ctx.brain.id, own)),) if own else ())):
         if bg is not None:
-            bg.add_task(fn, arg)
+            bg.add_task(fn, *args)
         else:
-            fn(arg)
+            fn(*args)
     return rid
 
 

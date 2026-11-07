@@ -135,7 +135,7 @@ def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa:
     from mimirsynth.store import _factory
     assert client.post("/api/brains", json={"slug": "cu4", "name": "CU4", "graph_name": repeated}).status_code == 201
     s = client.get("/api/brains/cu4/curator/settings").json()
-    assert s["passes"] == {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False}                      # off until an administrator turns it on
+    assert s["passes"] == {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False, "archive": False}                      # off until an administrator turns it on
     pv = client.post("/api/brains/cu4/curator/preview?pass=redundancy").json()
     assert pv["count"] == 1                                                                     # PostgreSQL 14 / 16 is a change, not a repeat
     f = pv["findings"][0]
