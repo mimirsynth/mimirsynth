@@ -44,7 +44,7 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
   const waiting = runs.data?.items.filter((r) => r.status === "waiting") ?? [];
   return (
     <Stack gap="sm">
-      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales y hechos repetidos entre las mismas entidades; en los dos casos se queda con el más reciente.")}</Notice>
+      <Notice tone="info">{t("El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Busca contradicciones claras en las relaciones funcionales, hechos repetidos entre las mismas entidades y hechos pasados de su vida útil; cada pasada se activa por separado.")}</Notice>
       {s.data && <Group gap="md">
         {isAdmin ? <Check checked={s.data.enabled} onChange={(e) => save.mutate({ enabled: e.currentTarget.checked })} label={t("Activar el curador en este brain")}
           description={t("Si una pasada fuera a proponer más de {{n}} cambios a la vez, espera a que alguien mire una muestra y la confirme.", { n: s.data.batch })} />
