@@ -67,6 +67,13 @@ A proposal sent by an agent or over the API may carry **claims** next to its tex
 
 Once applied, each claim says when. The agent guide (`docs/AGENTS.md`) explains how to send them.
 
+## By category
+**By category** groups what is pending by what produced it: the curator's contradictions, facts a verifier contradicts, corrections, possible duplicates, proposals close to something no longer true, and new ones. Each category shows how many are pending, a sample and its **precision**: the share of its proposals that people approved, over the last 50 they decided.
+
+After looking at the sample, **Approve the category** or **Reject the category** decides all its pending proposals, up to 200. Proposals with a secret to review and corrections are left to decide one at a time. An approval waits the usual 10 seconds before ingestion.
+
+**Automatic approval.** A brain administrator can tick **Approve this category automatically**, only once the category has earned it: at least 20 decisions by people and a precision of 95 % (adjustable through the API). From then on its proposals are approved within minutes, as «automatic» in the history and the audit log, and can be undone like any other. Automatic approvals never count towards the precision. If the precision of people's decisions falls below the bar, the category goes back to manual and the **autoapprove.disabled** notification says so. Nothing flagged by the secret scanner is ever approved this way. The email summary lists the curator's and verifiers' proposals by category, with a link here.
+
 ## Secrets in proposals
 Before a proposal is stored (from the interface, the API or the `remember` tool over MCP), its title and content go through the **secret detector**: cloud and AI provider keys, tokens, private keys, JWTs, `Authorization` headers, passwords in URLs… Some findings are **certain**; a random-looking value assigned to `password`, `secret` or `token` is only **possible**. What happens depends on the brain's policy (Administration → Brain → **Secrets**):
 

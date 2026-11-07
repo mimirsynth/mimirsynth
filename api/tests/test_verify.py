@@ -77,13 +77,13 @@ def test_probes_verify_refute_and_show_in_the_recall(client, graph, tmp_path):  
     probes = {p["fact_uuid"]: p for p in client.get("/api/brains/vf/probes").json()["items"]}
     assert probes["f1"]["state"] == "verified" and probes["f2"]["state"] == "refuted" and probes["f2"]["value"] == "pve2"
     with _factory()() as db:
-        assert db.query(FactConfirmation).filter(FactConfirmation.fact_uuid == "f1").one()
-        p = db.query(Proposal).filter(Proposal.category == "verifier.refuted").one()
+        assert db.query(FactConfirmation).filter(FactConfirmation.brain_id == _bid(), FactConfirmation.fact_uuid == "f1").one()
+        p = db.query(Proposal).filter(Proposal.brain_id == _bid(), Proposal.category == "verifier.refuted").one()
         assert p.status == "pending" and p.claims[0]["supersedes"] == "f2" and p.claims[0]["value"] == "pve2" and "pve2" in p.body
         assert db.query(VerifierConfig).one().values == {"path": str(inv)}
     client.post("/api/brains/vf/probes/run")                                             # refuted again: not proposed twice
     with _factory()() as db:
-        assert db.query(Proposal).filter(Proposal.category == "verifier.refuted").count() == 1
+        assert db.query(Proposal).filter(Proposal.brain_id == _bid(), Proposal.category == "verifier.refuted").count() == 1
     assert graph.query("MATCH ()-[r:RELATES_TO {uuid:'f2'}]->() RETURN r.invalid_at").result_set[0][0] is None   # nothing on its own
     facts = V.mark(_bid(), [{"uuid": "f1", "fact": "x", "status": "current"}, {"uuid": "zz", "fact": "y", "status": "current"}])
     assert facts[0]["verification"]["state"] == "verified" and "verification" not in facts[1]

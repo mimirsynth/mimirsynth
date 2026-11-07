@@ -90,7 +90,7 @@ def test_send_approve_confirm_replace_and_undo(client, graph, monkeypatch):  # n
     with _factory()() as db:
         p = db.get(Proposal, pid)
         assert p.status == "ingested" and p.ingest_report == {"claims": {"confirmed": ["f1"], "superseded": []}}
-        assert db.query(FactConfirmation).filter(FactConfirmation.fact_uuid == "f1").one().user_id is not None
+        assert db.query(FactConfirmation).filter(FactConfirmation.brain_id == p.brain_id, FactConfirmation.fact_uuid == "f1").one().user_id is not None
 
     # a replacement: the decider and a batch leave it to a person; approved, the text is ingested and only then f3 is invalidated
     r = client.post("/api/brains/cl/proposals", headers=contrib, json={"name": "BD", "body": "Nextcloud usa MariaDB desde octubre.",
