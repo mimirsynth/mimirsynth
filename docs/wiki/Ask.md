@@ -17,7 +17,7 @@ Here you try **recall**: the same thing an agent does when it queries the memory
 ## How to use it (Context)
 1. Write a question or a sentence in natural language (e.g. "where is the production database now?").
 2. Adjust, if you like, **Facts** (how many facts to bring, 0–30) and **Fragments** (how many episode fragments, 0–15).
-3. Press **Search** or `Ctrl+Enter`.
+3. Press **Search** or `Ctrl+Enter` (`⌘+Enter` on a Mac); in **Answer** mode the same button and keys write the answer. Above the results, a line says which question they answer and what came back, and marks them «From an earlier question» once you change the text.
 
 ## What it returns
 - **Facts:** the most similar to the question, only above the *Minimum similarity of a fact or a fragment* (which also applies to episode fragments), in two lists as the agent receives them: **Current facts** and **Facts no longer true** (struck through, with their date range). Each shows its similarity. A current fact that replaces one no longer true says «Replaces …», and the one it replaced says «Now: …» and which fragment or passage states it; each name is a link to its card. A fact that joined by that link and not by closeness shows «no similarity». If nothing reaches the threshold, Ask says so.
