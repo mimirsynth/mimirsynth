@@ -69,6 +69,7 @@ Guía: [[Recuerdo e ingesta]]
 | Ajuste | Clave | Por defecto | Rango o valores | Descripción |
 |---|---|---|---|---|
 | Peso de un hecho a revisar | `recall_stale_weight` | `0,6` | 0–1 | Un hecho vigente que ha superado la vida útil de su relación pesa esto en el recall (y sale marcado «sin confirmar desde …»). 1: igual que los demás. |
+| Responder primero con el estado actual | `recall_state_card` | `no` | `no` (No) / `yes` (Sí) | Para una pregunta sobre el presente, el recall empieza por el estado actual de las entidades de las que trata (el valor vigente de cada relación) antes que cualquier otro hecho o fragmento. Una pregunta sobre el pasado no lo lleva. Simúlalo antes con las consultas de referencia. |
 | Pesar los hechos por su origen | `recall_trust` | `no` | `no` (No) / `yes` (Sí) | Un hecho que escribió un agente o que se capturó de forma automática pesa menos en el recall que uno que aprobó una persona o que verificó un sistema (pesos de abajo). Simúlalo antes con las consultas de referencia. |
 | Peso de un hecho escrito por un agente | `recall_trust_agent` | `0,95` | 0–1 | Cuánto pesa en el recall un hecho que un agente decidió guardar, con «Pesar los hechos por su origen». 1: igual que los de una persona. |
 | Peso de un hecho capturado automáticamente | `recall_trust_auto` | `0,85` | 0–1 | Cuánto pesa un hecho capturado de forma automática (un hook, o un cliente que no dice su origen), con «Pesar los hechos por su origen». |

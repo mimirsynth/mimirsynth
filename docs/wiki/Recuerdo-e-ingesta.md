@@ -31,6 +31,9 @@ Si otros brains le prestan su memoria a este ([[Federación]]), el recall tambi�
 ### El índice de texto de episodios
 Copia el texto de los episodios de FalkorDB a PostgreSQL, troceado, con vectores y búsqueda de texto completo. Se mantiene al día solo con la sincronización periódica; los curadores pueden forzarlo con **Reindexar ahora** en [[Preguntar]]. Se puede **reconstruir** siempre desde el grafo.
 
+### Primero el estado actual
+Con **Responder primero con el estado actual** (Administración → Recuerdo (recall), desactivado por defecto), una pregunta sobre el presente empieza por el **estado actual** de las entidades de las que tratan sus primeros hechos, hasta dos. Es decir, el valor vigente de cada relación, antes que cualquier otro hecho, fragmento o pasaje. Una relación que un curador marcó como funcional muestra solo su valor más reciente y dice cuántos más siguen vigentes (una posible contradicción); el resto de relaciones listan todos sus valores vigentes. Una pregunta sobre el pasado («antes», «historia», «qué era») no lo lleva, y lo que dejó de ser cierto sigue en su propia sección. La tarjeta se lee del grafo al pedirla, así que siempre está al día. También está en el JSON del recall (`state`) y en `GET /api/brains/{slug}/entities/{uuid}/state`. Las consultas de referencia pueden simularla (`params.state_card`).
+
 ### Confianza y antigüedad
 Cada hecho del JSON del recall dice su **nivel de confianza** (`trust`), según de dónde vino, de más a menos:
 - **verified**: una sonda lo comprobó ([[Hechos verificables]]);

@@ -1,0 +1,8 @@
+{
+ "## Estado actual de «{{entity}}»": "## Current state of «{{entity}}»",
+ "Para una pregunta sobre el presente, el recall empieza por el estado actual de las entidades de las que trata (el valor vigente de cada relación) antes que cualquier otro hecho o fragmento. Una pregunta sobre el pasado no lo lleva. Simúlalo antes con las consultas de referencia.": "For a question about the present, the recall starts with the current state of the entities it is about (the current value of each relation) before any other fact or fragment. A question about the past does not get it. Simulate it first with the reference queries.",
+ "Responder primero con el estado actual": "Answer first with the current state",
+ "[y {{n}} valores más vigentes: posible contradicción]": "[and {{n}} more current values: a possible contradiction]",
+ "desde {{date}}": "since {{date}}",
+ "la entidad no tiene hechos vigentes": "the entity has no current facts"
+}

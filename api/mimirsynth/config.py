@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     health_redundancy_max: float = 0.0  # notify when the redundancy is above this (#292); 0: never
     ingest_selftest: str = "yes"  # after ingesting, check that each new fact comes back to a control question (#296): yes | no
     ingest_selftest_per_hour: int = 60  # proposals per brain and hour that are self-tested (#296)
+    recall_state_card: str = "no"  # a question about the present gets the entity's current-state card first (#294): yes | no
     recall_trust: str = "no"  # weigh facts by where they came from (#298): yes | no
     recall_trust_agent: float = 0.95  # weight of a fact an agent chose to write (#298)
     recall_trust_auto: float = 0.85  # weight of a fact captured automatically (#298)
