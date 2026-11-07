@@ -65,15 +65,24 @@ def items_of(out: dict) -> list[dict]:
     return items
 
 
-def log(ctx: BrainCtx, query: str, out: dict, bg=None) -> str:
-    """Gives the recall its `recall_id` and logs it, after the answer when `bg` (BackgroundTasks) is given. Never raises."""
+def log(ctx: BrainCtx, query: str, out: dict, bg=None, body=None, via: str = "http") -> str:
+    """Gives the recall its `recall_id` and logs it, after the answer when `bg` (BackgroundTasks) is given. Never raises. With the
+    request's `body`, a brain that keeps a replay sample (#291) also keeps this recall in it."""
+    from . import replay
     rid = secrets.token_urlsafe(9)
+    items = items_of(out)
     row = dict(brain_id=ctx.brain.id, rid=rid, user_id=ctx.user.id, query_hash=hashlib.sha256(query.encode()).hexdigest(),
-               query_len=len(query), query_text=query if ctx.brain.recall_query_text else None, items=items_of(out))
-    if bg is not None:
-        bg.add_task(_write, row)
-    else:
-        _write(row)
+               query_len=len(query), query_text=query if ctx.brain.recall_query_text else None, items=items)
+    try:
+        sample = replay.row(ctx.brain, query, replay.params_of(body), items, via) if body is not None else None
+    except Exception:  # noqa: BLE001  (the sample fails open, like the log)
+        log_.warning("no se pudo preparar la muestra de un recall", exc_info=True)
+        sample = None
+    for fn, arg in ((_write, row), *(((replay.write, sample),) if sample else ())):
+        if bg is not None:
+            bg.add_task(fn, arg)
+        else:
+            fn(arg)
     return rid
 
 

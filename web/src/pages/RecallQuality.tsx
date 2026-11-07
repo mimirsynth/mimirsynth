@@ -11,6 +11,8 @@ type Quality = { days: number; recalls: number; rated_recalls: number; ratings: 
   buckets: Record<string, ({ range: string } & Counts)[]>; incorrect: { kind: string; text: string; similarity: number | null; created_at: string; proposal_id: number | null }[];
   keep_query_text: boolean; query_text_days: number; rate_hours: number };
 
+type Replay = { enabled: boolean; max: number; days: number; samples: number };
+
 export const KIND: Record<string, string> = { fact: T("Hechos"), chunk: T("Fragmentos de episodios"), doc: T("Pasajes de documentos") };
 const pct = (c: Counts) => { const n = c.useful + c.irrelevant + c.incorrect; return n ? Math.round((100 * c.irrelevant) / n) : null; };
 
@@ -21,6 +23,9 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
   const key = ["recall-quality", graph];
   const q = useQuery({ queryKey: key, queryFn: () => get<Quality>(`brains/${graph}/recall/quality`, { days: 30 }) });
   const keep = useMutation({ mutationFn: (v: boolean) => send("PUT", `brains/${graph}/recall/settings`, { keep_query_text: v }), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
+  const rp = useQuery({ queryKey: ["replay", graph], queryFn: () => get<Replay>(`brains/${graph}/replay/settings`), enabled: canAdmin });
+  const sample = useMutation({ mutationFn: (v: boolean) => send("PUT", `brains/${graph}/replay/settings`, { ...rp.data, enabled: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["replay", graph] }) });
   const d = q.data;
   const csv = () => {
     if (!d) return;
@@ -63,6 +68,9 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
       {canAdmin && <Check checked={d.keep_query_text} onChange={(e) => keep.mutate(e.currentTarget.checked)} label={t("Guardar el texto de las consultas")}
         description={t("Por defecto solo se guarda una huella y la longitud de cada consulta, porque llevan los prompts de las personas. Con esto se guarda el texto, que se borra a los {{n}} días; al desmarcarlo se borra ya.", { n: d.query_text_days })} />}
       <MutationError error={keep.error} />
+      {canAdmin && rp.data && <Check checked={rp.data.enabled} onChange={(e) => sample.mutate(e.currentTarget.checked)} label={t("Guardar una muestra de consultas para repetirlas")}
+        description={t("Guarda las últimas {{max}} consultas reales (con los secretos enmascarados, durante {{days}} días) para repetirlas con otra configuración antes de cambiarla. Llevan los prompts de las personas: actívalo solo si hace falta. Al desmarcarlo se borran. Ahora hay {{n}}.", { max: rp.data.max, days: rp.data.days, n: rp.data.samples })} />}
+      <MutationError error={sample.error} />
     </Stack>
   );
 }

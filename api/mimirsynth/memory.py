@@ -50,7 +50,7 @@ def do_recall(body: RecallIn, request: Request, bg: BackgroundTasks, ctx: BrainC
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
     from . import ratings
-    return {**out, "recall_id": ratings.log(ctx, body.query, out, bg)}  # to rate what it returned (#110), logged after answering
+    return {**out, "recall_id": ratings.log(ctx, body.query, out, bg, body)}  # to rate what it returned (#110), logged after answering
 
 
 @router.get("/index/status")

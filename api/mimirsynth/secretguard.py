@@ -105,6 +105,18 @@ def safe_name(p) -> str:
     return name
 
 
+def mask_all(brain: Brain, text: str, lang: str | None = None) -> tuple[str, int]:
+    """The text with everything the scanner finds masked, certain or possible, whatever the brain's mode, and how many: for what is
+    kept outside the memory and never reviewed (the replay sample, #291). The brain's exceptions still apply."""
+    found = scan(text, brain.secret_allow or "")
+    if not found:
+        return text, 0
+    lang = lang or instance_lang()
+    out = redact(text, [Finding(f.rule, f.label, f.start, f.end, True) for f in found],
+                 marker=tr("[secreto eliminado: {{label}}]", lang, label="{label}"), labels=labels(lang), spans=[])
+    return out, len(found)
+
+
 def mask_flagged(text: str, findings: list[dict], lang: str | None = None) -> tuple[str, list[dict]]:
     """Masks what was flagged in one field of a stored text, because a curator decided it must not reach the memory as written («Mask
     and approve»). The already masked findings stay as they are; every position is recomputed for the new text. Like `guard`, the
