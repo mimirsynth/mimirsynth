@@ -589,5 +589,4 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
    word stays and `aria-pressed` says it to a screen reader. */
 .ms-btn[aria-pressed="true"] { background: var(--ms-hover) !important; color: var(--ms-accent) !important; }
 .ms-ask-head { display: flex; flex-direction: column; gap: 2px; }
-.ms-ask-head:empty { display: none; }
 .ms-ask-head:focus { outline: none; }  /* it takes the focus only so the next Tab starts at the results */
