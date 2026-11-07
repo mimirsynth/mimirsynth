@@ -34,8 +34,8 @@ log = logging.getLogger("mimirsynth.curator")
 router = APIRouter(prefix="/api/brains/{slug}/curator")
 curator = brain_access("curator")
 KIND = "curator.run"
-PASSES = ("contradictions", "redundancy")
-DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False}, "batch": 5}
+PASSES = ("contradictions", "redundancy", "obsolescence")
+DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False}, "batch": 5}
 MAX_REDUNDANT = 3000   # candidate facts whose embeddings the redundancy pass reads per run (the most recent first)
 MAX_FINDINGS = 200   # per run: what is past it waits for the next one
 SAMPLE = 10
@@ -127,7 +127,22 @@ def redundancy(brain_id: int) -> list[dict]:
     return out
 
 
-FINDERS = {"contradictions": contradictions, "redundancy": redundancy}
+def obsolescence(brain_id: int) -> list[dict]:
+    """Findings of the obsolescence pass: current facts past their relation's shelf life (as Content quality → To review lists them, the
+    longest overdue first), proposed for invalidation one by one. Confirming one in To review, or rejecting its proposal, keeps it."""
+    from . import shelflife
+    with _factory()() as db:
+        b = db.get(Brain, brain_id)
+        busy = _pending_targets(db, brain_id)
+        items = shelflife.scan(db, b, limit=MAX_FINDINGS * 2)["items"]
+    items = sorted(items, key=lambda i: -(i.get("days_over") or 0))
+    return [{"pass": "obsolescence", "subject": i["source"], "relation": i["relation"], "keep": None,
+             "replace": [{k: i.get(k) for k in ("uuid", "fact", "target", "valid_at")}],
+             "why": f"not confirmed since {str(i['stale_since'])[:10]}, {i['days_over']} days past its {i['shelf_life_days']}-day shelf life"}
+            for i in items if i["uuid"] not in busy][:MAX_FINDINGS]
+
+
+FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence}
 
 
 def precision(db, brain_id: int, pass_: str) -> dict:
@@ -165,14 +180,16 @@ def propose(brain_id: int, findings: list[dict]) -> list[int]:
         for f in findings:
             if busy & {x["uuid"] for x in f["replace"]}:
                 continue
-            raw = [{"subject": f["subject"], "relation": f["relation"], "value": f["keep"]["target"], "valid_from": f["keep"].get("valid_at"),
+            keep = f.get("keep") or {}   # the obsolescence pass keeps nothing: the fact just stops being current
+            raw = [{"subject": f["subject"], "relation": f["relation"], "value": keep.get("target") or x["target"], "valid_from": keep.get("valid_at"),
                     "supersedes": x["uuid"]} for x in f["replace"]]
             try:
                 checked = claims_mod.check(g, raw, amap, functional)
             except claims_mod.ClaimError:   # a fact stopped being current since the pass read it
                 continue
-            name = (f"Curador: repite «{(f['keep'].get('fact') or '')[:200]}»" if f["pass"] == "redundancy"
-                    else f"Curador: «{f['subject']}» {f['relation']} → {f['keep']['target']}")[:255]
+            name = (f"Curador: repite «{(keep.get('fact') or '')[:200]}»" if f["pass"] == "redundancy"
+                    else f"Curador: sin confirmar «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "obsolescence"
+                    else f"Curador: «{f['subject']}» {f['relation']} → {keep.get('target')}")[:255]
             p = Proposal(brain_id=brain_id, author_id=author.id, name=name, body="", source="text", status="pending", kind="memory",
                          source_description=f"curator: {f['pass']}", category=category(f["pass"]), claims=checked,
                          related_verdict="new", decision={"curator": {"pass": f["pass"], "why": f["why"], "keep": f["keep"]}})
