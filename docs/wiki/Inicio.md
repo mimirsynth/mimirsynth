@@ -23,7 +23,7 @@ Esta wiki es la guía de usuario completa, en castellano y [en inglés](Home). S
 ## Cuidar el conocimiento
 El marco: [[Vocabulario]] · [[Ontología]] · [[Tipos de entidad]] · [[Relaciones y alias]]
 
-El contenido: [[Calidad del contenido]] · [[Salud de la memoria]] · [[Curador]] · [[Fusionar duplicados]] · [[Contradicciones]] · [[Corrector de tipos]]
+El contenido: [[Calidad del contenido]] · [[Salud de la memoria]] · [[Curador]] · [[Hechos verificables]] · [[Fusionar duplicados]] · [[Contradicciones]] · [[Corrector de tipos]]
 
 ## Administrar la instancia
 [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Métricas]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Actualización y copias de seguridad]]

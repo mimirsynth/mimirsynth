@@ -210,6 +210,10 @@ def build_context(facts: list[dict], chunks: list[dict], max_chars: int, passage
                     else tr("- {{fact}} (desde {{date}})", lang, fact=f["fact"], date=_fmt_date(f["valid_at"] or f["created_at"])))
             if f.get("replaces"):
                 line += " " + tr("[sustituye a «{{old}}»]", lang, old=f["replaces"])
+            v = f.get("verification") or {}
+            if v.get("checked_at") and v.get("state") in ("verified", "refuted"):
+                line += " " + (tr("[verificado el {{date}}]", lang, date=_fmt_date(v["checked_at"])) if v["state"] == "verified"
+                               else tr("[un sistema lo contradijo el {{date}}]", lang, date=_fmt_date(v["checked_at"])))
             if not add(line + _origin(f, lang)):
                 break
     if old:
@@ -457,6 +461,8 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         chunks = fuse(clists, lambda c: (c.get("origin"), c["id"]), weights)[:n_chunks]
     from . import shelflife
     facts = shelflife.mark(brain_id, facts, amap)  # past its relation's shelf life: weighs less and says so (#114)
+    from . import verify
+    facts = verify.mark(brain_id, facts)  # checked against a live system: its state and when (#293)
     cur = [f for f in facts if f["status"] != "invalidated"][:n_facts]
     old = [f for f in facts if f["status"] == "invalidated"][: max(2, n_facts // 3)]
     t2 = time.time()

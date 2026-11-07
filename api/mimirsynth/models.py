@@ -619,6 +619,33 @@ class HealthRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class FactProbe(Base):
+    """A fact's probe (#293): the verifier that checks it against a live system, its parameters and the last result."""
+    __tablename__ = "fact_probes"
+    __table_args__ = (UniqueConstraint("brain_id", "fact_uuid", name="uq_fact_probes_fact"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    fact_uuid: Mapped[str] = mapped_column(String(64))
+    verifier: Mapped[str] = mapped_column(String(64))
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    state: Mapped[str | None] = mapped_column(String(16), nullable=True)  # verified | refuted | unverifiable; empty: not checked yet
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class VerifierConfig(Base):
+    """A verifier's settings for a brain (#293); the secret ones sealed with the session secret, never returned."""
+    __tablename__ = "verifier_configs"
+    __table_args__ = (UniqueConstraint("brain_id", "verifier", name="uq_verifier_configs"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    verifier: Mapped[str] = mapped_column(String(64))
+    values: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class CuratorRun(Base):
     """One run of the scheduled curator on a brain (#300): at most one per brain and day. `findings`: per pass, what it found;
     `proposals`: the ids it created. `waiting`: a pass found more than its batch and waits for a person to confirm a sample."""
