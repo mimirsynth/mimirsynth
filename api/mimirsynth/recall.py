@@ -126,7 +126,11 @@ def docs_block(passages: list[dict], lang: str = "es") -> str:
     size = len(parts[0])
     for p in passages:
         cite = p["title"] + (f" › {p['heading_path']}" if p["heading_path"] else "") + (f" (p. {p['page']})" if p["page"] else "") + _origin(p, lang)
-        entry = tr("### {{cite}} [doc {{doc}}, trozo {{chunk}}]", lang, cite=cite, doc=p["document_id"], chunk=p["chunk_idx"]) + "\n" + p["text"]
+        updated = p.get("source_updated_at") or p.get("last_seen_at")
+        if updated:   # how old the page is, next to what it says (#286)
+            cite += tr(" · actualizado el {{date}}", lang, date=_fmt_date(updated))
+        entry = (tr("### {{cite}} [doc {{doc}}, trozo {{chunk}}]", lang, cite=cite, doc=p["document_id"], chunk=p["chunk_idx"]) + "\n" + p["text"]
+                 + _superseded_note(p, lang))
         if size + len(entry) > DOC_BLOCK_CHARS:
             break
         parts.append(entry); size += len(entry) + 1
@@ -173,7 +177,8 @@ def _origin(x: dict, lang: str) -> str:
 
 
 def _superseded_note(c: dict, lang: str) -> str:
-    """Under a fragment whose episode stated something no longer true: what stopped being true, when, and what is true now (#282)."""
+    """Under a fragment or a passage that states something no longer true: what stopped being true, when, and what is true now
+    (#282, #286)."""
     lines = []
     for s in c.get("superseded") or []:
         line = tr("> Puede estar superado: «{{fact}}» dejó de ser cierto el {{date}}.", lang, fact=s["fact"], date=_fmt_date(s["invalid_at"]))
@@ -282,52 +287,107 @@ def _facts(res, amap: dict | None) -> list[dict]:
     return out
 
 
-def superseded(graph_name: str, episodes: set[str], gone: list[dict], amap: dict | None = None) -> tuple[dict[str, list[dict]], dict[str, list[dict]]]:
-    """What stopped being true behind a recall (#282): the facts no longer true that were learned from `episodes` (by episode), and
-    the current facts that replace those and the ones in `gone` (by the uuid of the fact they replace). Two queries to the graph."""
+def superseded(graph_name: str, episodes: set[str], gone: list[dict], amap: dict | None = None,
+               entities: set[str] | frozenset = frozenset()) -> tuple[list[dict], dict[str, list[dict]]]:
+    """What stopped being true behind a recall (#282, #286): the facts no longer true learned from `episodes`, and those between two
+    of `entities` (what a document passage names); and the current facts that replace those and the ones in `gone` (by the uuid of
+    the fact they replace). Up to three queries to the graph."""
     g = graph(graph_name)
-    from_eps = [f for f in _facts(g.query(
-        "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NOT NULL AND any(e IN r.episodes WHERE e IN $eps) "
-        f"RETURN {FACT_RETURN} LIMIT 100", {"eps": sorted(episodes)}), amap) if f["status"] == "invalidated"] if episodes else []
-    olds = {f["uuid"]: f for f in [*from_eps, *gone] if f.get("uuid")}
+    stated: dict[str, dict] = {}
+    if episodes:
+        for f in _facts(g.query("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NOT NULL AND any(e IN r.episodes WHERE e IN $eps) "
+                                f"RETURN {FACT_RETURN} LIMIT 100", {"eps": sorted(episodes)}), amap):
+            stated.setdefault(f["uuid"], f)
+    if entities:
+        for f in _facts(g.query("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NOT NULL AND a.uuid IN $u AND b.uuid IN $u "
+                                f"RETURN {FACT_RETURN} LIMIT 100", {"u": sorted(entities)}), amap):
+            stated.setdefault(f["uuid"], f)
+    found = [f for f in stated.values() if f["status"] == "invalidated"]
+    olds = {f["uuid"]: f for f in [*found, *gone] if f.get("uuid")}
     if not olds:
-        return {}, {}
+        return found, {}
     ents = sorted({u for f in olds.values() for u in (f.get("source_uuid"), f.get("target_uuid")) if u})
     cands = _facts(g.query("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE (a.uuid IN $u OR b.uuid IN $u) AND r.invalid_at IS NULL "
                            f"AND r.expired_at IS NULL RETURN {FACT_RETURN} LIMIT {_CANDIDATES}", {"u": ents}), amap)
-    by_episode: dict[str, list[dict]] = {}
-    for f in from_eps:
-        for e in f.get("episodes") or []:
-            if e in episodes:
-                by_episode.setdefault(e, []).append(f)
-    return by_episode, {u: replacements(f, cands)[:2] for u, f in olds.items()}
+    return found, {u: replacements(f, cands)[:2] for u, f in olds.items()}
 
 
-def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs: dict, amap: dict | None) -> tuple[list[dict], list[dict], list[dict]]:
-    """A fragment of an episode whose facts stopped being true says so, with what is true now, and goes after the others; the facts
-    that replace them, and those that replace a fact no longer true in the result, join the current facts first (#282). A fact that
-    replaces another is fetched by its link to it, not by its similarity, so the threshold does not apply to it. `graphs`: the graph
-    of each origin (None: the brain's own)."""
-    cur, old = list(cur), list(old)
+_PROMOTED = re.compile(r"^documento (\d+) · trozo (\d+)")   # source_description of a passage promoted to memory (docbridge.promote)
+
+
+def promoted_episodes(brain_id: int, keys: set[tuple[int, int]]) -> dict[tuple[int, int], set[str]]:
+    """The episodes ingested from each document passage (document, chunk) promoted to memory: the facts learned from it."""
+    if not keys:
+        return {}
+    from sqlalchemy import or_, select
+    from .models import Proposal
+    from .store import _factory
+    with _factory()() as db:
+        res = db.execute(select(Proposal.source_description, Proposal.episode_uuid).where(
+            Proposal.brain_id == brain_id, Proposal.episode_uuid.is_not(None),
+            or_(*[Proposal.source_description.like(f"documento {d} · trozo %") for d in sorted({d for d, _ in keys})]))).all()
+    out: dict[tuple[int, int], set[str]] = {}
+    for desc, ep in res:
+        m = _PROMOTED.match(desc or "")
+        if m and (int(m.group(1)), int(m.group(2))) in keys:
+            out.setdefault((int(m.group(1)), int(m.group(2))), set()).add(ep)
+    return out
+
+
+def passage_links(passages: list[dict], graph_name: str, brain_id: int) -> list[tuple[set[str], set[str]]]:
+    """For each passage, the episodes that came from it (promoted to memory) and the graph's entities it names (#286). A passage is a
+    piece of a document, not of an episode, so those two are what link it to the facts it states."""
+    from . import docbridge
+    eps = promoted_episodes(brain_id, {(p["document_id"], p["chunk_idx"]) for p in passages})
+    ents = docbridge.entities(graph_name)
+    return [(eps.get((p["document_id"], p["chunk_idx"]), set()), {e["uuid"] for e in docbridge.find_mentions(p.get("text") or "", ents)})
+            for p in passages]
+
+
+def _ends(f: dict) -> set:
+    return {f.get("source_uuid"), f.get("target_uuid")} - {None}
+
+
+def _states(f: dict, eps: set[str], ents: set[str], repl: dict) -> bool:
+    """Whether an item linked to `eps` and naming `ents` states the fact `f`, no longer true: it was learned from one of its episodes,
+    or the item names both its ends and not both ends of what replaced it (a passage that names the new fact too is the update)."""
+    if eps & set(f.get("episodes") or ()):
+        return True
+    ends = _ends(f)
+    return bool(ends) and ends <= ents and not any(_ends(r) <= ents for r in repl.get(f["uuid"], []) if _ends(r))
+
+
+def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs: dict, amap: dict | None,
+                    passages: list[dict] | None = None, brains: dict | None = None) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    """A fragment of an episode, or a document passage, that states something no longer true says so, with what is true now, and goes
+    after the others; the facts that replace them, and those that replace a fact no longer true in the result, join the current facts
+    first (#282, #286). A fact that replaces another is fetched by its link to it, not by its similarity, so the threshold does not
+    apply to it. `graphs`: the graph of each origin (None: the brain's own); `brains`: the brain of each origin whose passages are
+    checked (a brain that lends only its documents has no graph here)."""
+    cur, old, passages = list(cur), list(old), list(passages or [])
     have = {(f.get("origin"), f.get("uuid")) for f in cur + old if f.get("uuid")}
     added_now = added_old = 0
     for origin, gname in graphs.items():
-        mine = [c for c in chunks if c.get("origin") == origin and c.get("episode_uuid")]
         gone = [f for f in old if f.get("origin") == origin]
-        if not mine and not gone:
-            continue
         try:
-            by_episode, repl = superseded(gname, {c["episode_uuid"] for c in mine}, gone, amap if origin is None else None)
+            mine = [(c, {c["episode_uuid"]}, set()) for c in chunks if c.get("origin") == origin and c.get("episode_uuid")]
+            docs = [p for p in passages if p.get("origin") == origin] if brains and origin in brains else []
+            if docs:
+                mine += [(p, eps, ents) for p, (eps, ents) in zip(docs, passage_links(docs, gname, brains[origin]))]
+            if not mine and not gone:
+                continue
+            found, repl = superseded(gname, set().union(*[e for _, e, _ in mine]), gone, amap if origin is None else None,
+                                     set().union(*[n for _, _, n in mine]))
         except Exception as e:  # noqa: BLE001  (without it the recall is what it was before)
             log.warning("recall: no se pudo comprobar lo superado en %s: %s", gname, e)
             continue
         tag = {"origin": origin} if origin else {}
         olds = [*gone]
-        for c in mine:
-            facts = by_episode.get(c["episode_uuid"], [])
+        for item, eps, ents in mine:
+            facts = [f for f in found if _states(f, eps, ents, repl)]
             if facts:
-                c["superseded"] = [{"uuid": f["uuid"], "fact": f["fact"], "invalid_at": f["invalid_at"],
-                                    "replaced_by": [{"uuid": r["uuid"], "fact": r["fact"]} for r in repl.get(f["uuid"], [])]} for f in facts[:3]]
+                item["superseded"] = [{"uuid": f["uuid"], "fact": f["fact"], "invalid_at": f["invalid_at"],
+                                       "replaced_by": [{"uuid": r["uuid"], "fact": r["fact"]} for r in repl.get(f["uuid"], [])]} for f in facts[:3]]
             for f in facts:
                 olds.append(f)
                 if (origin, f["uuid"]) not in have and added_old < SUPERSEDED_OLD_MAX:
@@ -341,8 +401,10 @@ def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs
                 elif (origin, r["uuid"]) not in have and added_now < SUPERSEDING_MAX:
                     front.append({**r, **tag, "replaces": f["fact"]}); have.add((origin, r["uuid"])); added_now += 1
         cur = front + cur
-    chunks = sorted(chunks, key=lambda c: bool(c.get("superseded")))   # stable: the order of the rest does not change
-    return chunks, cur, old
+
+    def last(x: dict) -> bool:   # stable: the order of the rest does not change
+        return bool(x.get("superseded"))
+    return sorted(chunks, key=last), cur, old, sorted(passages, key=last)
 
 
 def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n_chunks: int, min_sim: float) -> tuple[list[dict], list[dict]]:
@@ -397,10 +459,6 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     facts = shelflife.mark(brain_id, facts, amap)  # past its relation's shelf life: weighs less and says so (#114)
     cur = [f for f in facts if f["status"] != "invalidated"][:n_facts]
     old = [f for f in facts if f["status"] == "invalidated"][: max(2, n_facts // 3)]
-    ts = time.time()
-    graphs = {None: graph_name, **{s.slug: s.graph_name for s in sources if s.scope in ("graph", "both")}}
-    chunks, cur, old = mark_superseded(chunks, cur, old, graphs, amap)
-    t_superseded = time.time() - ts
     t2 = time.time()
     t3 = time.time()
     passages, docs_state = [], "off"
@@ -412,6 +470,12 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     for src in sources:
         if src.scope == "docs":
             fed.append({"slug": src.slug, "name": src.name, "scope": src.scope, "state": docs_state})
+    t_docs_wait = time.time() - t3
+    ts = time.time()
+    graphs = {None: graph_name, **{s.slug: s.graph_name for s in sources if s.scope in ("graph", "both")}}
+    brains = {None: brain_id, **{s.slug: s.brain_id for s in sources if s.scope == "both"}}   # a lent passage, against its brain's graph
+    chunks, cur, old, passages = mark_superseded(chunks, cur, old, graphs, amap, passages, brains)
+    t_superseded = time.time() - ts
     t4 = time.time()
     keep = cur + old
     from . import metrics
@@ -421,5 +485,5 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         "min_similarity": graph_min,
         **({"federated": fed} if sources else {}),
         "context": build_context(keep, chunks, max_chars, passages, lang),
-        "ms": {"embed": round((t1 - t0) * 1000), "facts": round((t2 - t1) * 1000), "chunks": round((t3 - t2) * 1000), "docs_wait": round((t4 - t3) * 1000), "superseded": round(t_superseded * 1000), "total": round((t4 - t0) * 1000)},
+        "ms": {"embed": round((t1 - t0) * 1000), "facts": round((t2 - t1) * 1000), "chunks": round((t3 - t2) * 1000), "docs_wait": round(t_docs_wait * 1000), "superseded": round(t_superseded * 1000), "total": round((t4 - t0) * 1000)},
     }

@@ -14,9 +14,10 @@ import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score: number; similarity?: number; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
 const entityLink = (uuid: string, origin?: string) => `/entidad/${uuid}${origin ? `?origen=${origin}` : ""}`;
-type Chunk = { id: number; origin?: string; name: string; text: string; valid_at: string | null; score: number; similarity?: number | null; rrf: number;
-  superseded?: { uuid: string; fact: string; invalid_at: string | null; replaced_by: { uuid: string; fact: string }[] }[] };
-type Passage = { document_id: number; chunk_idx: number; title: string; text: string; similarity: number; origin?: string };
+type Superseded = { uuid: string; fact: string; invalid_at: string | null; replaced_by: { uuid: string; fact: string }[] }[];
+type Chunk = { id: number; origin?: string; name: string; text: string; valid_at: string | null; score: number; similarity?: number | null; rrf: number; superseded?: Superseded };
+type Passage = { document_id: number; chunk_idx: number; title: string; text: string; similarity: number; origin?: string; superseded?: Superseded;
+  source_updated_at?: string | null; last_seen_at?: string | null };
 type Res = { recall_id?: string; query: string; facts: Fact[]; chunks: Chunk[]; documents?: Passage[]; documents_state?: string; context: string; index: boolean; min_similarity?: number; ms: Record<string, number> };
 const sim = (x: { similarity?: number | null; score: number }) => (x.similarity ?? x.score).toFixed(2);
 type Mark = "expect" | "avoid";
@@ -78,6 +79,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     <Btn size="row" kind={marks[key]?.mark === "expect" ? "primary" : "ghost"} icon="check" onClick={() => toggle(key, "expect", item)}>{t("Debe salir")}</Btn>
     <Btn size="row" kind={marks[key]?.mark === "avoid" ? "danger" : "ghost"} icon="close" onClick={() => toggle(key, "avoid", item)}>{t("Sobra")}</Btn>
   </Group>;
+  // A fragment or a passage that states something no longer true (issues 282 and 286): the mark, and what stopped being true and what is now.
+  const supersededPill = (sup?: Superseded) => (sup?.length ? <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill> : undefined);
+  const supersededMeta = (sup?: Superseded) => (sup?.length ? <>{sup.map((s) => (
+    <div key={s.uuid}>{t("«{{fact}}» dejó de ser cierto el {{date}}.", { fact: s.fact, date: fmt(s.invalid_at) })}
+      {s.replaced_by.length > 0 && <> {t("Ahora: «{{now}}».", { now: s.replaced_by.map((x) => x.fact).join("» · «") })}</>}</div>))}</> : undefined);
   const marked = Object.values(marks);
   const toRef = (): RefQuery => ({ query: r?.query ?? q, expect: marked.filter((m) => m.mark === "expect").map((m) => m.item), avoid: marked.filter((m) => m.mark === "avoid").map((m) => m.item),
     docs: null, note: "" });
@@ -125,14 +131,13 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             {r.chunks.map((c) => (
               <ListCard key={`${c.origin ?? ""}-${c.id}`} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={`${fmt(c.valid_at)} · sim ${sim(c)}`}
                 actions={<Group gap="xs" wrap="nowrap">{rateBtns(`c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, false)}{markBtns(`c:${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" })}</Group>}
-                tags={c.superseded?.length ? <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill> : undefined}
-                meta={c.superseded?.length ? <>{c.superseded.map((s) => (
-                  <div key={s.uuid}>{t("«{{fact}}» dejó de ser cierto el {{date}}.", { fact: s.fact, date: fmt(s.invalid_at) })}
-                    {s.replaced_by.length > 0 && <> {t("Ahora: «{{now}}».", { now: s.replaced_by.map((r) => r.fact).join("» · «") })}</>}</div>))}</> : undefined}>{c.text}</ListCard>))}
+                tags={supersededPill(c.superseded)} meta={supersededMeta(c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={5} mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
               {r.documents.map((p) => (
-                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} title={p.origin ? `${p.title} · ${p.origin}` : p.title} aside={`sim ${p.similarity.toFixed(2)}`}
+                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
+                  aside={`${t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) })} · sim ${p.similarity.toFixed(2)}`}
+                  tags={supersededPill(p.superseded)} meta={supersededMeta(p.superseded)}
                   actions={<Group gap="xs" wrap="nowrap">{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
             </>}
           </Stack>
