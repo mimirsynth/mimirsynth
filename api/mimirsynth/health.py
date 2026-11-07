@@ -100,6 +100,11 @@ def _groups(facts: list[dict]) -> list[list[dict]]:
 
 def repeats(group: list[dict]) -> int:
     """How many facts of a group repeat another one: in each cluster of near duplicates, all but one."""
+    return sum(len(c) - 1 for c in clusters(group))
+
+
+def clusters(group: list[dict]) -> list[list[dict]]:
+    """The facts of a group that say the same thing, together (only clusters of two or more), in the group's order."""
     parent = list(range(len(group)))
 
     def root(i: int) -> int:
@@ -111,7 +116,10 @@ def repeats(group: list[dict]) -> int:
         for j in range(i + 1, len(group)):
             if root(i) != root(j) and near_duplicate(group[i], group[j]):
                 parent[root(j)] = root(i)
-    return len(group) - len({root(i) for i in range(len(group))})
+    by: dict[int, list[dict]] = {}
+    for i, f in enumerate(group):
+        by.setdefault(root(i), []).append(f)
+    return [c for c in by.values() if len(c) > 1]
 
 
 def redundancy(graph, max_facts: int = MAX_FACTS, max_sample: int = MAX_SAMPLE) -> dict:
