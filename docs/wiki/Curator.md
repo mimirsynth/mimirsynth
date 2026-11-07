@@ -12,7 +12,9 @@ For now, **clear contradictions** in the relations marked functional (a single v
 
 And, once an administrator ticks it (it is off by default), **repeated facts**: current facts between the same two entities that say the same thing. That means the same text, or very close embeddings with the same numbers and identifiers, as [[Memory health]] counts redundancy: «PostgreSQL 14» and «PostgreSQL 16» are a change, not a repeat. The proposal keeps the newest one and invalidates the others. Up to 3,000 candidate facts are read per run, the most recent first.
 
-Each pass has its own checkbox and its own precision. Noise and outdated facts come next ([#300](https://github.com/mimirsynth/mimirsynth/issues/300)).
+And, also off by default, **facts past their shelf life**: the current facts that Content quality → To review lists (relations with a shelf life, not confirmed in time), the longest overdue first. Each one becomes a proposal to invalidate it. Rejecting the proposal, or confirming the fact in To review, keeps it.
+
+Each pass has its own checkbox and its own precision. Noise comes next ([#300](https://github.com/mimirsynth/mimirsynth/issues/300)).
 
 ## Turning it on
 It is **off by default**. A brain administrator ticks **Turn on the curator in this brain**. From then on it runs once a day (the day is the run's key: a restart never runs it twice), and **Run now** runs it at once. **See what it would propose** shows it without creating anything.
