@@ -44,7 +44,7 @@ El servidor ofrece estas herramientas:
 
 | Herramienta | Rol mínimo del token | Qué hace |
 |---|---|---|
-| `recall` | Lector | Devuelve el contexto de memoria para una pregunta, igual que el recall HTTP. Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars` y `federated` |
+| `recall` | Lector | Devuelve el contexto de memoria para una pregunta, igual que el recall HTTP. Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars`, `federated` y `min_similarity` |
 | `remember` | Colaborador | Propone una memoria, con las mismas reglas que las propuestas HTTP (cuarentena para un colaborador, aprobada al instante para un curador). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time` y `confidence` |
 | `facts_about` | Lector | Todo lo que se sabe de una entidad: los hechos vigentes y los que dejaron de ser ciertos, del más reciente al más antiguo, con fechas, el episodio del que se aprendió cada uno y el **uuid de cada hecho** entre corchetes. La entidad se busca por nombre (sin distinguir mayúsculas ni espacios), por un nombre fusionado en ella o por su uuid; un nombre ambiguo devuelve las candidatas. Argumentos: `entity` y, opcionalmente, `status`, `limit`, `offset`, `max_chars` y `federated` |
 | `timeline` | Lector | Cómo cambió lo que se sabe de una entidad: cuándo se aprendió cada hecho y cuándo dejó de ser cierto. Argumentos: `entity` y, opcionalmente, `since`, `until`, `limit`, `offset`, `max_chars` y `federated` |
@@ -71,11 +71,12 @@ curl -s -X POST "$URL/api/brains/mi-brain/recall" \
   -d '{"query": "¿dónde corre la base de datos de producción ahora?"}'
 ```
 La respuesta incluye:
-- `facts`: los hechos más parecidos (vigentes e invalidados, con fechas).
-- `chunks`: fragmentos del texto original de los episodios.
+- `facts`: los hechos más parecidos (vigentes e invalidados, con fechas), cada uno con su `similarity` con la pregunta (coseno, 0–1).
+- `chunks`: fragmentos del texto original de los episodios, cada uno con su `similarity`.
 - `documents`: los pasajes de documentos citados, si los hay.
 - `context`: **el bloque de texto listo para inyectar en el prompt**.
 - `federated`: solo cuando otros brains prestan a este, el estado de cada uno (`ok`, `error`, `off`).
+- `min_similarity`: el umbral aplicado a hechos y fragmentos.
 - `ms`: tiempos.
 
 Parámetros opcionales:
@@ -86,6 +87,7 @@ Parámetros opcionales:
 | `max_chars` | 6000 | 500–30000 | Tamaño máximo del contexto |
 | `docs` | el de la instancia (2) | 0–6 | Pasajes de documentos. **0 = sin documentos** |
 | `federated` | `true` | | Incluir lo que otros brains prestan a este. `false` = solo la memoria propia del brain |
+| `min_similarity` | el de la instancia (0,55) | 0–1 | Similitud mínima para que entre un hecho o un fragmento de episodio. Si no llega nada, `context` vuelve **vacío**. **0 = sin umbral** |
 
 > El recall tarda del orden de **100–300 ms** y **no usa ningún LLM**, así que es seguro llamarlo en cada turno. Si el servidor no responde, tu agente debe seguir sin memoria (el hook de Claude Code lo hace).
 

@@ -160,15 +160,20 @@ def search(brain_id: int, qvec: list[float], qtext: str, k: int = 4, pool: int =
     if not enabled():
         return []
     with engine().begin() as c:
-        vec = c.execute(text("SELECT id, name, text, valid_at, episode_uuid, 1 - (embedding <=> CAST(:q AS vector)) AS score FROM episode_chunks "
+        vec = c.execute(text("SELECT id, name, text, valid_at, episode_uuid, 1 - (embedding <=> CAST(:q AS vector)) AS score, "
+                             "1 - (embedding <=> CAST(:q AS vector)) AS similarity FROM episode_chunks "
                              "WHERE brain_id=:b ORDER BY embedding <=> CAST(:q AS vector) LIMIT :n"), {"q": str(qvec), "b": brain_id, "n": pool}).mappings().all()
         tsq = _tsquery(qtext)
-        fts = c.execute(text("SELECT id, name, text, valid_at, episode_uuid, ts_rank(tsv, to_tsquery('simple', :t)) AS score FROM episode_chunks "
-                             "WHERE brain_id=:b AND tsv @@ to_tsquery('simple', :t) ORDER BY score DESC LIMIT :n"), {"t": tsq, "b": brain_id, "n": pool}).mappings().all() if tsq else []
-    byid = {r["id"]: dict(r) for r in [*vec, *fts]}
+        fts = c.execute(text("SELECT id, name, text, valid_at, episode_uuid, ts_rank(tsv, to_tsquery('simple', :t)) AS score, "
+                             "1 - (embedding <=> CAST(:q AS vector)) AS similarity FROM episode_chunks "
+                             "WHERE brain_id=:b AND tsv @@ to_tsquery('simple', :t) ORDER BY score DESC LIMIT :n"),
+                        {"t": tsq, "q": str(qvec), "b": brain_id, "n": pool}).mappings().all() if tsq else []
+    byid = {r["id"]: dict(r) for r in [*vec, *fts]}   # `similarity`: the cosine, also for a fragment found only by its words (#281)
     fused = rrf([[r["id"] for r in vec], [r["id"] for r in fts]])
     boosted = sorted(((cid, sc * recency_factor(byid[cid]["valid_at"], recency)) for cid, sc in fused), key=lambda kv: -kv[1])
     out = []
     for cid, sc in boosted[:k]:
-        d = byid[cid]; d["rrf"] = round(sc, 5); d["score"] = round(float(d["score"]), 4); out.append(d)
+        d = byid[cid]; d["rrf"] = round(sc, 5); d["score"] = round(float(d["score"]), 4)
+        d["similarity"] = round(float(d["similarity"]), 4) if d.get("similarity") is not None else None
+        out.append(d)
     return out

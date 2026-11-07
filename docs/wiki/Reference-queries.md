@@ -51,7 +51,7 @@ The texts go through the brain's secret detector, so saving a graph fact as an e
 The last **20 runs** of each brain are kept.
 
 ## Simulate
-Write one or more passage similarity thresholds in **Thresholds to simulate** (for example `0.68 0.70 0.72`, up to 6) and press **Simulate**: there is one run per threshold, **without changing the setting**. Compare them, and when you have chosen, set the value of *Minimum similarity of a passage* under Administration → Recall ([[Recall and ingestion]]).
+Write one or more similarity thresholds in **Thresholds to simulate** (for example `0.68 0.70 0.72`, up to 6), choose under **Threshold** whether they are the passages' or the facts' and fragments', and press **Simulate**: there is one run per threshold, **without changing the setting**. Compare them, and when you have chosen, set the value of *Minimum similarity of a passage* or *Minimum similarity of a fact or a fragment* under Administration → Recall ([[Recall and ingestion]]). For the facts' threshold, include among the queries a few vague ones (such as «ok, carry on») that expect nothing and list as **must not** what they bring today.
 
 ## How runs are compared
 - Each run is compared with the previous run on the **current settings**; simulations are never the baseline.

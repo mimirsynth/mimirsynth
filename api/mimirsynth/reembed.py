@@ -690,7 +690,7 @@ def _switch_job(ctx: "jobs.JobCtx", p: dict) -> dict:
         except Exception as ex:  # noqa: BLE001  (son vectores ya sin uso: recover_switch los borra al arrancar)
             ctx.note(f"no se pudieron borrar los vectores anteriores del grafo «{g}»: {str(ex)[:150]}")
     notify.resolve("reindex.orphan", MARKER, "El cambio de modelo ha terminado.")
-    ctx.note("hecho: recalibra la similitud mínima de un pasaje del recall (Administración → Recuerdo) y pasa al modelo nuevo los agentes que escriban directamente en Graphiti")
+    ctx.note("hecho: recalibra las similitudes mínimas del recall, la de un pasaje y la de un hecho o un fragmento (Administración → Recuerdo), y pasa al modelo nuevo los agentes que escriban directamente en Graphiti")
     from .deps import audit
     with _factory()() as db:
         audit(db, None, "embedding.switched", None, name=name, model=model, dim=dim, previous=before["model"], pause_seconds=round(paused, 1))

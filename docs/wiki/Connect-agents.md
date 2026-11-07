@@ -44,7 +44,7 @@ The server offers these tools:
 
 | Tool | Minimum token role | What it does |
 |---|---|---|
-| `recall` | Reader | Returns the memory context for a question, the same as the HTTP recall. Arguments: `query` and, optionally, `facts`, `chunks`, `docs`, `max_chars` and `federated` |
+| `recall` | Reader | Returns the memory context for a question, the same as the HTTP recall. Arguments: `query` and, optionally, `facts`, `chunks`, `docs`, `max_chars`, `federated` and `min_similarity` |
 | `remember` | Contributor | Proposes a memory, with the same rules as the HTTP proposals (quarantine for a contributor, approved at once for a curator). Arguments: `name`, `body` and, optionally, `source`, `source_description`, `reference_time` and `confidence` |
 | `facts_about` | Reader | Everything known about an entity: current facts and those that stopped being true, newest first, with dates, the episode each one was learned from and the **uuid of each fact** in brackets. The entity is found by name (case and spacing do not matter), by a name merged into it or by its uuid; an ambiguous name returns the candidates. Arguments: `entity` and, optionally, `status`, `limit`, `offset`, `max_chars` and `federated` |
 | `timeline` | Reader | How what is known about an entity changed: when each fact was learned and when it stopped being true. Arguments: `entity` and, optionally, `since`, `until`, `limit`, `offset`, `max_chars` and `federated` |
@@ -71,11 +71,12 @@ curl -s -X POST "$URL/api/brains/my-brain/recall" \
   -d '{"query": "where does the production database run now?"}'
 ```
 The response includes:
-- `facts`: the most similar facts (current and invalidated, with dates).
-- `chunks`: fragments of the episodes' original text.
+- `facts`: the most similar facts (current and invalidated, with dates), each with its `similarity` to the question (cosine, 0–1).
+- `chunks`: fragments of the episodes' original text, each with its `similarity`.
 - `documents`: the cited document passages, if any.
 - `context`: **the block of text ready to inject into the prompt**.
 - `federated`: only when other brains lend to this one, the state of each of them (`ok`, `error`, `off`).
+- `min_similarity`: the threshold applied to facts and fragments.
 - `ms`: timings.
 
 Optional parameters:
@@ -86,6 +87,7 @@ Optional parameters:
 | `max_chars` | 6000 | 500–30000 | Maximum size of the context |
 | `docs` | the instance's (2) | 0–6 | Document passages. **0 = no documents** |
 | `federated` | `true` | | Include what other brains lend to this one. `false` = only this brain's own memory |
+| `min_similarity` | the instance's (0.55) | 0–1 | Minimum similarity for a fact or an episode fragment to enter. If nothing reaches it, `context` comes back **empty**. **0 = no threshold** |
 
 > Recall takes on the order of **100–300 ms** and **uses no LLM**, so it is safe to call on every turn. If the server does not respond, your agent should carry on without memory (the Claude Code hook does).
 

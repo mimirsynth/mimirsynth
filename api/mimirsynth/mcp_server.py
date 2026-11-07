@@ -36,7 +36,8 @@ TOOLS = [
          "chunks": {"type": "integer", "minimum": 0, "maximum": 15, "description": "Máximo de fragmentos de episodios (por defecto 4)."},
          "docs": {"type": "integer", "minimum": 0, "maximum": 6, "description": "Máximo de pasajes de documentos; 0 = sin documentos."},
          "max_chars": {"type": "integer", "minimum": 500, "maximum": 30000, "description": "Tamaño máximo del contexto devuelto (por defecto 6000)."},
-         "federated": {"type": "boolean", "description": "Incluir lo que otros brains prestan a este (por defecto sí); false = solo la memoria propia."}},
+         "federated": {"type": "boolean", "description": "Incluir lo que otros brains prestan a este (por defecto sí); false = solo la memoria propia."},
+         "min_similarity": {"type": "number", "minimum": 0, "maximum": 1, "description": "Similitud mínima (coseno) de un hecho o un fragmento para entrar; por defecto, la de la instancia; 0 = sin umbral."}},
          "required": ["query"]}, "annotations": {"readOnlyHint": True, "idempotentHint": True, "openWorldHint": False}},
     {"name": "remember", "title": "Proponer una memoria", "description": "Propone guardar un conocimiento que persista (una decisión, una configuración, un arreglo, un patrón). Según tu rol queda en cuarentena hasta que un curador la apruebe, o se aprueba al instante. No guardes datos efímeros ni secretos: si el texto lleva alguno, se enmascara o se marca y el resultado lo dice.",
      "inputSchema": {"type": "object", "properties": {
@@ -141,7 +142,7 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
         if name == "recall":
             body = RecallIn(**args)
             out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body), lang=lang,
-                         **federated_kwargs(ctx, body))
+                         min_similarity=body.min_similarity, **federated_kwargs(ctx, body))
             if not out["context"]:
                 return _text(tr("No hay nada relevante en la memoria para esa consulta.", lang))
             from . import ratings

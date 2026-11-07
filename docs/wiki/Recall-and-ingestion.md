@@ -5,21 +5,22 @@
 Two sections of the **System** group of administration (instance administrator only).
 
 ## Recall
-It controls how **documents** are mixed into the recall agents receive, and the text index.
+It controls how relevant a fact, an episode fragment or a document passage must be to enter the recall agents receive, how **documents** are mixed in, and the text index.
 
 | Setting | Default | Range | What it does |
 |---|---|---|---|
+| **Minimum similarity of a fact or a fragment** | 0.55 | 0–1 | Minimum cosine for a graph fact or an episode fragment to enter recall. If nothing reaches it, recall comes back **empty** instead of filling up with the least distant. **0 = no threshold** |
 | **Minimum similarity of a passage** | 0.66 | 0–1 | Minimum cosine for a document passage to enter recall |
 | **Document passages per recall** | 2 | 0–10 | Maximum number of document passages accompanying the facts. **0 disables** documents in recall |
 | **Maximum time of the document search** | 0.6 s | 0.1–10 | If it takes longer, recall answers **without documents** (facts are not delayed) |
 | **Text index synchronisation** | 10 min | 0–1440 | How often the episode text is copied to the index. **0 = disabled** |
 
 ### Calibrating similarity
-Similarity depends on the **embedding model**. With `nomic-embed-text`, 0.66 works well. If you change model ([[AI providers]]), recalibrate:
-- Too low → loosely related passages get in ("noise").
+Similarity depends on the **embedding model**. With `nomic-embed-text`, 0.66 works well for passages. If you change model ([[AI providers]]), recalibrate both thresholds:
+- Too low → loosely related facts or passages get in ("noise"), even for a question with nothing in memory.
 - Too high → almost none gets in.
 
-Try real questions in [[Ask]] and check whether the **Document passages** it lists are relevant. To measure instead of guessing, keep **reference queries** for the brain ([[Reference queries]], curators and above): questions with what their recall must bring and what it must not. **Run** counts the expected items found and the false positives, and **Simulate** repeats the measurement with other thresholds (for instance `0.68 0.70 0.72`) **without changing this setting**.
+Try real questions in [[Ask]] and check whether the **Document passages** it lists are relevant. To measure instead of guessing, keep **reference queries** for the brain ([[Reference queries]], curators and above): questions with what their recall must bring and what it must not. **Run** counts the expected items found and the false positives, and **Simulate** repeats the measurement with other thresholds, of the passages or of the facts and fragments (for instance `0.68 0.70 0.72`), **without changing the setting**. An agent can also ask for its own threshold in each call (`min_similarity`, see [[Connect agents]]).
 
 ### Document recall budget
 Passages are limited in **number** (2 by default), **size** (~600 tokens in total) and **time**. When the same text appears in two documents (the same note in two sources, or in the brain and in a brain that lends it its documents), only the first copy is kept, so the passages are the best *different* ones. An agent can ask for `docs: 0` in a particular request to not receive them.

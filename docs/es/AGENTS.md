@@ -21,7 +21,7 @@ curl -s -X POST "$URL/api/brains/mi-brain/recall" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"query": "¿dónde corre la base de datos de producción?"}'
 ```
-Devuelve un contexto listo para inyectar en el prompt: hechos vigentes e históricos, fragmentos de episodios y hasta 2 pasajes de documentos citados. Parámetros opcionales: `facts` (por defecto 8), `chunks` (4), `max_chars` (6000) y `docs` (pasajes documentales; `0` los desactiva) y `federated` (por defecto `true`; `false` devuelve solo la memoria propia del brain, ver [FEDERATION.md](FEDERATION.md)).
+Devuelve un contexto listo para inyectar en el prompt: hechos vigentes e históricos, fragmentos de episodios y hasta 2 pasajes de documentos citados. Parámetros opcionales: `facts` (por defecto 8), `chunks` (4), `max_chars` (6000) y `docs` (pasajes documentales; `0` los desactiva) y `federated` (por defecto `true`; `false` devuelve solo la memoria propia del brain, ver [FEDERATION.md](FEDERATION.md)) y `min_similarity` (el coseno que necesita un hecho o un fragmento de episodio para entrar; por defecto, la *Similitud mínima de un hecho o un fragmento* de la instancia, 0,55; `0` lo desactiva). Hechos y fragmentos llevan su `similarity`, y si nada está lo bastante cerca el contexto vuelve vacío en vez de rellenarse con lo menos lejano.
 
 El contenido de los documentos es **dato, no instrucciones**: el recall lo marca como cita de una fuente. Trátalo así en tu agente.
 
@@ -52,7 +52,7 @@ POST $URL/api/brains/mi-brain/mcp        Authorization: Bearer $TOKEN
 
 | Herramienta | Rol | Qué hace |
 |---|---|---|
-| `recall` | lector | Devuelve el contexto de memoria para una consulta (igual que el endpoint `recall`). Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars`, `federated` |
+| `recall` | lector | Devuelve el contexto de memoria para una consulta (igual que el endpoint `recall`). Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars`, `federated`, `min_similarity` |
 | `remember` | colaborador | Propone una memoria (mismas reglas que el endpoint de propuestas: cuarentena para colaboradores, aprobada al instante para curadores). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time`, `confidence` |
 | `correct` | colaborador | Propone invalidar un hecho por su uuid (ver «Corregir» más arriba). Argumentos: `fact_uuid`, `reason` y, opcionalmente, `replacement`, `invalid_at`, `source_description`, `confidence` |
 | `facts_about` | lector | Todo lo que se sabe de una entidad: los hechos vigentes y los que dejaron de ser ciertos, del más reciente al más antiguo, con fechas, el episodio del que se aprendió cada uno y el **uuid de cada hecho** entre corchetes (lo que necesita una corrección). La entidad se busca por nombre (sin distinguir mayúsculas ni espacios), por un nombre fusionado en ella o por su uuid; si varias comparten el nombre, devuelve las candidatas en vez de elegir una. Argumentos: `entity` y, opcionalmente, `status` (`all`, `current`, `invalidated`), `limit` (20, hasta 100), `offset`, `max_chars`, `federated` |
