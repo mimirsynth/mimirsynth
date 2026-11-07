@@ -62,6 +62,7 @@ Se usan **solo si no hay ningún motor configurado en la interfaz** ([[Proveedor
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del **host** montada en solo lectura en `/sources`. Solo Compose |
 | `MIMIRSYNTH_DOC_STORE` | `/data/documents` | Volumen con los originales subidos. **Entra en las copias de seguridad**. Fija en el compose oficial |
 | `MIMIRSYNTH_DOC_ROOTS_BASE` | `/sources` | Las raíces de carpetas solo pueden estar bajo esta ruta. Fija en el compose oficial |
+| `MIMIRSYNTH_VERIFIERS_DIR` | (vacía) | Carpeta con tus propios verificadores de hechos (`*.py`), que se cargan al arrancar. Vacía: solo el de ejemplo. Es código externo que corre con las credenciales de los verificadores: ponla solo para código de confianza. Ver [[Hechos verificables]] |
 | `MIMIRSYNTH_EXPORT_TTL_HOURS` | `24` | Horas que un paquete de exportación de un brain espera a descargarse antes de borrarse. Ver [[Exportar un brain]] |
 | `MIMIRSYNTH_IMPORT_MAX_MB` | `20480` | Paquete más grande de un brain que se puede subir para importarlo. Ver [[Importar un brain]] |
 

@@ -62,6 +62,7 @@ Used **only if no engine is configured in the interface** ([[AI providers]]).
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | **Host** folder mounted read-only at `/sources`. Compose only |
 | `MIMIRSYNTH_DOC_STORE` | `/data/documents` | Volume with the uploaded originals. **Include it in backups**. Fixed by the official compose |
 | `MIMIRSYNTH_DOC_ROOTS_BASE` | `/sources` | Folder roots can only be under this path. Fixed by the official compose |
+| `MIMIRSYNTH_VERIFIERS_DIR` | (empty) | Folder with your own fact verifiers (`*.py`), loaded at start. Empty: only the built-in example. It is external code that runs with the verifiers' credentials: set it only for code you trust. See [[Verifiable facts]] |
 | `MIMIRSYNTH_EXPORT_TTL_HOURS` | `24` | Hours an exported brain package waits to be downloaded before it is deleted. See [[Export a brain]] |
 | `MIMIRSYNTH_IMPORT_MAX_MB` | `20480` | Largest brain package that can be uploaded to import it. See [[Import a brain]] |
 

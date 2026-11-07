@@ -1,0 +1,10 @@
+{
+ "Verificar hechos": "Verify facts",
+ "[un sistema lo contradijo el {{date}}]": "[a system contradicted it on {{date}}]",
+ "[verificado el {{date}}]": "[verified on {{date}}]",
+ "el brain no tiene sondas": "the brain has no probes",
+ "el hecho no tiene sonda": "the fact has no probe",
+ "el hecho ya no está vigente": "the fact is no longer current",
+ "falta «{{missing}}»": "«{{missing}}» is missing",
+ "verificador desconocido": "unknown verifier"
+}

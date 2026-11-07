@@ -25,7 +25,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Resumen** | `GET /overview` · `GET /overview/activity` | lector |
 | **Episodios** | `GET /episodes/sources` · `GET /episodes` · `GET /episodes/{uuid}` | lector |
 | **Hechos** | `GET /facts/relations` · `GET /facts` · `GET /timeline` · `GET /entities/{uuid}` · `GET /entities` | lector |
-| | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` | curador |
+| | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` · `PUT/DELETE /facts/{uuid}/probe` | curador |
 | **Grafo y consulta** | `GET /graph` · `POST /query` | lector |
 | **Propuestas** | `POST /proposals/corrections` · `GET/POST /proposals` · `GET /proposals/counts` · `GET /proposals/{pid}` | colaborador |
 | | `POST /proposals/{pid}/reactivate` · `POST /proposals/{pid}/approve` · `POST /proposals/{pid}/mask-and-approve` · `POST /proposals/{pid}/ingest` · `POST /proposals/{pid}/reject` · `POST /proposals/bulk` · `GET /proposals/{pid}/related` · `POST /proposals/{pid}/undo` | curador |
@@ -44,6 +44,8 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Muestra para repetir** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` | administrador |
 | **Curador** | `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curador |
 | | `PUT /curator/settings` | administrador |
+| **Hechos verificables** | `GET /verifiers` · `GET /probes` · `POST /probes/run` | curador |
+| | `PUT /verifiers/{vid}` | administrador |
 | **Federación** | `GET /grants` | lector |
 | | `POST /grants` · `PATCH/DELETE /grants/{gid}` | administrador |
 | **Trabajos** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | lector |

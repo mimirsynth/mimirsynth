@@ -25,7 +25,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Overview** | `GET /overview` · `GET /overview/activity` | reader |
 | **Episodes** | `GET /episodes/sources` · `GET /episodes` · `GET /episodes/{uuid}` | reader |
 | **Facts** | `GET /facts/relations` · `GET /facts` · `GET /timeline` · `GET /entities/{uuid}` · `GET /entities` | reader |
-| | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` | curator |
+| | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` · `PUT/DELETE /facts/{uuid}/probe` | curator |
 | **Graph and query** | `GET /graph` · `POST /query` | reader |
 | **Proposals** | `POST /proposals/corrections` · `GET/POST /proposals` · `GET /proposals/counts` · `GET /proposals/{pid}` | contributor |
 | | `POST /proposals/{pid}/reactivate` · `POST /proposals/{pid}/approve` · `POST /proposals/{pid}/mask-and-approve` · `POST /proposals/{pid}/ingest` · `POST /proposals/{pid}/reject` · `POST /proposals/bulk` · `GET /proposals/{pid}/related` · `POST /proposals/{pid}/undo` | curator |
@@ -44,6 +44,8 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Replay sample** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` | administrator |
 | **Curator** | `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curator |
 | | `PUT /curator/settings` | administrator |
+| **Verifiable facts** | `GET /verifiers` · `GET /probes` · `POST /probes/run` | curator |
+| | `PUT /verifiers/{vid}` | administrator |
 | **Federation** | `GET /grants` | reader |
 | | `POST /grants` · `PATCH/DELETE /grants/{gid}` | administrator |
 | **Jobs** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | reader |

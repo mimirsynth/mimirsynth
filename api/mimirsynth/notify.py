@@ -304,6 +304,8 @@ async def worker(version: str = "0.0.0") -> None:
                 await asyncio.to_thread(health.due)  # once a day per brain, keyed by the day in the database (#292)
                 from . import curator
                 await asyncio.to_thread(curator.due)  # the brains with the scheduled curator on (#300)
+                from . import verify
+                await asyncio.to_thread(verify.due)  # facts with a probe not checked in the last day (#293)
             if t - last_conflicts >= 86400:
                 last_conflicts = t
                 from . import conflicts, memory
