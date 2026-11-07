@@ -324,6 +324,10 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-listcard[data-invalid] .ms-listcard-body { color: var(--ms-invalidado); text-decoration: line-through; }
 .ms-listcard-tags, .ms-listcard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .ms-listcard-meta { color: var(--ms-muted); }
+.ms-listcard-notice { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--ms-line); font-size: 13px; line-height: 1.5; color: var(--ms-ink); overflow-wrap: anywhere; }
+.ms-listcard-note { font-size: 13px; line-height: 1.5; color: var(--ms-muted); overflow-wrap: anywhere; }
+.ms-cardlink { color: var(--ms-accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }  /* as Btn kind="link", but it wraps */
+.ms-listcard[tabindex="-1"]:focus { outline: none; border-color: var(--ms-accent); }  /* where a link from another card landed */
 .ms-listcard-meta .ms-invalid-date { color: var(--ms-invalidado); }
 .ms-codeblock { position: relative; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); background: var(--ms-surface); }
 .ms-codeblock pre { margin: 0; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
