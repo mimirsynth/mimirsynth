@@ -119,8 +119,9 @@ def triage_proposal(pid: int) -> None:
     from datetime import datetime, timezone
     with _factory()() as db:
         d, p = default_decider(db), db.get(Proposal, pid)
-        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings) or p.kind == "correction":
-            return  # a flagged possible secret is decided by a person (#116); a correction, always (#109)
+        from .claims import replaces
+        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings) or p.kind == "correction" or replaces(p):
+            return  # a flagged possible secret is decided by a person (#116); a correction or a claim that replaces facts, always (#109, #295)
         brain = db.get(Brain, p.brain_id)
         try:
             context = decider.scope(brain.name, brain.description, get_ontology(db, brain.id))  # el decisor no supone ningún dominio

@@ -58,6 +58,15 @@ A **correction** is a proposal that does not add memory: it asks to **invalidate
 - If the fact stopped being current while the correction waited, approving it gives an error and the correction stays pending: reject it.
 - **Reactivate the fact** in the correction puts the fact back as it was. An ingested replacement is left as it is.
 
+## Structured claims
+A proposal sent by an agent or over the API may carry **claims** next to its text: subject, relation and value, and optionally since when and which current fact it replaces. When it is sent, each one is compared with what the brain knows, and the detail shows them under **Claims** with their verdict:
+- **Confirms a current fact:** approving it records a confirmation of that fact (it renews its shelf life) instead of a new fact. If every claim confirms, nothing is ingested.
+- **Replaces facts:** approving it invalidates the facts listed, once the text is ingested, as of the claim's date. Like a correction, it is decided one at a time: the decider and a batch approval leave it to you. Each invalidation is in the vocabulary history and can be undone.
+- **Looks like a replacement:** the subject has other current values in a relation that is not functional; they are left alone.
+- **New:** nothing current in that relation.
+
+Once applied, each claim says when. The agent guide (`docs/AGENTS.md`) explains how to send them.
+
 ## Secrets in proposals
 Before a proposal is stored (from the interface, the API or the `remember` tool over MCP), its title and content go through the **secret detector**: cloud and AI provider keys, tokens, private keys, JWTs, `Authorization` headers, passwords in URLs… Some findings are **certain**; a random-looking value assigned to `password`, `secret` or `token` is only **possible**. What happens depends on the brain's policy (Administration → Brain → **Secrets**):
 

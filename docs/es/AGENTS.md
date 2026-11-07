@@ -35,6 +35,20 @@ Un colaborador queda en estado `pending`; un curador, `approved` e ingerida al m
 
 No guardes contraseñas ni tokens: guarda **dónde** están (por ejemplo, en qué gestor de contraseñas). Lo que tenga forma de credencial se enmascara antes de guardarse o, si el brain lo bloquea, la propuesta se rechaza con un 422 que dice qué tipo de secreto es (ver «Secretos» en [ARCHITECTURE.md](ARCHITECTURE.md)). Por MCP, `remember` aplica lo mismo. La respuesta dice qué tipos se enmascararon o se marcaron (`secrets_notice` en la respuesta HTTP, una frase más en el resultado de `remember`), nunca el valor.
 
+### Afirmaciones estructuradas: di qué sustituye
+El texto libre se extrae por su cuenta, así que una repetición con otras palabras acaba siendo un segundo hecho vigente y un valor nuevo puede dejar vigente el anterior. Junto a `body`, una propuesta (REST o `remember`) puede llevar hasta 20 **afirmaciones** (`claims`): `subject`, `relation` (como la nombra la ontología del brain), `value` y, opcionalmente, `valid_from` y `supersedes` (el uuid del hecho vigente al que sustituye, como lo dan `recall` o `facts_about`).
+```json
+{"name": "Nextcloud cambia de host", "body": "Desde el 1 de octubre Nextcloud corre en Notus.",
+ "claims": [{"subject": "Nextcloud", "relation": "RunsOn", "value": "Notus", "valid_from": "2026-10-01T00:00:00Z", "supersedes": "<uuid de «Nextcloud corre en Eridani»>"}]}
+```
+Al enviarla, cada afirmación se compara con los hechos vigentes del sujeto en esa relación, y la respuesta dice lo que encontró (`claims[].verdict` por HTTP, una frase por afirmación en el resultado de `remember`):
+- **confirms:** un hecho vigente ya lo dice. Al aprobarla se registra como **confirmación** de ese hecho (renueva su vida útil), no como hecho nuevo; si todas confirman, no se ingiere nada.
+- **replaces:** nombra el hecho con `supersedes`, o la relación es funcional y tiene otro valor vigente. Al aprobarla, una vez ingerido el texto, esos hechos se invalidan con fecha `valid_from`; la decide una persona, nunca el decisor ni un lote.
+- **may_replace:** hay otros valores vigentes y la relación no es funcional: no se invalida nada salvo que lo digas con `supersedes`.
+- **new:** no hay nada vigente en esa relación.
+
+Un `supersedes` que no es un hecho vigente del brain se rechaza (404 o 409).
+
 ## Corregir: un hecho que ya no es cierto
 ```bash
 curl -s -X POST "$URL/api/brains/mi-brain/proposals/corrections" \
@@ -53,7 +67,7 @@ POST $URL/api/brains/mi-brain/mcp        Authorization: Bearer $TOKEN
 | Herramienta | Rol | Qué hace |
 |---|---|---|
 | `recall` | lector | Devuelve el contexto de memoria para una consulta (igual que el endpoint `recall`). Argumentos: `query` y, opcionalmente, `facts`, `chunks`, `docs`, `max_chars`, `federated`, `min_similarity` |
-| `remember` | colaborador | Propone una memoria (mismas reglas que el endpoint de propuestas: cuarentena para colaboradores, aprobada al instante para curadores). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time`, `confidence` |
+| `remember` | colaborador | Propone una memoria (mismas reglas que el endpoint de propuestas: cuarentena para colaboradores, aprobada al instante para curadores). Argumentos: `name`, `body` y, opcionalmente, `source`, `source_description`, `reference_time`, `confidence` y `claims` (ver «Afirmaciones estructuradas») |
 | `correct` | colaborador | Propone invalidar un hecho por su uuid (ver «Corregir» más arriba). Argumentos: `fact_uuid`, `reason` y, opcionalmente, `replacement`, `invalid_at`, `source_description`, `confidence` |
 | `facts_about` | lector | Todo lo que se sabe de una entidad: los hechos vigentes y los que dejaron de ser ciertos, del más reciente al más antiguo, con fechas, el episodio del que se aprendió cada uno y el **uuid de cada hecho** entre corchetes (lo que necesita una corrección). La entidad se busca por nombre (sin distinguir mayúsculas ni espacios), por un nombre fusionado en ella o por su uuid; si varias comparten el nombre, devuelve las candidatas en vez de elegir una. Argumentos: `entity` y, opcionalmente, `status` (`all`, `current`, `invalidated`), `limit` (20, hasta 100), `offset`, `max_chars`, `federated` |
 | `timeline` | lector | Cómo cambió lo que se sabe de una entidad: cuándo se aprendió cada hecho y, si procede, cuándo dejó de ser cierto, del más reciente al más antiguo. Argumentos: `entity` y, opcionalmente, `since`, `until` (`AAAA-MM-DD`), `limit` (30, hasta 200), `offset`, `max_chars`, `federated` |

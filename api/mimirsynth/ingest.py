@@ -125,6 +125,17 @@ def ingest_proposal(pid: int, job=None) -> str:
             p.ingest_error = usage.PAUSED
             db.commit()
             return ""
+        from . import claims as claims_mod
+        if claims_mod.only_confirms(p):   # every claim repeats a current fact: confirmations, nothing to extract (#295)
+            try:
+                done = claims_mod.apply(db, _graph(brain), brain, p, _actor(db, p))
+                p.status, p.ingest_error, p.ingested_at, p.ingest_report = "ingested", "", datetime.now(timezone.utc), {"claims": done}
+            except Exception as e:  # noqa: BLE001
+                log.exception("no se pudieron aplicar las afirmaciones de la propuesta %s", pid)
+                p.status, p.ingest_error = "failed", str(e)[:500]
+            db.commit()
+            audit(db, None, f"proposal.{p.status}", brain, id=p.id)
+            return p.ingest_error if p.status == "failed" else ""
         try:
             onto = ontology_mod.get_ontology(db, brain.id)
             for attempt in range(1, appsettings.get("ingest_retries") + 1):
@@ -146,6 +157,12 @@ def ingest_proposal(pid: int, job=None) -> str:
             from . import vocab_apply
             vocab_apply.apply(db, brain, rep)
             p.status, p.episode_uuid, p.ingest_error, p.ingested_at, p.ingest_report = "ingested", uuid, "", datetime.now(timezone.utc), rep or None
+            if p.claims:   # after the text is in the graph: an old fact is never invalidated without its replacement (#295)
+                try:
+                    p.ingest_report = {**(rep or {}), "claims": claims_mod.apply(db, _graph(brain), brain, p, _actor(db, p))}
+                except Exception as e:  # noqa: BLE001  (the episode is in: a retry would ingest it twice; a person applies them by hand)
+                    log.exception("no se pudieron aplicar las afirmaciones de la propuesta %s", pid)
+                    p.ingest_report = {**(rep or {}), "claims_error": str(e)[:300]}
         except Exception as e:  # noqa: BLE001
             log.exception("ingesta fallida de la propuesta %s", pid)
             p.status, p.ingest_error = "failed", str(e)[:500]
@@ -158,6 +175,17 @@ def ingest_proposal(pid: int, job=None) -> str:
             notify.resolve("ingest.failed", f"proposal:{p.id}")
         audit(db, None, f"proposal.{p.status}", brain, id=p.id)
         return err
+
+
+def _graph(brain):
+    from .db import graph
+    return graph(brain.graph_name)
+
+
+def _actor(db, p):
+    """Who the claims' actions are recorded for: the person who approved the proposal, else its author."""
+    from .models import User
+    return db.get(User, p.reviewer_id or p.author_id)
 
 
 def submit_ingest(pid: int, brain_id: int, name: str, user_id: int | None = None, delay: float = 0) -> int:
