@@ -7,13 +7,13 @@ import { Btn, Check, EmptyState, MutationError, Notice, Panel, Pill } from "../u
 import { T } from "../i18n";
 
 type Fact = { uuid: string; fact: string; target: string; valid_at: string | null };
-type Finding = { pass: string; subject: string; relation: string; keep: Fact; replace: Fact[] };
+type Finding = { pass: string; subject: string; relation: string; keep: Fact | null; replace: Fact[]; why?: string };
 type Precision = { approved: number; rejected: number; pending: number; precision: number | null };
 type Settings = { enabled: boolean; passes: Record<string, boolean>; batch: number; precision: Record<string, Precision> };
 type Run = { id: number; day: string; status: string; reason: string; error: string; finished_at: string | null; findings: Record<string, number>;
   proposals: number[]; sample?: Record<string, Finding[]> };
 
-const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades") };
+const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil") };
 
 const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha") };
 
@@ -22,7 +22,8 @@ function FindingRow({ f }: { f: Finding }) {
   const { t } = useTranslation();
   return (<Panel withBorder p="sm"><Stack gap={4}>
     <Text size="sm" fw={600}>{f.subject} · <span className="ms-data">{f.relation}</span></Text>
-    <Text size="xs">{t("Se queda:")} «{f.keep.fact}» {f.keep.valid_at && <span className="ms-data">({fmtDay(f.keep.valid_at)})</span>}</Text>
+    {f.keep ? <Text size="xs">{t("Se queda:")} «{f.keep.fact}» {f.keep.valid_at && <span className="ms-data">({fmtDay(f.keep.valid_at)})</span>}</Text>
+      : <Text size="xs" c="dimmed">{t("Pasado de su vida útil y sin confirmar.")}</Text>}
     {f.replace.map((r) => <Text key={r.uuid} size="xs" c="dimmed">{t("Se invalidaría:")} «{r.fact}» {r.valid_at && <span className="ms-data">({fmtDay(r.valid_at)})</span>}</Text>)}
   </Stack></Panel>);
 }
@@ -63,11 +64,11 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
       <MutationError error={save.error ?? run.error ?? decide.error ?? preview.error} />
       {preview.data && (preview.data.count ? <Stack gap="xs">
         <Text size="sm">{t("Propondría {{n}} cambios (sin crear nada todavía):", { n: preview.data.count })}</Text>
-        {preview.data.findings.map((f) => <FindingRow key={f.keep.uuid} f={f} />)}
+        {preview.data.findings.map((f) => <FindingRow key={(f.keep ?? f.replace[0]).uuid} f={f} />)}
       </Stack> : <EmptyState>{t("Ahora no propondría nada.")}</EmptyState>)}
       {waiting.map((r) => <Panel key={r.id} withBorder p="sm"><Stack gap="xs">
         <Group gap="xs"><Pill tone="warn">{t("Espera tu confirmación")}</Pill><Text size="sm">{t("La ejecución del {{day}} propondría {{n}} cambios. Mira la muestra: si es correcta, se crean las propuestas (cada una se decide aparte).", { day: fmtDay(r.day), n: Object.values(r.findings).reduce((a, b) => a + b, 0) })}</Text></Group>
-        {Object.values(r.sample ?? {}).flat().map((f) => <FindingRow key={f.keep.uuid} f={f} />)}
+        {Object.values(r.sample ?? {}).flat().map((f) => <FindingRow key={(f.keep ?? f.replace[0]).uuid} f={f} />)}
         <Group gap="xs"><Btn kind="primary" loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, verb: "confirm" })}>{t("Crear las propuestas")}</Btn>
           <Btn loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, verb: "discard" })}>{t("Descartar")}</Btn></Group>
       </Stack></Panel>)}
