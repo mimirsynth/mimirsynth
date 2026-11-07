@@ -167,7 +167,7 @@ def answer(body: AnswerIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx 
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"recall falló: {e}") from e
     from . import ratings
-    rid = ratings.log(ctx, body.query, out, bg)
+    rid = ratings.log(ctx, body.query, out, bg, body, "answer")
     sources, ev = evidence(out)
     head = {"type": "sources", "recall_id": rid, "sources": sources, "documents_state": out.get("documents_state"),
             **({"federated": out["federated"]} if out.get("federated") else {})}

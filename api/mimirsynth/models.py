@@ -142,6 +142,7 @@ class Brain(Base):
     retention: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # days per kind of data (#137); empty: the instance's
     ai_budget: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {limit, unit: tokens | cost, pause} (#132); empty: none
     recall_query_text: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # keep the text of rated recalls (#110)
+    replay: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # sample of real recalls to replay (#291): {enabled, max, days}; empty: off
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
@@ -613,6 +614,20 @@ class HealthRun(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RecallSample(Base):
+    """A real recall kept to be replayed later against another configuration (#291): its question (secrets masked), the parameters it
+    was asked with and what it returned. Only for brains that opted in, up to their size and age limits."""
+    __tablename__ = "recall_samples"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, index=True)
+    via: Mapped[str] = mapped_column(String(8), default="http")  # http | mcp | answer
+    query: Mapped[str] = mapped_column(Text)
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    items: Mapped[list] = mapped_column(JSON, default=list)  # [{kind, id}] what it returned, in order
+    masked: Mapped[bool] = mapped_column(Boolean, default=False)  # the scanner found and masked something in the question
 
 
 class RecallLog(Base):
