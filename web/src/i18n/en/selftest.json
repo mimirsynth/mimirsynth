@@ -1,0 +1,13 @@
+{
+ "Comprobado: cada hecho nuevo sale al preguntar por él.": "Checked: each new fact comes back when asked about.",
+ "Ingerida, pero no se recupera": "Ingested, but not retrievable",
+ "No se pudo comprobar si se recupera: {{e}}": "Could not check whether it is retrievable: {{e}}",
+ "Para arreglarlo: reescribe el hecho con el nombre con que se pregunta, añade un alias a la entidad o invalida los hechos que lo tapan.": "To fix it: rewrite the fact with the name it is asked by, add an alias to the entity, or invalidate the facts that bury it.",
+ "Propuestas que se recuperan": "Proposals that are retrievable",
+ "Salen antes: {{v}}.": "Coming first: {{v}}.",
+ "Sin comprobar si se recupera: este brain ya hizo todas las comprobaciones de esta hora.": "Not checked for retrievability: this brain already used all of this hour's checks.",
+ "las propuestas que se recuperan": "the proposals that are retrievable",
+ "ninguna comprobada en 30 días": "none checked in 30 days",
+ "no sale al preguntar «{{q}}».": "does not come back when asking «{{q}}».",
+ "{{n}} de {{total}} ingeridas en 30 días": "{{n}} of {{total}} ingested in 30 days"
+}

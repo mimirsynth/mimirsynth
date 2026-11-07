@@ -50,7 +50,7 @@ REDUNDANT_COSINE = 0.93    # two facts between the same entities this close, wit
 # Questions that ask for nothing in particular: a good recall returns (almost) nothing for them. In the two interface languages.
 VAGUE = ("hola", "ok", "gracias", "vale, sigue con lo que estábamos haciendo", "¿y ahora qué?",
          "hello", "thanks", "ok, go on with what we were doing")
-HEADLINE = ("coverage", "staleness", "noise", "redundancy", "contradictions", "stale_facts")
+HEADLINE = ("coverage", "staleness", "noise", "redundancy", "contradictions", "stale_facts", "retrievable")
 
 _FACTS = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
           "RETURN r.uuid AS uuid, r.fact AS fact, a.uuid AS source_uuid, b.uuid AS target_uuid "
@@ -239,6 +239,12 @@ def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
         with _factory()() as db:
             return {"stale_facts": shelflife.scan(db, db.get(Brain, brain_id), limit=1)["total"]}
     part("stale_facts", stale)
+
+    def retrievable():
+        from .selftest import retrievability
+        with _factory()() as db:
+            return retrievability(db, brain_id)
+    part("retrievable", retrievable)
     for k in HEADLINE:
         out.setdefault(k, None)
     return out

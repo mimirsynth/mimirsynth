@@ -250,6 +250,7 @@ class Proposal(Base):
     kind: Mapped[str] = mapped_column(String(16), default="memory", server_default="memory")  # memory | correction (#109)
     correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the correction of a fact: see corrections.py
     claims: Mapped[list | None] = mapped_column(JSON, nullable=True)  # structured claims with their verdict and what was applied (#295): claims.py
+    selftest: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # whether its new facts come back to a control question (#296)
     origin: Mapped[str] = mapped_column(String(8), default="", server_default="")  # person | agent | auto; empty: before #298 or internal
     category: Mapped[str] = mapped_column(String(32), default="", server_default="")  # what produced it, to measure its precision (#300): curator.<pass>
     # what the brain already knows close to it, for the review queue: "" not checked yet | new | related | duplicate (a current fact

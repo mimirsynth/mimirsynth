@@ -216,8 +216,13 @@ def test_space_check_blocks_the_start(env, client, monkeypatch):  # noqa: F811
 def test_rate_limit_waits_for_retry_after(env, client, monkeypatch):  # noqa: F811
     from mimirsynth import reembed
     from mimirsynth.config import settings
+    import time as real_time
+    import types
     waits = []
-    monkeypatch.setattr(reembed.time, "sleep", lambda s: waits.append(s))
+    # only reembed's own waits: patching time.sleep for the whole process would also catch other threads (the AI usage flusher)
+    only_here = types.SimpleNamespace(**{k: getattr(real_time, k) for k in dir(real_time) if not k.startswith("_")})
+    only_here.sleep = lambda s: waits.append(s)
+    monkeypatch.setattr(reembed, "time", only_here)
     monkeypatch.setattr(settings, "reindex_pause", 1.5)
     fake, seen = env["fakes"]["nuevo"], {"n": 0}
 

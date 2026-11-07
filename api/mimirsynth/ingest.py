@@ -174,6 +174,12 @@ def ingest_proposal(pid: int, job=None) -> str:
         else:
             notify.resolve("ingest.failed", f"proposal:{p.id}")
         audit(db, None, f"proposal.{p.status}", brain, id=p.id)
+        if not err and p.episode_uuid:
+            try:
+                from . import selftest   # does each new fact come back to a control question? (#296)
+                selftest.submit(p.id, brain.id)
+            except Exception:  # noqa: BLE001  (the check never fails an ingestion)
+                log.warning("no se pudo lanzar la comprobación de la propuesta %s", pid, exc_info=True)
         return err
 
 

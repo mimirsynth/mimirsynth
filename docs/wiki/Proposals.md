@@ -67,6 +67,11 @@ A proposal sent by an agent or over the API may carry **claims** next to its tex
 
 Once applied, each claim says when. The agent guide (`docs/AGENTS.md`) explains how to send them.
 
+## Retrievable after ingesting
+A fact can be ingested well and never be found, because newer, more detailed facts bury it. After a proposal is ingested, the recall is asked one **control question** per new fact (up to 5), built from the subject and the relation («Vaultwarden runs on»). A proposal whose fact does not come back among the first 8 says **Ingested, but not retrievable** in its history, with the question and what came first. To fix it, rewrite the fact with the name people ask by, add an alias to the entity, or invalidate what buries it.
+
+The questions are internal: no agent sees them. Each one is an embedding, and they are limited per brain and hour (*Retrievability checks per hour*; *Check that what is ingested can be retrieved* turns them off). [[Memory health]] counts the share of proposals that are retrievable.
+
 ## By category
 **By category** groups what is pending by what produced it: the curator's contradictions, facts a verifier contradicts, corrections, possible duplicates, proposals close to something no longer true, and new ones. Each category shows how many are pending, a sample and its **precision**: the share of its proposals that people approved, over the last 50 they decided.
 
