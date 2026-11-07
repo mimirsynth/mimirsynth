@@ -144,6 +144,7 @@ class Brain(Base):
     recall_query_text: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # keep the text of rated recalls (#110)
     replay: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # sample of real recalls to replay (#291): {enabled, max, days}; empty: off
     curator: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # scheduled curator (#300): {enabled, passes, batch, by}; empty: off
+    auto_approve: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # auto-approval tiers per category (#299): {category: {enabled, bar, min}}
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 

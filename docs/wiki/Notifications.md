@@ -31,6 +31,7 @@ What changed in a brain (new facts, proposals waiting…) is not an alert: each 
 | `webhook.capped` | warning | An incoming webhook reached its daily cap of proposals; once a day per webhook, with its name and cap ([[Incoming webhooks]]) |
 | `digest.failed` | warning | A person's email summary failed 5 times in a row; with their name and the count, never their address. It is resolved when an email to them goes through ([[My account]]) |
 | `health.degraded` | warning | After the daily measurement, a brain's coverage falls more than configured since the previous one, or one of its numbers crosses its threshold (Administration → Settings → Notifications). It closes when a measurement is back within them ([[Memory health]]) |
+| `autoapprove.disabled` | warning | A category with automatic approval fell below its minimum precision in the curators' decisions; it goes back to manual and its proposals wait for a person ([[Proposals]]) |
 | `update.available` | info | A newer release exists (only if you turn it on, see below) |
 | `conflicts.found` | info | A brain has current facts that contradict each other in a single-valued relation; checked once a day ([[Vocabulary]]) |
 | `token.expiring` | info | An API token expires within 7 days; announced once per token, with its name and prefix, never the token. A rotated token is not announced ([[Connect agents]]) |

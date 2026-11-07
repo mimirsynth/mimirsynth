@@ -34,6 +34,7 @@ EVENTS = {
     "webhook.capped": ("warning", "Un webhook de entrada ha llegado a su tope diario de propuestas"),
     "digest.failed": ("warning", "El resumen por correo de una persona falla una y otra vez"),
     "health.degraded": ("warning", "La salud de la memoria de un brain empeora o cruza un umbral"),
+    "autoapprove.disabled": ("warning", "Una categoría de propuestas deja de aprobarse sola porque su precisión ha bajado"),
 }
 
 # How the wiki describes each event: when it is raised, in more detail than its label, and the guide it links to (an English page
@@ -55,6 +56,7 @@ EVENT_DOCS = {
     "conflicts.found": ("Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día", "Vocabulary"),
     "token.expiring": ("Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa", "Connect agents"),
     "facts.stale": ("Un brain tiene hechos vigentes que han superado la vida útil de su relación; se cuentan una vez al día, sin texto", "Ontology"),
+    "autoapprove.disabled": ("Una categoría con aprobación automática bajó de su precisión mínima en las decisiones de los curadores; vuelve a ser manual y sus propuestas esperan a una persona", "Proposals"),
     "health.degraded": ("Tras la medición diaria, la cobertura de un brain baja más de lo configurado respecto a la anterior, o una de sus cifras cruza su umbral (Administración → Ajustes → Notificaciones). Se cierra cuando una medición vuelve a estar dentro", "Memory health"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
@@ -300,6 +302,8 @@ async def worker(version: str = "0.0.0") -> None:
                 from . import reembed, usage
                 await asyncio.to_thread(reembed.check_orphan)
                 await asyncio.to_thread(usage.resume)  # proposals that waited for a budget that no longer stops them
+                from . import categories
+                await asyncio.to_thread(categories.run_tiers)  # categories that earned automatic approval (#299)
                 from . import health
                 await asyncio.to_thread(health.due)  # once a day per brain, keyed by the day in the database (#292)
                 from . import curator
