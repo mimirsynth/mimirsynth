@@ -17,7 +17,7 @@ Aquí pruebas el **recall**: lo mismo que hace un agente cuando consulta la memo
 ## Cómo se usa (Contexto)
 1. Escribe una pregunta o una frase en lenguaje natural (por ejemplo, «¿dónde está la base de datos de producción ahora?»).
 2. Ajusta, si quieres, **Hechos** (cuántos hechos traer, 0–30) y **Fragmentos** (cuántos fragmentos de episodios, 0–15).
-3. Pulsa **Buscar** o `Ctrl+Enter`.
+3. Pulsa **Buscar** o `Ctrl+Enter` (`⌘+Enter` en un Mac); en el modo **Responder** el mismo botón y las mismas teclas redactan la respuesta. Encima del resultado, una línea dice a qué pregunta responde y qué ha traído, y lo marca «De una pregunta anterior» en cuanto cambias el texto.
 
 ## Qué devuelve
 - **Hechos:** los más parecidos a la pregunta, solo por encima de la *Similitud mínima de un hecho o un fragmento* (que vale también para los fragmentos de episodios), en dos listas, como los recibe el agente: **Hechos vigentes** y **Hechos que dejaron de ser ciertos** (tachados, con su rango de fechas). Cada uno muestra su similitud. Un hecho vigente que sustituye a otro que ya no es cierto dice «Sustituye a …», y el sustituido dice «Ahora: …» y qué fragmento o pasaje lo dice; cada nombre es un enlace a su tarjeta. Un hecho que entró por ese vínculo y no por cercanía muestra «sin similitud». Si no llega ninguno al umbral, Preguntar lo dice.
