@@ -7,6 +7,7 @@ import { Btn, DataState, EmptyState, EntityChip, FillArea, humanRelation, Mutati
 import { fmt, get, send } from "../api";
 import { TypeDialog } from "./TypePicker";
 import EntityMiniGraph from "./EntityMiniGraph";
+import { ProbeDialog, ProbeMark, useProbes } from "./Probes";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };
@@ -194,20 +195,27 @@ function FactItem({ f, graph, canEdit, link }: { f: EFact; graph: string; canEdi
   const old = f.status === "invalidated";
   const act = useMutation({ mutationFn: () => send("POST", `facts/${f.uuid}/${old ? "reactivate" : "invalidate"}`, undefined, { graph }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["entity", graph] }) });
+  const probe = useProbes(graph, canEdit).get(f.uuid);   // a check against a live system (issue 293)
+  const [probing, setProbing] = useState(false);
   return (
     <li className="ms-tl-item" data-event={old ? "invalidated" : "learned"}>
-      <Group gap="xs" justify="space-between" wrap="nowrap" align="flex-start">
+      <div className="ms-tl-row">
         <Stack gap={0} className="ms-tl-body">
           <Group gap={6}><EntityChip name={f.other.name} type={f.other.labels[0]} to={link(f.other)} />
             <Text size="sm" td={old ? "line-through" : undefined} c={old ? "dimmed" : undefined}>{f.fact}</Text></Group>
           <Text size="xs" c="dimmed">
             {old ? t("Válido {{from}} → {{to}}", { from: day(f.valid_at ?? f.created_at), to: day(f.invalid_at) }) : t("Vigente desde {{from}}", { from: day(f.valid_at ?? f.created_at) })}
             {" · "}{t("aprendido {{date}}", { date: day(f.created_at) })}
+            {probe && !old && <>{" · "}<ProbeMark p={probe} /></>}
           </Text>
           <MutationError error={act.error} />
         </Stack>
-        {canEdit && <Btn size="row" icon={old ? "undo" : "close"} loading={act.isPending} onClick={() => act.mutate()}>{old ? t("Reactivar") : t("Invalidar")}</Btn>}
-      </Group>
+        {canEdit && <Group gap={6} wrap="nowrap">
+          {!old && <Btn size="row" icon="test" onClick={() => setProbing(true)}>{probe ? t("Sonda") : t("Poner sonda")}</Btn>}
+          <Btn size="row" icon={old ? "undo" : "close"} loading={act.isPending} onClick={() => act.mutate()}>{old ? t("Reactivar") : t("Invalidar")}</Btn>
+        </Group>}
+      </div>
+      {probing && <ProbeDialog graph={graph} fact={f} probe={probe} onClose={() => setProbing(false)} />}
     </li>
   );
 }

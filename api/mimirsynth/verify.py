@@ -323,8 +323,14 @@ def set_verifier(vid: str, body: ConfigIn, ctx: BrainCtx = Depends(admin_of_brai
 
 @router.get("/probes")
 def list_probes(ctx: BrainCtx = Depends(curator)):
-    rows_ = ctx.db.scalars(select(FactProbe).where(FactProbe.brain_id == ctx.brain.id).order_by(FactProbe.id.desc()).limit(1000))
-    return {"items": [_probe_out(p) for p in rows_]}
+    probes = list(ctx.db.scalars(select(FactProbe).where(FactProbe.brain_id == ctx.brain.id).order_by(FactProbe.id.desc()).limit(1000)))
+    facts = {}   # what each probe checks, to read it: the fact's text and its entity
+    if probes:
+        for r in rows(ctx.graph.query("MATCH (a:Entity)-[r:RELATES_TO]->(:Entity) WHERE r.uuid IN $u RETURN r.uuid AS uuid, r.fact AS fact, "
+                                      "a.name AS source, a.uuid AS source_uuid, r.invalid_at AS invalid_at", {"u": [p.fact_uuid for p in probes]})):
+            facts[r["uuid"]] = r
+    return {"items": [{**_probe_out(p), **{k: (facts.get(p.fact_uuid) or {}).get(k) for k in ("fact", "source", "source_uuid", "invalid_at")}}
+                      for p in probes]}
 
 
 @router.put("/facts/{uuid}/probe")
