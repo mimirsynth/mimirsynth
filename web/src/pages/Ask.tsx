@@ -50,6 +50,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const [save, setSave] = useState<RefQuery | null>(null);
   const [marking, setMarking] = useState(false);
   const [answerTrigger, setAnswerTrigger] = useState(0); const [answering, setAnswering] = useState(false);
+  const answered = useRef(0);  // the last press AskAnswer acted on: coming back to «Responder» must not write again by itself
   const resultsHead = useRef<HTMLDivElement>(null);  // «Debe salir / Sobra» show only while building a reference query
   const [tab, setTab] = useTabParam("preguntar");
   const [mode, setMode] = useTabParam("contexto", "modo");   // «Responder» writes an answer with citations (issue 126); «Contexto» shows the recall
@@ -60,7 +61,10 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   // The open brain pays for the query's embedding in the AI consumption (issue 176).
   const searchAll = useMutation({ mutationFn: () => send<AllBrainsResult>("POST", "search", { query: q, facts: nf, chunks: nc, brain: graph }) });
   const search = () => { if (!q.trim()) return; if (scope === "all") searchAll.mutate(); else run.mutate(); };
-  const primary = () => { if (!q.trim()) return; if (view === "contexto") search(); else setAnswerTrigger((n) => n + 1); };
+  // The mode as the address has it now, not as this render saw it: the router re-renders in a transition, so Ctrl/⌘+Enter right after
+  // choosing «Responder» can still run in a render that shows «Contexto».
+  const viewNow = () => scope === "all" ? "contexto" : new URLSearchParams(window.location.search).get("modo") ?? "contexto";
+  const primary = () => { if (!q.trim()) return; if (viewNow() === "contexto") search(); else setAnswerTrigger((n) => n + 1); };
   // The button that had the focus is disabled while it works, so the focus falls to the page: give it to the results instead.
   useEffect(() => { if (run.data && (!document.activeElement || document.activeElement === document.body)) resultsHead.current?.focus(); }, [run.data]);
   useEffect(() => { run.reset(); }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
@@ -161,16 +165,17 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         {view === "contexto" && scope === "brain" && r && canSync && <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />}
         {view === "contexto" && scope === "brain" && r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
       </Group>
-      {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} trigger={answerTrigger} onBusy={setAnswering} />}
+      {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} trigger={answerTrigger} answered={answered} onBusy={setAnswering} />}
       {scope === "all" && <MutationError error={searchAll.error} />}
       {scope === "all" && searchAll.data && <AskAllBrains r={searchAll.data} />}
       {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error} />}
       {view === "contexto" && scope === "brain" && rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
-      {view === "contexto" && scope === "brain" && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">{r && <>
-        <Group gap="xs"><Text size="sm" role="status">{t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 })}</Text>
-          {r.query !== q.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}</Group>
-        <Text size="xs" c="dimmed" className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms (embedding {{e}} · hechos {{f}} · fragmentos {{c}})", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</Text>
-      </>}</div>}
+      {/* The live region is there before the first search and only its text changes: a node replaced on every search is not announced. */}
+      {view === "contexto" && scope === "brain" && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">
+        <Group gap="xs"><Text size="sm" role="status">{r ? t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 }) : ""}</Text>
+          {r && r.query !== q.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}</Group>
+        {r && <Text size="xs" c="dimmed" className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms (embedding {{e}} · hechos {{f}} · fragmentos {{c}})", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</Text>}
+      </div>}
       {view === "contexto" && scope === "brain" && r && (
         <div className="ms-ask-wrap"><div className="ms-ask-cols">
           <Stack className="ms-ask-main" gap="xs">
