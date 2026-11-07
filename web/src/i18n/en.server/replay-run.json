@@ -1,0 +1,6 @@
+{
+ "Repetir recalls reales con otra configuración": "Replay real recalls with another configuration",
+ "como mucho {{RUNS_PER_HOUR}} repeticiones por hora en cada brain": "at most {{RUNS_PER_HOUR}} replays per hour in each brain",
+ "consulta no encontrada en la muestra": "query not found in the sample",
+ "el brain no tiene ninguna consulta guardada en su muestra": "the brain has no query kept in its sample"
+}

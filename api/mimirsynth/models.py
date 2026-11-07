@@ -668,6 +668,22 @@ class CuratorRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class ReplayRun(Base):
+    """A shadow replay of a brain's recall sample with a candidate configuration (#291): its parameters and what would differ."""
+    __tablename__ = "replay_runs"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(12), default="queued")  # queued | running | done | error
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    size: Mapped[int] = mapped_column(Integer, default=100)
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    results: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class RecallSample(Base):
     """A real recall kept to be replayed later against another configuration (#291): its question (secrets masked), the parameters it
     was asked with and what it returned. Only for brains that opted in, up to their size and age limits."""
