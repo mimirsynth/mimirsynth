@@ -1,7 +1,7 @@
 
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, NumberField, Pill, Segments, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam, CardLink } from "../ui";
+import { Btn, NumberField, Pill, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam, CardLink } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Fragment, useEffect, useState } from "react";
@@ -47,6 +47,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const [nf, setNf] = useState(8); const [nc, setNc] = useState(4);
   const [marks, setMarks] = useState<Record<string, { mark: Mark; item: Item }>>({});
   const [save, setSave] = useState<RefQuery | null>(null);
+  const [marking, setMarking] = useState(false);  // «Debe salir / Sobra» show only while building a reference query
   const [tab, setTab] = useTabParam("preguntar");
   const [mode, setMode] = useTabParam("contexto", "modo");   // «Responder» writes an answer with citations (issue 126); «Contexto» shows the recall
   const status = useQuery({ queryKey: ["index", graph], queryFn: () => get<{ enabled: boolean; chunks: number; episodes: number }>("index/status", { graph }) });
@@ -61,7 +62,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const rate = useMutation({
     mutationFn: (a: { key: string; kind: string; id: string; rating: Rating }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${run.data?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating }),
     onSuccess: (r, a) => { setRated((m) => ({ ...m, [a.key]: a.rating })); setRateMsg(r.proposal_id ? t("Se ha propuesto la corrección del hecho (propuesta #{{id}}); la decide un curador.", { id: r.proposal_id }) : r.recorded_only ? t("Valoración guardada. Con tu rol no se propone la corrección: la verá un curador en Calidad.") : ""); } });
-  const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => run.data?.recall_id && <Group gap={2} wrap="nowrap">
+  const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => run.data?.recall_id && <Group gap={4}>
     {(["useful", "irrelevant", ...(canIncorrect ? ["incorrect"] : [])] as Rating[]).map((v) => (
       <Btn key={v} size="row" kind={rated[key] === v ? (v === "useful" ? "primary" : "danger") : "ghost"} onClick={() => rate.mutate({ key, kind, id, rating: v })}>
         {v === "useful" ? t("Útil") : v === "irrelevant" ? t("Irrelevante") : t("Incorrecto")}</Btn>))}
@@ -102,7 +103,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
   const factCard = (f: Fact) => (
     <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)}
-      actions={<Group gap="xs" wrap="nowrap">{rateBtns(`f:${f.uuid}`, "fact", f.uuid, !f.origin)}{markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}</Group>}
+      actions={<Group gap="md" className="ms-ask-actions">{rateBtns(`f:${f.uuid}`, "fact", f.uuid, !f.origin)}{markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}</Group>}
       tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
         <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
       meta={`${sim(f) ?? t("sin similitud")} · ${validity(f)}`}>{f.fact}</ListCard>);
@@ -112,7 +113,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     if (n[key]?.mark === mark) delete n[key]; else n[key] = { mark, item: { ...item, text: item.text.slice(0, 200) } };
     return n;
   });
-  const markBtns = (key: string, item: Item) => canSync && <Group gap={4} wrap="nowrap">
+  const markBtns = (key: string, item: Item) => canSync && marking && <Group gap={4}>
     <Btn size="row" kind={marks[key]?.mark === "expect" ? "primary" : "ghost"} icon="check" onClick={() => toggle(key, "expect", item)}>{t("Debe salir")}</Btn>
     <Btn size="row" kind={marks[key]?.mark === "avoid" ? "danger" : "ghost"} icon="close" onClick={() => toggle(key, "avoid", item)}>{t("Sobra")}</Btn>
   </Group>;
@@ -150,6 +151,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         <NumberField size="xs" label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={100} />
         {view === "contexto" && <Btn kind="primary" disabled={!q} loading={run.isPending || searchAll.isPending} onClick={search}>{t("Buscar (Ctrl+Enter)")}</Btn>}
         {view === "contexto" && scope === "brain" && r && <Text size="xs" c="dimmed">{r.ms.total} {t("ms (embedding")} {r.ms.embed} {t("· hechos")} {r.ms.facts} {t("· fragmentos")} {r.ms.chunks})</Text>}
+        {view === "contexto" && scope === "brain" && r && canSync && <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />}
         {view === "contexto" && scope === "brain" && r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
       </Group>
       {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} />}
@@ -171,7 +173,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             <Title order={5} mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>
             {r.chunks.map((c) => (
               <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmt(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
-                actions={<Group gap="xs" wrap="nowrap">{rateBtns(`c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, false)}{markBtns(`c:${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" })}</Group>}
+                actions={<Group gap="md" className="ms-ask-actions">{rateBtns(`c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, false)}{markBtns(`c:${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" })}</Group>}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={5} mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
@@ -179,7 +181,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
                 <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
                   aside={[t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
-                  actions={<Group gap="xs" wrap="nowrap">{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
+                  actions={<Group gap="md" className="ms-ask-actions">{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
             </>}
           </Stack>
           <Stack gap="xs" className="ms-ask-side">

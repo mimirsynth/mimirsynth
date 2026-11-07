@@ -17,7 +17,7 @@ Están en **Preguntar → Consultas de referencia**, para **curadores y roles su
 
 Cada lista admite hasta 50 textos de hasta 500 caracteres. Cada fila tiene **Editar** y **Borrar**; borrar una consulta no cambia el resultado de las ejecuciones anteriores.
 
-También puedes crearlas desde [[Preguntar]]: tras una búsqueda, marca resultados como **Debe salir** o **Sobra** y pulsa **Guardar como consulta de referencia**; el formulario se abre ya relleno.
+También puedes crearlas desde [[Preguntar]]: tras una búsqueda, activa **Marcar para una consulta de referencia**, marca resultados como **Debe salir** o **Sobra** y pulsa **Guardar como consulta de referencia**; el formulario se abre ya relleno.
 
 Los textos pasan por el detector de secretos del brain, así que guardar un hecho del grafo como texto esperado nunca copia una credencial: según el ajuste del brain, el secreto se enmascara o la consulta se rechaza.
 
