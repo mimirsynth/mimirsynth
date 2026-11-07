@@ -34,8 +34,9 @@ log = logging.getLogger("mimirsynth.curator")
 router = APIRouter(prefix="/api/brains/{slug}/curator")
 curator = brain_access("curator")
 KIND = "curator.run"
-PASSES = ("contradictions",)
-DEFAULT = {"enabled": False, "passes": {"contradictions": True}, "batch": 5}
+PASSES = ("contradictions", "redundancy")
+DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False}, "batch": 5}
+MAX_REDUNDANT = 3000   # candidate facts whose embeddings the redundancy pass reads per run (the most recent first)
 MAX_FINDINGS = 200   # per run: what is past it waits for the next one
 SAMPLE = 10
 
@@ -86,7 +87,47 @@ def contradictions(brain_id: int) -> list[dict]:
     return out[:MAX_FINDINGS]
 
 
-FINDERS = {"contradictions": contradictions}
+_RICH = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
+         "RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact, r.valid_at AS valid_at, r.created_at AS created_at, a.name AS source, "
+         "a.uuid AS source_uuid, b.name AS target, b.uuid AS target_uuid ORDER BY coalesce(r.valid_at, r.created_at) DESC, r.uuid LIMIT $n")
+
+
+def redundancy(brain_id: int) -> list[dict]:
+    """Findings of the redundancy pass (#297's merge): current facts between the same two entities that say the same thing (the same
+    text, or close embeddings with the same numbers and identifiers, as the memory health counts them). The newest one is kept and the
+    others are proposed for invalidation, pointing to it."""
+    from . import health
+    from .db import graph, rows
+    with _factory()() as db:
+        b = db.get(Brain, brain_id)
+        gname, busy = b.graph_name, _pending_targets(db, brain_id)
+    g = graph(gname)
+    groups, n, out = [], 0, []
+    for grp in health._groups(rows(g.query(_RICH, {"n": health.MAX_FACTS}))):
+        if n + len(grp) > MAX_REDUNDANT and groups:
+            break
+        groups.append(grp)
+        n += len(grp)
+    uuids = [f["uuid"] for grp in groups for f in grp]
+    vectors = {}
+    for i in range(0, len(uuids), 500):
+        for r in rows(g.query(health._VECTORS, {"u": uuids[i:i + 500]})):
+            vectors[r["uuid"]] = r["e"]
+    for grp in groups:
+        for c in health.clusters([{**f, "embedding": vectors.get(f["uuid"])} for f in grp]):
+            c = sorted(c, key=lambda f: (str(f.get("valid_at") or f.get("created_at") or ""), f["uuid"]), reverse=True)
+            keep, drop = c[0], [f for f in c[1:] if f["uuid"] not in busy]
+            if not drop:
+                continue
+            short = lambda f: {k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}  # noqa: E731
+            out.append({"pass": "redundancy", "subject": keep["source"], "relation": keep["name"], "keep": short(keep),
+                        "replace": [short(f) for f in drop], "why": "says the same as a newer current fact between the same entities"})
+            if len(out) >= MAX_FINDINGS:
+                return out
+    return out
+
+
+FINDERS = {"contradictions": contradictions, "redundancy": redundancy}
 
 
 def precision(db, brain_id: int, pass_: str) -> dict:
@@ -130,7 +171,8 @@ def propose(brain_id: int, findings: list[dict]) -> list[int]:
                 checked = claims_mod.check(g, raw, amap, functional)
             except claims_mod.ClaimError:   # a fact stopped being current since the pass read it
                 continue
-            name = f"Curador: «{f['subject']}» {f['relation']} → {f['keep']['target']}"[:255]
+            name = (f"Curador: repite «{(f['keep'].get('fact') or '')[:200]}»" if f["pass"] == "redundancy"
+                    else f"Curador: «{f['subject']}» {f['relation']} → {f['keep']['target']}")[:255]
             p = Proposal(brain_id=brain_id, author_id=author.id, name=name, body="", source="text", status="pending", kind="memory",
                          source_description=f"curator: {f['pass']}", category=category(f["pass"]), claims=checked,
                          related_verdict="new", decision={"curator": {"pass": f["pass"], "why": f["why"], "keep": f["keep"]}})

@@ -10,7 +10,9 @@ Por ahora, **contradicciones claras** en las relaciones marcadas como funcionale
 - los que no están claros, que siguen en Calidad del contenido → Contradicciones para una persona;
 - los hechos que ya tienen una propuesta pendiente.
 
-El ruido, la redundancia y los hechos desactualizados vienen después ([#300](https://github.com/mimirsynth/mimirsynth/issues/300)).
+Y, cuando lo marca un administrador (está desactivado por defecto), **hechos repetidos**: hechos vigentes entre las mismas dos entidades que dicen lo mismo. Es decir, el mismo texto, o embeddings muy cercanos con los mismos números e identificadores, como cuenta la redundancia la [[Salud de la memoria]]: «PostgreSQL 14» y «PostgreSQL 16» son un cambio, no una repetición. La propuesta se queda con el más reciente e invalida los demás. Se leen hasta 3.000 hechos candidatos por ejecución, los más recientes primero.
+
+Cada pasada tiene su casilla y su precisión. El ruido y los hechos desactualizados vienen después ([#300](https://github.com/mimirsynth/mimirsynth/issues/300)).
 
 ## Activarlo
 Está **desactivado por defecto**. Un administrador del brain marca **Activar el curador en este brain**. Desde entonces se ejecuta una vez al día (el día es la clave de la ejecución: un reinicio nunca lo ejecuta dos veces), y **Ejecutar ahora** lo lanza al momento. **Ver qué propondría** lo muestra sin crear nada.
