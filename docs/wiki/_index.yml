@@ -28,6 +28,7 @@ sidebar:
   - Proposals
   - Content quality
   - Memory health
+  - Curator
   - Vocabulary
   - Contradictions
   - Jobs
@@ -111,6 +112,7 @@ home:
     pages:
     - Content quality
     - Memory health
+    - Curator
     - Merge duplicates
     - Contradictions
     - Type corrector

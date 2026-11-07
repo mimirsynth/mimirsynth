@@ -1,0 +1,7 @@
+{
+ "Curador programado": "Scheduled curator",
+ "el curador ya está en marcha o espera una confirmación": "the curator is already running or waits for a confirmation",
+ "esa ejecución no espera ninguna confirmación": "that run is not waiting for a confirmation",
+ "pasada desconocida": "unknown pass",
+ "pasadas desconocidas: {{v}}": "unknown passes: {{v}}"
+}

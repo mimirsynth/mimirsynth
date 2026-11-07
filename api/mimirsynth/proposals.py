@@ -45,7 +45,7 @@ def _out(p: Proposal, full: bool = False) -> dict:
          "reviewer": (p.reviewer.email or p.reviewer.name) if p.reviewer else None,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
-         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "claims": p.claims, "purged_at": p.purged_at}
+         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "claims": p.claims, "category": p.category or "", "purged_at": p.purged_at}
     d["body"] = p.body if full else p.body[:300]
     return d
 
@@ -243,7 +243,7 @@ def approve(pid: int, body: ReviewIn, request: Request, bg: BackgroundTasks, ctx
         corrections.apply(ctx, p, language(request), note=body.note)
         return _out(p)
     out = _review(ctx, pid, "approved", body.note)
-    if ingest.enabled():  # a person's approval waits UNDO_SECONDS queued: the curator can still take it back (`undo`)
+    if ingest.enabled() or claims_mod.actions_only(_get(ctx, pid)):  # a person's approval waits UNDO_SECONDS queued: the curator can still take it back (`undo`)
         ingest.submit_ingest(pid, ctx.brain.id, secretguard.safe_name(_get(ctx, pid)), ctx.user.id, delay=UNDO_SECONDS)
         out["undo_seconds"] = UNDO_SECONDS
     return out

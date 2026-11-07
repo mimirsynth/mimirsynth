@@ -126,7 +126,7 @@ def ingest_proposal(pid: int, job=None) -> str:
             db.commit()
             return ""
         from . import claims as claims_mod
-        if claims_mod.only_confirms(p):   # every claim repeats a current fact: confirmations, nothing to extract (#295)
+        if claims_mod.actions_only(p):   # confirmations or replacements with nothing to extract (#295, #300)
             try:
                 done = claims_mod.apply(db, _graph(brain), brain, p, _actor(db, p))
                 p.status, p.ingest_error, p.ingested_at, p.ingest_report = "ingested", "", datetime.now(timezone.utc), {"claims": done}
