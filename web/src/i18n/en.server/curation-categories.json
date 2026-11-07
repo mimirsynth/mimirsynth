@@ -1,0 +1,7 @@
+{
+ "Propuestas por categoría: {{v}}": "Proposals by category: {{v}}",
+ "Una categoría con aprobación automática bajó de su precisión mínima en las decisiones de los curadores; vuelve a ser manual y sus propuestas esperan a una persona": "A category with automatic approval fell below its minimum precision in the curators' decisions; it goes back to manual and its proposals wait for a person",
+ "la categoría no lo ha ganado: {{approved}} aprobadas de {{decided}} decididas por personas; hacen falta {{min}} decisiones y una precisión de {{bar}}": "the category has not earned it: {{approved}} approved of {{decided}} decided by people; it needs {{min}} decisions and a precision of {{bar}}",
+ "la muestra ya no corresponde a la categoría: vuelve a mirarla": "the sample no longer matches the category: look at it again",
+ "no hay propuestas pendientes en esa categoría": "there are no pending proposals in that category"
+}

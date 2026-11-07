@@ -57,7 +57,9 @@ def test_off_by_default_preview_and_the_sample_gate(client, graph):  # noqa: F81
     run = client.get("/api/brains/cu1/curator/runs").json()["items"][0]
     assert run["status"] == "waiting" and run["findings"] == {"contradictions": 7} and len(run["sample"]["contradictions"]) == 7
     with _factory()() as db:
-        assert db.query(Proposal).filter(Proposal.category == "curator.contradictions").count() == 0   # nothing proposed yet
+        from mimirsynth.models import Brain
+        bid = db.query(Brain).filter(Brain.slug == "cu1").one().id
+        assert db.query(Proposal).filter(Proposal.brain_id == bid, Proposal.category == "curator.contradictions").count() == 0   # nothing proposed yet
     assert client.post("/api/brains/cu1/curator/run").status_code == 409                    # it waits: not run again
     done = client.post(f"/api/brains/cu1/curator/runs/{run['id']}/confirm").json()
     assert done["status"] == "done" and len(done["proposals"]) == 7
