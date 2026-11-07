@@ -77,6 +77,7 @@ type HealthMetrics = {
   staleness: number | null; stale_results?: number; noise: number | null; noise_queries?: number;
   redundancy: number | null; redundant_facts?: number; current_facts?: number; redundancy_sampled?: boolean;
   contradictions: number | null; stale_facts: number | null; failed: string[]; probes_paused?: boolean;
+  retrievable?: number | null; selftested?: number; not_retrievable?: number;
 };
 type HealthRun = { id: number; day: string; status: string; metrics: HealthMetrics | null; finished_at: string | null };
 type Health = { items: HealthRun[]; latest: HealthRun | null; measuring: boolean };
@@ -84,6 +85,7 @@ type Health = { items: HealthRun[]; latest: HealthRun | null; measuring: boolean
 /** The parts of a measurement that can fail on their own, as the sentence «Could not measure: …» names them. */
 const HEALTH_PARTS: Record<string, string> = {
   probes: T("las preguntas de prueba"), redundancy: T("la redundancia"), contradictions: T("las contradicciones"), stale_facts: T("los hechos a revisar"),
+  retrievable: T("las propuestas que se recuperan"),
 };
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 }));
@@ -117,6 +119,8 @@ function MemoryHealth({ graph }: { graph: string }) {
             <StatCard label={t("Redundancia")} value={pct(m.redundancy)}
               hint={before ? ago(pct(before.redundancy)) : m.redundancy_sampled ? t("unos {{n}} hechos repiten otro (estimado)", { n: m.redundant_facts ?? 0 }) : t("{{n}} hechos repiten otro", { n: m.redundant_facts ?? 0 })} />
             <StatCard label={t("Contradicciones abiertas")} value={fmtNum(m.contradictions)} hint={m.contradictions === null ? t("ninguna relación es funcional") : before ? ago(fmtNum(before.contradictions)) : undefined} />
+            <StatCard label={t("Propuestas que se recuperan")} value={pct(m.retrievable)}
+              hint={m.retrievable === null || m.retrievable === undefined ? t("ninguna comprobada en 30 días") : before ? ago(pct(before.retrievable)) : t("{{n}} de {{total}} ingeridas en 30 días", { n: (m.selftested ?? 0) - (m.not_retrievable ?? 0), total: m.selftested ?? 0 })} />
             <StatCard label={t("Hechos a revisar")} value={fmtNum(m.stale_facts)} hint={m.stale_facts === null ? t("ninguna relación tiene vida útil") : before ? ago(fmtNum(before.stale_facts)) : undefined} />
           </StatGrid>)}
         {m?.probes_paused && <Text size="sm" c="dimmed">{t("Las preguntas de prueba no se hicieron: el brain ha llegado a su presupuesto de IA.")}</Text>}

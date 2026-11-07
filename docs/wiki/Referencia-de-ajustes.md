@@ -90,6 +90,8 @@ Guía: [[Recuerdo e ingesta]]
 | Ajuste | Clave | Por defecto | Rango o valores | Descripción |
 |---|---|---|---|---|
 | Motor para revisar resúmenes | `summary_engine` | — | texto | Nombre del motor LLM que reescribe los resúmenes pobres de las entidades en Calidad del contenido → Resúmenes. Vacío: el motor LLM predeterminado. |
+| Comprobar que lo ingerido se recupera | `ingest_selftest` | `yes` | `yes` (Sí) / `no` (No) | Tras ingerir una propuesta, se hace al recall una pregunta de control por cada hecho nuevo (hasta 5) y se marca la propuesta si alguno no sale entre los primeros. Cada pregunta es un embedding. |
+| Comprobaciones de recuperación por hora | `ingest_selftest_per_hour` | `60` | 1–10000 | Propuestas por brain y hora que se comprueban; las demás se quedan sin comprobar y lo dicen. |
 | Reintentos de la ingesta | `ingest_retries` | `4` | 1–20 | Intentos cuando el modelo responde con límite de tasa o un error transitorio. |
 | Lote al cambiar de modelo de embeddings | `reindex_batch` | `64` textos | 1–512 textos | Textos por lote al recalcular los vectores con otro modelo. Más pequeño reparte mejor la carga en el proveedor. |
 | Pausa entre lotes al cambiar de modelo | `reindex_pause` | `0` s | 0–600 s | Segundos de espera entre lotes para respetar el límite de tasa del proveedor. Con un 429 se espera además lo que indique Retry-After. |

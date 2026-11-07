@@ -67,6 +67,11 @@ Una propuesta que envía un agente o el API puede llevar **afirmaciones** junto 
 
 Una vez aplicada, cada afirmación dice cuándo. La guía de agentes (`docs/AGENTS.md`) explica cómo enviarlas.
 
+## Se recupera tras ingerirla
+Un hecho puede ingerirse bien y no encontrarse nunca, porque otros más recientes y detallados lo tapan. Tras ingerir una propuesta, se hace al recall una **pregunta de control** por cada hecho nuevo (hasta 5), formada con el sujeto y la relación («Vaultwarden runs on»). Si uno no sale entre los 8 primeros, la historia de la propuesta dice **Ingerida, pero no se recupera**, con la pregunta y lo que salió antes. Para arreglarlo, reescribe el hecho con el nombre con que se pregunta, añade un alias a la entidad o invalida lo que lo tapa.
+
+Las preguntas son internas: ningún agente las ve. Cada una es un embedding, y tienen un límite por brain y hora (*Comprobaciones de recuperación por hora*; *Comprobar que lo ingerido se recupera* las desactiva). La [[Salud de la memoria]] cuenta qué parte de las propuestas se recupera.
+
 ## Por categorías
 **Por categorías** agrupa lo pendiente según lo que lo produjo: las contradicciones del curador, los hechos que contradice un verificador, las correcciones, los posibles duplicados, las propuestas parecidas a algo que ya no es cierto y las nuevas. Cada categoría muestra cuántas hay pendientes, una muestra y su **precisión**: la parte de sus propuestas que aprobaron personas, sobre las últimas 50 que decidieron.
 
