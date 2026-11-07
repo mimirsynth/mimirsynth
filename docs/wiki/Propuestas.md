@@ -58,6 +58,15 @@ Una **corrección** es una propuesta que no añade memoria: pide **invalidar un 
 - Si el hecho dejó de estar vigente mientras la corrección esperaba, aprobarla da un error y la corrección sigue pendiente: recházala.
 - **Reactivar el hecho**, en la propia corrección, lo deja como estaba. El sustituto ya ingerido no se toca.
 
+## Afirmaciones estructuradas
+Una propuesta que envía un agente o el API puede llevar **afirmaciones** junto a su texto: sujeto, relación y valor y, opcionalmente, desde cuándo y a qué hecho vigente sustituye. Al enviarla, cada una se compara con lo que sabe el brain, y el detalle las muestra en **Afirmaciones** con su veredicto:
+- **Confirma un hecho vigente:** al aprobarla se registra una confirmación de ese hecho (renueva su vida útil) en vez de un hecho nuevo. Si todas confirman, no se ingiere nada.
+- **Sustituye hechos:** al aprobarla se invalidan los hechos que lista, una vez ingerido el texto, con la fecha de la afirmación. Como una corrección, se decide de una en una: el decisor y la aprobación en lote la dejan para ti. Cada invalidación queda en el historial del vocabulario y se puede deshacer.
+- **Parece sustituir:** el sujeto tiene otros valores vigentes en una relación que no es funcional; no se tocan.
+- **Nueva:** no hay nada vigente en esa relación.
+
+Una vez aplicada, cada afirmación dice cuándo. La guía de agentes (`docs/AGENTS.md`) explica cómo enviarlas.
+
 ## Secretos en las propuestas
 Antes de guardar una propuesta (desde la interfaz, la API o la herramienta `remember` del MCP), su título y su contenido pasan por el **detector de secretos**: claves de nube y de proveedores de IA, tokens, claves privadas, JWT, cabeceras `Authorization`, contraseñas en URLs… Algunos hallazgos son **seguros**; un valor de aspecto aleatorio asignado a `password`, `secret` o `token` es solo **posible**. Lo que pasa depende de la política del brain (Administración → Brain → **Secretos**):
 

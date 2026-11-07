@@ -35,6 +35,20 @@ A contributor ends up `pending`; a curator, `approved` and ingested right away. 
 
 Do not store passwords or tokens: store **where** they are kept (for example, which password manager). Anything shaped like a credential is masked before it is stored or, if the brain blocks them, the proposal is rejected with a 422 saying which type of secret it is (see «Secrets» in [ARCHITECTURE.md](ARCHITECTURE.md)). Over MCP, `remember` does the same. The answer says which types were masked or flagged (`secrets_notice` in the HTTP response, an extra sentence in the `remember` result), never the value.
 
+### Structured claims: say what it replaces
+Free text is extracted on its own, so a repeat in other words becomes a second current fact and a new value can leave the old one current. Next to `body`, a proposal (REST or `remember`) can carry up to 20 **claims**: `subject`, `relation` (as the brain's ontology names it), `value`, and optionally `valid_from` and `supersedes` (the uuid of the current fact it replaces, as `recall` or `facts_about` give it).
+```json
+{"name": "Nextcloud moved", "body": "Since 1 Oct Nextcloud runs on Notus.",
+ "claims": [{"subject": "Nextcloud", "relation": "RunsOn", "value": "Notus", "valid_from": "2026-10-01T00:00:00Z", "supersedes": "<uuid of «Nextcloud runs on Eridani»>"}]}
+```
+Each claim is compared with the subject's current facts in that relation when it is sent, and the answer says what it found (`claims[].verdict` over HTTP, a sentence per claim in the `remember` result):
+- **confirms:** a current fact already says it. When approved it is recorded as a **confirmation** of that fact (it renews its shelf life), not as a new fact; if every claim confirms, nothing is ingested.
+- **replaces:** it names the fact with `supersedes`, or the relation is functional and has another current value. When approved, once the text is ingested, those facts are invalidated as of `valid_from`; a person decides it, never the decider or a batch.
+- **may_replace:** there are other current values and the relation is not functional: nothing is invalidated unless you say `supersedes`.
+- **new:** nothing current in that relation.
+
+A `supersedes` that is not a current fact of the brain is refused (404 or 409).
+
 ## Correct: a fact that is no longer true
 ```bash
 curl -s -X POST "$URL/api/brains/my-brain/proposals/corrections" \
@@ -53,7 +67,7 @@ POST $URL/api/brains/my-brain/mcp        Authorization: Bearer $TOKEN
 | Tool | Role | What it does |
 |---|---|---|
 | `recall` | reader | Returns the memory context for a query (same as the `recall` endpoint). Arguments: `query`, and optionally `facts`, `chunks`, `docs`, `max_chars`, `federated`, `min_similarity` |
-| `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` |
+| `remember` | contributor | Proposes a memory (same rules as the proposals endpoint: quarantine for contributors, approved at once for curators). Arguments: `name`, `body`, and optionally `source`, `source_description`, `reference_time`, `confidence` and `claims` (see «Structured claims») |
 | `correct` | contributor | Proposes invalidating a fact by its uuid (see «Correct» above). Arguments: `fact_uuid`, `reason`, and optionally `replacement`, `invalid_at`, `source_description`, `confidence` |
 | `facts_about` | reader | Everything known about an entity: current facts and those that stopped being true, newest first, with dates, the episode each one was learned from and the **uuid of each fact** in brackets (what a correction needs). The entity is found by name (case and spacing do not matter), by a name merged into it or by its uuid; if several entities share the name, it returns the candidates instead of choosing one. Arguments: `entity`, and optionally `status` (`all`, `current`, `invalidated`), `limit` (20, up to 100), `offset`, `max_chars`, `federated` |
 | `timeline` | reader | How what is known about an entity changed: when each fact was learned and, if it applies, when it stopped being true, newest first. Arguments: `entity`, and optionally `since`, `until` (`YYYY-MM-DD`), `limit` (30, up to 200), `offset`, `max_chars`, `federated` |

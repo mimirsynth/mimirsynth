@@ -246,6 +246,7 @@ class Proposal(Base):
     secret_findings: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [{rule, start, end, action}] sobre el texto guardado; nunca el valor
     kind: Mapped[str] = mapped_column(String(16), default="memory", server_default="memory")  # memory | correction (#109)
     correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the correction of a fact: see corrections.py
+    claims: Mapped[list | None] = mapped_column(JSON, nullable=True)  # structured claims with their verdict and what was applied (#295): claims.py
     # what the brain already knows close to it, for the review queue: "" not checked yet | new | related | duplicate (a current fact
     # says nearly the same) | stale (it resembles a fact that stopped being true); set after submission, refreshed when opened
     related_verdict: Mapped[str] = mapped_column(String(16), default="", server_default="")

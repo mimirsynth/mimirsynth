@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, R
 from pydantic import BaseModel, Field
 from sqlalchemy import String, case, cast, func, select, update
 
-from . import deciders_admin, ingest, secretguard
+from . import claims as claims_mod, deciders_admin, ingest, secretguard
 from .deps import BrainCtx, audit, brain_access
 from .i18n import language, tr
 from .models import Job, Proposal, User
@@ -31,6 +31,8 @@ class ProposalIn(BaseModel):
     source_description: str = Field("", max_length=255)
     reference_time: datetime | None = None
     confidence: float | None = Field(None, ge=0, le=1)
+    claims: list[claims_mod.ClaimIn] = Field(default_factory=list, max_length=claims_mod.MAX,
+                                             description="Structured claims next to the text (#295): compared with what the brain knows when sent.")
 
 
 class ReviewIn(BaseModel):
@@ -43,7 +45,7 @@ def _out(p: Proposal, full: bool = False) -> dict:
          "reviewer": (p.reviewer.email or p.reviewer.name) if p.reviewer else None,
          "review_note": p.review_note, "reference_time": p.reference_time, "review_kind": p.review_kind, "decision": p.decision,
          "ingest_error": p.ingest_error, "ingest_report": p.ingest_report, "episode_uuid": p.episode_uuid, "ingested_at": p.ingested_at,
-         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "purged_at": p.purged_at}
+         "secrets": secretguard.describe(p.secret_findings), "kind": p.kind or "memory", "related_verdict": p.related_verdict or "", "correction": p.correction, "claims": p.claims, "purged_at": p.purged_at}
     d["body"] = p.body if full else p.body[:300]
     return d
 
@@ -67,20 +69,47 @@ def create(ctx: BrainCtx, request: Request, bg: BackgroundTasks, body: ProposalI
         labels = secretguard.labels(language(request))
         raise HTTPException(422, tr("La propuesta contiene secretos ({{labels}}). Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).",
                                     language(request), labels=", ".join(labels[r] for r in rules)))
+    checked = _claims(ctx, request, body)
     tok = getattr(request.state, "token", None)
     return store(ctx.db, ctx.brain, ctx.user, body, name, text, in_name, in_body, allows(ctx.role, "curator"), bg.add_task,
-                 token_id=tok.id if tok else None)
+                 token_id=tok.id if tok else None, claims=checked)
+
+
+def _claims(ctx: BrainCtx, request: Request, body: ProposalIn) -> list[dict] | None:
+    """The proposal's claims through the secret detector and compared with the brain's current facts (#295)."""
+    if not body.claims:
+        return None
+    from .conflicts import _brain_functional
+    from .vocab import alias_map
+    lang = language(request)
+    out = []
+    for c in body.claims:
+        d = c.model_dump(mode="json")
+        if c.valid_from:   # the graph's format, as a correction stores its date
+            d["valid_from"] = (c.valid_from if c.valid_from.tzinfo else c.valid_from.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat()
+        for k in ("subject", "value"):
+            try:
+                d[k] = secretguard.guard(ctx.brain, d[k])[0]
+            except secretguard.Blocked:
+                raise HTTPException(422, tr("Una afirmación contiene secretos. Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).", lang)) from None
+        out.append(d)
+    try:
+        return claims_mod.check(ctx.graph, out, alias_map(ctx.db, ctx.brain.id), _brain_functional(ctx.db, ctx.brain.id))
+    except claims_mod.ClaimError as e:
+        if e.code == "unknown":
+            raise HTTPException(404, tr("No hay ningún hecho con el uuid {{uuid}} en este brain.", lang, uuid=e.uuid)) from None
+        raise HTTPException(409, tr("El hecho {{uuid}} ya no está vigente: una afirmación no puede sustituirlo.", lang, uuid=e.uuid)) from None
 
 
 def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list, in_body: list, direct: bool, later,
-          token_id: int | None = None, how: str = "direct") -> Proposal:
+          token_id: int | None = None, how: str = "direct", claims: list[dict] | None = None) -> Proposal:
     """Saves a proposal whose name and text already went through the secret detector (`in_name`, `in_body`: its findings). `direct`
     approves it, unless the detector flagged something; otherwise the decider triages it, through `later` (a background task)."""
     found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
     direct = direct and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
     p = Proposal(brain_id=brain.id, author_id=user.id, token_id=token_id, name=name[:255], body=text, source=body.source,
                  source_description=body.source_description, reference_time=body.reference_time, confidence=body.confidence,
-                 status="approved" if direct else "pending", secret_findings=found or None)
+                 status="approved" if direct else "pending", secret_findings=found or None, claims=claims)
     if direct:
         p.reviewer_id, p.reviewed_at, p.review_kind = user.id, datetime.now(timezone.utc), how
     db.add(p); db.commit()
@@ -299,6 +328,8 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
             skipped.append({"id": pid, "reason": "not_pending"}); continue
         if body.verb == "approve" and p.kind == "correction":
             skipped.append({"id": pid, "reason": "correction"}); continue
+        if body.verb == "approve" and claims_mod.replaces(p):  # it invalidates facts: one at a time, like a correction (#295)
+            skipped.append({"id": pid, "reason": "replaces"}); continue
         if body.verb == "approve" and any(f.get("action") == "flagged" for f in (p.secret_findings or [])):
             skipped.append({"id": pid, "reason": "secret"}); continue
         if body.verb == "approve" and p.related_verdict in KNOWN:

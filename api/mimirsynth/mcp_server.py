@@ -46,7 +46,15 @@ TOOLS = [
          "source": {"type": "string", "enum": ["text", "message", "json"], "description": "Tipo de contenido (por defecto text)."},
          "source_description": {"type": "string", "maxLength": 255, "description": "De dónde viene (por ejemplo, el agente o la sesión)."},
          "reference_time": {"type": "string", "format": "date-time", "description": "Cuándo ocurrió (ISO 8601); por defecto, ahora."},
-         "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que es cierto."}},
+         "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que es cierto."},
+         "claims": {"type": "array", "maxItems": 20, "description": "Opcional: lo que afirma, en forma estructurada. Cada afirmación se compara con lo que la memoria ya sabe: si repite un hecho vigente se registra como confirmación en vez de duplicarlo, y con `supersedes` sustituye a un hecho que ya no es cierto.",
+                    "items": {"type": "object", "properties": {
+                        "subject": {"type": "string", "maxLength": 255, "description": "La entidad de la que se habla, por su nombre."},
+                        "relation": {"type": "string", "maxLength": 128, "description": "La relación, como la nombra la ontología del brain (por ejemplo HostedOn)."},
+                        "value": {"type": "string", "maxLength": 500, "description": "El otro extremo: el nombre de una entidad o un valor."},
+                        "valid_from": {"type": "string", "format": "date-time", "description": "Desde cuándo es cierto (ISO 8601)."},
+                        "supersedes": {"type": "string", "description": "uuid del hecho vigente al que sustituye (el que dan `facts_about` o `recall`)."}},
+                        "required": ["subject", "relation", "value"]}}},
          "required": ["name", "body"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}},
     {"name": "correct", "title": "Proponer una corrección", "description": "Propone invalidar un hecho que ya no es cierto, por su uuid (el que dan `facts_about`, `timeline` o `whats_new`), con el motivo y, si lo sabes, el texto que lo sustituye. Queda siempre en cuarentena hasta que una persona con rol de curador la apruebe, también si este token es de curador; al aprobarla, el hecho se invalida, nunca se borra, y el sustituto se guarda como memoria nueva.",
      "inputSchema": {"type": "object", "properties": {
@@ -134,6 +142,21 @@ def _tools(lang: str) -> list[dict]:
     return walk(TOOLS)
 
 
+def claims_notice(claims: list[dict] | None, lang: str) -> str:
+    """What the comparison of the claims found, for the agent that sent them (#295): what repeats, replaces or may replace a fact."""
+    out = []
+    for c in claims or []:
+        what = f"«{c['subject']} {c['relation']} {c['value']}»"
+        facts = "; ".join(f"«{f.get('fact')}» [{f.get('uuid')}]" for f in c.get("facts") or [])
+        if c.get("verdict") == "confirms":
+            out.append(tr("{{claim}} ya es un hecho vigente: al aprobarla se registra como confirmación, no como hecho nuevo.", lang, claim=what))
+        elif c.get("verdict") == "replaces":
+            out.append(tr("{{claim}} sustituirá a: {{facts}}.", lang, claim=what, facts=facts))
+        elif c.get("verdict") == "may_replace":
+            out.append(tr("{{claim}} parece sustituir a: {{facts}}. Si es así, indícalo con `supersedes`.", lang, claim=what, facts=facts))
+    return " ".join(out)
+
+
 def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args: dict, lang: str) -> dict:
     """Resultado de una herramienta. Los fallos propios de la herramienta vuelven como `isError` (que el modelo puede leer y corregir)."""
     try:
@@ -169,7 +192,7 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
             p = create(ctx, request, bg, ProposalIn(**args))
             done = (tr("Memoria guardada y aprobada; se ingiere en el grafo (propuesta #{{id}}).", lang, id=p.id) if p.status == "approved"
                     else tr("Memoria propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
-            return _text(" ".join(x for x in (done, secretguard.notice(p.secret_findings, lang)) if x))  # the agent learns its text was altered
+            return _text(" ".join(x for x in (done, secretguard.notice(p.secret_findings, lang), claims_notice(p.claims, lang)) if x))  # the agent learns its text was altered
         if name == "correct":
             if not allows(ctx.role, "contributor"):
                 return _text(tr("Este token solo puede leer (rol de lector): no puede proponer correcciones.", lang), True)

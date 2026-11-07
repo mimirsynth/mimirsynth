@@ -13,7 +13,11 @@ import { fmt, fmtDay, fmtNum, get, send } from "../api";
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
   created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
-  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string };
+  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null };
+/** A structured claim of the proposal, compared with the brain's current facts when it was sent, and what approving it did. */
+type Claim = { subject: string; relation: string; value: string; valid_from: string | null; supersedes: string | null;
+  verdict: "new" | "confirms" | "replaces" | "may_replace"; facts: { uuid: string; fact: string; target: string; valid_at: string | null }[];
+  applied?: { action: string; facts: (string | { uuid: string; op: number })[]; invalid_at?: string; at: string } };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
 type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
   invalid_at: string; applied_at?: string; reverted_at?: string };
@@ -256,6 +260,31 @@ function CorrectionDetail({ c, replacement }: { c: Correction; replacement: stri
   </Stack>);
 }
 
+const CLAIM_VERDICT: Record<Claim["verdict"], { label: string; tone: Tone; facts?: string }> = {
+  new: { label: T("Nueva"), tone: "neutral" },
+  confirms: { label: T("Confirma un hecho vigente"), tone: "success", facts: T("Al aprobarla se registra como confirmación de:") },
+  replaces: { label: T("Sustituye hechos"), tone: "warn", facts: T("Al aprobarla, tras ingerirla, se invalidan:") },
+  may_replace: { label: T("Parece sustituir"), tone: "neutral", facts: T("Hay otros valores vigentes en esa relación; no se tocan:") },
+};
+
+/** The proposal's structured claims (issue 295): each with what the brain knew when it was sent and what approving it does or did. */
+function ClaimsDetail({ claims }: { claims: Claim[] }) {
+  const { t } = useTranslation();
+  return (<Stack gap="xs">
+    <Text size="xs" fw={600}>{t("Afirmaciones")}</Text>
+    {claims.map((c, i) => {
+      const v = CLAIM_VERDICT[c.verdict] ?? CLAIM_VERDICT.new;
+      return (<Panel key={i} withBorder p="sm"><Stack gap={4}>
+        <Group gap="xs"><Text size="sm">{c.subject} → <span title={c.relation}>{humanRelation(c.relation)}</span> → {c.value}</Text><Pill size="xs" tone={v.tone}>{t(v.label)}</Pill></Group>
+        {c.valid_from && <Text size="xs" c="dimmed">{t("vigente desde {{date}}", { date: fmtDay(c.valid_from) })}</Text>}
+        {v.facts && c.facts.length > 0 && <>
+          <Text size="xs" c="dimmed">{c.applied ? t("Aplicada el {{at}}.", { at: fmt(c.applied.at) }) : t(v.facts)}</Text>
+          {c.facts.map((f) => <Text key={f.uuid} size="xs">«{f.fact}» <code>{f.uuid}</code></Text>)}</>}
+      </Stack></Panel>);
+    })}
+  </Stack>);
+}
+
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
 function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context?: ReactNode;
   /** Shown in the review queue, where every proposal is pending: its state and the usual kind (adding) go without saying. */ inQueue?: boolean }) {
@@ -269,6 +298,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
     {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
         : paired ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
+    {!!d.claims?.length && <ClaimsDetail claims={d.claims} />}
     <SecretsNotice found={d.secrets} />
     {context}
     {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
