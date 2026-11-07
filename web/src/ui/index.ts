@@ -24,7 +24,7 @@ export type { BarFilter } from "./FilterBar";
 export { SearchBar } from "./SearchBar";
 export { useServerTableView } from "./useServerTableView";
 export { useTabParam } from "./useTabParam";
-export { ListCard } from "./ListCard";
+export { ListCard, CardLink } from "./ListCard";
 export { CodeBlock } from "./CodeBlock";
 export { SecretReveal } from "./SecretReveal";
 export { Steps, Step } from "./Steps";

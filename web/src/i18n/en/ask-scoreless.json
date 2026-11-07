@@ -1,7 +1,4 @@
 {
  "El resto de la aplicación sigue funcionando: puedes reintentar o ir a otra pantalla.": "The rest of the application still works: you can retry or go to another screen.",
- "Esta pantalla ha fallado": "This screen has failed",
- "entra porque lo dice «{{src}}»": "joins because «{{src}}» states it",
- "entra porque sustituye a «{{old}}»": "joins because it replaces «{{old}}»",
- "entra sin similitud con la pregunta": "joins without a similarity to the question"
+ "Esta pantalla ha fallado": "This screen has failed"
 }

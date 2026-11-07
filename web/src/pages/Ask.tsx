@@ -1,11 +1,11 @@
 
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, NumberField, Pill, Segments, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam } from "../ui";
+import { Btn, NumberField, Pill, Segments, TextArea, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam, CardLink } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import { Brain, fmt, get, send } from "../api";
+import { Fragment, useEffect, useState } from "react";
+import { Brain, fmt, fmtDay, get, send } from "../api";
 import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries";
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
@@ -71,10 +71,41 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const canSync = ["curator", "admin", "owner"].includes(role);
   const r = run.data;
   const sim = (x: { similarity?: number | null; score?: number }) => { const v = simValue(x); return v === null ? null : `${t("sim")} ${v}`; };
-  /** The fragment or passage of the result that states a fact no longer true: why that fact joined without a similarity. */
-  const statedBy = (f: Fact) => [...(r?.chunks ?? []).map((c) => ({ origin: c.origin, name: c.name, gone: c.superseded })),
-    ...(r?.documents ?? []).map((p) => ({ origin: p.origin, name: p.title, gone: p.superseded }))]
-    .find((x) => x.origin === f.origin && x.gone?.some((s) => s.uuid === f.uuid))?.name;
+  // Every card of the result has an anchor, so what replaces what reads as a link between the two cards (issue: critique of Ask).
+  const factAnchor = (origin: string | undefined, uuid: string) => `hecho-${origin ?? ""}-${uuid}`;
+  const chunkAnchor = (c: Chunk) => `fragmento-${c.origin ?? ""}-${c.id}`;
+  const passageAnchor = (p: Passage) => `pasaje-${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`;
+  /** «fact», a link to its card when it is in the result. */
+  const factRef = (origin: string | undefined, uuid: string, text: string) => r?.facts.some((x) => x.uuid === uuid && x.origin === origin)
+    ? <>«<CardLink to={factAnchor(origin, uuid)}>{text}</CardLink>»</> : <>«{text}»</>;
+  /** The fragments and passages of the result that state a fact no longer true. */
+  const statedBy = (f: Fact) => [...(r?.chunks ?? []).map((c) => ({ origin: c.origin, name: c.name, anchor: chunkAnchor(c), gone: c.superseded })),
+    ...(r?.documents ?? []).map((p) => ({ origin: p.origin, name: p.title, anchor: passageAnchor(p), gone: p.superseded }))]
+    .filter((x) => x.origin === f.origin && x.gone?.some((s) => s.uuid === f.uuid));
+  const current = r?.facts.filter((f) => f.status !== "invalidated") ?? [];
+  const gone = r?.facts.filter((f) => f.status === "invalidated") ?? [];
+  /** The sentence under a fact: what it replaces, or, for one no longer true, what replaced it and what in the result states it. */
+  const factNote = (f: Fact) => {
+    if (f.status !== "invalidated") {
+      if (!f.replaces) return undefined;
+      const old = gone.find((g) => g.origin === f.origin && g.fact === f.replaces);
+      return <>{t("Sustituye a")} {old ? factRef(old.origin, old.uuid, old.fact) : <>«{f.replaces}»</>}</>;
+    }
+    const now = current.filter((c) => c.origin === f.origin && c.replaces === f.fact);
+    const by = statedBy(f);
+    if (!now.length && !by.length) return undefined;
+    return <>
+      {now.length > 0 && <div>{t("Ahora:")} {now.map((c, i) => <Fragment key={c.uuid}>{i ? " · " : ""}{factRef(c.origin, c.uuid, c.fact)}</Fragment>)}</div>}
+      {by.length > 0 && <div>{t("Lo dice:")} {by.map((x, i) => <Fragment key={x.anchor}>{i ? " · " : ""}«<CardLink to={x.anchor}>{x.name}</CardLink>»</Fragment>)}</div>}
+    </>;
+  };
+  const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
+  const factCard = (f: Fact) => (
+    <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)}
+      actions={<Group gap="xs" wrap="nowrap">{rateBtns(`f:${f.uuid}`, "fact", f.uuid, !f.origin)}{markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}</Group>}
+      tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
+        <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
+      meta={`${sim(f) ?? t("sin similitud")} · ${validity(f)}`}>{f.fact}</ListCard>);
   // Marcar un resultado como «debe salir» o «sobra» para guardarla como consulta de referencia. Se guarda el principio del texto.
   const toggle = (key: string, mark: Mark, item: Item) => setMarks((m) => {
     const n = { ...m };
@@ -85,11 +116,16 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     <Btn size="row" kind={marks[key]?.mark === "expect" ? "primary" : "ghost"} icon="check" onClick={() => toggle(key, "expect", item)}>{t("Debe salir")}</Btn>
     <Btn size="row" kind={marks[key]?.mark === "avoid" ? "danger" : "ghost"} icon="close" onClick={() => toggle(key, "avoid", item)}>{t("Sobra")}</Btn>
   </Group>;
-  // A fragment or a passage that states something no longer true (issues 282 and 286): the mark, and what stopped being true and what is now.
-  const supersededPill = (sup?: Superseded) => (sup?.length ? <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill> : undefined);
-  const supersededMeta = (sup?: Superseded) => (sup?.length ? <>{sup.map((s) => (
-    <div key={s.uuid}>{t("«{{fact}}» dejó de ser cierto el {{date}}.", { fact: s.fact, date: fmt(s.invalid_at) })}
-      {s.replaced_by.length > 0 && <> {t("Ahora: «{{now}}».", { now: s.replaced_by.map((x) => x.fact).join("» · «") })}</>}</div>))}</> : undefined);
+  // A fragment or a passage that states something no longer true (issues 282 and 286): the mark first, then what stopped being true and
+  // what is true now, before its text, so it is not read as current.
+  const supersededNotice = (origin: string | undefined, sup?: Superseded) => (sup?.length ? <>
+    <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill>
+    {sup.map((s) => (
+      <div key={s.uuid}>
+        <div>{t("Dejó de ser cierto el {{date}}:", { date: fmtDay(s.invalid_at) })} {factRef(origin, s.uuid, s.fact)}</div>
+        {s.replaced_by.length > 0 && <div>{t("Ahora:")} {s.replaced_by.map((x, i) => <Fragment key={x.uuid}>{i ? " · " : ""}{factRef(origin, x.uuid, x.fact)}</Fragment>)}</div>}
+      </div>))}
+  </> : undefined);
   const marked = Object.values(marks);
   const toRef = (): RefQuery => ({ query: r?.query ?? q, expect: marked.filter((m) => m.mark === "expect").map((m) => m.item), avoid: marked.filter((m) => m.mark === "avoid").map((m) => m.item),
     docs: null, note: "" });
@@ -126,25 +162,23 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
           <Stack className="ms-ask-main" gap="xs">
             {!r.facts.length && !r.chunks.length && !!r.min_similarity && (
               <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: r.min_similarity })}</Text>)}
-            <Title order={5}>{t("Hechos (")}{r.facts.length})</Title>
-            {r.facts.map((f) => (
-              <ListCard key={f.uuid} invalid={f.status === "invalidated"} actions={<Group gap="xs" wrap="nowrap">{rateBtns(`f:${f.uuid}`, "fact", f.uuid, !f.origin)}{markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}</Group>}
-                tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
-                  <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
-                meta={<>{sim(f) ? `${sim(f)} · ` : ""}{fmt(f.valid_at)}{f.invalid_at ? ` → ${fmt(f.invalid_at)}` : ""}
-                  {f.replaces ? <> · {sim(f) ? t("sustituye a «{{old}}»", { old: f.replaces }) : t("entra porque sustituye a «{{old}}»", { old: f.replaces })}</>
-                    : !sim(f) && <> · {statedBy(f) ? t("entra porque lo dice «{{src}}»", { src: statedBy(f) }) : t("entra sin similitud con la pregunta")}</>}</>}>{f.fact}</ListCard>))}
-            <Title order={5} mt="xs">{t("Fragmentos de episodios (")}{r.chunks.length})</Title>
+            <Title order={5}>{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>
+            {current.map(factCard)}
+            {gone.length > 0 && <>
+              <Title order={5} mt="xs">{t("Hechos que dejaron de ser ciertos ({{n}})", { n: gone.length })}</Title>
+              {gone.map(factCard)}
+            </>}
+            <Title order={5} mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>
             {r.chunks.map((c) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmt(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmt(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
                 actions={<Group gap="xs" wrap="nowrap">{rateBtns(`c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, false)}{markBtns(`c:${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" })}</Group>}
-                tags={supersededPill(c.superseded)} meta={supersededMeta(c.superseded)}>{c.text}</ListCard>))}
+                notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={5} mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
               {r.documents.map((p) => (
-                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
+                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
                   aside={[t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
-                  tags={supersededPill(p.superseded)} meta={supersededMeta(p.superseded)}
+                  notice={supersededNotice(p.origin, p.superseded)}
                   actions={<Group gap="xs" wrap="nowrap">{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
             </>}
           </Stack>

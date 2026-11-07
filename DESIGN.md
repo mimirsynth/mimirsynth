@@ -278,7 +278,7 @@ The options of a status filter, shaped like pills but interactive and 36px tall.
 - **Shadow Strategy:** none (see Elevation & Depth).
 - **Border:** 1px line.
 - **Internal Padding:** 16px for panels and stat cards, 14px × 16px for list cards and 16px × 20px for settings groups.
-- **List card:** a title with a muted aside on the right, a body in 14/1.55 text, then tags and actions. An invalidated card shows its body in rust and struck through. A clickable card turns teal at the edge on hover and opens with Enter or Space.
+- **List card:** a title with a muted aside on the right, a body in 14/1.55 text, then tags and actions. An invalidated card shows its body in rust and struck through. A clickable card turns teal at the edge on hover and opens with Enter or Space. What must be read before the body (that it may be superseded) sits above it as a notice, set off by a 1px rule; a sentence about the body (what it replaces, what replaced it) sits under it in 13px muted text. Those sentences link to the cards they name with `CardLink`, a real link that wraps with the text; the card it lands on takes the focus and a teal edge.
 
 ### Inputs / Fields
 - **Style:** raised fill, a 1px field line, 6px corner and 36px height. Labels are 13px semibold ink and descriptions 12px muted. All fields share one size; a size requested at the call site is ignored.
