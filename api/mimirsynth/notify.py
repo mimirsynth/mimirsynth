@@ -34,6 +34,7 @@ EVENTS = {
     "webhook.capped": ("warning", "Un webhook de entrada ha llegado a su tope diario de propuestas"),
     "digest.failed": ("warning", "El resumen por correo de una persona falla una y otra vez"),
     "health.degraded": ("warning", "La salud de la memoria de un brain empeora o cruza un umbral"),
+    "curator.stopped": ("warning", "El curador de un brain se detiene porque la cobertura bajó tras aprobar sus propuestas"),
     "autoapprove.disabled": ("warning", "Una categoría de propuestas deja de aprobarse sola porque su precisión ha bajado"),
 }
 
@@ -56,6 +57,7 @@ EVENT_DOCS = {
     "conflicts.found": ("Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día", "Vocabulary"),
     "token.expiring": ("Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa", "Connect agents"),
     "facts.stale": ("Un brain tiene hechos vigentes que han superado la vida útil de su relación; se cuentan una vez al día, sin texto", "Ontology"),
+    "curator.stopped": ("La medición diaria de la salud dice que la cobertura de las consultas de referencia bajó más de lo configurado después de que se aprobaran propuestas del curador; ese día no propone nada", "Curator"),
     "autoapprove.disabled": ("Una categoría con aprobación automática bajó de su precisión mínima en las decisiones de los curadores; vuelve a ser manual y sus propuestas esperan a una persona", "Proposals"),
     "health.degraded": ("Tras la medición diaria, la cobertura de un brain baja más de lo configurado respecto a la anterior, o una de sus cifras cruza su umbral (Administración → Ajustes → Notificaciones). Se cierra cuando una medición vuelve a estar dentro", "Memory health"),
 }

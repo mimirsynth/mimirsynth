@@ -97,7 +97,7 @@ def test_a_small_batch_is_proposed_and_approving_applies_it(client, graph, monke
 
 def test_settings_are_for_administrators_and_known_passes(client):  # noqa: F811
     client.post("/api/brains", json={"slug": "cu3", "name": "CU3"})
-    assert client.put("/api/brains/cu3/curator/settings", json={"enabled": True, "passes": {"noise": True}}).status_code == 422   # not a pass yet
+    assert client.put("/api/brains/cu3/curator/settings", json={"enabled": True, "passes": {"nope": True}}).status_code == 422   # not a pass
     tok = client.post("/api/brains/cu3/tokens", json={"name": "c", "role": "curator"}).json()["token"]
     h = {"Authorization": f"Bearer {tok}"}
     assert client.get("/api/brains/cu3/curator/settings", headers=h).status_code == 200
@@ -135,7 +135,7 @@ def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa:
     from mimirsynth.store import _factory
     assert client.post("/api/brains", json={"slug": "cu4", "name": "CU4", "graph_name": repeated}).status_code == 201
     s = client.get("/api/brains/cu4/curator/settings").json()
-    assert s["passes"] == {"contradictions": True, "redundancy": False, "obsolescence": False}                      # off until an administrator turns it on
+    assert s["passes"] == {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False}                      # off until an administrator turns it on
     pv = client.post("/api/brains/cu4/curator/preview?pass=redundancy").json()
     assert pv["count"] == 1                                                                     # PostgreSQL 14 / 16 is a change, not a repeat
     f = pv["findings"][0]
@@ -175,3 +175,52 @@ def test_the_obsolescence_pass_proposes_facts_past_their_shelf_life(client, repe
     gone = p.claims[0]["supersedes"]
     from mimirsynth import db as dbm
     assert dbm.client().select_graph(repeated).query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.invalid_at", {"u": gone}).result_set[0][0]
+
+
+def test_the_noise_rules_are_conservative():
+    nr = K.noise_reason
+    assert nr({"source": "Vaultwarden", "target": "it", "name": "RUNS_ON", "fact": "Vaultwarden runs on it"}, []) == "one end is a placeholder, not a thing of the world"
+    assert nr({"source": "El grafo", "target": "Vaultwarden", "name": "MENTIONS", "fact": "El grafo menciona a Vaultwarden"}, []).startswith("it is about the memory")
+    assert nr({"source": "web01", "target": "Node", "name": "USES", "fact": "web01 uses Node 20 to build the frontend"}, []) is None   # Node.js, not a graph node
+    assert nr({"source": "Vaultwarden", "target": "altair", "name": "RELATES_TO", "fact": "Vaultwarden is related to altair"}, []).startswith("a generic relation")
+    assert nr({"source": "Vaultwarden", "target": "altair", "name": "RELATES_TO", "fact": "Vaultwarden backups are copied nightly to altair storage"}, []) is None
+    moved = {"source": "Vaultwarden", "target": "altair", "name": "MOVED_TO", "fact": "Vaultwarden was moved to altair"}
+    assert nr(moved, [{"fact": "Vaultwarden runs on altair"}]).startswith("a change told as an event")
+    assert nr(moved, []) is None                                                              # the only trace of the change: kept
+    assert nr({**moved, "fact": "Vaultwarden se migró a altair"}, [{"fact": "Vaultwarden corre en altair"}]) is not None
+
+
+@needs_falkor
+def test_the_noise_pass_and_the_stop_on_a_coverage_drop(client, repeated, monkeypatch):  # noqa: F811
+    from datetime import date, datetime, timedelta, timezone
+    from mimirsynth import db as dbm
+    from mimirsynth.config import settings
+    from mimirsynth.models import Brain, CuratorRun, HealthRun, Notification, Proposal, User
+    from mimirsynth.store import _factory
+    g = dbm.client().select_graph(repeated)
+    g.query("MATCH (a:Entity {uuid:'vw'}) CREATE (a)-[:RELATES_TO {uuid:'nz', name:'RELATES_TO', fact:'Vaultwarden is related to it', "
+            "created_at:'2026-01-01T00:00:00Z'}]->(:Entity {uuid:'it', name:'it'})")
+    assert client.post("/api/brains", json={"slug": "cu6", "name": "CU6", "graph_name": repeated}).status_code == 201
+    pv = client.post("/api/brains/cu6/curator/preview?pass=noise").json()
+    assert [f["replace"][0]["uuid"] for f in pv["findings"]] == ["nz"]
+    client.put("/api/brains/cu6/curator/settings", json={"enabled": True, "batch": 10, "passes": {"contradictions": False, "noise": True}})
+    client.post("/api/brains/cu6/curator/run")
+    run = client.get("/api/brains/cu6/curator/runs").json()["items"][0]
+    assert run["findings"] == {"noise": 1} and len(run["proposals"]) == 1
+    with _factory()() as db:
+        p = db.get(Proposal, run["proposals"][0])
+        assert p.category == "curator.noise" and p.name.startswith("Curador: ruido")
+        bid, uid = p.brain_id, db.query(User).first().id
+        today = date.today()
+        db.add(HealthRun(brain_id=bid, day=today - timedelta(days=1), status="done", metrics={"coverage_items": {"a": 1, "b": 1}},
+                         finished_at=datetime.now(timezone.utc) - timedelta(days=1)))
+        db.add(HealthRun(brain_id=bid, day=today, status="done", metrics={"coverage_items": {"a": 1, "b": 0}}))
+        p.status, p.reviewed_at, p.reviewer_id, p.review_kind = "ingested", datetime.now(timezone.utc), uid, "human"
+        db.query(CuratorRun).filter(CuratorRun.brain_id == bid).delete()
+        db.commit()
+    monkeypatch.setattr(settings, "health_coverage_drop", 0.05)
+    client.post("/api/brains/cu6/curator/run")
+    run = client.get("/api/brains/cu6/curator/runs").json()["items"][0]
+    assert run["status"] == "stopped" and "100 % al 50 %" in run["error"] and run["proposals"] == []
+    with _factory()() as db:
+        assert db.query(Notification).filter(Notification.event == "curator.stopped", Notification.brain_id == bid).count() == 1

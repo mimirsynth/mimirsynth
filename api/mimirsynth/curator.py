@@ -18,6 +18,7 @@ each proposal (as a correction, one at a time), and only then the change is appl
 - **Cost.** These passes read the graph, with no AI calls.
 """
 import logging
+import re
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -34,8 +35,8 @@ log = logging.getLogger("mimirsynth.curator")
 router = APIRouter(prefix="/api/brains/{slug}/curator")
 curator = brain_access("curator")
 KIND = "curator.run"
-PASSES = ("contradictions", "redundancy", "obsolescence")
-DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False}, "batch": 5}
+PASSES = ("contradictions", "redundancy", "obsolescence", "noise")
+DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False}, "batch": 5}
 MAX_REDUNDANT = 3000   # candidate facts whose embeddings the redundancy pass reads per run (the most recent first)
 MAX_FINDINGS = 200   # per run: what is past it waits for the next one
 SAMPLE = 10
@@ -142,7 +143,96 @@ def obsolescence(brain_id: int) -> list[dict]:
             for i in items if i["uuid"] not in busy][:MAX_FINDINGS]
 
 
-FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence}
+# The noise pass: deterministic and conservative on purpose (a keyword list alone gave false positives on a real brain, #300).
+# A placeholder that is not a thing of the world: a fact with one at either end says nothing that can be used.
+PLACEHOLDERS = frozenset("""it this that these those them they something someone thing things stuff user the-user
+esto eso ello él ella ellos ellas algo alguien cosa cosas usuario el-usuario lo la le""".split())
+# The memory talking about itself: an entity named like this is the graph, not the world it describes.
+# Only names that cannot be a thing of the world: «node» is also Node.js, «memory» also RAM and «edge» also a browser.
+META = frozenset("""knowledge-graph the-graph this-graph the-memory this-memory episode episodes fact facts entity entities
+grafo-de-conocimiento el-grafo este-grafo la-memoria esta-memoria episodio episodios hecho hechos entidad entidades""".split())
+# A change told as an event («X was moved to Y»): history, redundant when a current fact between the same entities states the result.
+_CHANGE = re.compile(r"\b(was|were|has been|have been|got) (changed|moved|migrated|updated|renamed|replaced|switched|upgraded)\b|"
+                     r"\bse (cambi[oó]|movi[oó]|migr[oó]|actualiz[oó]|renombr[oó]|sustituy[oó])\b|\bha sido (cambiad|movid|migrad|actualizad|renombrad)", re.I)
+_WORD = re.compile(r"\w(?:[\w.-]*\w)?")
+
+
+def _name(s) -> str:
+    return "-".join(str(s or "").lower().split())
+
+
+def _content(text: str, minus: set[str]) -> set[str]:
+    """The words of four letters or more (or with a digit) of a fact that are not the names of its two entities."""
+    return {w for w in (x.lower() for x in _WORD.findall(text or "")) if (len(w) >= 4 or any(c.isdigit() for c in w)) and w not in minus}
+
+
+def noise_reason(f: dict, others: list[dict]) -> str | None:
+    """Why a current fact is noise, or None. `others`: the other current facts between the same two entities."""
+    from .conflicts import generic
+    s, t = _name(f.get("source")), _name(f.get("target"))
+    if s in PLACEHOLDERS or t in PLACEHOLDERS or len(s) < 2 or len(t) < 2:
+        return "one end is a placeholder, not a thing of the world"
+    if s in META or t in META:
+        return "it is about the memory itself, not the world it describes"
+    names = set(_WORD.findall(f"{f.get('source') or ''} {f.get('target') or ''}".lower()))
+    if generic(f.get("name")) and len(_content(f.get("fact") or "", names)) < 2:
+        return "a generic relation that says nothing beyond its two entities"
+    if _CHANGE.search(f.get("fact") or "") and any(not _CHANGE.search(o.get("fact") or "") for o in others):
+        return "a change told as an event, while a current fact between the same entities states the result"
+    return None
+
+
+def noise(brain_id: int) -> list[dict]:
+    """Findings of the noise pass, one fact each, proposed for invalidation."""
+    from .db import graph, rows
+    with _factory()() as db:
+        b = db.get(Brain, brain_id)
+        gname, busy = b.graph_name, _pending_targets(db, brain_id)
+    facts = rows(graph(gname).query(_RICH, {"n": 50000}))
+    pairs: dict[tuple, list[dict]] = {}
+    for f in facts:
+        pairs.setdefault(tuple(sorted((str(f["source_uuid"]), str(f["target_uuid"])))), []).append(f)
+    out = []
+    for f in facts:
+        if f["uuid"] in busy:
+            continue
+        others = [o for o in pairs[tuple(sorted((str(f["source_uuid"]), str(f["target_uuid"]))))] if o["uuid"] != f["uuid"]]
+        why = noise_reason(f, others)
+        if why:
+            out.append({"pass": "noise", "subject": f["source"], "relation": f["name"], "keep": None,
+                        "replace": [{k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}], "why": why})
+            if len(out) >= MAX_FINDINGS:
+                break
+    return out
+
+
+def coverage_stop(brain_id: int) -> str | None:
+    """Why the curator must not run today: the memory health's coverage fell (as `health.degraded` measures it) after curators
+    approved some of the curator's proposals. None if it may run."""
+    from . import appsettings, health
+    from .models import HealthRun
+    drop = float(appsettings.get("health_coverage_drop"))
+    if not drop:
+        return None
+    with _factory()() as db:
+        last = list(db.scalars(select(HealthRun).where(HealthRun.brain_id == brain_id, HealthRun.status == "done")
+                                .order_by(HealthRun.day.desc()).limit(2)))
+        if len(last) < 2:
+            return None
+        d = health.coverage_drop(last[0].metrics or {}, last[1].metrics or {})
+        if not d or d[0] - d[1] < drop - 1e-9:
+            return None
+        since = last[1].finished_at or last[1].created_at
+        approved = db.scalar(select(func.count()).select_from(Proposal).where(
+            Proposal.brain_id == brain_id, Proposal.category.like("curator.%"), Proposal.status.in_(("approved", "ingested")),
+            Proposal.reviewed_at >= since))
+    if not approved:
+        return None
+    return (f"la cobertura bajó del {round(d[0] * 100, 1):g} % al {round(d[1] * 100, 1):g} % tras aprobar {approved} propuestas del curador: "
+            "no propone nada hasta que la cobertura se recupere o se revise")
+
+
+FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence, "noise": noise}
 
 
 def precision(db, brain_id: int, pass_: str) -> dict:
@@ -187,7 +277,8 @@ def propose(brain_id: int, findings: list[dict]) -> list[int]:
                 checked = claims_mod.check(g, raw, amap, functional)
             except claims_mod.ClaimError:   # a fact stopped being current since the pass read it
                 continue
-            name = (f"Curador: repite «{(keep.get('fact') or '')[:200]}»" if f["pass"] == "redundancy"
+            name = (f"Curador: ruido «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "noise"
+                    else f"Curador: repite «{(keep.get('fact') or '')[:200]}»" if f["pass"] == "redundancy"
                     else f"Curador: sin confirmar «{(f['replace'][0].get('fact') or '')[:200]}»" if f["pass"] == "obsolescence"
                     else f"Curador: «{f['subject']}» {f['relation']} → {keep.get('target')}")[:255]
             p = Proposal(brain_id=brain_id, author_id=author.id, name=name, body="", source="text", status="pending", kind="memory",
@@ -250,6 +341,17 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
         cfg, bid = config(b), b.id
         r.status = "running"
         db.commit()
+    stop = coverage_stop(bid)
+    if stop:   # the reference queries say the curated memory answers worse: stop and say so (#300)
+        from . import notify
+        with _factory()() as db:
+            r = db.get(CuratorRun, p["run_id"])
+            r.status, r.error, r.finished_at = "stopped", stop, datetime.now(timezone.utc)
+            db.commit()
+            name = db.get(Brain, bid).name
+            slug = db.get(Brain, bid).slug
+        notify.emit("curator.stopped", f"El curador de «{name}» se ha detenido", stop[:1].upper() + stop[1:] + ".", brain_id=bid, key=f"curator:{slug}")
+        return {"stopped": stop}
     try:
         found, made, waiting = {}, [], False
         for name in PASSES:
