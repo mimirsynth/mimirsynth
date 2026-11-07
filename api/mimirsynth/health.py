@@ -18,7 +18,13 @@ A brain is measured once a UTC day (`due`, called by the notification loop every
 database, so a restart never measures twice and never skips a day. A curator can measure again (`POST /health/run`): that day's numbers
 are replaced. Each part is measured on its own; a part that fails is left empty (`null`) and named in `failed`, the rest is kept.
 The probes are recalls, one embedding each, and never logged for ratings. Nothing here writes to the graph.
+
+After each measurement, the `health.degraded` notification fires when the coverage falls at least `health_coverage_drop` since the
+previous measurement (over the expected texts that are in both, so editing the reference queries is not a drop) or a number crosses
+its threshold (`health_coverage_min`, `health_staleness_max`, `health_noise_max`, `health_redundancy_max`; 0 is off). It closes when a
+later measurement is back within them.
 """
+import hashlib
 import logging
 import re
 from datetime import date, datetime, timedelta, timezone
@@ -139,6 +145,10 @@ def outdated(out: dict) -> int:
             + sum(1 for p in out.get("documents") or [] if p.get("superseded")))
 
 
+def _item(qid, item: dict) -> str:
+    return hashlib.sha1(f"{qid}|{_norm(item.get('text'))}|{item.get('kind', 'any')}".encode()).hexdigest()[:12]
+
+
 def size(out: dict) -> tuple[int, int]:
     """Items and characters of context a recall returned."""
     return (len(out.get("facts") or []) + len(out.get("chunks") or []) + len(out.get("documents") or []), len(out.get("context") or ""))
@@ -149,6 +159,7 @@ def probes(recall, queries: list[dict], check=lambda: None) -> dict:
     from .refqueries import evaluate
     expected = found = probed = stale = errors = 0
     noisy: list[tuple[int, int]] = []
+    items: dict[str, int] = {}   # each expected text (hashed with its query and kind): 1 found, 0 not; to compare two runs fairly
     for q in [*queries, *({"query": v, "vague": True} for v in VAGUE)]:
         check()
         try:
@@ -160,6 +171,8 @@ def probes(recall, queries: list[dict], check=lambda: None) -> dict:
         if not q.get("vague"):
             r = evaluate(q, out)
             expected, found, probed = expected + r["expected"], found + r["found"], probed + 1
+            for i in r["expect"]:
+                items[_item(q["id"], i)] = int(bool(i["found_in"]))
             stale += outdated(out) > 0
         if q.get("vague") or not q.get("expect"):
             noisy.append(size(out))
@@ -168,7 +181,7 @@ def probes(recall, queries: list[dict], check=lambda: None) -> dict:
             "noise": round(sum(n for n, _ in noisy) / len(noisy), 2) if noisy else None,
             "noise_chars": round(sum(c for _, c in noisy) / len(noisy)) if noisy else None,
             "noise_empty": round(sum(1 for n, _ in noisy if not n) / len(noisy), 4) if noisy else None, "noise_queries": len(noisy),
-            "probe_errors": errors}
+            "probe_errors": errors, "coverage_items": items}
 
 
 def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
@@ -287,7 +300,63 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
         r.status, r.metrics, r.finished_at = "done", m, datetime.now(timezone.utc)
         db.execute(delete(HealthRun).where(HealthRun.brain_id == brain_id, HealthRun.day < _today() - timedelta(days=KEEP_DAYS)))
         db.commit()
+        day = r.day
+    try:
+        _alert(brain_id, day, m)
+    except Exception:  # noqa: BLE001  (a notification that fails does not lose the measurement)
+        log.warning("health of brain %s: the notification failed", brain_id, exc_info=True)
     return {k: m.get(k) for k in HEADLINE}
+
+
+def _pct(v: float) -> str:
+    return f"{round(v * 100, 1):g} %"
+
+
+def coverage_drop(m: dict, prev: dict | None) -> tuple[float, float, int] | None:
+    """(before, now, texts compared): the coverage of the two runs over the expected texts that are in both, so that adding, editing
+    or deleting a reference query never reads as a drop. None if there is nothing in common."""
+    cur, old = (m or {}).get("coverage_items") or {}, (prev or {}).get("coverage_items") or {}
+    common = cur.keys() & old.keys()
+    if not common:
+        return None
+    return sum(old[k] for k in common) / len(common), sum(cur[k] for k in common) / len(common), len(common)
+
+
+def crossings(m: dict, prev: dict | None) -> list[str]:
+    """What in a measurement crosses the thresholds of Administration → Settings → Notifications, one sentence each."""
+    from . import appsettings
+    out = []
+    drop = float(appsettings.get("health_coverage_drop"))
+    d = coverage_drop(m, prev)
+    if drop and d and d[0] - d[1] >= drop - 1e-9:
+        out.append(f"la cobertura ha bajado del {_pct(d[0])} al {_pct(d[1])} sobre los {d[2]} textos esperados que estaban en las dos mediciones")
+    for key, setting, above, text in (
+            ("coverage", "health_coverage_min", False, "la cobertura es del {v}, por debajo del {t}"),
+            ("staleness", "health_staleness_max", True, "el {v} de las consultas de referencia trae algo desactualizado, más del {t}"),
+            ("redundancy", "health_redundancy_max", True, "el {v} de los hechos vigentes repite otro, más del {t}"),
+            ("noise", "health_noise_max", True, "una pregunta vaga trae de media {v} elementos, más de {t}")):
+        t, v = float(appsettings.get(setting)), m.get(key)
+        if not t or not isinstance(v, (int, float)) or (v <= t if above else v >= t):
+            continue
+        fmt = (lambda x: f"{x:g}") if key == "noise" else _pct
+        out.append(text.format(v=fmt(v), t=fmt(t)))
+    return out
+
+
+def _alert(brain_id: int, day: date, m: dict) -> None:
+    """After a measurement: a `health.degraded` notification if something crosses a threshold, closed when nothing does."""
+    from . import notify
+    with _factory()() as db:
+        b = db.get(Brain, brain_id)
+        prev = db.scalar(select(HealthRun.metrics).where(HealthRun.brain_id == brain_id, HealthRun.status == "done", HealthRun.day < day)
+                         .order_by(HealthRun.day.desc()).limit(1))
+        name, slug = b.name, b.slug
+    reasons, key = crossings(m, prev), f"health:{slug}"
+    if reasons:
+        notify.emit("health.degraded", f"La salud de la memoria de «{name}» ha empeorado",
+                    "; ".join(reasons).capitalize() + ". Revísala en Resumen → Salud de la memoria.", brain_id=brain_id, key=key)
+    else:
+        notify.resolve("health.degraded", key, "La salud de la memoria vuelve a estar dentro de sus umbrales.")
 
 
 def latest(db, since_days: int = 2) -> dict[int, dict]:

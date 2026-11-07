@@ -111,6 +111,11 @@ Guide: [[Notifications]]
 | Consecutive failures before alerting | `notify_health_failures` | `2` | 1–10 | How many checks in a row must fail before alerting that the graph or a model is not responding. With 2, a one-off provider error raises no alert. With 1 you are alerted on the first failure. |
 | Notify about new versions | `notify_update_check` | `no` | `no` (No) / `yes` (Yes) | Once a day it asks GitHub whether a newer version exists. It is the only outbound connection the instance makes on its own; off by default. |
 | Forbid private networks | `notify_block_private` | `no` | `no` (No) / `yes` (Yes) | Stops channels from pointing at private or local addresses (protects against a channel being used to reach internal services). Leave it on «No» if your ntfy or Gotify is on the local network. |
+| Memory health: notify when coverage falls | `health_coverage_drop` | `0.05` | 0–1 | Notifies (event «health.degraded») when a brain's coverage falls at least this much between two daily measurements, counting only the expected texts that were in both (adding or changing reference queries does not count). 0.05: five points. 0: never. |
+| Memory health: minimum coverage | `health_coverage_min` | `0` | 0–1 | Notifies when a brain's coverage is below this (from 0 to 1). 0: never. |
+| Memory health: maximum outdated results | `health_staleness_max` | `0` | 0–1 | Notifies when the share of reference queries that bring something outdated is above this (from 0 to 1). 0: never. |
+| Memory health: maximum noise | `health_noise_max` | `0` items | 0–100 items | Notifies when the recall returns on average more than this many items for a vague question. 0: never. |
+| Memory health: maximum redundancy | `health_redundancy_max` | `0` | 0–1 | Notifies when the share of current facts that repeat another is above this (from 0 to 1). 0: never. |
 | Keep notifications | `notify_keep_days` | `30` days | 1–3650 days | After this time notifications and their delivery history are deleted. |
 <!-- generated:end -->
 

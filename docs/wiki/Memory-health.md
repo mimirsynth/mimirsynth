@@ -27,6 +27,13 @@ A memory that only accumulates becomes a log of everything that was ever said, n
 - Nothing is written to the graph.
 - Measurements are kept for 400 days.
 
+## Notification
+After each measurement, the [[Notifications]] event **health.degraded** fires when:
+- **coverage falls** at least *Memory health: notify when coverage falls* (5 points by default) since the previous measurement. Only the expected texts that are in both measurements are compared, so adding, editing or deleting a reference query never reads as a drop;
+- or a number crosses its threshold: *minimum coverage*, *maximum outdated results*, *maximum noise* or *maximum redundancy*. These are off (0) until you set them.
+
+The thresholds are in Administration → Settings → Notifications ([[Settings reference]]). The notification says what crossed and closes on its own when a later measurement is back within them.
+
 ## Reading it
 - **Coverage drops** after an update or a model change: run the [[Reference queries]] to see which expected texts stopped coming, and simulate a threshold.
 - **Outdated results grow**: review [[Content quality]] → To review and the contradictions; facts that stopped being true are better invalidated (or corrected) than left current.

@@ -30,6 +30,7 @@ Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un avi
 | `ai.budget` | aviso (crítico al 100 %) | Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes; una vez por mes y nivel. Al 100 %, si así se configuró, su ingesta queda en pausa ([[Consumo de IA]]) |
 | `webhook.capped` | aviso | Un webhook de entrada llegó a su tope diario de propuestas; una vez al día por webhook, con su nombre y su tope ([[Webhooks de entrada]]) |
 | `digest.failed` | aviso | El resumen por correo de una persona ha fallado 5 veces seguidas; con su nombre y el recuento, nunca su dirección. Se cierra cuando un correo le llega ([[Mi cuenta]]) |
+| `health.degraded` | aviso | Tras la medición diaria, la cobertura de un brain baja más de lo configurado respecto a la anterior, o una de sus cifras cruza su umbral (Administración → Ajustes → Notificaciones). Se cierra cuando una medición vuelve a estar dentro ([[Salud de la memoria]]) |
 | `update.available` | información | Hay una versión más reciente (solo si lo activas, ver abajo) |
 | `conflicts.found` | información | Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día ([[Vocabulario]]) |
 | `token.expiring` | información | Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa ([[Conectar agentes]]) |

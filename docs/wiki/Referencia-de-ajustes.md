@@ -111,6 +111,11 @@ Guía: [[Notificaciones]]
 | Fallos seguidos para avisar | `notify_health_failures` | `2` | 1–10 | Cuántas comprobaciones seguidas deben fallar antes de avisar de que el grafo o un modelo no responde. Con 2, un error puntual de un proveedor no genera aviso. Con 1 se avisa al primer fallo. |
 | Avisar de versiones nuevas | `notify_update_check` | `no` | `no` (No) / `yes` (Sí) | Una vez al día consulta en GitHub si hay una versión más reciente. Es la única conexión de salida que hace la instancia por su cuenta; está desactivada por defecto. |
 | Prohibir redes privadas | `notify_block_private` | `no` | `no` (No) / `yes` (Sí) | Impide que los canales apunten a direcciones privadas o locales (protege de que se use un canal para llegar a servicios internos). Déjalo en «No» si tu ntfy o Gotify están en la red local. |
+| Salud de la memoria: avisar si la cobertura baja | `health_coverage_drop` | `0,05` | 0–1 | Avisa (evento «health.degraded») si la cobertura de un brain baja al menos esto entre dos mediciones diarias, contando solo los textos esperados que estaban en las dos (añadir o cambiar consultas de referencia no cuenta). 0,05: cinco puntos. 0: no avisar. |
+| Salud de la memoria: cobertura mínima | `health_coverage_min` | `0` | 0–1 | Avisa si la cobertura de un brain queda por debajo de esto (de 0 a 1). 0: no avisar. |
+| Salud de la memoria: resultados desactualizados máximos | `health_staleness_max` | `0` | 0–1 | Avisa si la proporción de consultas de referencia que traen algo desactualizado supera esto (de 0 a 1). 0: no avisar. |
+| Salud de la memoria: ruido máximo | `health_noise_max` | `0` elementos | 0–100 elementos | Avisa si el recall devuelve de media más de estos elementos ante una pregunta vaga. 0: no avisar. |
+| Salud de la memoria: redundancia máxima | `health_redundancy_max` | `0` | 0–1 | Avisa si la proporción de hechos vigentes que repiten otro supera esto (de 0 a 1). 0: no avisar. |
 | Conservar avisos | `notify_keep_days` | `30` días | 1–3650 días | Pasado este plazo se borran los avisos y su historial de envíos. |
 <!-- generated:end -->
 

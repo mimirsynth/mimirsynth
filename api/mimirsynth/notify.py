@@ -33,6 +33,7 @@ EVENTS = {
     "ai.budget": ("warning", "Un brain ha gastado el 80 % o el 100 % de su presupuesto de IA del mes"),
     "webhook.capped": ("warning", "Un webhook de entrada ha llegado a su tope diario de propuestas"),
     "digest.failed": ("warning", "El resumen por correo de una persona falla una y otra vez"),
+    "health.degraded": ("warning", "La salud de la memoria de un brain empeora o cruza un umbral"),
 }
 
 # How the wiki describes each event: when it is raised, in more detail than its label, and the guide it links to (an English page
@@ -54,6 +55,7 @@ EVENT_DOCS = {
     "conflicts.found": ("Un brain tiene hechos vigentes que se contradicen en una relación de un solo valor; se comprueba una vez al día", "Vocabulary"),
     "token.expiring": ("Un token de API caduca en 7 días o menos; se avisa una vez por token, con su nombre y su prefijo, nunca el token. Un token rotado no se avisa", "Connect agents"),
     "facts.stale": ("Un brain tiene hechos vigentes que han superado la vida útil de su relación; se cuentan una vez al día, sin texto", "Ontology"),
+    "health.degraded": ("Tras la medición diaria, la cobertura de un brain baja más de lo configurado respecto a la anterior, o una de sus cifras cruza su umbral (Administración → Ajustes → Notificaciones). Se cierra cuando una medición vuelve a estar dentro", "Memory health"),
 }
 BACKOFF = [60, 300, 1800, 7200, 43200]  # segundos entre reintentos de un envío; tras el último se da por fallido
 MAX_ATTEMPTS = len(BACKOFF) + 1
