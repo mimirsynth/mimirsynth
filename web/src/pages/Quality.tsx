@@ -12,6 +12,7 @@ import VocabDuplicates from "./VocabDuplicates";
 import VocabStale from "./VocabStale";
 import VocabAliasCleanup from "./VocabAliasCleanup";
 import CuratorPanel from "./CuratorPanel";
+import ProbesPanel from "./Probes";
 
 /** What waits for a person's decision in the brain (`null`: it could not be counted). `retype` only comes to administrators. */
 export type Attention = { proposals: number | null; corrections: number | null; duplicates: number | null; conflicts: number | null;
@@ -71,6 +72,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
           {isAdmin && <Tabs.Tab value="alias">{t("Alias repetidos")}</Tabs.Tab>}
           <Tabs.Tab value="summaries">{t("Resúmenes")}{count(a?.summaries)}</Tabs.Tab>
           <Tabs.Tab value="curator">{t("Curador")}</Tabs.Tab>
+          <Tabs.Tab value="verify">{t("Verificación")}</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="dup" pt="sm">
           {vocab.data ? <VocabDuplicates graph={graph} groups={vocab.data.duplicates} ignored={vocab.data.ignored_duplicates ?? []} isAdmin={isAdmin} />
@@ -82,6 +84,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
         {isAdmin && <Tabs.Panel value="alias" pt="sm"><VocabAliasCleanup graph={graph} /></Tabs.Panel>}
         <Tabs.Panel value="summaries" pt="sm"><SummaryReview graph={graph} role={role} /></Tabs.Panel>
         <Tabs.Panel value="curator" pt="sm"><CuratorPanel graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
+        <Tabs.Panel value="verify" pt="sm"><ProbesPanel graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
       </Tabs>
     </Page>
   );
