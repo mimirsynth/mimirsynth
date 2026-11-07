@@ -1,0 +1,23 @@
+{
+ "Activar el curador en este brain": "Turn on the curator in this brain",
+ "Ahora no propondría nada.": "It would propose nothing now.",
+ "Crear las propuestas": "Create the proposals",
+ "Ejecutar ahora": "Run now",
+ "El curador está activado en este brain.": "The curator is on in this brain.",
+ "El curador está desactivado; lo activa un administrador del brain.": "The curator is off; a brain administrator turns it on.",
+ "El curador recorre el grafo una vez al día y convierte lo que encuentra en propuestas en cuarentena, con su evidencia. No cambia nada por su cuenta: cada propuesta la decide un curador, una a una, y se puede deshacer. Por ahora busca contradicciones claras en las relaciones funcionales: se queda con el valor más reciente.": "The curator goes over the graph once a day and turns what it finds into proposals in quarantine, with their evidence. It changes nothing on its own: a curator decides each proposal, one at a time, and it can be undone. For now it looks for clear contradictions in the functional relations: it keeps the newest value.",
+ "Espera tu confirmación": "Waits for your confirmation",
+ "Ir a las propuestas": "Go to the proposals",
+ "La ejecución del {{day}} propondría {{n}} cambios. Mira la muestra: si es correcta, se crean las propuestas (cada una se decide aparte).": "The run of {{day}} would propose {{n}} changes. Look at the sample: if it is right, the proposals are created (each one is decided on its own).",
+ "Precisión de las contradicciones: {{pct}} de sus propuestas aprobadas ({{a}} aprobadas, {{r}} rechazadas, {{w}} pendientes).": "Precision of the contradictions: {{pct}} of its proposals approved ({{a}} approved, {{r}} rejected, {{w}} pending).",
+ "Propondría {{n}} cambios (sin crear nada todavía):": "It would propose {{n}} changes (nothing is created yet):",
+ "Se invalidaría:": "Would be invalidated:",
+ "Se queda:": "Kept:",
+ "Si una pasada fuera a proponer más de {{n}} cambios a la vez, espera a que alguien mire una muestra y la confirme.": "If a pass would propose more than {{n}} changes at once, it waits for someone to look at a sample and confirm it.",
+ "Todavía no se ha decidido ninguna propuesta del curador.": "No proposal of the curator has been decided yet.",
+ "Ver qué propondría": "See what it would propose",
+ "descartada": "discarded",
+ "terminada": "finished",
+ "{{n}} propuestas": "{{n}} proposals",
+ "Últimas ejecuciones": "Latest runs"
+}

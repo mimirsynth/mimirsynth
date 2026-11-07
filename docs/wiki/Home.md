@@ -23,7 +23,7 @@ This wiki is the complete user guide, in English and [in Spanish](Inicio). If yo
 ## Curating the knowledge
 The framework: [[Vocabulary]] · [[Ontology]] · [[Entity types]] · [[Relations and aliases]]
 
-The content: [[Content quality]] · [[Memory health]] · [[Merge duplicates]] · [[Contradictions]] · [[Type corrector]]
+The content: [[Content quality]] · [[Memory health]] · [[Curator]] · [[Merge duplicates]] · [[Contradictions]] · [[Type corrector]]
 
 ## Administering the instance
 [[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Export a brain]] · [[Import a brain]] · [[Notifications]] · [[Metrics]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[AI consumption]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]

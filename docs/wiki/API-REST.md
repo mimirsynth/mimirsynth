@@ -42,6 +42,8 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Consultas de referencia** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{qid}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{rid}` | curador |
 | **Salud de la memoria** | `GET /health` · `POST /health/run` | curador |
 | **Muestra para repetir** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` | administrador |
+| **Curador** | `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curador |
+| | `PUT /curator/settings` | administrador |
 | **Federación** | `GET /grants` | lector |
 | | `POST /grants` · `PATCH/DELETE /grants/{gid}` | administrador |
 | **Trabajos** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | lector |

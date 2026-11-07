@@ -143,6 +143,7 @@ class Brain(Base):
     ai_budget: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {limit, unit: tokens | cost, pause} (#132); empty: none
     recall_query_text: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # keep the text of rated recalls (#110)
     replay: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # sample of real recalls to replay (#291): {enabled, max, days}; empty: off
+    curator: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # scheduled curator (#300): {enabled, passes, batch, by}; empty: off
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
@@ -247,6 +248,7 @@ class Proposal(Base):
     kind: Mapped[str] = mapped_column(String(16), default="memory", server_default="memory")  # memory | correction (#109)
     correction: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the correction of a fact: see corrections.py
     claims: Mapped[list | None] = mapped_column(JSON, nullable=True)  # structured claims with their verdict and what was applied (#295): claims.py
+    category: Mapped[str] = mapped_column(String(32), default="", server_default="")  # what produced it, to measure its precision (#300): curator.<pass>
     # what the brain already knows close to it, for the review queue: "" not checked yet | new | related | duplicate (a current fact
     # says nearly the same) | stale (it resembles a fact that stopped being true); set after submission, refreshed when opened
     related_verdict: Mapped[str] = mapped_column(String(16), default="", server_default="")
@@ -613,6 +615,24 @@ class HealthRun(Base):
     error: Mapped[str] = mapped_column(Text, default="")
     job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CuratorRun(Base):
+    """One run of the scheduled curator on a brain (#300): at most one per brain and day. `findings`: per pass, what it found;
+    `proposals`: the ids it created. `waiting`: a pass found more than its batch and waits for a person to confirm a sample."""
+    __tablename__ = "curator_runs"
+    __table_args__ = (UniqueConstraint("brain_id", "day", name="uq_curator_runs_day"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(12), default="queued")  # queued | running | waiting | done | discarded | error
+    reason: Mapped[str] = mapped_column(String(16), default="daily")  # daily | manual
+    findings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    proposals: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -42,6 +42,8 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Reference queries** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{qid}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{rid}` | curator |
 | **Memory health** | `GET /health` · `POST /health/run` | curator |
 | **Replay sample** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` | administrator |
+| **Curator** | `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curator |
+| | `PUT /curator/settings` | administrator |
 | **Federation** | `GET /grants` | reader |
 | | `POST /grants` · `PATCH/DELETE /grants/{gid}` | administrator |
 | **Jobs** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | reader |

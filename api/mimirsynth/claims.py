@@ -97,6 +97,12 @@ def replaces(p) -> bool:
     return any(c.get("verdict") == "replaces" for c in p.claims or [])
 
 
+def actions_only(p) -> bool:
+    """Approving it only applies its claims, with nothing to extract: every claim confirms, or it has no text (the curator's, #300).
+    It needs no LLM."""
+    return bool(p.claims) and (only_confirms(p) or not (p.body or "").strip())
+
+
 def only_confirms(p) -> bool:
     """Every claim repeats a current fact: approving it confirms them and ingests nothing."""
     return bool(p.claims) and all(c.get("verdict") == "confirms" for c in p.claims)
