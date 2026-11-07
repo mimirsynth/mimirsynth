@@ -31,6 +31,9 @@ If other brains lend their memory to this one ([[Federation]]), recall also quer
 ### The episode text index
 It copies the text of the episodes from FalkorDB to PostgreSQL, chunked, with vectors and full-text search. It is kept up to date only by the periodic synchronisation; curators can force it with **Reindex now** in [[Ask]]. It can always be **rebuilt** from the graph.
 
+### Current state first
+With **Answer first with the current state** (Administration → Recall, off by default), a question about the present starts with the **current state** of the entities its first facts are about, up to two. That is the current value of each relation, before any other fact, fragment or passage. A relation a curator marked functional shows only its newest value and says how many others are still current (a possible contradiction); any other relation lists all its current values. A question about the past («before», «history», «what was») does not get it, and what stopped being true stays in its own section. The card is read from the graph when asked, so it is always current. It is also in the recall's JSON (`state`) and at `GET /api/brains/{slug}/entities/{uuid}/state`. Reference queries can simulate it (`params.state_card`).
+
 ### Trust and age
 Every fact in the recall's JSON says its **trust tier** (`trust`), from where it came, highest first:
 - **verified**: a probe checked it ([[Verifiable facts]]);

@@ -24,7 +24,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | | `POST /index/sync` | curator |
 | **Overview** | `GET /overview` · `GET /overview/activity` | reader |
 | **Episodes** | `GET /episodes/sources` · `GET /episodes` · `GET /episodes/{uuid}` | reader |
-| **Facts** | `GET /facts/relations` · `GET /facts` · `GET /timeline` · `GET /entities/{uuid}` · `GET /entities` | reader |
+| **Facts** | `GET /facts/relations` · `GET /facts` · `GET /timeline` · `GET /entities/{uuid}` · `GET /entities` · `GET /entities/{uuid}/state` | reader |
 | | `PATCH/DELETE /facts/{uuid}` · `POST /facts/{uuid}/invalidate` · `POST /facts/{uuid}/reactivate` · `PUT /entities/{uuid}/type` · `PUT/DELETE /facts/{uuid}/probe` | curator |
 | **Graph and query** | `GET /graph` · `POST /query` | reader |
 | **Proposals** | `POST /proposals/corrections` · `GET/POST /proposals` · `GET /proposals/counts` · `GET /proposals/{pid}` | contributor |
