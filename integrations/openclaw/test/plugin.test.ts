@@ -99,6 +99,9 @@ test("the entry is a plain plugin definition and registers the hooks, two tools,
   const manifest = JSON.parse(readFileSync(new URL("../openclaw.plugin.json", import.meta.url), "utf8"));
   assert.equal(manifest.id, plugin.id);
   assert.equal(manifest.kind, undefined, "a companion plugin: it must not take OpenClaw's exclusive memory slot");
+  // the recall runs only in turns that may call mimirsynth_search: without these, a default install would never recall
+  assert.deepEqual(manifest.toolMetadata.mimirsynth_search.profiles, ["minimal", "coding", "messaging", "full"]);
+  assert.deepEqual(manifest.toolMetadata.mimirsynth_remember.profiles, ["coding", "messaging", "full"]);
   const { f } = plug();
   assert.deepEqual([...f.hooks.keys()].sort(), ["after_tool_call", "agent_end", "before_prompt_build", "session_end", "session_start"]);
   assert.ok(f.hooks.get("before_prompt_build")?.some((h) => h.opts?.requiresToolAuthority === true));

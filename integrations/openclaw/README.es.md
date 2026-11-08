@@ -53,7 +53,7 @@ Un asistente en OpenClaw también habla en grupos y con otras personas. Por defe
 openclaw config set plugins.entries.mimirsynth.config.conversations true
 ```
 
-El recall además sigue la política de herramientas de cada turno: un turno que no puede llamar a `mimirsynth_search` tampoco recibe recall. Las sesiones de incógnito nunca ven el cerebro.
+El recall además sigue la política de herramientas de cada turno: un turno que no puede llamar a `mimirsynth_search` tampoco recibe recall, y el log del Gateway lo dice una vez por sesión. El plugin añade sus herramientas a los perfiles de herramientas integrados de OpenClaw (`mimirsynth_search` a todos, `mimirsynth_remember` a `coding`, `messaging` y `full`); si mantienes una lista explícita `tools.allow`, añádelas con `openclaw config set tools.alsoAllow '["mimirsynth"]' --strict-json --merge`. Las sesiones de incógnito nunca ven el cerebro.
 
 ## Captura de lo que aprendió una sesión (desactivada por defecto)
 

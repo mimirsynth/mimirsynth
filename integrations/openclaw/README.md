@@ -53,7 +53,7 @@ An assistant on OpenClaw also talks in group chats and with other people. By def
 openclaw config set plugins.entries.mimirsynth.config.conversations true
 ```
 
-The recall also follows each turn's tool policy: a turn that may not call `mimirsynth_search` gets no recall either. Incognito sessions never see the brain.
+The recall also follows each turn's tool policy: a turn that may not call `mimirsynth_search` gets no recall either, and the Gateway log says so once per session. The plugin adds its tools to OpenClaw's built-in tool profiles (`mimirsynth_search` to all of them, `mimirsynth_remember` to `coding`, `messaging` and `full`); if you keep an explicit `tools.allow` list, add them with `openclaw config set tools.alsoAllow '["mimirsynth"]' --strict-json --merge`. Incognito sessions never see the brain.
 
 ## Capturing what a session learned (off by default)
 

@@ -95,6 +95,7 @@ export class Hooks {
   readonly log: Logger;
   private news = new Set<string>(); // sessions whose first prompt still gets what changed
   private notices = new Set<string>(); // «session|message» already said
+  private skipped = new Set<string>(); // sessions already told that their tool policy leaves recall out
   private files = new Map<string, string[]>(); // files touched in a run, until its agent_end writes them
   private serial = new Serial();
 
@@ -160,10 +161,17 @@ export class Hooks {
   async beforePromptBuild(event: PromptEvent, ctx: HookContext = {}): Promise<PromptResult | undefined> {
     try {
       const authority = ctx.toolAuthority;
-      if (!authority?.allows(SEARCH_TOOL) || !allowed(this.settings(), ctx.memoryAudience, ctx.sessionKey)) return undefined;
+      const session = ctx.sessionId ?? ctx.sessionKey ?? "";
+      if (!allowed(this.settings(), ctx.memoryAudience, ctx.sessionKey)) return undefined;
       const conf = this.m.config(ctx.workspaceDir);
       if (!conf.configured()) return undefined;
-      const session = ctx.sessionId ?? ctx.sessionKey ?? "";
+      if (!authority?.allows(SEARCH_TOOL)) {
+        if (!this.skipped.has(session)) {
+          this.skipped.add(session);
+          this.log.info?.(`mimirsynth: no recall in this session: its tool policy does not allow ${SEARCH_TOOL}`);
+        }
+        return undefined;
+      }
       const raw = typeof event.currentUserMessage === "string" ? event.currentUserMessage : (event.prompt ?? "");
       const text = withoutOwnBlocks(raw);
       const wantRecall = conf.get("recall") && text.length >= MIN_QUERY && !text.startsWith("/");
@@ -184,7 +192,10 @@ export class Hooks {
       if (memory) parts.push(`<mimirsynth-memory brain="${brain}">\n${memory}\n</mimirsynth-memory>`);
       const said = this.notice(session, recall?.error ?? news?.error ?? null);
       if (said) parts.push(said);
-      return parts.length ? { prependContext: parts.join("\n\n") } : undefined;
+      if (!parts.length) return undefined;
+      const what = [memory ? `${memory.length} characters of recall` : "", parts[0].startsWith("<mimirsynth-news") ? "the news" : ""].filter(Boolean);
+      this.log.info?.(`mimirsynth: injected ${what.join(" and ") || "a notice"}`);
+      return { prependContext: parts.join("\n\n") };
     } catch (e) {
       this.log.debug?.(`mimirsynth: recall: ${String(e)}`);
       return undefined;
