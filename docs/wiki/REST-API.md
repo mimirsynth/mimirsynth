@@ -55,7 +55,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Jobs** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | reader |
 | | `POST /jobs/{jid}/cancel` · `POST /jobs/{jid}/retry` | curator |
 | **Members** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrator |
-| **Tokens** | `GET/POST /tokens` · `POST /tokens/{token_id}/rotate` · `DELETE /tokens/{token_id}` | reader |
+| **Tokens** | `GET/POST /tokens` · `POST /tokens/{token_id}/rotate` · `DELETE /tokens/{token_id}` · `GET /tokens/{token_id}/activity` · `POST /tokens/{token_id}/test-recall` | reader |
 | **The brain itself** | `PATCH /api/brains/{slug}` · `GET /secrets/scan` | administrator |
 | | `POST /delete` | owner |
 | **AI consumption** | `GET /ai-usage` · `PUT /ai-budget` | administrator |

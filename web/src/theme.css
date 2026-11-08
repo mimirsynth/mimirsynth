@@ -335,6 +335,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-codeblock pre { margin: 0; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 420px; overflow: auto; }
 .ms-codeblock pre[data-select] { user-select: all; }
 .ms-codeblock-copy { position: absolute; top: 6px; right: 6px; }
+.ms-codeblock:has(.ms-codeblock-copy) pre { padding-right: 104px; }  /* a one-line command does not run under «Copy» */
 .ms-canvas { border: 1px solid var(--ms-line); border-radius: var(--ms-radius-lg); overflow: hidden; background: var(--ms-canvas); position: relative; }
 .ms-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .ms-step { position: relative; padding: 0 0 14px 24px; --dot: var(--ms-line); }

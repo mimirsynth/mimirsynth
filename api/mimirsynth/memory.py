@@ -195,6 +195,45 @@ def revoke_token(token_id: int, ctx: BrainCtx = Depends(reader)):
     return {"ok": True}
 
 
+def _watched(ctx: BrainCtx, token_id: int) -> ApiToken:
+    """A live token of this brain that the person may watch: their own, or any for an administrator of the brain (as in the list)."""
+    t = ctx.db.get(ApiToken, token_id)
+    if not t or t.brain_id != ctx.brain.id or t.revoked or (t.user_id != ctx.user.id and rank(ctx.role) < rank("admin")):
+        raise HTTPException(404, "token no encontrado")
+    return t
+
+
+@router.get("/tokens/{token_id}/activity")
+def token_activity(token_id: int, ctx: BrainCtx = Depends(reader)):
+    """Whether an agent is already using this token (#362, «Connect an agent»): its last authenticated call and the recalls made with
+    it. The panel asks every couple of seconds and turns green when `last_used_at` moves; nothing new is recorded for it."""
+    from .onboarding import token_activity as activity
+    return activity(ctx.db, _watched(ctx, token_id))
+
+
+class ProbeIn(BaseModel):
+    query: str = Field(min_length=1, max_length=4000)
+
+
+@router.post("/tokens/{token_id}/test-recall")
+def probe_recall(token_id: int, body: ProbeIn, request: Request, ctx: BrainCtx = Depends(reader)):
+    """A recall with what this token may see (no passages without the `documents` scope), to show in the «Connect an agent» panel what
+    the agent receives. It is a preview, like a simulation in Ask: it is not logged, so it neither counts as the agent's recall nor as a
+    question of the person's own."""
+    t = _watched(ctx, token_id)
+    if token_expired(t):
+        raise HTTPException(409, "este token ha caducado: crea uno nuevo")
+    need = "recall"
+    if not token_allows(t, need):
+        raise HTTPException(403, f"este token no tiene el alcance «{need}»")
+    probe = RecallIn(query=body.query)
+    try:
+        return recall(ctx.brain.id, ctx.brain.graph_name, body.query, probe.facts, probe.chunks, probe.max_chars,
+                      n_docs=None if token_allows(t, "documents") else 0, lang=language(request), **federated_kwargs(ctx, probe))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"recall falló: {e}") from e
+
+
 WARN_DAYS = 7  # how long before it expires a token is announced
 
 

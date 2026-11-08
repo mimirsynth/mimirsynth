@@ -55,7 +55,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Trabajos** | `GET /jobs` · `GET /jobs/summary` · `GET /jobs/{jid}` | lector |
 | | `POST /jobs/{jid}/cancel` · `POST /jobs/{jid}/retry` | curador |
 | **Miembros** | `GET/PUT /members` · `DELETE /members/{user_id}` | administrador |
-| **Tokens** | `GET/POST /tokens` · `POST /tokens/{token_id}/rotate` · `DELETE /tokens/{token_id}` | lector |
+| **Tokens** | `GET/POST /tokens` · `POST /tokens/{token_id}/rotate` · `DELETE /tokens/{token_id}` · `GET /tokens/{token_id}/activity` · `POST /tokens/{token_id}/test-recall` | lector |
 | **El propio brain** | `PATCH /api/brains/{slug}` · `GET /secrets/scan` | administrador |
 | | `POST /delete` | propietario |
 | **Consumo de IA** | `GET /ai-usage` · `PUT /ai-budget` | administrador |

@@ -10,6 +10,7 @@ import AdminFolders from "./AdminFolders";
 import AdminSettings from "./AdminSettings";
 import AdminUsers from "./AdminUsers";
 import TokensPanel from "./TokensPanel";
+import ConnectAgent from "./ConnectAgent";
 import Federation from "./Federation";
 import Secrets from "./Secrets";
 import BrainExport from "./BrainExport";
@@ -225,7 +226,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const canAdmin = cur && ["admin", "owner"].includes(cur.role);
   // The active brain, one entry per topic, each with the same role rules as the card it holds; «brains» is the old single page.
   const brainNav = [{ value: "brains", label: t("Brain activo") }, ...(cur ? [
-    { value: "members", label: t("Miembros") }, { value: "tokens", label: t("Tokens de API") }, { value: "federation", label: t("Federación") },
+    { value: "connect", label: t("Conectar un agente") }, { value: "members", label: t("Miembros") }, { value: "tokens", label: t("Tokens de API") }, { value: "federation", label: t("Federación") },
     ...(canAdmin ? [{ value: "secrets", label: t("Secretos") }, { value: "webhooks", label: t("Webhooks de entrada") }, { value: "brain-usage", label: t("Consumo de IA") }] : []),
     ...(cur.role === "owner" ? [{ value: "retention", label: t("Retención") }] : []),
     ...(canAdmin ? [{ value: "export", label: t("Exportar") }] : []),
@@ -299,6 +300,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
               <SettingsBody><BrainImport onOpen={(s) => { qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(s); }} /></SettingsBody></SettingsGroup>}
           </>}
           {cur && <>
+            {section === "connect" && <SettingsGroup title={t("Conectar un agente")} description={t("Elige tu agente y copia lo que necesita, ya con este servidor, este brain y un token. Se pone en verde en cuanto el agente hace su primera llamada.")}><SettingsBody><ConnectAgent brain={cur} /></SettingsBody></SettingsGroup>}
             {section === "members" && <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>}
             {section === "tokens" && <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>}
             {section === "federation" && <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>}

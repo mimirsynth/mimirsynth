@@ -15,7 +15,7 @@ const STEPS: Record<string, { title: string; text: string; links: PageLink[]; wi
   agent_recall: {
     title: T("Un agente hace su primer recall"),
     text: T("Crea un token de API y conecta tu agente por MCP o por la API: antes de responder, leerá lo que sabe el brain."),
-    links: [{ label: T("Tokens de API"), to: "/cuenta?seccion=tokens", icon: "plus" }],
+    links: [{ label: T("Conectar un agente"), to: "/admin?seccion=connect", icon: "plus" }],
     wiki: { en: "Connect-agents", es: "Conectar-agentes" },
   },
   proposal_received: {
