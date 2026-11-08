@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { ApiError, fmtDay, langHeaders } from "../api";
 import { translateServer } from "../i18n";
-import { Btn, CardLink, EmptyState, EntityChip, humanRelation, ListCard, MutationError, Notice, Pill } from "../ui";
+import { Btn, CardLink, EmptyState, EntityChip, humanRelation, ListCard, MutationError, Pill } from "../ui";
 import { loadAsk, saveAsk } from "./askSession";
 
 /** One numbered piece of evidence: what the answer cites as [F1], [E1] or [D1]. */
@@ -136,7 +136,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
       {/* what this mode does: before the first answer; after it, under the answer, where checking the citations happens */}
       {asked === null && <Text size="xs" c="dimmed">{help}</Text>}
       <MutationError error={error} />
-      {sources && (text ? <Notice tone="info" title={t("Respuesta")} role="region" aria-label={t("Respuesta")}><Text size="sm" className="ms-prose ms-answer-prose">{parts}</Text></Notice>
+      {sources && (text ? <section aria-label={t("Respuesta")} className="ms-answer"><ListCard title={t("Respuesta")}><span className="ms-answer-prose">{parts}</span></ListCard></section>
         : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
       {text && !busy && <Text size="xs" c="dimmed">{help}</Text>}
       {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
