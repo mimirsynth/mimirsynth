@@ -17,7 +17,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 
 | Área | Rutas | Rol |
 |---|---|---|
-| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST /recall/{rid}/ratings` · `POST /answer` | lector |
+| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST/DELETE /recall/{rid}/ratings` · `POST /answer` | lector |
 | | `GET /recall/quality` | curador |
 | | `PUT /recall/settings` | administrador |
 | **Índice de texto** | `GET /index/status` | lector |
@@ -86,7 +86,7 @@ Cuelgan de `/api/…`.
 
 ## Notas sobre algunas rutas
 - **Rutas que comprueban algo más que su rol:** `POST /tokens/{id}/rotate` es solo para el dueño del token, y `/tokens` y `POST /api/search` solo funcionan desde una sesión, nunca con un token de API (`403`); el rol de un token nunca supera el tuyo. Un colaborador solo ve sus propias propuestas. Conectar una wiki y cambiar sus colecciones o su clave necesita al administrador de la instancia. `PATCH /api/brains/{slug}` solo cambia el grafo si lo pide el administrador de la instancia.
-- **`POST /recall`** devuelve un `recall_id`; `POST /recall/{recall_id}/ratings` valora lo que devolvió: `kind` (`fact`, `chunk` o `doc`), `id`, `rating` (`useful`, `irrelevant` o `incorrect`) y una `note` opcional. `GET /recall/quality?days=30` suma las valoraciones, y `PUT /recall/settings` (`keep_query_text`) decide si se guarda el texto de las consultas.
+- **`POST /recall`** devuelve un `recall_id`; `POST /recall/{recall_id}/ratings` valora lo que devolvió: `kind` (`fact`, `chunk` o `doc`), `id`, `rating` (`useful`, `irrelevant` o `incorrect`) y una `note` opcional; valorar otra vez como `incorrect` un hecho cuya corrección está pendiente devuelve esa corrección (`existing: true`) en vez de abrir otra. `DELETE /recall/{recall_id}/ratings?kind=…&id=…` retira tu propia valoración de un elemento mientras el recall se pueda valorar (`removed`, y el `proposal_id` que hubiera propuesto, que sigue en la cola). `GET /recall/quality?days=30` suma las valoraciones, y `PUT /recall/settings` (`keep_query_text`) decide si se guarda el texto de las consultas.
 - **`PUT /entities/{uuid}/type`** recibe `{"type": …}`, un tipo de la ontología del brain; se deshace desde el historial del vocabulario. `GET /entities?q=` busca entidades por nombre.
 - **`POST /query`** ejecuta Cypher de solo lectura.
 - **Subidas:** `POST /docs/uploads`, después cada parte con `PUT /docs/uploads/{uid}/parts/{n}` y `POST …/complete`. Las fuentes wiki están en `/docs/sources` y `/docs/wiki`.

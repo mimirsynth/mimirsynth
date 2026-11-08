@@ -69,6 +69,46 @@ def test_rate_each_item_and_incorrect_opens_a_correction_only_from_a_contributor
     assert {("doc", ":3:1", "useful"), ("chunk", ":7", "irrelevant"), ("fact", "f1", "incorrect"), ("fact", "f2", "incorrect")} <= rows
 
 
+def test_a_person_takes_back_only_their_own_rating_and_the_correction_stays(client, fake_recall, monkeypatch):  # noqa: F811
+    """A rating clicked by mistake would stay in Quality: its author takes it back (a second click), someone else's rating of the same
+    item stays, and the correction «incorrect» proposed stays in the queue, because a curator decides it."""
+    from mimirsynth import corrections
+    from mimirsynth.models import RecallRating
+    from mimirsynth.store import _factory
+    monkeypatch.setattr(corrections, "create", lambda ctx, req, body, direct=True: type("P", (), {"id": 77})())
+    assert client.post("/api/brains", json={"slug": "rr9", "name": "Rr9"}).status_code == 201
+    rid = client.post("/api/brains/rr9/recall", json={"query": "¿Dónde corre Nextcloud?"}).json()["recall_id"]
+    base = f"/api/brains/rr9/recall/{rid}/ratings"
+    assert client.post(base, json={"kind": "fact", "id": "f1", "rating": "incorrect", "note": "ya no"}).json()["proposal_id"] == 77
+    assert client.post(base, json={"kind": "chunk", "id": ":7", "rating": "useful"}).status_code == 200
+    lg = _log(rid)
+    with _factory()() as db:
+        me = db.query(RecallRating).filter(RecallRating.log_id == lg.id).first().user_id
+    with _factory()() as db:  # someone else (an agent with no account here) rated the same fragment
+        db.add(RecallRating(brain_id=lg.brain_id, log_id=lg.id, kind="chunk", item_id=":7", rating="irrelevant", user_id=None))
+        db.commit()
+    assert client.delete(base, params={"kind": "chunk", "id": ":7"}).json() == {"ok": True, "removed": True, "proposal_id": None}
+    assert client.delete(base, params={"kind": "chunk", "id": ":7"}).json()["removed"] is False     # already gone: nothing to take back
+    r = client.delete(base, params={"kind": "fact", "id": "f1"}).json()
+    assert r == {"ok": True, "removed": True, "proposal_id": 77}                    # gone; its correction is still to be decided
+    with _factory()() as db:
+        rows = {(x.kind, x.item_id, x.rating, x.user_id) for x in db.query(RecallRating).filter(RecallRating.log_id == lg.id)}
+    assert rows == {("chunk", ":7", "irrelevant", None)}                             # only the other one's is left
+    # «incorrect» again: it points to the correction still in the queue instead of opening a second one
+    from mimirsynth.models import Proposal
+    with _factory()() as db:
+        db.add(Proposal(id=77, brain_id=lg.brain_id, author_id=me, kind="correction", name="x", body="", correction={"fact_uuid": "f1", "reason": "x"}))
+        db.commit()
+    r = client.post(base, json={"kind": "fact", "id": "f1", "rating": "incorrect", "note": "otra vez"}).json()
+    assert r["proposal_id"] == 77 and r["existing"] is True
+    with _factory()() as db:  # the database is shared with other tests, which count corrections
+        db.query(Proposal).filter(Proposal.id == 77).delete()
+        db.commit()
+    assert client.delete(base, params={"kind": "fact", "id": "nope"}).status_code == 404
+    assert client.delete(base, params={"kind": "fact"}).status_code == 422
+    assert client.delete("/api/brains/rr9/recall/xxxxxxxxxxxx/ratings", params={"kind": "fact", "id": "f1"}).status_code == 404
+
+
 def test_a_failure_logging_the_recall_never_breaks_it(client, fake_recall, monkeypatch):  # noqa: F811
     """Review of #159: the hook recalls on every prompt, so logging fails open: the answer still comes, only it cannot be rated."""
     from mimirsynth import ratings

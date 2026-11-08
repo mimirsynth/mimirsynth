@@ -17,7 +17,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 
 | Area | Routes | Role |
 |---|---|---|
-| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST /recall/{rid}/ratings` · `POST /answer` | reader |
+| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST/DELETE /recall/{rid}/ratings` · `POST /answer` | reader |
 | | `GET /recall/quality` | curator |
 | | `PUT /recall/settings` | administrator |
 | **Text index** | `GET /index/status` | reader |
@@ -86,7 +86,7 @@ Under `/api/…`.
 
 ## Notes on some routes
 - **Routes that check more than their role:** `POST /tokens/{id}/rotate` is only for the token's owner, and `/tokens` and `POST /api/search` only work from a session, never with an API token (`403`); a token's role never exceeds yours. A contributor only sees their own proposals. Connecting a wiki and changing its collections or key need the instance administrator. `PATCH /api/brains/{slug}` can only change the graph for the instance administrator.
-- **`POST /recall`** returns a `recall_id`; `POST /recall/{recall_id}/ratings` rates what came back: `kind` (`fact`, `chunk` or `doc`), `id`, `rating` (`useful`, `irrelevant` or `incorrect`) and an optional `note`. `GET /recall/quality?days=30` sums the ratings, and `PUT /recall/settings` (`keep_query_text`) decides whether the text of the queries is kept.
+- **`POST /recall`** returns a `recall_id`; `POST /recall/{recall_id}/ratings` rates what came back: `kind` (`fact`, `chunk` or `doc`), `id`, `rating` (`useful`, `irrelevant` or `incorrect`) and an optional `note`; rating a fact `incorrect` again while its correction is pending returns that correction (`existing: true`) instead of opening another. `DELETE /recall/{recall_id}/ratings?kind=…&id=…` takes back your own rating of an item while the recall can be rated (`removed`, and the `proposal_id` it had proposed, which stays in the queue). `GET /recall/quality?days=30` sums the ratings, and `PUT /recall/settings` (`keep_query_text`) decides whether the text of the queries is kept.
 - **`PUT /entities/{uuid}/type`** takes `{"type": …}`, a type of the brain's ontology; it is undone from the vocabulary history. `GET /entities?q=` finds entities by name.
 - **`POST /query`** runs read-only Cypher.
 - **Uploads:** `POST /docs/uploads`, then each part with `PUT /docs/uploads/{uid}/parts/{n}` and `POST …/complete`. The wiki sources are under `/docs/sources` and `/docs/wiki`.
