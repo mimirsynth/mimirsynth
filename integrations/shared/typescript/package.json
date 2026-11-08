@@ -1,0 +1,26 @@
+{
+  "name": "@mimirsynth/agent-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MimirSynth's shared client library for JavaScript agent integrations: configuration contract, recall, news, proposals, secret redaction and session capture.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/contract.test.ts",
+    "test:live": "node --experimental-strip-types --no-warnings --test test/live.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~5.8.3"
+  }
+}

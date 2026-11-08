@@ -24,7 +24,7 @@ GITHUB = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 def plugin(monkeypatch, tmp_path):
     """The plugin's modules, configured by environment, with its state in a temporary folder and every request recorded."""
     monkeypatch.syspath_prepend(str(PLUGIN / "scripts"))
-    for m in ("mimir", "hook", "cli", "secretscan"):
+    for m in [m for m in sys.modules if m.split(".")[0] in ("mimir", "hook", "cli", "mimirsynth_agent")]:
         sys.modules.pop(m, None)
     mimir = importlib.import_module("mimir")
     monkeypatch.setattr(mimir, "CONFIG", tmp_path / "config.json")
@@ -82,7 +82,7 @@ def test_the_plugin_hangs_together_and_carries_the_servers_detector():
     assert events == {"session-start", "prompt", "tool", "stop", "session-end"} and all(f'"{e}"' in src for e in events)
     assert {p.stem for p in (PLUGIN / "commands").glob("*.md")} == {"setup", "status", "search", "remember"}
     # the same module on both sides: a rule added to the server reaches the plugin only by copying the file again
-    assert (PLUGIN / "scripts" / "secretscan.py").read_bytes() == (ROOT / "api" / "mimirsynth" / "secretscan.py").read_bytes()
+    assert (PLUGIN / "scripts" / "mimirsynth_agent" / "secretscan.py").read_bytes() == (ROOT / "api" / "mimirsynth" / "secretscan.py").read_bytes()
 
 
 def test_redaction_removes_tokens_passwords_headers_and_url_credentials(plugin):

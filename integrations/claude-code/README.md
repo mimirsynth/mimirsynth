@@ -39,6 +39,8 @@ It asks for:
 
 It writes `~/.config/mimirsynth/config.json`, readable only by you. The same keys can come from `MIMIRSYNTH_*` environment variables, which take precedence. The hooks need `python3` on the `PATH`.
 
+The file is shared with every MimirSynth agent plugin, and a `projects` entry can give some folders another brain with its own tokens: see [`docs/AGENT_CLIENT.md`](../../docs/AGENT_CLIENT.md). The plugin is built on the shared client library, which it carries in `scripts/mimirsynth_agent/` (a copy of `integrations/shared/python/mimirsynth_agent`).
+
 ### Capturing what a session learned (off by default)
 
 `capture` decides it:
@@ -50,7 +52,7 @@ What is recorded and sent:
 - **Which sessions:** only those that changed files or ended with a substantial answer, as at most **one proposal per session**.
 - **What it holds:** the task (the first prompt), the outcome (the last answer) and the files changed. Never the transcript.
 - **How it is sent:** with low confidence (`capture_confidence`, 0.3), so it waits in **quarantine**. It is only sent with a **contributor** token: with a curator's it would be approved at once, so it is refused and said.
-- **Secrets:** before anything is written to disk or sent, it is redacted with the server's own detector (`scripts/secretscan.py` is the same file as `api/mimirsynth/secretscan.py`, and a test keeps them equal). It works by patterns and is not infallible: read the drafts if in doubt.
+- **Secrets:** before anything is written to disk or sent, it is redacted with the server's own detector (`scripts/mimirsynth_agent/secretscan.py` is the same file as `api/mimirsynth/secretscan.py`, and a test keeps them equal). It works by patterns and is not infallible: read the drafts if in doubt.
 - **When it leaves the machine:** at the next start, not at the end of the session, because Claude Code gives a plugin only 1.5 s when a session ends.
 
 ### Other memory plugins
