@@ -90,7 +90,7 @@ jobs:
           grep -q '^MIMIRSYNTH_FALKOR_HOST=host.docker.internal$' .env
           grep -q '^COMPOSE_PROFILES=$' .env
           [ -z "$(docker compose ps -q falkordb)" ]
-          curl -sf localhost:8001/api/health | grep -q '"graph":true'
+          curl -sf "localhost:$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)/api/health" | grep -q '"graph":true'   # the next free port: 8001 is the OCR step's
       - name: The installer stops when an existing graph database does not answer (#360)
         run: |
           if ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/nothing" --no-start --graph existing --graph-host 127.0.0.1 --graph-port 6391; then exit 1; fi
