@@ -54,6 +54,20 @@ How long what is no longer useful is kept, only for the brain's **owner** (or th
 
 An empty field uses the instance's period ([[Settings reference]]: `retention_rejected_days`, `retention_jobs_days`) and **0 keeps forever**. By default there is no period, so nothing is purged until someone sets one. A daily job applies them and leaves a summary (the card shows the last one); **Purge now** runs it at once. Every change is audited (`brain.retention`). The audit log and the episodes are never purged from here.
 
+## Right to be forgotten
+
+MimirSynth invalidates instead of deleting, which is the base of its timeline. When someone asks for their data to be deleted, invalidating is not enough. The first step is a **report**: on an entity's page, the brain's owner opens **Right to be forgotten: see what would be deleted**. The report changes nothing. The same report is `POST /api/brains/{slug}/forget/report` with `entity` and `aliases`; it needs a session, not an API token.
+
+- **What is looked for:** the entity, its name, its aliases and any other names given (an email, a nickname), as whole words, ignoring case and accents. Terms shorter than three characters are ignored.
+- **What it says, layer by layer**, with what deleting would do there:
+  - **Deleted:** the entity and its facts, the episodes that mention it, their chunks in the index, the recall sample and recall logs with their ratings, proposed summaries, jobs, notifications, and the confirmations, probes and dates of its facts.
+  - **Text deleted:** proposals keep their status, authors and dates.
+  - **Cleaned:** the graph copies kept to undo an entity merge, so the undo keeps working; replays of the sample, webhook events and the audit log.
+  - **Blocked:** a Knowledge document that names it would not be indexed again until it changes at its source.
+  - **To review, never deleted on their own:** facts and summaries of other entities that name it, other entities named like it, and reference queries.
+  - **Out of reach:** backups, application logs and other systems.
+- **Audit:** the audit log records `forget.report` with the entity's id and the counts per layer, never names or text.
+
 ## Incoming webhooks
 Alerts, deployments and other events from your tools as the brain's episodic memory: each webhook has its address, its secret and a template for its emitter (Alertmanager, CheckMK, Uptime Kuma, Proxmox VE, GitHub Actions, GitLab CI or a generic one), with a daily cap of proposals. Only brain administrators see this card. See [[Incoming webhooks]].
 
