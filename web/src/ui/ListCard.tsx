@@ -5,14 +5,14 @@ import type { ReactNode } from "react";
  *  `role="button"`, which would swallow its own actions). `invalid` marca lo que ya no es cierto.
  *  `notice`: what must be read before the body (that it may be superseded), set off by a rule. `note`: a sentence about the body (what
  *  it replaces, what replaced it), in the body's type. `anchor`: an id other cards can jump to; the card then takes the focus. */
-export function ListCard({ title, aside, notice, note, tags, meta, actions, invalid, highlight, anchor, onOpen, children }:
-  { title?: ReactNode; aside?: ReactNode; notice?: ReactNode; note?: ReactNode; tags?: ReactNode; meta?: ReactNode; actions?: ReactNode; invalid?: boolean; highlight?: boolean;
+export function ListCard({ title, aside, notice, note, tags, meta, actions, invalid, anchor, onOpen, children }:
+  { title?: ReactNode; aside?: ReactNode; notice?: ReactNode; note?: ReactNode; tags?: ReactNode; meta?: ReactNode; actions?: ReactNode; invalid?: boolean;
     anchor?: string; onOpen?: () => void; children?: ReactNode }) {
   const head = onOpen && title
     ? <button type="button" className="ms-listcard-title ms-rowopen" onClick={(e) => { e.stopPropagation(); onOpen(); }}>{title}</button>
     : <div className="ms-listcard-title">{title}</div>;
   return (
-    <div className="ms-listcard" id={anchor} tabIndex={anchor ? -1 : undefined} data-invalid={invalid ? "" : undefined} data-highlight={highlight ? "" : undefined} data-clickable={onOpen ? "" : undefined} onClick={onOpen}>
+    <div className="ms-listcard" id={anchor} tabIndex={anchor ? -1 : undefined} data-invalid={invalid ? "" : undefined} data-clickable={onOpen ? "" : undefined} onClick={onOpen}>
       {(title || aside) && <div className="ms-listcard-head">{head}{aside && <div className="ms-listcard-aside">{aside}</div>}</div>}
       {notice && <div className="ms-listcard-notice">{notice}</div>}
       {children && <div className="ms-listcard-body">{children}</div>}
