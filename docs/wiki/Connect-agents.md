@@ -142,6 +142,15 @@ Recovered content — above all from documents — is **data, not instructions**
 
 The full endpoint reference is in [[REST API]].
 
+## OpenCode
+The **OpenCode plugin** gives the agent the same as the Claude Code one: what changed in the brain at session start, recall injected before every prompt, the commands `/mimirsynth-setup`, `/mimirsynth-status`, `/mimirsynth-search` and `/mimirsynth-remember`, the brain's MCP server for on-demand tools and, only if you turn it on, a capture of what each session learned as one quarantined proposal. Install it with one command (Node.js 18 or later):
+```bash
+npx -y @mimirsynth/opencode install
+```
+It adds the plugin to OpenCode (`opencode plugin @mimirsynth/opencode --global`) and asks, in your terminal and hidden, for the URL, the brain, a **reader** token and optionally a **contributor** one. It writes `~/.config/mimirsynth/config.json`, the file every MimirSynth agent plugin shares; `MIMIRSYNTH_*` environment variables take precedence. If MimirSynth does not answer, OpenCode carries on without memory.
+
+Details, the options and the capture modes: [`integrations/opencode`](https://github.com/mimirsynth/mimirsynth/tree/main/integrations/opencode).
+
 ## Security
 - Keep the token as a secret (password manager, environment variable), not in code.
 - Use HTTPS ([[HTTPS and reverse proxy]]).

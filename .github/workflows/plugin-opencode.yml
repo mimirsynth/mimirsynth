@@ -1,0 +1,66 @@
+name: Plugin OpenCode
+# The OpenCode plugin (integrations/opencode, #371): types, its unit tests, the package npm would publish, and its hooks against a test
+# instance of MimirSynth (api/tests/test_opencode_plugin.py, which the api job of CI skips because it does not install the plugin).
+on:
+  push:
+    branches: [main]
+    paths: [integrations/opencode/**, integrations/shared/**, api/**, .github/workflows/plugin-opencode.yml]
+  pull_request:
+    paths: [integrations/opencode/**, integrations/shared/**, api/**, .github/workflows/plugin-opencode.yml]
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    defaults:
+      run: {working-directory: integrations/opencode}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22, cache: npm, cache-dependency-path: integrations/opencode/package-lock.json}
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: The package npm would publish holds the built plugin and its command-line tool
+        run: |
+          npm pack --dry-run --json > "$RUNNER_TEMP/pack.json"
+          node -e '
+            const files = require(process.argv[1])[0].files.map((f) => f.path).sort();
+            console.log(files.join("\n"));
+            for (const f of ["dist/index.js", "dist/cli.js", "package.json", "README.md"]) if (!files.includes(f)) throw new Error(f + " is missing");
+            if (files.some((f) => f.startsWith("src/") || f.startsWith("test/"))) throw new Error("sources or tests in the package");
+          ' "$RUNNER_TEMP/pack.json"
+      - name: The built plugin is an OpenCode plugin module and its command-line tool runs
+        run: |
+          node --input-type=module -e '
+            const m = await import(process.cwd() + "/dist/index.js");
+            if (m.default.id !== "mimirsynth" || typeof m.default.server !== "function") throw new Error("not a plugin module");
+            const hooks = await m.default.server({ directory: process.cwd(), worktree: process.cwd(), client: {} }, {});
+            for (const h of ["config", "event", "chat.message", "command.execute.before", "tool.execute.after", "dispose"]) if (!hooks[h]) throw new Error(h);
+          '
+          node dist/cli.js help
+          MIMIRSYNTH_CONFIG="$RUNNER_TEMP/none.json" node dist/cli.js status || test $? -eq 1
+  live:
+    # The hooks, and OpenCode with the plugin, against a real MimirSynth on a local port, with a graph so that «what changed at session
+    # start» runs too. The model is a local stand-in (integrations/opencode/test/mock-llm.mjs): no key, no account, nothing hosted.
+    runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:v4.22.0
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22, cache: npm, cache-dependency-path: integrations/opencode/package-lock.json}
+      - run: cd integrations/opencode && npm ci && npm run build
+      - name: OpenCode itself, at the version the plugin was written against
+        run: npm install -g opencode-ai@1.19.5 && opencode --version
+      - run: cd api && uv venv && uv pip install -e . pytest
+      - name: The plugin's hooks, and OpenCode with the plugin and a stand-in model, against a test instance
+        env:
+          MIMIRSYNTH_TEST_FALKOR: localhost
+          MIMIRSYNTH_TEST_OPENCODE: opencode
+        run: |
+          cd api && .venv/bin/pytest -q -rs tests/test_opencode_plugin.py | tee "$RUNNER_TEMP/live.log"
+          grep -q "2 passed" "$RUNNER_TEMP/live.log"   # both ran, none skipped

@@ -142,6 +142,15 @@ El contenido recuperado —sobre todo el de documentos— es **dato, no instrucc
 
 La referencia completa de endpoints está en [[API REST]].
 
+## OpenCode
+El **plugin de OpenCode** da al agente lo mismo que el de Claude Code: qué cambió en el brain al empezar la sesión, el recall inyectado antes de cada prompt, los comandos `/mimirsynth-setup`, `/mimirsynth-status`, `/mimirsynth-search` y `/mimirsynth-remember`, el servidor MCP del brain para herramientas bajo demanda y, solo si la activas, una captura de lo que aprendió cada sesión como una propuesta en cuarentena. Se instala con un comando (Node.js 18 o posterior):
+```bash
+npx -y @mimirsynth/opencode install
+```
+Añade el plugin a OpenCode (`opencode plugin @mimirsynth/opencode --global`) y pide, en tu terminal y ocultos, la URL, el brain, un token **lector** y, opcionalmente, uno **colaborador**. Escribe `~/.config/mimirsynth/config.json`, el fichero que comparten todos los plugins de agente de MimirSynth; las variables de entorno `MIMIRSYNTH_*` tienen prioridad. Si MimirSynth no responde, OpenCode sigue sin memoria.
+
+Detalles, las opciones y los modos de captura: [`integrations/opencode`](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/opencode/README.es.md).
+
 ## Seguridad
 - Guarda el token como un secreto (gestor de contraseñas, variable de entorno), no en el código.
 - Usa HTTPS ([[HTTPS y proxy inverso]]).
