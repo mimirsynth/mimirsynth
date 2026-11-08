@@ -1,7 +1,7 @@
 
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, NumberField, Pill, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, Tabs, useTabParam, CardLink } from "../ui";
+import { Btn, NumberField, Pill, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState } from "react";
@@ -179,6 +179,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       {view === "contexto" && scope === "brain" && r && (
         <div className="ms-ask-wrap"><div className="ms-ask-cols">
           <Stack className="ms-ask-main" gap="xs">
+            {/* In one column the context comes after every card: on a phone that is thousands of pixels down. */}
+            {r.context && <Text size="sm" className="ms-ask-jump"><CardLink to="ask-context">{t("Ir al contexto inyectado")}</CardLink></Text>}
             {!r.facts.length && !r.chunks.length && !!r.min_similarity && (
               <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: r.min_similarity })}</Text>)}
             <Title order={2} size="h5">{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>
@@ -201,9 +203,14 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
                   actions={<Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(p.title)}>{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
             </>}
           </Stack>
-          <Stack gap="xs" className="ms-ask-side">
-            <Title order={2} size="h6">{t("Contexto inyectado")}</Title>
-            <CodeBlock copy label={t("Contexto inyectado")}>{r.context}</CodeBlock>
+          {/* Beside the cards it stays in view while they scroll, and scrolls inside its own box. «Copiar» sits in its header, not over the text. */}
+          <Stack gap="xs" className="ms-ask-side" id="ask-context" tabIndex={-1}>
+            <div className="ms-ask-side-head">
+              <Title order={2} size="h6">{t("Contexto inyectado")}</Title>
+              {r.context && <CopyBtn value={r.context} />}
+            </div>
+            {r.context ? <CodeBlock label={t("Contexto inyectado")}>{r.context}</CodeBlock>
+              : <Text size="sm" c="dimmed">{t("Vacío: con este recall el agente no recibiría nada.")}</Text>}
           </Stack>
         </div></div>)}
       {save && <RefQueryForm graph={graph} initial={save} onClose={() => setSave(null)} />}

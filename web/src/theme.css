@@ -422,6 +422,18 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-ask-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: var(--mantine-spacing-md); align-items: start; }
 .ms-ask-main, .ms-ask-side { min-width: 0; }
 @container (max-width: 860px) { .ms-ask-cols { grid-template-columns: minmax(0, 1fr); } }
+/* Ask's injected context: beside the cards it stays in view (the page area scrolls, not the window) and its text scrolls inside its own
+   box, as tall as that area allows. In one column it goes last, and a link at the top of the results leads to it. */
+.ms-ask-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
+.ms-ask-side:focus { outline: none; }  /* it takes the focus only so the next Tab enters the context */
+.ms-ask-jump { display: none; }
+.ms-ask-jump .ms-cardlink { display: inline-block; padding-block: 4px; }  /* a line of its own: a target at least 24px tall */
+@container (min-width: 861px) {
+  .ms-ask-side { position: sticky; top: 0; max-height: calc(100dvh - var(--app-shell-header-offset, 0px) - 160px); min-height: 240px; }
+  .ms-ask-side .ms-codeblock { flex: 1; min-height: 0; display: flex; }
+  .ms-ask-side .ms-codeblock pre { flex: 1; min-height: 0; max-height: none; }
+}
+@container (max-width: 860px) { .ms-ask-jump { display: block; } }
 .ms-graph-canvas { position: absolute; inset: 0; }
 /* entity page (issue 200): a top card in two columns (head and summary | graph), then facts and episodes about 70 / 30 */
 .ms-entity-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "head graph" "summary graph"; grid-template-rows: auto 1fr; gap: 8px 20px; align-items: start; }
