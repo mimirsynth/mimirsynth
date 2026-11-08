@@ -4,7 +4,7 @@ import { Link } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { ApiError, fmtDay, langHeaders } from "../api";
 import { translateServer } from "../i18n";
-import { Btn, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
+import { Btn, CardLink, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
 
 /** One numbered piece of evidence: what the answer cites as [F1], [E1] or [D1]. */
 type Superseded = { fact: string; invalid_at: string | null; replaced_by: { fact: string }[] }[];
@@ -60,6 +60,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   useEffect(() => { onBusy?.(busy); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (trigger !== answered.current) { answered.current = trigger; if (query.trim()) void go(); } }, [trigger]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { abort.current?.abort(); onBusy?.(false); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  const evAnchor = (ref: string) => `ev-${ref}`;
   const label = (ref: string) => {
     const n = ref.slice(1);
     return ref[0] === "F" ? t("hecho {{n}}", { n }) : ref[0] === "E" ? t("episodio {{n}}", { n }) : t("doc {{n}}", { n });
@@ -83,11 +84,10 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   const parts: ReactNode[] = [];
   let last = 0;
   for (const m of text.matchAll(CITE)) {
-    const ref = `${m[1]}${Number(m[2])}`, s = byRef.get(ref), to = s && sourceLink(s);
+    const ref = `${m[1]}${Number(m[2])}`, s = byRef.get(ref);
     parts.push(<Fragment key={`t${m.index}`}>{text.slice(last, m.index)}</Fragment>);
     parts.push(!s ? <Pill key={`c${m.index}`} size="xs" tone="danger" title={t("Esta cita no estaba entre las pruebas: no lleva a ningún sitio.")}>{t("cita sin origen")}</Pill>
-      : to ? <Link key={`c${m.index}`} to={to} className="ms-nolink" title={s.text}><Pill size="xs" tone="alt">{label(ref)}</Pill></Link>
-      : <Pill key={`c${m.index}`} size="xs" tone="alt" title={`${s.text}${s.origin ? ` · ${s.origin}` : ""}`}>{label(ref)}</Pill>);
+      : <CardLink key={`c${m.index}`} to={evAnchor(ref)} className="ms-cite" title={`${s.text}${s.origin ? ` · ${s.origin}` : ""}`}>{label(ref)}</CardLink>);
     last = (m.index ?? 0) + m[0].length;
   }
   parts.push(<Fragment key="end">{text.slice(last)}</Fragment>);
@@ -122,7 +122,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
       </Group></div>
       <Text size="xs" c="dimmed">{t("Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.")}</Text>
       <MutationError error={error} />
-      {sources && (text ? <Notice tone="info" title={t("Respuesta")} role="region" aria-label={t("Respuesta")}><Text size="sm" className="ms-prose">{parts}</Text></Notice>
+      {sources && (text ? <Notice tone="info" title={t("Respuesta")} role="region" aria-label={t("Respuesta")}><Text size="sm" className="ms-prose ms-answer-prose">{parts}</Text></Notice>
         : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
       {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
       {!!sources?.length && <>
@@ -133,7 +133,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
             {list.map((s) => {
               const to = sourceLink(s);
               return (
-                <ListCard key={s.ref} invalid={s.status === "invalidated"} notice={notice(s.superseded)} meta={when(s)}
+                <ListCard key={s.ref} anchor={evAnchor(s.ref)} invalid={s.status === "invalidated"} notice={notice(s.superseded)} meta={when(s)}
                   note={s.replaces ? <>{t("Sustituye a")} «{s.replaces}»</> : undefined}
                   tags={<>{to ? <Link to={to} className="ms-nolink"><Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill></Link>
                     : <Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill>}

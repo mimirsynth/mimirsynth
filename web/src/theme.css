@@ -348,6 +348,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-step-title { font-weight: 600; font-size: 14px; color: var(--ms-ink); }
 .ms-step-body { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--ms-muted); }
 .ms-prose { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+/* A written answer reads as prose: about 70 characters a line. Its citations are small lowercase chips inside the sentence that jump to
+   their evidence below, not uppercase pills that break the line. */
+.ms-answer-prose { max-width: 70ch; }
+.ms-cardlink.ms-cite { display: inline-block; padding: 0 5px; margin: 0 1px; border: 1px solid var(--ms-chip-line); border-radius: var(--ms-radius); background: var(--ms-chip-bg); font-size: 12px; line-height: 1.5; text-decoration: none; white-space: nowrap; vertical-align: baseline; }
+.ms-cardlink.ms-cite:hover { text-decoration: underline; }
 /* summary review (issue 201): the summary now and the proposed one side by side; one under the other on a phone */
 .ms-summary-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: start; }
 @media (max-width: 48em) { .ms-summary-pair { grid-template-columns: minmax(0, 1fr); } }
