@@ -11,6 +11,7 @@ import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
 import { EmptyState, EntityChip, Form, humanRelation, Toolbar } from "../ui";
+import { askParams, loadAsk, saveAsk } from "./askSession";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; source_type?: string | null; target_type?: string | null; score?: number; similarity?: number | null; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
@@ -34,12 +35,17 @@ const KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘+Enter" : "Ctrl+E
 const TOUCH = typeof window !== "undefined" && !!window.matchMedia?.("(hover: none) and (pointer: coarse)").matches;
 type Rating = "useful" | "irrelevant" | "incorrect";
 type Scope = "brain" | "all";
+/** What the recall left on screen, kept for this tab so Back restores it: see askSession. */
+type Kept = { q: string; facts: number; chunks: number; data: Res; marks: Record<string, { mark: Mark; item: Item }>; rated: Record<string, Rating>; marking: boolean };
 const SCOPE_KEY = "mimirsynth.askScope";  // the last scope chosen, per browser; a convenience, Ask works the same without it
 const storedScope = (): Scope => { try { return localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "brain"; } catch { return "brain"; } };
 
 export default function Ask({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
-  const [q, setQ] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "");  // «Open in Ask» from «All my brains»
+  // The question and its limits come from the address («Open in Ask» from «All my brains», or Back after leaving the page), and a search
+  // or an answer writes them there: so Back, a reload or a copied link come back to the same question.
+  const [start] = useState(askParams);
+  const [q, setQ] = useState(start.q);
   // Scope (issue 186): this brain, or the same search in every brain the person can read. A link may set it (`?alcance=`); the choice
   // is then remembered in the browser. With a single brain there is nothing to choose.
   const [params, setParams] = useSearchParams();
@@ -54,29 +60,45 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     const n = new URLSearchParams(params); n.delete("alcance"); setParams(n, { replace: true });
   };
   useEffect(() => { if (asked === "all" || asked === "brain") setScope(asked); }, [asked]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const [nf, setNf] = useState(8); const [nc, setNc] = useState(4);
-  const [marks, setMarks] = useState<Record<string, { mark: Mark; item: Item }>>({});
+  const [nf, setNf] = useState(start.facts); const [nc, setNc] = useState(start.chunks);
+  // What this tab last had on screen for this question, if anything: the recall, its ratings and the marks not yet saved.
+  const [kept, setKept] = useState<Kept | null>(() => {
+    const k = start.q ? loadAsk<Kept>(graph, "context") : null;
+    return k && k.q === start.q && k.facts === start.facts && k.chunks === start.chunks ? k : null;
+  });
+  const [marks, setMarks] = useState<Record<string, { mark: Mark; item: Item }>>(() => kept?.marks ?? {});
   const [save, setSave] = useState<RefQuery | null>(null);
-  const [marking, setMarking] = useState(false);
+  const [marking, setMarking] = useState(() => kept?.marking ?? false);
   const [answerTrigger, setAnswerTrigger] = useState(0); const [answering, setAnswering] = useState(false);
   const answered = useRef(0);  // the last press AskAnswer acted on: coming back to «Responder» must not write again by itself
   const resultsHead = useRef<HTMLDivElement>(null);  // «Debe salir / Sobra» show only while building a reference query
   const [tab, setTab] = useTabParam("preguntar");
   const [mode, setMode] = useTabParam("contexto", "modo");   // «Responder» writes an answer with citations (issue 126); «Contexto» shows the recall
   const status = useQuery({ queryKey: ["index", graph], queryFn: () => get<{ enabled: boolean; chunks: number; episodes: number }>("index/status", { graph }) });
-  const [rated, setRated] = useState<Record<string, Rating>>({});
+  const [rated, setRated] = useState<Record<string, Rating>>(() => kept?.rated ?? {});
   const [rateNote, setRateNote] = useState<Record<string, ReactNode>>({});  // what a rating did, said on its own card
   // «Incorrecto» on a fact proposes its correction: first it asks what is wrong, on the card, so the curator has something to decide on.
   const [wrong, setWrong] = useState<{ key: string; note: string } | null>(null);
   const focusWrong = (key: string) => document.getElementById(`ms-wrong-${key}`)?.focus();
-  const run = useMutation({ mutationFn: () => send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }), onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); setWrong(null); } });
+  const limits = useRef({ facts: nf, chunks: nc });  // those of the search on screen, kept with it
+  const run = useMutation({ mutationFn: () => { limits.current = { facts: nf, chunks: nc }; return send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }); }, onMutate: () => setKept(null),
+    onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); setWrong(null); } });
+  const r = run.data ?? kept?.data;  // the recall on screen: this search's, or the one kept for this question
+  /** The question and limits into the address, replacing the entry: the page stays one step of Back. Defaults are left out. */
+  const remember = () => setParams((p) => {
+    const n = new URLSearchParams(p);
+    n.set("q", q.trim());
+    if (nf !== 8) n.set("hechos", String(nf)); else n.delete("hechos");
+    if (nc !== 4) n.set("fragmentos", String(nc)); else n.delete("fragmentos");
+    return n;
+  }, { replace: true });
   // The open brain pays for the query's embedding in the AI consumption (issue 176).
   const searchAll = useMutation({ mutationFn: () => send<AllBrainsResult>("POST", "search", { query: q, facts: nf, chunks: nc, brain: graph }) });
   const search = () => { if (!q.trim()) return; if (scope === "all") searchAll.mutate(); else run.mutate(); };
   // The mode as the address has it now, not as this render saw it: the router re-renders in a transition, so Ctrl/⌘+Enter right after
   // choosing «Responder» can still run in a render that shows «Contexto».
   const viewNow = () => scope === "all" ? "contexto" : new URLSearchParams(window.location.search).get("modo") ?? "contexto";
-  const primary = () => { if (!q.trim()) return; if (viewNow() === "contexto") search(); else setAnswerTrigger((n) => n + 1); };
+  const primary = () => { if (!q.trim()) return; remember(); if (viewNow() === "contexto") search(); else setAnswerTrigger((n) => n + 1); };
   // The button that had the focus is disabled while it works, so the focus falls to the page: give it to the results instead.
   useEffect(() => {
     if (!run.data) return;
@@ -87,10 +109,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       head.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
     }
   }, [run.data]);
-  useEffect(() => { run.reset(); }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
+  const shownGraph = useRef(graph);
+  useEffect(() => { if (graph !== shownGraph.current) { shownGraph.current = graph; run.reset(); setKept(null); } }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
   // Valorar lo que devolvió el recall (útil, irrelevante, incorrecto): alimenta la pestaña Calidad.
   const rate = useMutation({
-    mutationFn: (a: { key: string; kind: string; id: string; rating: Rating; note?: string }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${run.data?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating, note: a.note ?? "" }),
+    mutationFn: (a: { key: string; kind: string; id: string; rating: Rating; note?: string }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${r?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating, note: a.note ?? "" }),
     onSuccess: (r, a) => {
       setRated((m) => ({ ...m, [a.key]: a.rating }));
       if (a.rating === "incorrect") { setWrong(null); focusWrong(a.key); }
@@ -113,7 +136,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   };
   // Rating feeds Quality and is saved at once; «Incorrecto» also proposes a correction, so it stands apart, in the danger colour. A word
   // before each group says which one it is: the marks for a reference query look the same and do something else.
-  const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => run.data?.recall_id && <Group gap={4} role="group" aria-label={t("Valorar")}>
+  const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => r?.recall_id && <Group gap={4} role="group" aria-label={t("Valorar")}>
     <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Valorar")}</Text>
     {(["useful", "irrelevant"] as Rating[]).map((v) => (
       <Btn key={v} size="row" kind="ghost" aria-pressed={rated[key] === v} icon={rated[key] === v ? "check" : undefined} onClick={() => rate.mutate({ key, kind, id, rating: v })}>
@@ -137,12 +160,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
           <Btn size="row" kind="ghost" onClick={() => { setWrong(null); focusWrong(key); }}>{t("Cancelar")}</Btn>
         </Group>
       </Form></div>}
-      {run.data?.recall_id && <Text size="xs" c="dimmed" role="status">{rateNote[key] ?? ""}</Text>}
+      {r?.recall_id && <Text size="xs" c="dimmed" role="status">{rateNote[key] ?? ""}</Text>}
     </Stack>);
   const view = scope === "all" ? "contexto" : mode;  // across brains there is no written answer: it needs one brain's recall
   const sync = useMutation({ mutationFn: () => send<any>("POST", `brains/${graph}/index/sync`), onSuccess: () => status.refetch() });
   const canSync = ["curator", "admin", "owner"].includes(role);
-  const r = run.data;
   const sim = (x: { similarity?: number | null; score?: number }) => { const v = simValue(x); return v === null ? null : `${t("sim")} ${v}`; };
   // Every card of the result has an anchor, so what replaces what reads as a link between the two cards (issue: critique of Ask).
   const factAnchor = (origin: string | undefined, uuid: string) => `hecho-${origin ?? ""}-${uuid}`;
@@ -182,7 +204,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const isMarked = (key: string) => marking && !!marks[key];
   // a similarity within 0,05 of the threshold: what a small change of threshold would drop
   const edge = (x: { similarity?: number | null; score?: number }) => {
-    const v = x.similarity ?? x.score, min = run.data?.min_similarity;
+    const v = x.similarity ?? x.score, min = r?.min_similarity;
     return typeof v === "number" && !!min && v < min + 0.05 ? ` · ${t("en el límite del umbral")}` : "";
   };
   const factCard = (f: Fact, i: number, list: Fact[]) => (
@@ -215,6 +237,20 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   </> : undefined);
   const actionsLabel = (what: string) => t("Acciones sobre «{{what}}»", { what: what.length > 60 ? `${what.slice(0, 60)}…` : what });
   const marked = Object.values(marks);
+  // Kept for this tab as it changes, so leaving for an entity and coming back with Back finds it as it was (the notes under the ratings
+  // are not kept: the pressed button says the rating).
+  useEffect(() => {
+    if (run.data) saveAsk(graph, "context", { q: run.data.query, ...limits.current, data: run.data, marks, rated, marking } satisfies Kept);
+    else if (kept) saveAsk(graph, "context", { ...kept, marks, rated, marking } satisfies Kept);
+  }, [run.data, kept, marks, rated, marking]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Marks not saved as a reference query are kept in this tab; closing it or leaving the app would lose them, so the browser asks first.
+  const unsaved = marking && marked.length > 0;
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
   const toRef = (): RefQuery => ({ query: r?.query ?? q, expect: marked.filter((m) => m.mark === "expect").map((m) => m.item), avoid: marked.filter((m) => m.mark === "avoid").map((m) => m.item),
     docs: null, note: "" });
   const busyNow = view === "contexto" ? run.isPending || searchAll.isPending : answering;
