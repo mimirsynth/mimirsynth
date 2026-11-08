@@ -7,7 +7,7 @@ import { Btn, Check, EmptyState, MutationError, Notice, Panel, Pill } from "../u
 import { T } from "../i18n";
 
 type Fact = { uuid: string; fact: string; target: string; valid_at: string | null };
-type Finding = { pass: string; subject: string; relation: string; keep: Fact | null; replace: Fact[]; why?: string };
+type Finding = { pass: string; rule?: string; subject: string; relation: string; keep: Fact | null; replace: Fact[]; why?: string };
 type Precision = { approved: number; rejected: number; pending: number; precision: number | null };
 type Settings = { enabled: boolean; passes: Record<string, boolean>; batch: number; precision: Record<string, Precision> };
 type Run = { id: number; day: string; status: string; reason: string; error: string; finished_at: string | null; findings: Record<string, number>;
@@ -15,15 +15,24 @@ type Run = { id: number; day: string; status: string; reason: string; error: str
 
 const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil"), noise: T("Ruido: hechos que no dicen nada útil"), archive: T("Archivar lo que nunca se recupera") };
 
+// Why a finding that keeps nothing would leave: the noise pass says which of its rules it fell under (issue 325).
+const NOISE_RULE: Record<string, string> = { placeholder: T("Un extremo es un comodín («esto», «algo»), no una cosa del mundo."),
+  meta: T("Habla de la propia memoria, no del mundo que describe."), generic: T("Relación genérica cuyo texto no dice nada más que sus dos entidades."),
+  change: T("Cuenta un cambio como suceso y otro hecho vigente ya dice el resultado.") };
+const RULE_NAME: Record<string, string> = { placeholder: T("Comodines"), meta: T("Sobre la propia memoria"), generic: T("Relaciones genéricas"),
+  change: T("Cambios contados como suceso") };
+const ALONE: Record<string, string> = { obsolescence: T("Pasado de su vida útil y sin confirmar."), archive: T("Sin recuperar en mucho tiempo y sin confirmar.") };
+
 const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha"), stopped: T("detenida") };
 
 /** One finding: the fact the curator keeps and the ones it would replace, the evidence a person looks at before confirming. */
 function FindingRow({ f }: { f: Finding }) {
   const { t } = useTranslation();
+  const why = f.rule ? NOISE_RULE[f.rule] : ALONE[f.pass];
   return (<Panel withBorder p="sm"><Stack gap={4}>
     <Text size="sm" fw={600}>{f.subject} · <span className="ms-data">{f.relation}</span></Text>
     {f.keep ? <Text size="xs">{t("Se queda:")} «{f.keep.fact}» {f.keep.valid_at && <span className="ms-data">({fmtDay(f.keep.valid_at)})</span>}</Text>
-      : <Text size="xs" c="dimmed">{t("Pasado de su vida útil y sin confirmar.")}</Text>}
+      : <Text size="xs" c="dimmed">{why ? t(why) : f.why}</Text>}
     {f.replace.map((r) => <Text key={r.uuid} size="xs" c="dimmed">{t("Se invalidaría:")} «{r.fact}» {r.valid_at && <span className="ms-data">({fmtDay(r.valid_at)})</span>}</Text>)}
   </Stack></Panel>);
 }
@@ -57,7 +66,7 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
   const s = useQuery({ queryKey: ["curator", graph, "settings"], queryFn: () => get<Settings>(`brains/${graph}/curator/settings`) });
   const runs = useQuery({ queryKey: ["curator", graph, "runs"], queryFn: () => get<{ items: Run[] }>(`brains/${graph}/curator/runs`),
     refetchInterval: (q) => (q.state.data?.items.some((r) => r.status === "queued" || r.status === "running") ? 4000 : false) });
-  const preview = useMutation({ mutationFn: (pass: string) => send<{ count: number; findings: Finding[]; batch: number }>("POST", `brains/${graph}/curator/preview`, undefined, { pass }) });
+  const preview = useMutation({ mutationFn: (pass: string) => send<{ count: number; findings: Finding[]; batch: number; by_rule?: Record<string, number> }>("POST", `brains/${graph}/curator/preview`, undefined, { pass }) });
   const save = useMutation({ mutationFn: (c: { enabled?: boolean; passes?: Record<string, boolean> }) => send("PUT", `brains/${graph}/curator/settings`,
     { enabled: c.enabled ?? s.data?.enabled, passes: { ...s.data?.passes, ...c.passes }, batch: s.data?.batch }), onSuccess: refresh });
   const run = useMutation({ mutationFn: () => send("POST", `brains/${graph}/curator/run`), onSettled: refresh });
@@ -85,7 +94,10 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
       <MutationError error={save.error ?? run.error ?? decide.error ?? preview.error} />
       {preview.data && (preview.data.count ? <Stack gap="xs">
         <Text size="sm">{t("Propondría {{n}} cambios (sin crear nada todavía):", { n: preview.data.count })}</Text>
-        {preview.data.findings.map((f) => <FindingRow key={(f.keep ?? f.replace[0]).uuid} f={f} />)}
+        {Object.keys(preview.data.by_rule ?? {}).length ? Object.entries(preview.data.by_rule ?? {}).map(([rule, n]) => <Stack key={rule} gap="xs">
+          <Text size="sm" fw={600}>{RULE_NAME[rule] ? t(RULE_NAME[rule]) : rule} <span className="ms-data">· {t("{{n}} hallazgos", { n })}</span></Text>
+          {preview.data!.findings.filter((f) => f.rule === rule).map((f) => <FindingRow key={f.replace[0].uuid} f={f} />)}
+        </Stack>) : preview.data.findings.map((f) => <FindingRow key={(f.keep ?? f.replace[0]).uuid} f={f} />)}
       </Stack> : <EmptyState>{t("Ahora no propondría nada.")}</EmptyState>)}
       {waiting.map((r) => <Panel key={r.id} withBorder p="sm"><Stack gap="xs">
         <Group gap="xs"><Pill tone="warn">{t("Espera tu confirmación")}</Pill><Text size="sm">{t("La ejecución del {{day}} propondría {{n}} cambios. Mira la muestra: si es correcta, se crean las propuestas (cada una se decide aparte).", { day: fmtDay(r.day), n: Object.values(r.findings).reduce((a, b) => a + b, 0) })}</Text></Group>

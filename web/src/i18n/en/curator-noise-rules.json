@@ -1,0 +1,12 @@
+{
+ "Cambios contados como suceso": "Changes told as events",
+ "Comodines": "Placeholders",
+ "Cuenta un cambio como suceso y otro hecho vigente ya dice el resultado.": "Tells a change as an event, and another current fact already states the result.",
+ "Habla de la propia memoria, no del mundo que describe.": "It is about the memory itself, not the world it describes.",
+ "Relaciones genéricas": "Generic relations",
+ "Relación genérica cuyo texto no dice nada más que sus dos entidades.": "A generic relation whose text says nothing beyond its two entities.",
+ "Sin recuperar en mucho tiempo y sin confirmar.": "Not recalled in a long time and never confirmed.",
+ "Sobre la propia memoria": "About the memory itself",
+ "Un extremo es un comodín («esto», «algo»), no una cosa del mundo.": "One end is a placeholder («this», «something»), not a thing of the world.",
+ "{{n}} hallazgos": "{{n}} findings"
+}
