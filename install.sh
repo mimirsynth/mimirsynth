@@ -131,11 +131,11 @@ env_quote() {  # a value as Docker Compose reads it literally from .env
     *) printf "'%s'" "$1" ;;
   esac
 }
-setenv() {  # KEY VALUE: replace the KEY= line (or its commented example) in .env, or append it
-  K="$1" V="$2" awk 'BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"]; done = 0 }
+setenv() {  # KEY VALUE: replace the KEY= line (or its commented example) in .env, or append it; .env stays readable only by you
+  (umask 077; K="$1" V="$2" awk 'BEGIN { k = ENVIRON["K"]; v = ENVIRON["V"]; done = 0 }
     !done && ($0 ~ "^" k "=" || $0 ~ "^# ?" k "=") { print k "=" v; done = 1; next }
     { print }
-    END { if (!done) print k "=" v }' .env > .env.tmp && mv .env.tmp .env
+    END { if (!done) print k "=" v }' .env > .env.tmp) && mv .env.tmp .env && chmod 600 .env
 }
 json_str() {  # a JSON string literal
   local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\n'/\\n}"; s="${s//$'\r'/\\r}"; s="${s//$'\t'/\\t}"; printf '"%s"' "$s"
