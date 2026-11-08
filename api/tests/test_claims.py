@@ -22,11 +22,11 @@ def graph(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     g.query("CREATE (:Entity {uuid:'nc', name:'Nextcloud', aliases:['NC']}), (:Entity {uuid:'er', name:'Eridani'}), "
             "(:Entity {uuid:'no', name:'Notus', aliases:['notus.lan']}), (:Entity {uuid:'pg', name:'PostgreSQL'}), (:Entity {uuid:'ops', name:'Ops'})")
     for u, rel, target, fact, inv in (("f1", "RUNS_ON", "er", "Nextcloud corre en Eridani", None),
@@ -36,8 +36,8 @@ def graph(monkeypatch):
         g.query("MATCH (a:Entity {uuid:'nc'}), (b:Entity {uuid:$b}) CREATE (a)-[:RELATES_TO {uuid:$u, name:$r, fact:$f, valid_at:'2024-01-01T00:00:00Z', "
                 "created_at:'2024-01-01T00:00:00Z', invalid_at:$i, expired_at:$i}]->(b)", {"u": u, "r": rel, "f": fact, "b": target, "i": inv})
     yield g
-    g.delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 def _claim(subject, relation, value, **k):

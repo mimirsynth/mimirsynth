@@ -16,13 +16,13 @@ def falkor(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    yield c.select_graph(GRAPH)
-    c.select_graph(GRAPH).delete()
-    dbm.client.cache_clear()
+        c.delete_graph(GRAPH)
+    yield c.graph(GRAPH)
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 def _link_episode(pid: int, ep: str) -> None:

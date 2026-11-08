@@ -43,19 +43,19 @@ def graph(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     old, new = (datetime.now(timezone.utc) - timedelta(days=400)).isoformat(), (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
     g.query("CREATE (:Entity {uuid:'vw', name:'Vaultwarden'})")
     for u, t, when in (("used", "altair", old), ("unused", "rack 7", old), ("confirmed", "Ops", old), ("young", "nas01", new)):
         g.query("MATCH (a:Entity {uuid:'vw'}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'X', fact:$f, created_at:$w, valid_at:$w}]->(:Entity {uuid:$t, name:$t})",
                 {"u": u, "t": t, "f": f"Vaultwarden X {t}", "w": when})
     yield g
-    g.delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 @needs_falkor

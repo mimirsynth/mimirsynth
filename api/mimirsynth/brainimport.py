@@ -41,10 +41,11 @@ from sqlalchemy import DateTime, select, text
 from sqlalchemy.orm import Session
 
 from . import appsettings, docindex, docstore, index, jobs, packcrypt, secretguard
-from .brainexport import FORMAT_VERSION, _falkor_version
+from .brainexport import FORMAT_VERSION
 from .brains import GRAPH, SLUG, _count
 from .config import settings
-from .db import client, rows
+from .db import rows, vector
+from .graphdb import backend
 from .deps import audit, require_admin
 from .models import (
     Base,
@@ -192,7 +193,7 @@ def upload_complete(uid: str, user: User = Depends(require_admin)):
 
 def _summary(man: dict) -> dict:
     from .embed import resolve_embedding
-    emb, here = resolve_embedding(), _falkor_version().get("graph_module")
+    emb, here = resolve_embedding(), backend().version().get("graph_module")
     theirs = man.get("embedding") or {}
     g = man.get("graph") or {}
     return {"slug": (man.get("brain") or {}).get("slug"), "created_at": man.get("created_at"), "mimirsynth": man.get("mimirsynth"),
@@ -469,7 +470,7 @@ def _target_error(db: Session, slug: str) -> str | None:
         return "slug inválido (minúsculas, números y guiones, 2-41 caracteres)"
     if db.scalar(select(Brain.id).where(Brain.slug == slug)):
         return "ya existe un brain con ese slug"
-    if db.scalar(select(Brain.id).where(Brain.graph_name == slug)) or slug in client().list_graphs():
+    if db.scalar(select(Brain.id).where(Brain.graph_name == slug)) or backend().exists(slug):
         return f"ya existe un grafo llamado «{slug}»"
     return None
 
@@ -480,8 +481,8 @@ def _mark(work: Path, made: dict) -> None:
 
 
 def _drop_graph(name: str | None) -> None:
-    if name and name in client().list_graphs():
-        client().select_graph(name).delete()
+    if name and backend().exists(name):
+        backend().delete_graph(name)
 
 
 def undo(made: dict) -> None:
@@ -580,10 +581,10 @@ def _curation(db: Session, stage: Path, bid: int, full: bool) -> dict:
 def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, made: dict, work: Path, use_dump: bool, shape: dict) -> dict:
     """The JSON copy, which was validated; the dump only on request, when it can be restored here and holds what the JSON copy
     holds. Returns how the graph went in and why."""
-    g, c = man["graph"], client()
+    g, b = man["graph"], backend()
     orig = g.get("name") if isinstance(g.get("name"), str) else ""
     dump = stage / "graph" / "graph.dump"
-    here = _falkor_version().get("graph_module")
+    here = b.version().get("graph_module")
     reason, mismatch = None, None
     if not use_dump:
         reason = "not_requested"
@@ -591,20 +592,20 @@ def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, mad
         reason = g.get("dump_omitted") or "no_dump"
     elif not here or here != (man.get("falkordb") or {}).get("graph_module"):
         reason = "falkordb_version"
-    elif not GRAPH.match(orig) or (orig != slug and orig in c.list_graphs()):
+    elif not GRAPH.match(orig) or (orig != slug and b.exists(orig)):
         reason = "name_taken"  # the payload carries its name: it is restored under it and then copied
     else:
         made["restored"] = orig if orig != slug else None
         made["graph"] = slug
         _mark(work, made)
         try:
-            c.connection.restore(orig, 0, dump.read_bytes())
+            b.restore(orig, dump.read_bytes())
             if orig != slug:
-                c.select_graph(orig).copy(slug)
+                b.copy_graph(orig, slug)
                 _drop_graph(orig)
                 made["restored"] = None
                 _mark(work, made)
-            dst = c.select_graph(slug)
+            dst = b.graph(slug)
             dst.query("MATCH (n) WHERE n.group_id IS NOT NULL SET n.group_id = $g", {"g": slug})  # the payload's own is not trusted
             dst.query("MATCH ()-[r]->() WHERE r.group_id IS NOT NULL SET r.group_id = $g", {"g": slug})
             mismatch = _differences(shape, _shape(dst))
@@ -626,18 +627,18 @@ def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, mad
 
 
 def _graph_json(job: jobs.JobCtx, stage: Path, slug: str, reuse: bool) -> None:
-    g, ids = client().select_graph(slug), {}
+    g, ids = backend().graph(slug), {}
 
     def node_batch(key, batch):
         labels, vecs = key
-        sets = "".join(f", n.{v} = vecf32(r.v.{v})" for v in vecs)
+        sets = "".join(f", n.{v} = {vector(f'r.v.{v}')}" for v in vecs)
         q = f"UNWIND $rows AS r CREATE (n{''.join(':' + x for x in labels)}) SET n += r.p{sets} RETURN r.i, id(n)"
         for i, nid in g.query(q, {"rows": batch}).result_set:
             ids[i] = nid
 
     def edge_batch(key, batch):
         typ, vecs = key
-        sets = "".join(f", e.{v} = vecf32(r.v.{v})" for v in vecs)
+        sets = "".join(f", e.{v} = {vector(f'r.v.{v}')}" for v in vecs)
         q = (f"UNWIND $rows AS r MATCH (a) WHERE id(a) = r.s MATCH (b) WHERE id(b) = r.t "
              f"CREATE (a)-[e:{typ}]->(b) SET e += r.p{sets} RETURN count(e)")
         if g.query(q, {"rows": batch}).result_set[0][0] != len(batch):
@@ -670,10 +671,8 @@ def _graph_json(job: jobs.JobCtx, stage: Path, slug: str, reuse: bool) -> None:
 
 def _indices(name: str) -> None:
     """Graphiti's range and full-text indices, which the dump carries but the JSON copy does not."""
-    from graphiti_core.driver.falkordb_driver import FalkorDriver
-
     async def go():
-        d = FalkorDriver(host=settings.falkor_host, port=settings.falkor_port, database=name)
+        d = backend().graphiti_driver(name)
         try:
             await d.build_indices_and_constraints()
         finally:
@@ -685,7 +684,7 @@ def _embed_graph(job: jobs.JobCtx, name: str, everything: bool) -> int:
     """Graphiti's vectors with the embedding model in use: all of them, or only the ones the package did not bring."""
     from .embed import gate, get_embedder, resolve_embedding
     from .reembed import ITEMS, _embed, _match
-    g, emb, dim, n = client().select_graph(name), get_embedder(), resolve_embedding()["dim"], 0
+    g, emb, dim, n = backend().graph(name), get_embedder(), resolve_embedding()["dim"], 0
     with gate.writing():
         for kind, label, txt, vec in ITEMS:
             cond = f"x.uuid IS NOT NULL AND x.{txt} IS NOT NULL AND x.{txt} <> ''" + ("" if everything else f" AND x.{vec} IS NULL")
@@ -694,7 +693,7 @@ def _embed_graph(job: jobs.JobCtx, name: str, everything: bool) -> int:
                 job.check()
                 found = rows(g.query(f"UNWIND $u AS u MATCH {_match(kind, label, True)} RETURN x.uuid AS u, x.{txt} AS t", {"u": todo[i:i + EMBED_BATCH]}))
                 vecs = _embed(emb, [str(b["t"]).replace("\n", " ") for b in found], dim, job.note)
-                g.query(f"UNWIND $rows AS r WITH r, r.u AS u MATCH {_match(kind, label, True)} SET x.{vec} = vecf32(r.v)",
+                g.query(f"UNWIND $rows AS r WITH r, r.u AS u MATCH {_match(kind, label, True)} SET x.{vec} = {vector('r.v')}",
                         {"rows": [{"u": b["u"], "v": v} for b, v in zip(found, vecs)]})
                 n += len(found)
                 job.progress(4, None, f"vectores del grafo: {n}")
@@ -884,7 +883,7 @@ def _import(job: jobs.JobCtx, work: Path, p: dict, password: str | None) -> dict
             from .usage import scope
             with scope(bid, "import"):
                 computed = _embed_graph(job, slug, everything=graph["method"] == "dump" and not reuse) if man["graph"]["nodes"] else 0
-            graph.update(zip(("nodes", "edges"), _count(client().select_graph(slug)) if man["graph"]["nodes"] else (0, 0)))
+            graph.update(zip(("nodes", "edges"), _count(backend().graph(slug)) if man["graph"]["nodes"] else (0, 0)))
             if (graph["nodes"], graph["edges"]) != (man["graph"]["nodes"], man["graph"]["edges"]):
                 raise RuntimeError(f"el grafo importado no tiene los elementos del paquete ({graph['nodes']} nodos y {graph['edges']} aristas)")
             counts["proposals"] = _proposals(db, stage, bid, user_id)

@@ -19,22 +19,22 @@ def graphs(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     for name in (OWN, LENT):
         if name in c.list_graphs():
-            c.select_graph(name).delete()
-    g = c.select_graph(OWN)
+            c.delete_graph(name)
+    g = c.graph(OWN)
     g.query("CREATE (a:Entity {uuid:'nc', name:'Nextcloud'}), (b:Entity {uuid:'er', name:'Eridani'}), (n:Entity {uuid:'no', name:'Notus'})")
     for u, fact, b, inv in [("f1", "Nextcloud corre en Eridani", "er", None), ("f2", "Nextcloud corría en Notus", "no", "2025-01-01T00:00:00Z"),
                             ("f3", "Nextcloud usa PHP 8.1", "er", None), ("f4", "Nextcloud tiene 40 usuarios", "no", None)]:
         g.query("MATCH (a:Entity {uuid:'nc'}), (b:Entity {uuid:$b}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'RUNS_ON', fact:$f, valid_at:'2024-01-01T00:00:00Z', "
                 "created_at:'2024-01-01T00:00:00Z', invalid_at:$i, expired_at:$i}]->(b)", {"u": u, "f": fact, "b": b, "i": inv})
-    c.select_graph(LENT).query("CREATE (:Entity {uuid:'x', name:'X'})-[:RELATES_TO {uuid:'g1', name:'R', fact:'X es prestado', created_at:'2024-01-01T00:00:00Z'}]->(:Entity {uuid:'y', name:'Y'})")
+    c.graph(LENT).query("CREATE (:Entity {uuid:'x', name:'X'})-[:RELATES_TO {uuid:'g1', name:'R', fact:'X es prestado', created_at:'2024-01-01T00:00:00Z'}]->(:Entity {uuid:'y', name:'Y'})")
     yield g
     for name in (OWN, LENT):
-        c.select_graph(name).delete()
-    dbm.client.cache_clear()
+        c.delete_graph(name)
+    dbm.backend.cache_clear()
 
 
 def _state(g, uuid):

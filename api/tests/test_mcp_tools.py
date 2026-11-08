@@ -38,12 +38,12 @@ def graphs(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     for name in (OWN, LENT):
         if name in c.list_graphs():
-            c.select_graph(name).delete()
-    g, lent = c.select_graph(OWN), c.select_graph(LENT)
+            c.delete_graph(name)
+    g, lent = c.graph(OWN), c.graph(LENT)
     for uuid, name, label, extra in [(ERIDANI, "Eridani", "Host", ", aliases:['Eridani-Old']"), (NOTUS, "Notus", "Host", ""),
                                      (NEXTCLOUD, "Nextcloud", "Service", ""), (BACKUP1, "Backup", "Service", ""), (BACKUP2, "backup ", "Job", "")]:
         g.query(f"CREATE (:Entity:{label} {{uuid:$u, name:$n, summary:'resumen de ' + $n{extra}}})", {"u": uuid, "n": name})
@@ -57,8 +57,8 @@ def graphs(monkeypatch):
     _rel(lent, LENT_NC, "pg", "g1", "Nextcloud usa Postgres", "2026-03-01T00:00:00Z")
     yield g
     for name in (OWN, LENT):
-        c.select_graph(name).delete()
-    dbm.client.cache_clear()
+        c.delete_graph(name)
+    dbm.backend.cache_clear()
 
 
 @pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")

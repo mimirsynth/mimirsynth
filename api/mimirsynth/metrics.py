@@ -140,8 +140,8 @@ def ai_time(kind: str, model: str, seconds: float) -> None:
 
 
 def _sizes(graph_name: str) -> dict:
-    from .db import client
-    g = client().select_graph(graph_name)
+    from .db import graph
+    g = graph(graph_name)
     one = lambda q: g.query(q).result_set[0][0]  # noqa: E731
     return {"entities": one("MATCH (n:Entity) RETURN count(n)"),
             "episodes": one("MATCH (e:Episodic) RETURN count(e)"),

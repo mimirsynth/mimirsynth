@@ -108,6 +108,6 @@ The environment only carries what is needed to start and connect (see `.env.exam
 
 ## Dependencies and licenses
 
-MimirSynth is published under Apache-2.0. Graphiti is Apache-2.0. **FalkorDB is *source-available* (SSPL)**, not a permissive open-source license: review its terms before offering MimirSynth as a service. Graph access goes through our own layer so the engine can be replaced in the future.
+MimirSynth is published under Apache-2.0. Graphiti is Apache-2.0. **FalkorDB is *source-available* (SSPL)**, not a permissive open-source license: review its terms before offering MimirSynth as a service. Graph access goes through our own layer (`api/mimirsynth/graphdb`: one interface, with FalkorDB as its implementation) so the engine can be replaced: the modules never talk to a driver, and the Cypher that differs between databases (vectors, similarity) comes from the backend.
 
 The web fonts (Oxanium, Instrument Sans and JetBrains Mono) are under the SIL Open Font License 1.1. They ship inside the image, served by the instance itself, so a browser never calls a third-party host for them.

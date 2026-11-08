@@ -19,15 +19,15 @@ def graphs(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     g.query("CREATE (:Entity:Event {uuid:'vps', name:'vps01'}), (:Entity {uuid:'ups', name:'UPS'}), (:Entity:Topic {uuid:'nas', name:'nas01'})")
     yield g
-    c.select_graph(GRAPH).delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 def _labels(g, uuid: str) -> list[str]:

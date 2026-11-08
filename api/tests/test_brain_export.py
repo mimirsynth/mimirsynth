@@ -48,22 +48,22 @@ def falkor(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     for g in (GRAPH, f"_snap_{GRAPH}_20260101000000"):
         if g in c.list_graphs():
-            c.select_graph(g).delete()
-    g = c.select_graph(GRAPH)
+            c.delete_graph(g)
+    g = c.graph(GRAPH)
     g.query("CREATE (:Episodic {uuid:'e1', name:'ep', content:'Polaris hosts the wiki', group_id:$g})", {"g": GRAPH})
     g.query("CREATE (a:Entity {uuid:'a', name:'wiki', group_id:$g, name_embedding: vecf32([0.1, 0.2])})"
             "-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'wiki runs on Polaris', group_id:$g, fact_embedding: vecf32([0.3, 0.4])}]->"
             "(:Entity:Host {uuid:'b', name:'Polaris', group_id:$g})", {"g": GRAPH})
-    c.select_graph(f"_snap_{GRAPH}_20260101000000").query("CREATE (:Entity {uuid:'old'})")
+    c.graph(f"_snap_{GRAPH}_20260101000000").query("CREATE (:Entity {uuid:'old'})")
     yield g
     for x in (GRAPH, f"_snap_{GRAPH}_20260101000000"):
         if x in c.list_graphs():
-            c.select_graph(x).delete()
-    dbm.client.cache_clear()
+            c.delete_graph(x)
+    dbm.backend.cache_clear()
 
 
 def _seed(slug: str) -> dict:
@@ -165,10 +165,10 @@ def test_export_contents_secrets_and_download_once(client, falkor):  # noqa: F81
     assert acts == ["brain.export", "brain.export.download"]
     # the dump restores the same graph, under its own name (the payload carries it)
     dump = files["graph/graph.dump"]
-    falkor.delete()
-    from mimirsynth.db import client as fc
-    fc().connection.restore(GRAPH, 0, dump)
-    assert fc().select_graph(GRAPH).query("MATCH (n) RETURN count(n)").result_set[0][0] == 3
+    from mimirsynth.graphdb import backend as fc
+    fc().delete_graph(GRAPH)
+    fc().restore(GRAPH, dump)
+    assert fc().graph(GRAPH).query("MATCH (n) RETURN count(n)").result_set[0][0] == 3
 
 
 @pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")

@@ -1,22 +1,26 @@
 from datetime import datetime, timezone
-from functools import lru_cache
-
-from falkordb import FalkorDB
 
 from .config import settings
-
-
-@lru_cache
-def client() -> FalkorDB:
-    return FalkorDB(host=settings.falkor_host, port=settings.falkor_port)
+from .graphdb import backend
 
 
 def graph(name: str | None = None):
-    return client().select_graph(name or settings.default_graph)
+    return backend().graph(name or settings.default_graph)
 
 
 def list_graphs() -> list[str]:
-    return [g for g in client().list_graphs() if not g.startswith("_")]
+    """The brains' graphs: the hidden ones («_» first: snapshots) left out."""
+    return [g for g in backend().list_graphs() if not g.startswith("_")]
+
+
+def vector(expr: str) -> str:
+    """Cypher that stores the list `expr` as a vector property, in the active backend's dialect."""
+    return backend().vector(expr)
+
+
+def cosine(a: str, b: str) -> str:
+    """Cypher for the cosine similarity of two vectors in [0, 1], in the active backend's dialect."""
+    return backend().cosine(a, b)
 
 
 def parse_ts(value) -> datetime | None:
@@ -43,6 +47,6 @@ def fact_status(valid_at, invalid_at, expired_at, at: datetime | None = None) ->
 
 
 def rows(result) -> list[dict]:
-    """result_set de falkordb -> lista de dicts usando la cabecera."""
+    """The result of a query -> a list of dicts, keyed by the header."""
     names = [h[1] if isinstance(h, (list, tuple)) else h for h in result.header]
     return [dict(zip(names, r)) for r in result.result_set]

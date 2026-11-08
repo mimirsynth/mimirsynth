@@ -27,13 +27,13 @@ def graph(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     for name in (GRAPH, SNAP):
         if name in c.list_graphs():
-            c.select_graph(name).delete()
-    g = c.select_graph(GRAPH)
-    for target in (g, c.select_graph(SNAP)):   # the snapshot an entity merge kept holds the person too
+            c.delete_graph(name)
+    g = c.graph(GRAPH)
+    for target in (g, c.graph(SNAP)):   # the snapshot an entity merge kept holds the person too
         target.query("CREATE (p:Entity {uuid:'p', name:'José Pérez', aliases:['Pepe Pérez']}), (a:Entity {uuid:'acme', name:'Acme', "
                       "summary:'Acme, where José Pérez works'}), (x:Entity {uuid:'x', name:'Madrid'}), (d:Entity {uuid:'d', name:'jperez@example.com'}), "
                       "(p)-[:RELATES_TO {uuid:'f1', name:'WORKS_AT', fact:'José Pérez works at Acme'}]->(a), "
@@ -43,8 +43,8 @@ def graph(monkeypatch):
                       "(:Episodic {uuid:'e2', name:'n2', content:'Pepe Perez called'}), (:Episodic {uuid:'e3', name:'n3', content:'nothing here'})")
     yield g
     for name in (GRAPH, SNAP):
-        c.select_graph(name).delete()
-    dbm.client.cache_clear()
+        c.delete_graph(name)
+    dbm.backend.cache_clear()
 
 
 @needs_falkor
@@ -94,7 +94,7 @@ def test_deleting_removes_every_layer_rewrites_episodes_and_keeps_what_is_to_rev
     monkeypatch.setattr(jobs, "INLINE", True)
     monkeypatch.setattr(llm, "resolve", lambda db: {"base_url": "http://llm", "model": "m"})
     monkeypatch.setattr(summary_review, "ask", lambda eng, msgs: "EMPTY" if msgs[1]["content"] == "a note" else "Someone called")
-    for g in (graph, dbm.client().select_graph(SNAP)):   # a duplicate merged into the person: the undo keeps it as Merged
+    for g in (graph, dbm.backend().graph(SNAP)):   # a duplicate merged into the person: the undo keeps it as Merged
         g.query("CREATE (:Merged {uuid:'m1', name:'Pepe', merged_into:'p'})")
     assert client.post("/api/brains", json={"slug": "fg2", "name": "FG2", "graph_name": GRAPH}).status_code == 201
     with _factory()() as db:
@@ -111,7 +111,7 @@ def test_deleting_removes_every_layer_rewrites_episodes_and_keeps_what_is_to_rev
     r = client.post("/api/brains/fg2/forget/run", json={**body, "confirm": "José Pérez"})
     assert r.status_code == 202, r.text
     left = lambda g, q: g.query(q).result_set  # noqa: E731
-    for g in (graph, dbm.client().select_graph(SNAP)):
+    for g in (graph, dbm.backend().graph(SNAP)):
         assert left(g, "MATCH (n) WHERE n.uuid IN ['p', 'm1', 'e1', 'e2'] RETURN n") == []                # the entity, its duplicate, its episodes
         assert left(g, "MATCH ()-[r {uuid:'f1'}]->() RETURN r") == []
         assert left(g, "MATCH ()-[r {uuid:'f2'}]->() RETURN r") and left(g, "MATCH (n {uuid:'e3'}) RETURN n")   # to review / unrelated: kept

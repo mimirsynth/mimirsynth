@@ -43,7 +43,7 @@ def close(a, b) -> bool:
 
 @pytest.fixture()
 def env(client, monkeypatch):  # noqa: F811
-    import falkordb
+    from mimirsynth import graphdb
     from sqlalchemy import delete
 
     from mimirsynth import db as fdb, embeddings_admin as ea, reembed
@@ -51,7 +51,7 @@ def env(client, monkeypatch):  # noqa: F811
     from mimirsynth.models import EmbeddingEngine, Job
     from mimirsynth.store import _factory
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    fdb.client.cache_clear()
+    fdb.backend.cache_clear()
     monkeypatch.setattr(settings, "embedding_dim", 4)
     monkeypatch.setattr(settings, "reindex_batch", 2)  # varios lotes por tipo
     monkeypatch.setattr(ea, "_probe", lambda url, model, key: {"viejo": 4, "nuevo": 8}[model])
@@ -64,12 +64,13 @@ def env(client, monkeypatch):  # noqa: F811
         db.execute(delete(EmbeddingEngine)); db.execute(delete(Job).where(Job.kind == reembed.KIND))
         db.execute(delete(AppSetting).where(AppSetting.key == reembed.MARKER)); db.execute(delete(Notification).where(Notification.event == "reindex.orphan"))
         db.commit()
-    c = falkordb.FalkorDB(host=FALKOR, port=6379)
+    graphdb.backend.cache_clear()
+    c = graphdb.backend()
     try:
-        c.select_graph(GRAPH).delete()
+        c.delete_graph(GRAPH)
     except Exception:  # noqa: BLE001
         pass
-    g = c.select_graph(GRAPH)
+    g = c.graph(GRAPH)
     for i, n in enumerate(ENTITIES):
         g.query("CREATE (:Entity {uuid:$u, name:$n, name_embedding: vecf32($v)})", {"u": f"e{i}", "n": n, "v": vec("viejo", 4, n)})
     g.query("CREATE (:Community {uuid:'c1', name:'Servidores', name_embedding: vecf32($v)})", {"v": vec("viejo", 4, "Servidores")})
@@ -82,7 +83,7 @@ def env(client, monkeypatch):  # noqa: F811
     assert old["is_default"] and not new["is_default"]
     yield {"g": g, "old": old, "new": new, "fakes": fakes}
     client.post("/api/brains/reemb/delete", json={"confirm": "reemb"})
-    g.delete()
+    c.delete_graph(GRAPH)
 
 
 def one(g, q: str, p: dict | None = None):

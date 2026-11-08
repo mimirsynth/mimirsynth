@@ -7,8 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import secretguard, secretscan, userlib
-from .db import client
 from .deps import BrainCtx, admin_of_brain, audit, current_user, owner_of_brain, require_admin
+from .graphdb import backend
 from .models import Audit, Brain, Membership, User
 from .roles import ROLES, rank
 from .store import get_db
@@ -71,23 +71,23 @@ def _count(g) -> tuple[int, int]:
 def _move_graph(old: str, new: str) -> dict:
     """Copia el grafo, reescribe group_id (Graphiti lo guarda en cada nodo y arista) y verifica los conteos.
     El grafo original no se borra: queda como copia de seguridad."""
-    c = client()
+    c = backend()
     existing = set(c.list_graphs())
     if old not in existing:
         raise HTTPException(409, f"el grafo origen '{old}' no existe")
     if new in existing:
         raise HTTPException(409, f"ya existe un grafo llamado '{new}'")
-    src = c.select_graph(old)
+    src = c.graph(old)
     before = _count(src)
-    src.copy(new)
-    dst = c.select_graph(new)
+    c.copy_graph(old, new)
+    dst = c.graph(new)
     try:
         dst.query("MATCH (n) SET n.group_id = $g", {"g": new})
         dst.query("MATCH ()-[r]->() SET r.group_id = $g", {"g": new})
         if _count(dst) != before:
             raise RuntimeError(f"conteos distintos tras la copia: {before} vs {_count(dst)}")
     except Exception as e:  # noqa: BLE001
-        dst.delete()
+        c.delete_graph(new)
         raise HTTPException(500, f"migración abortada, no se ha cambiado nada: {e}")
     return {"nodes": before[0], "edges": before[1]}
 
@@ -185,7 +185,7 @@ def delete_brain(body: DeleteIn, ctx: BrainCtx = Depends(owner_of_brain)):
     graph_deleted = False
     if body.delete_graph:
         try:
-            client().select_graph(graph).delete(); graph_deleted = True
+            backend().delete_graph(graph); graph_deleted = True
         except Exception as e:  # noqa: BLE001
             audit(db, ctx.user, "brain.delete.graph_failed", None, slug=slug, graph=graph, error=str(e)[:200])
     audit(db, ctx.user, "brain.delete", None, slug=slug, name=name, graph=graph, graph_deleted=graph_deleted)

@@ -34,7 +34,7 @@ from starlette.background import BackgroundTask
 
 from . import docstore, index, jobs, packcrypt, secretguard
 from .config import settings
-from .db import client
+from .graphdb import backend
 from .deps import BrainCtx, admin_of_brain, audit
 from .i18n import tr
 from .models import (Brain, BrainOntology, DocSource, Document, Job, Proposal, RefQuery, RefRun, RetypeSuggestion, User, VocabAlias,
@@ -115,28 +115,14 @@ def _props(props: dict, guard: _Guard, vectors: bool) -> tuple[dict, dict, bool]
     return out, vec, hit
 
 
-def _falkor_version() -> dict:
-    out: dict = {}
-    try:
-        conn = client().connection
-        out["redis"] = conn.info("server").get("redis_version")
-        for m in conn.execute_command("MODULE", "LIST"):
-            d = dict(zip(*[iter(x.decode() if isinstance(x, bytes) else x for x in m)] * 2))
-            if d.get("name") == "graph":
-                out["graph_module"] = d.get("ver")
-    except Exception:  # noqa: BLE001  (the version is informative: the dump's own header is what decides)
-        pass
-    return out
-
-
 def _graph(job: jobs.JobCtx, name: str, stage: Path, guard: _Guard, vectors: bool, say) -> dict:
     (stage / "graph").mkdir()
-    c = client()
-    if name not in c.list_graphs():
+    b = backend()
+    if not b.exists(name):
         (stage / "graph" / "nodes.jsonl").touch()
         (stage / "graph" / "edges.jsonl").touch()
         return {"name": name, "nodes": 0, "edges": 0, "dump": None, "dump_omitted": "no_graph"}
-    g, secret, counts = c.select_graph(name), False, {}
+    g, secret, counts = b.graph(name), False, {}
     for what, q in (("nodes", f"MATCH (n) WHERE id(n) > $last RETURN id(n), labels(n), properties(n) ORDER BY id(n) LIMIT {PAGE}"),
                     ("edges", f"MATCH (a)-[e]->(b) WHERE id(e) > $last RETURN id(e), type(e), id(a), id(b), properties(e) ORDER BY id(e) LIMIT {PAGE}")):
         n, last = 0, -1
@@ -158,8 +144,10 @@ def _graph(job: jobs.JobCtx, name: str, stage: Path, guard: _Guard, vectors: boo
     out = {"name": name, **counts, "dump": None, "dump_omitted": None}
     if secret:
         out["dump_omitted"] = "secrets"
+    elif not b.can_dump():
+        out["dump_omitted"] = "backend"
     else:
-        (stage / "graph" / "graph.dump").write_bytes(c.connection.dump(name))
+        (stage / "graph" / "graph.dump").write_bytes(b.dump(name))
         out["dump"] = "graph/graph.dump"
     return out
 
@@ -330,7 +318,7 @@ def build(job: jobs.JobCtx, brain_id: int, vectors: bool, password: str | None) 
         files = sorted(p for p in stage.rglob("*") if p.is_file())
         secret_summary = {"masked": guard.masked, "flagged": guard.flagged}
         manifest = {"format": "mimirsynth-brain", "format_version": FORMAT_VERSION, "created_at": _now().isoformat(), "mimirsynth": app_version,
-                    "falkordb": _falkor_version(), "embedding": {"model": emb["model"], "dim": emb["dim"]},
+                    "falkordb": backend().version(), "embedding": {"model": emb["model"], "dim": emb["dim"]},
                     "brain": {"slug": slug, "graph_name": graph["name"]}, "options": {"vectors": vectors, "encrypted": bool(password)},
                     "graph": graph, "counts": counts, "vectors": vec, "secrets": secret_summary, "excluded": EXCLUDED,
                     "files": [{"path": p.relative_to(stage).as_posix(), "size": p.stat().st_size, "sha256": _sha256(p)} for p in files]}

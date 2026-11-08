@@ -108,6 +108,6 @@ El entorno solo lleva lo necesario para arrancar y conectar (ver `.env.example`)
 
 ## Dependencias y licencias
 
-MimirSynth se publica bajo Apache-2.0. Graphiti es Apache-2.0. **FalkorDB es *source-available* (SSPL)**, no una licencia open source permisiva: revisa sus condiciones antes de ofrecer MimirSynth como servicio. El acceso al grafo pasa por una capa propia para poder sustituir el motor en el futuro.
+MimirSynth se publica bajo Apache-2.0. Graphiti es Apache-2.0. **FalkorDB es *source-available* (SSPL)**, no una licencia open source permisiva: revisa sus condiciones antes de ofrecer MimirSynth como servicio. El acceso al grafo pasa por una capa propia (`api/mimirsynth/graphdb`: una interfaz, con FalkorDB como implementación) para poder sustituir el motor: los módulos nunca hablan con un driver, y el Cypher que cambia de una base de datos a otra (vectores, similitud) lo da el backend.
 
 Las fuentes de la web (Oxanium, Instrument Sans y JetBrains Mono) tienen la licencia SIL Open Font License 1.1. Van dentro de la imagen y las sirve la propia instancia, así que el navegador no llama a ningún servidor de terceros para cargarlas.

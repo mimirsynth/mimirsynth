@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from . import appsettings, ontology as ontology_mod
 from .config import settings
 from .embed import gate
+from .graphdb import backend
 
 os.environ.setdefault("SEMAPHORE_LIMIT", str(settings.ingest_concurrency))  # antes de importar graphiti_core
 log = logging.getLogger("mimirsynth.ingest")
@@ -64,7 +65,6 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
                       ontology: dict | None = None, report: dict | None = None) -> str:
     from graphiti_core import Graphiti
     from graphiti_core.cross_encoder.client import CrossEncoderClient
-    from graphiti_core.driver.falkordb_driver import FalkorDriver
     from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
     from graphiti_core.llm_client.config import LLMConfig
     from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
@@ -90,7 +90,7 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
     emb = OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key=ee["api_key"] or "none", embedding_model=ee["model"], base_url=ee["base_url"], embedding_dim=ee["dim"]),
                          client=AsyncOpenAI(api_key=ee["api_key"] or "none", base_url=ee["base_url"],
                                             http_client=httpx.AsyncClient(event_hooks=async_hooks("embedding", ee["model"]))))
-    g = Graphiti(graph_driver=FalkorDriver(host=settings.falkor_host, port=settings.falkor_port, database=graph_name),
+    g = Graphiti(graph_driver=backend().graphiti_driver(graph_name),
                  llm_client=llm, embedder=emb, cross_encoder=NoRerank())
     started = datetime.now(timezone.utc) - timedelta(seconds=5)
     try:

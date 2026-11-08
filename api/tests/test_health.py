@@ -164,11 +164,11 @@ def test_redundancy_on_a_real_graph(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     try:
         g.query("CREATE (:Entity {uuid:'vw', name:'Vaultwarden'}), (:Entity {uuid:'al', name:'altair'}), "
                 "(:Entity {uuid:'pg', name:'PostgreSQL'})")
@@ -187,7 +187,7 @@ def test_redundancy_on_a_real_graph(monkeypatch):
         sampled = H.redundancy(g, max_sample=2)                                   # half the candidates read: one repeat, estimated two
         assert sampled["redundant_facts"] == 2 and sampled["redundancy_sampled"] is True
     finally:
-        g.delete()
+        c.delete_graph(GRAPH)
 
 
 # --- notification on a threshold ---------------------------------------------------------------
