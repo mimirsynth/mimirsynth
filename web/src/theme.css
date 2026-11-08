@@ -592,7 +592,9 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   background: color-mix(in srgb, var(--ms-ink) 5%, var(--ms-raised)); }  /* the proposal and the fact it repeats, read one against the other; neutral: gold is the action's */
 .ms-added { background: color-mix(in srgb, var(--ms-accent) 22%, transparent); color: inherit; border-radius: 2px; padding: 0 1px;
   text-decoration: underline; text-decoration-color: var(--ms-accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }  /* told apart by the line, not by the tint alone */
-.ms-added-legend .ms-added { padding: 0 2px; }  /* the legend's key, the same mark as in the text below it */
+.ms-added-legend { color: var(--ms-muted); max-width: var(--ms-measure); }  /* under the text: the key to its mark, then the words it adds */
+.ms-added-legend .ms-added { padding: 0 2px; }  /* the key, the same mark as in the text above it */
+.ms-added-words { color: var(--ms-ink); font-weight: 600; }
 .ms-related .ms-fact-old { color: var(--ms-invalidado); text-decoration: line-through; }  /* no longer true: struck through, as in the entity lists */
 .ms-related a:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }
 
