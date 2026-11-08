@@ -1422,7 +1422,6 @@
  "Se ha enviado también por correo. Es de un solo uso y caduca; puedes generar otro cuando quieras.": "It was also sent by email. It is single-use and expires; you can generate another whenever you like.",
  "Se ha llegado al máximo: faltan hechos.": "The limit was reached: some facts were not analysed.",
  "Se ha parado al llegar al máximo de texto: faltan documentos.": "Stopped at the text limit: some documents were not scanned.",
- "Se ha propuesto la corrección del hecho (propuesta #{{id}}); la decide un curador.": "The fact's correction was proposed (proposal #{{id}}); a curator decides it.",
  "Se invalidará al aprobarla, con fecha {{date}}.": "It will be invalidated on approval, as of {{date}}.",
  "Se invalidaría:": "Would be invalidated:",
  "Se lee como": "Reads as",

@@ -603,6 +603,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-ask-actlabel { margin-right: 4px; }
 .ms-ask-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--ms-line); }
 .ms-btn.ms-ask-wrong { color: var(--ms-invalidado); }
+.ms-ask-wrongform { max-width: 560px; padding-top: 4px; }  /* «¿Qué está mal?» under the buttons, at a readable width */
 .ms-btn.ms-ask-wrong[aria-pressed="true"] { color: var(--ms-invalidado) !important; background: color-mix(in srgb, var(--ms-invalidado) 12%, transparent) !important; }
 /* A toggle button that is on (a rating given, a result marked): the teal wash and teal text of the active state, never a fill; the
    word stays and `aria-pressed` says it to a screen reader. */

@@ -3,14 +3,14 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, NumberField, Pill, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Brain, fmtDay, fmtNum, get, send } from "../api";
 import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries";
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
-import { EmptyState, EntityChip } from "../ui";
+import { EmptyState, EntityChip, Form } from "../ui";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score?: number; similarity?: number | null; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
@@ -63,8 +63,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const [mode, setMode] = useTabParam("contexto", "modo");   // «Responder» writes an answer with citations (issue 126); «Contexto» shows the recall
   const status = useQuery({ queryKey: ["index", graph], queryFn: () => get<{ enabled: boolean; chunks: number; episodes: number }>("index/status", { graph }) });
   const [rated, setRated] = useState<Record<string, Rating>>({});
-  const [rateNote, setRateNote] = useState<Record<string, string>>({});  // what a rating did, said on its own card
-  const run = useMutation({ mutationFn: () => send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }), onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); } });
+  const [rateNote, setRateNote] = useState<Record<string, ReactNode>>({});  // what a rating did, said on its own card
+  // «Incorrecto» on a fact proposes its correction: first it asks what is wrong, on the card, so the curator has something to decide on.
+  const [wrong, setWrong] = useState<{ key: string; note: string } | null>(null);
+  const focusWrong = (key: string) => document.getElementById(`ms-wrong-${key}`)?.focus();
+  const run = useMutation({ mutationFn: () => send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }), onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); setWrong(null); } });
   // The open brain pays for the query's embedding in the AI consumption (issue 176).
   const searchAll = useMutation({ mutationFn: () => send<AllBrainsResult>("POST", "search", { query: q, facts: nf, chunks: nc, brain: graph }) });
   const search = () => { if (!q.trim()) return; if (scope === "all") searchAll.mutate(); else run.mutate(); };
@@ -77,14 +80,27 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   useEffect(() => { run.reset(); }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
   // Valorar lo que devolvió el recall (útil, irrelevante, incorrecto): alimenta la pestaña Calidad.
   const rate = useMutation({
-    mutationFn: (a: { key: string; kind: string; id: string; rating: Rating }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${run.data?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating }),
+    mutationFn: (a: { key: string; kind: string; id: string; rating: Rating; note?: string }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${run.data?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating, note: a.note ?? "" }),
     onSuccess: (r, a) => {
       setRated((m) => ({ ...m, [a.key]: a.rating }));
+      if (a.rating === "incorrect") { setWrong(null); focusWrong(a.key); }
       const said = a.rating === "useful" ? t("Valorado como útil.") : a.rating === "irrelevant" ? t("Valorado como irrelevante.") : t("Valorado como incorrecto.");
-      const then = r.proposal_id ? t("Se ha propuesto la corrección del hecho (propuesta #{{id}}); la decide un curador.", { id: r.proposal_id })
-        : r.recorded_only ? t("Con tu rol no se propone la corrección: la verá un curador en Calidad.") : "";
-      setRateNote((m) => ({ ...m, [a.key]: then ? `${said} ${then}` : said }));
+      // The proposal a rating «incorrecto» created stays when the rating changes: a curator decides it, and saying otherwise would lie.
+      const proposal = r.proposal_id && (canSync ? <Link to="/propuestas?estado=pending&tipo=correction">{t("propuesta #{{id}}", { id: r.proposal_id })}</Link>
+        : t("propuesta #{{id}}", { id: r.proposal_id }));
+      const then = r.proposal_id
+        ? (a.rating === "incorrect"
+          ? <>{t("Se ha propuesto su corrección:")} {proposal}.{!canSync && <> {t("La decide un curador.")}</>}</>
+          : <>{t("La corrección que se propuso antes sigue en la cola:")} {proposal}.{canSync ? <> {t("Si ya no hace falta, recházala allí.")}</> : <> {t("La decide un curador.")}</>}</>)
+        : r.recorded_only ? t("Con tu rol no se propone la corrección: la verá un curador en Calidad.") : null;
+      setRateNote((m) => ({ ...m, [a.key]: then ? <>{said} {then}</> : said }));
     } });
+  const canPropose = ["contributor", "curator", "admin", "owner"].includes(role);
+  const sendWrong = () => {
+    if (!wrong?.note.trim()) return;
+    const [kind, id] = wrong.key.startsWith("f:") ? ["fact", wrong.key.slice(2)] : ["", ""];
+    if (kind) rate.mutate({ key: wrong.key, kind, id, rating: "incorrect", note: wrong.note.trim() });
+  };
   // Rating feeds Quality and is saved at once; «Incorrecto» also proposes a correction, so it stands apart, in the danger colour. A word
   // before each group says which one it is: the marks for a reference query look the same and do something else.
   const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => run.data?.recall_id && <Group gap={4} role="group" aria-label={t("Valorar")}>
@@ -94,12 +110,22 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         {v === "useful" ? t("Útil") : t("Irrelevante")}</Btn>))}
     {canIncorrect && <><span className="ms-ask-sep" aria-hidden="true" />
       <Btn size="row" kind="ghost" className="ms-ask-wrong" aria-pressed={rated[key] === "incorrect"} icon={rated[key] === "incorrect" ? "check" : undefined}
-        onClick={() => rate.mutate({ key, kind, id, rating: "incorrect" })}>{t("Incorrecto")}</Btn></>}
+        aria-expanded={canPropose && rated[key] !== "incorrect" ? wrong?.key === key : undefined} id={`ms-wrong-${key}`}
+        onClick={() => (canPropose && rated[key] !== "incorrect" ? setWrong(wrong?.key === key ? null : { key, note: "" }) : rate.mutate({ key, kind, id, rating: "incorrect" }))}>{t("Incorrecto")}</Btn></>}
   </Group>;
   // A card's actions and, under them, what its rating did (a live region there from the start, so the result is announced).
   const cardActions = (what: string, key: string, kind: string, id: string, item: Item, canIncorrect: boolean) => (
     <Stack gap={4}>
       <Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(what)}>{rateBtns(key, kind, id, canIncorrect)}{markBtns(key, item)}</Group>
+      {wrong?.key === key && <div className="ms-ask-wrongform"><Form onSubmit={sendWrong}>
+        <TextArea label={t("¿Qué está mal?")} description={t("Lo lee el curador que decide la corrección: qué dice mal el hecho y, si lo sabes, qué es lo cierto.")}
+          autosize minRows={2} maxLength={500} autoFocus value={wrong.note} onChange={(e) => setWrong({ key, note: e.currentTarget.value })}
+          onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); setWrong(null); focusWrong(key); } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendWrong(); } }} />
+        <Group gap="xs" mt={6}>
+          <Btn size="row" kind="danger" type="submit" disabled={!wrong.note.trim()} loading={rate.isPending}>{t("Proponer corrección")}</Btn>
+          <Btn size="row" kind="ghost" onClick={() => { setWrong(null); focusWrong(key); }}>{t("Cancelar")}</Btn>
+        </Group>
+      </Form></div>}
       {run.data?.recall_id && <Text size="xs" c="dimmed" role="status">{rateNote[key] ?? ""}</Text>}
     </Stack>);
   const view = scope === "all" ? "contexto" : mode;  // across brains there is no written answer: it needs one brain's recall
