@@ -43,7 +43,7 @@ export default function Retype({ graph, role }: { graph: string; role: string })
   const summary = (ids: number[]) => Object.entries(items.filter((i) => ids.includes(i.id)).reduce<Record<string, number>>((m, i) => ({ ...m, [i.suggested_type]: (m[i.suggested_type] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   return (
     <Page>
-      <Text size="sm" c="dimmed" maw={760}>{t("Graphiti no cambia el tipo de las entidades ya existentes, así que las clasificadas con tipos genéricos (Object, Organization, Location…) se quedan así. El decisor revisa cada una con la ontología del brain como opciones y propone un tipo; un administrador aprueba, y el cambio es reversible.")}</Text>
+      <Text size="sm" c="dimmed" className="ms-measure">{t("Graphiti no cambia el tipo de las entidades ya existentes, así que las clasificadas con tipos genéricos (Object, Organization, Location…) se quedan así. El decisor revisa cada una con la ontología del brain como opciones y propone un tipo; un administrador aprueba, y el cambio es reversible.")}</Text>
       {d && !d.ontology && <Notice tone="warn">{t("Este brain no tiene ontología. Aplica un paquete en Vocabulario → Ontología.")}{" "}<Btn kind="link" component={Link} to="/vocabulario?tab=onto">{t("Ir a Ontología")}</Btn></Notice>}
       {d && !d.decider && <Notice tone="warn">{t("No hay decisor configurado (Administración → Proveedores IA → Decisores).")}</Notice>}
       <Group align="flex-end" gap="xs">
@@ -60,8 +60,8 @@ export default function Retype({ graph, role }: { graph: string; role: string })
         <SliderField label={t("Confianza mínima")} min={0.5} max={0.99} step={0.01} value={minConf} onChange={setMinConf} />
         {!!d?.hidden_below_threshold && <Text size="xs" c="dimmed">{d.hidden_below_threshold} {t("más por debajo de ese umbral")} <Btn kind="link" onClick={() => setMinConf(0.5)}>{t("Ver todas")}</Btn></Text>}
       </Group>}
-      {status === "none" && <Text size="xs" c="dimmed" maw={760}>{t("El decisor no encuentra ningún tipo de la ontología que encaje con estas entidades. No hace falta tocarlas; si hay muchas de una misma clase, es señal de que falta un tipo en la ontología.")}</Text>}
-      {status === "doubtful" && <Text size="xs" c="dimmed" maw={760}>{t("Nombres que no parecen una entidad concreta (rutas, opciones, frases, versiones, descripciones de un problema). No tiene sentido darles un tipo; si quieres, descártalas de esta lista.")}</Text>}
+      {status === "none" && <Text size="xs" c="dimmed" className="ms-measure">{t("El decisor no encuentra ningún tipo de la ontología que encaje con estas entidades. No hace falta tocarlas; si hay muchas de una misma clase, es señal de que falta un tipo en la ontología.")}</Text>}
+      {status === "doubtful" && <Text size="xs" c="dimmed" className="ms-measure">{t("Nombres que no parecen una entidad concreta (rutas, opciones, frases, versiones, descripciones de un problema). No tiene sentido darles un tipo; si quieres, descártalas de esta lista.")}</Text>}
       {(status === "pending" || status === "doubtful") && <Group gap="xs">
         {status === "pending" && <>
         <Btn kind="primary" disabled={!chosen.length} onClick={() => setAsk({ kind: "apply", ids: chosen })} icon="check">{t("Aplicar seleccionadas (")}{chosen.length})</Btn>

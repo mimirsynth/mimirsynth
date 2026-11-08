@@ -61,14 +61,14 @@ export default function SummaryReview({ graph, role }: { graph: string; role: st
       {isAdmin ? <Group align="flex-end" gap="xs">
         <NumberField size="xs" label={t("Entidades a analizar")} min={1} max={1000} value={limit} onChange={setLimit} w={150} />
         <Btn kind="primary" icon="search" disabled={!d?.engine || p?.running} loading={scan.isPending} onClick={() => scan.mutate()}>{t("Analizar")}</Btn>
-        <Text size="xs" c="dimmed" maw={520}>{t("Una llamada al motor por entidad, empezando por las que tienen más hechos. Cuenta en el consumo de IA del brain como «Revisión de resúmenes» y se detiene si el brain agota su presupuesto.")}</Text>
+        <Text size="xs" c="dimmed" className="ms-measure">{t("Una llamada al motor por entidad, empezando por las que tienen más hechos. Cuenta en el consumo de IA del brain como «Revisión de resúmenes» y se detiene si el brain agota su presupuesto.")}</Text>
       </Group> : <Text size="xs" c="dimmed">{t("El análisis lo lanza un administrador del brain; los curadores revisan lo propuesto.")}</Text>}
       <MutationError error={scan.error} />
       {p?.running && <ProgressBar done={p.done} total={p.total} text={t("Analizando… {{done}} de {{total}}", { done: p.done, total: p.total })} />}
       {p?.error && !p.running && <Notice tone="warn">{t("Último error del análisis:")} {p.error}</Notice>}
       <Segments label={t("Estado")} value={status} onChange={(v) => { setStatus(v); setSel([]); setDone(null); }}
         data={STATUSES.map(([value, label]) => ({ value, label: t(label), count: d?.counts[value] ?? 0 }))} />
-      {status === "outdated" && <Text size="xs" c="dimmed" maw={760}>{t("Propuestas que no se aplicaron porque el resumen de la entidad cambió entre el análisis y la aprobación, por ejemplo con una ingesta. El próximo análisis la vuelve a mirar.")}</Text>}
+      {status === "outdated" && <Text size="xs" c="dimmed" className="ms-measure">{t("Propuestas que no se aplicaron porque el resumen de la entidad cambió entre el análisis y la aprobación, por ejemplo con una ingesta. El próximo análisis la vuelve a mirar.")}</Text>}
       {pending && <Group align="flex-end" gap="xs">
         <NumberField size="xs" label={t("Con al menos estos hechos")} min={0} value={minFacts} onChange={setMinFacts} w={170} />
         <SelectField size="xs" label={t("Por qué")} clearable placeholder={t("Todos")} value={reason} onChange={setReason} w={240}

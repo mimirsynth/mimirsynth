@@ -24,7 +24,7 @@ const count = (n: number | null | undefined) => (n ? ` (${n})` : "");
 
 /** One plain sentence on what a tool is for, who uses it and what happens when you act. */
 export function TabIntro({ children }: { children: ReactNode }) {
-  return <Text size="sm" c="dimmed" maw={820}>{children}</Text>;
+  return <Text size="sm" c="dimmed" className="ms-measure">{children}</Text>;
 }
 
 /** Content quality (issue 164): the curation work on what the graph already holds, apart from the framework (Vocabulary). */
@@ -58,7 +58,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
         <StatCard label={t("Hechos a revisar")} value={a?.stale ?? "—"} hint={t("pasados de su vida útil")} />
         <StatCard label={t("Resúmenes")} value={a?.summaries ?? "—"} hint={t("propuestos por aprobar")} />
       </StatGrid>
-      <Text size="xs" c="dimmed">
+      <Text size="xs" c="dimmed" className="ms-measure">
         {t("Para leer y explorar la memoria:")} <Btn kind="link" component={Link} to="/hechos">{t("Hechos")}</Btn>.{" "}
         {t("Lo que dicen quienes usan el recall (sus valoraciones y las consultas de referencia) se mide en")}{" "}
         <Btn kind="link" component={Link} to="/preguntar?tab=calidad">{t("Preguntar → Calidad")}</Btn>.

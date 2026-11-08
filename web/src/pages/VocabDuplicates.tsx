@@ -31,7 +31,7 @@ export default function VocabDuplicates({ graph, groups, ignored, isAdmin }: { g
   return (
     <FillArea>
       <Stack gap="sm">
-        <Text size="sm" c="dimmed">
+        <Text size="sm" c="dimmed" className="ms-measure">
           {t("Grupos de entidades con el mismo nombre salvo versión o mayúsculas. No todos son duplicados (Debian 12 y Debian 13 no lo son): marca cuáles fusionar y cuál es la principal. Fusionar mueve los hechos y menciones a la principal; el duplicado queda oculto, no borrado, y se puede deshacer. Antes se guarda una copia del grafo. Fusiona un administrador.")}{" "}
           {t("El nombre fusionado se guarda en la principal, así que lo que se ingiera después con ese nombre irá a ella; los alias de relaciones, en cambio, están en")}{" "}
           <Btn kind="link" component={Link} to="/vocabulario?tab=ali">{t("Vocabulario → Alias")}</Btn>.

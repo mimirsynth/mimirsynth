@@ -36,7 +36,7 @@ export default function BrainRetention({ brain }: { brain: Brain }) {
         <NumberField label={t("Valoraciones del recall")} min={0} max={3650} suffix={` ${t("días")}`} value={ratingsDays} onChange={setRatingsDays}
           placeholder={d ? t("El de la instancia: {{v}}", { v: inst(d.defaults.ratings_days) }) : ""} />
       </Group>
-      {d && <Text size="xs" c="dimmed">{t("En vigor: propuestas rechazadas, {{p}}; trabajos terminados, {{j}}; valoraciones del recall, {{r}}.", { p: inst(d.effective.rejected_days), j: inst(d.effective.jobs_days), r: inst(d.effective.ratings_days) })}</Text>}
+      {d && <Text size="xs" c="dimmed" className="ms-measure">{t("En vigor: propuestas rechazadas, {{p}}; trabajos terminados, {{j}}; valoraciones del recall, {{r}}.", { p: inst(d.effective.rejected_days), j: inst(d.effective.jobs_days), r: inst(d.effective.ratings_days) })}</Text>}
       <MutationError error={save.error ?? run.error} />
       <Group gap="xs">
         <Btn kind="primary" icon="save" loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>

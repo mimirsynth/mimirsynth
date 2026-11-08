@@ -72,7 +72,7 @@ export default function BrainExport({ brain }: { brain: Brain }) {
       <Group gap="xs">
         <Btn kind="primary" icon="download" disabled={!pwOk || busy} loading={start.isPending} onClick={() => start.mutate()}>{t("Exportar")}</Btn>
       </Group>
-      <Text size="xs" c="dimmed">{t("Se prepara como un trabajo. El paquete se descarga una sola vez y se borra al descargarlo; si nadie lo descarga, caduca a las {{h}} horas.", { h: list.data?.ttl_hours ?? 24 })}</Text>
+      <Text size="xs" c="dimmed" className="ms-measure">{t("Se prepara como un trabajo. El paquete se descarga una sola vez y se borra al descargarlo; si nadie lo descarga, caduca a las {{h}} horas.", { h: list.data?.ttl_hours ?? 24 })}</Text>
       {items.length ? (
         <Stack gap="xs">{items.map((it) => (
           <ListCard key={it.id} title={fmt(it.created_at)} aside={<Pill tone={STATES[it.state].tone}>{t(STATES[it.state].label)}</Pill>}

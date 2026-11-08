@@ -251,7 +251,7 @@ function CorrectionDetail({ c, replacement }: { c: Correction; replacement: stri
     <Panel withBorder p="sm"><Stack gap={4}>
       <Text size="xs" fw={600}>{t("Hecho que se invalida")}</Text>
       <Text className="ms-prose">{c.fact.fact}</Text>
-      <Text size="xs" c="dimmed">{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) })}` : ""} · <code>{c.fact_uuid}</code></Text>
+      <Text size="xs" c="dimmed" className="ms-measure">{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) })}` : ""} · <code>{c.fact_uuid}</code></Text>
     </Stack></Panel>
     <Panel withBorder p="sm"><Stack gap={4}>
       <Text size="xs" fw={600}>{t("Motivo")}</Text><Text className="ms-prose">{c.reason}</Text>
@@ -638,7 +638,7 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
       }} />}
     {(secret || d.correction) && <Stack gap={2}>
       {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
-      {d.correction && <Text size="xs" c="dimmed">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: fmtDay(d.correction.invalid_at) })}</Text>}
+      {d.correction && <Text size="xs" c="dimmed" className="ms-measure">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: fmtDay(d.correction.invalid_at) })}</Text>}
     </Stack>}
     <MutationError error={review.error} />
     <Group justify="space-between" gap="xs">
@@ -979,7 +979,7 @@ function MineTab({ ops, isCurator }: { ops: Ops; isCurator: boolean }) {
     {formOpen && <Panel withBorder p="sm"><Stack gap="xs">
       <TextField size="xs" label={t("Título")} placeholder={t("De qué trata, en pocas palabras")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
       <TextArea size="xs" autosize minRows={3} label={t("Contenido")} placeholder={t("Qué ha pasado o qué hay que recordar, con fecha y nombres exactos.")} value={body} onChange={(e) => setBody(e.currentTarget.value)} />
-      {isCurator && <Text size="xs" c="dimmed">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
+      {isCurator && <Text size="xs" c="dimmed" className="ms-measure">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
       <Group align="flex-end">
         <NumberField size="xs" label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={170} hideControls />
         <Btn kind="primary" disabled={!name || !body} loading={submit.isPending} onClick={() => submit.mutate()} icon="plus">{isCurator ? t("Crear y aprobar") : t("Proponer")}</Btn>

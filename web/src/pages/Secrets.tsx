@@ -61,7 +61,7 @@ export default function Secrets({ brain }: { brain: Brain }) {
       <Notice tone="info">{t("Antes de guardar una propuesta (también las de los agentes por MCP) o de indexar un documento, se buscan credenciales: claves de nube, tokens, claves privadas, JWT, cabeceras Authorization y contraseñas en URLs. Un valor aleatorio asignado a «password», «token» o «secret» se trata como posible y solo se marca. Ni la auditoría ni las notificaciones guardan el valor.")}</Notice>
       <Stack gap={4}>
         <SelectField label={t("Qué hacer con un secreto")} w={320} data={MODES.map((m) => ({ ...m, label: t(m.label) }))} value={mode} onChange={(v) => v && setMode(v)} allowDeselect={false} />
-        <Text size="xs" c="dimmed">{t(HELP[mode] ?? "")}</Text>
+        <Text size="xs" c="dimmed" className="ms-measure">{t(HELP[mode] ?? "")}</Text>
       </Stack>
       <TextArea label={t("Excepciones")} autosize minRows={2} maxRows={8} value={allow} onChange={(e) => setAllow(e.currentTarget.value)}
         description={t("Una por línea. «rule:jwt» desactiva una regla; cualquier otra línea es una expresión regular y lo que encaje con ella no se trata como secreto. Las líneas con # son comentarios.")} />
@@ -70,7 +70,7 @@ export default function Secrets({ brain }: { brain: Brain }) {
         <Btn kind="primary" icon="save" disabled={!changed} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>
         <Btn icon="search" loading={scan.isPending} onClick={() => scan.mutate()}>{t("Analizar lo ya guardado")}</Btn>
       </Group>
-      <Text size="xs" c="dimmed">{t("El análisis pasa el detector por las propuestas y los documentos indexados del brain, con las excepciones guardadas, sin cambiar nada. Sirve para ver aciertos y falsos positivos antes de cambiar la política. Lo que ya está en el grafo no se analiza.")}</Text>
+      <Text size="xs" c="dimmed" className="ms-measure">{t("El análisis pasa el detector por las propuestas y los documentos indexados del brain, con las excepciones guardadas, sin cambiar nada. Sirve para ver aciertos y falsos positivos antes de cambiar la política. Lo que ya está en el grafo no se analiza.")}</Text>
       <MutationError error={scan.error} />
       {r && <Stack gap="xs">
         <Text size="sm">{t("Propuestas analizadas: {{p}}. Documentos analizados: {{d}}.", { p: r.proposals, d: r.documents })}{r.truncated ? ` ${t("Se ha parado al llegar al máximo de texto: faltan documentos.")}` : ""}</Text>

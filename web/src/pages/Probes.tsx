@@ -108,7 +108,7 @@ export default function ProbesPanel({ graph, isAdmin }: { graph: string; isAdmin
         <Text size="sm" fw={600}>{t("Verificadores de esta instancia")}</Text>
         {vs.data.items.map((v) => <Panel key={v.id} withBorder p="sm"><Stack gap="xs"><Text size="sm" fw={600}>{t(v.label)} <code>{v.id}</code></Text>
           <VerifierSettings graph={graph} v={v} /></Stack></Panel>)}
-        <Text size="xs" c="dimmed">{t("Los verificadores propios se cargan de la carpeta MIMIRSYNTH_VERIFIERS_DIR al arrancar; los ajustes secretos se guardan cifrados y nunca se muestran.")}</Text>
+        <Text size="xs" c="dimmed" className="ms-measure">{t("Los verificadores propios se cargan de la carpeta MIMIRSYNTH_VERIFIERS_DIR al arrancar; los ajustes secretos se guardan cifrados y nunca se muestran.")}</Text>
       </Stack>}
     </Stack>
   );

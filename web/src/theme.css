@@ -187,7 +187,7 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-pagehead-actions { display: flex; gap: 8px; align-items: center; }
 .ms-pagehead-name { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; min-width: 0; }
 .ms-pagehead-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.ms-pagehead-help { margin: 0; max-width: 760px; font-size: 14px; color: var(--ms-muted); }
+.ms-pagehead-help { margin: 0; font-size: 14px; color: var(--ms-muted); }  /* at the measure (the Measure Rule, below) */
 .ms-fill { flex: 1; min-height: 0; overflow: auto; }
 /* Dentro de la página solo encogen las zonas que ocupan el alto sobrante; un formulario o una barra encima de una tabla larga no se aplastan (#88). */
 .ms-page > :not(.ms-fill):not(.ms-tabs-fill):not(.ms-split) { flex-shrink: 0; }
@@ -584,7 +584,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-check { display: inline-grid; place-items: center; cursor: pointer; }
 .ms-queue-desc { display: contents; }  /* only groups the description for aria-describedby; the layout is its children's */
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
-.ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); max-width: var(--ms-measure); }  /* a section of the detail, ruled off like the rest, not a card inside its card */
+.ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); max-width: calc(var(--ms-measure) * 0.875); }  /* a section of the detail, ruled off like the rest, not a card inside its card; the measure of its 14px facts, on a 16px box */
 .ms-section-title { margin: 0; font-family: var(--ms-display); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }  /* DESIGN.md's card label */
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
 .ms-proposal-text { font-size: 15px; line-height: 1.6; max-width: var(--ms-measure); }  /* the proposal itself, the thing being decided: on the panel, not in a card inside it */
@@ -625,8 +625,19 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 /* On a phone a row of tabs scrolls sideways instead of wrapping its last tab under the others. */
 @media (max-width: 48em) { .ms-tabs .mantine-Tabs-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; } .ms-tabs .mantine-Tabs-tab { flex-shrink: 0; } }
 
-/* The Measure Rule (DESIGN.md): running text (prose, facts, notes) stops at about 72 characters; past that the eye loses the next line. */
-:root { --ms-measure: 72ch; }
+/* The Measure Rule (DESIGN.md): running text (prose, facts, notes) stops at about 72 characters; past that the eye loses the next line.
+   In em, not ch: `ch` is the width of «0», and Instrument Sans draws a wide «0» (0.68em against 0.456em for an average character of
+   running text), so 72ch let a line run to ~107 characters. 33em is 72 average characters at any size, and stays close if the font falls
+   back to system-ui. Resolved in each element's own size: 462px for 14px text, 429px for 13px, 396px for 12px. */
+:root { --ms-measure: 33em; }
+/* The kit's running text keeps to the measure wherever it sits: a page's help, a list card's body and note, an empty state, a section's
+   hint, prose, a settings group's description and a row's help, a field's description and a notice's message. A notice wraps its message
+   instead of stretching its tint across the page. `.ms-measure` does the same for help text a screen writes itself. Tables, code, charts
+   and data grids keep their full width: the rule is for running text. */
+.ms-measure, .ms-pagehead-help, .ms-empty, .ms-card-hint, .ms-prose, .ms-listcard-body, .ms-listcard-note, .ms-listcard-notice > *,
+.ms-setgroup-head p, .ms-setrow-help, .ms-field .mantine-InputWrapper-description, .ms-check .mantine-Checkbox-description,
+.ms-toggle-field .mantine-Switch-description, .ms-notice .mantine-Alert-message { max-width: var(--ms-measure); }
+.ms-notice { width: fit-content; max-width: 100%; }
 /* A record's sheet: each value under its label, ruled off from the content beside it. */
 .ms-sheet { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .ms-sheet-list { display: flex; flex-direction: column; gap: 10px; margin: 0; }

@@ -278,7 +278,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
           <Tabs.Panel value="src" pt="sm">
             <Stack gap="sm">
               <Group justify="space-between">
-                <Text size="sm" c="dimmed">{t("De dónde salen los documentos. Las carpetas se referencian sin copiar los originales, las wikis se leen por su API y los repositorios Git por commit, todo en solo lectura; se reescanean solos: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en")} <Link to="/trabajos">{t("Trabajos")}</Link>.</Text>
+                <Text size="sm" c="dimmed" className="ms-measure">{t("De dónde salen los documentos. Las carpetas se referencian sin copiar los originales, las wikis se leen por su API y los repositorios Git por commit, todo en solo lectura; se reescanean solos: lo nuevo y lo cambiado se indexa, lo que desaparece se retira. El progreso está en")} <Link to="/trabajos">{t("Trabajos")}</Link>.</Text>
                 {isAdmin && (
                   <Group gap={6} wrap="nowrap">
                     {instanceAdmin && <Btn icon="repo" disabled={!enabled} onClick={() => { addRepo.reset(); setRepo({ name: "", url: "", branch: "", include: GIT_PATHS.join("\n"), username: "", token: "", interval: 60 }); }}>{t("Añadir repositorio")}</Btn>}
@@ -487,7 +487,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
       <Modal opened={!!promo} onClose={() => setPromo(null)} title={t("Promover a memoria")} size="lg">
         {promo && (
           <Stack>
-            <Text size="sm" c="dimmed">{t("El pasaje se envía como propuesta con su procedencia (documento y sección).")} {canUpload && ["curator", "admin", "owner"].includes(role) ? t("Como curador, se aprueba directamente y se extraen los hechos al grafo.") : t("Entra en cuarentena hasta que un curador la apruebe.")} {t("El documento no cambia.")}</Text>
+            <Text size="sm" c="dimmed" className="ms-measure">{t("El pasaje se envía como propuesta con su procedencia (documento y sección).")} {canUpload && ["curator", "admin", "owner"].includes(role) ? t("Como curador, se aprueba directamente y se extraen los hechos al grafo.") : t("Entra en cuarentena hasta que un curador la apruebe.")} {t("El documento no cambia.")}</Text>
             <Text size="xs" fw={600}>{promo.title}</Text>
             <TextArea label={t("Texto a recordar")} description={t("Puedes recortarlo o reescribirlo: conviene que sea una afirmación autocontenida.")} autosize minRows={5} maxRows={14} value={promo.text} onChange={(e) => setPromo({ ...promo, text: e.currentTarget.value })} />
             <TextField label={t("Título de la propuesta (opcional)")} value={promo.name} onChange={(e) => setPromo({ ...promo, name: e.currentTarget.value })} />

@@ -47,7 +47,7 @@ export default function ProposalCategories({ graph, isAdmin }: { graph: string; 
           <Text size="xs" c="dimmed">{p.precision === null ? t("Ninguna decidida todavía por una persona.")
             : t("Precisión: {{pct}} ({{a}} aprobadas de {{d}} decididas por personas).", { pct: `${Math.round(p.precision * 100)} %`, a: p.approved, d: p.decided })}
             {c.flagged ? ` ${t("{{n}} con un secreto por revisar, que no se deciden en bloque.", { n: c.flagged })}` : ""}</Text>
-          {c.sample.map((s) => <Text key={s.id} size="xs">#{s.id} · {s.name}{s.body ? ` — ${s.body}` : ""}{s.claims.map((cl, i) => <span key={i}> · {cl.subject} → {cl.relation} → {cl.value}{cl.facts.length ? ` (${cl.facts.join("; ")})` : ""}</span>)}</Text>)}
+          {c.sample.map((s) => <Text key={s.id} size="xs" className="ms-measure">#{s.id} · {s.name}{s.body ? ` — ${s.body}` : ""}{s.claims.map((cl, i) => <span key={i}> · {cl.subject} → {cl.relation} → {cl.value}{cl.facts.length ? ` (${cl.facts.join("; ")})` : ""}</span>)}</Text>)}
           {c.pending > 0 && <Group gap="xs">
             <Btn size="row" icon="check" onClick={() => setAsk({ cat: c, verb: "approve" })}>{t("Aprobar la categoría")}</Btn>
             <Btn size="row" kind="danger" onClick={() => setAsk({ cat: c, verb: "reject" })}>{t("Rechazar la categoría")}</Btn>
