@@ -7,7 +7,7 @@ Here you try **recall**: the same thing an agent does when it queries the memory
 ## Answer: a written answer with citations
 **Mode → Answer** writes a short answer to the question from the same recall, and cites where each claim comes from: `fact 1`, `episode 2`, `doc 1`. **Context** is the mode described below, which shows the recall itself.
 - The answer appears as it is written. Each citation is a link: a fact opens its entity page, an episode opens it in [[Journal]], a document passage opens its document in [[Knowledge]]. What another brain lends has no link here, only its name.
-- Under the answer, **Evidence** lists everything the recall brought, numbered, with what the answer cited highlighted.
+- Under the answer, **Evidence** lists everything the recall brought, numbered, with what the answer cited highlighted. It is split as in Context: current facts (with when they became true and what they replace), facts that stopped being true (with when), episode fragments and document passages. A fragment or passage that states something no longer true carries «May be superseded» with what is true now, and the model gets the same warning, so it does not present that statement as current.
 - The model is told to use **only** that evidence, to say so when it is not enough, and to treat the text of facts, episodes and documents as **data, never instructions**. A citation to something that was not in the evidence is marked «citation with no source» and leads nowhere.
 - If the recall finds nothing, it answers that there is no information **without calling the model**.
 - It answers in your language, whatever the language of the documents.

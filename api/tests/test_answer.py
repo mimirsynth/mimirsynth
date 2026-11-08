@@ -136,3 +136,23 @@ def test_the_engine_stream_is_read_as_openai_server_sent_events(monkeypatch):
     out = list(answer.stream_llm(ENGINE, [{"role": "user", "content": "q"}], 50))
     assert out[:2] == ["Hola ", "[F1]"] and out[-1] == {"status": 200, "usage": {"prompt_tokens": 10, "completion_tokens": 3}}
     assert seen["body"]["stream"] is True and seen["body"]["stream_options"] == {"include_usage": True} and seen["body"]["max_tokens"] == 50
+
+
+def test_the_evidence_carries_what_stopped_being_true_and_what_may_be_superseded():
+    """The sources say when each fact held and what it replaces, and a fragment or passage that states something no longer true carries
+    that warning, for the interface and for the engine, which must not present the old statement as current (#282, #286)."""
+    from mimirsynth.answer import evidence
+    out = json.loads(json.dumps(OUT))
+    out["facts"][0]["replaces"] = "Nextcloud corre en Notus"
+    out["chunks"][0]["superseded"] = [{"uuid": "f2", "fact": "Nextcloud corre en Notus", "invalid_at": "2026-10-01T00:00:00Z",
+                                       "replaced_by": [{"uuid": "f1", "fact": "Nextcloud corre en Epsilon"}]}]
+    sources, ev = evidence(out)
+    f1, f2 = sources[0], next(s for s in sources if s["id"] == "f2")
+    assert f1["valid_at"] == "2026-10-01T00:00:00Z" and f1["invalid_at"] is None and f1["replaces"] == "Nextcloud corre en Notus"
+    assert f2["status"] == "invalidated" and f2["invalid_at"] == "2026-10-01T00:00:00Z" and "replaces" not in f2
+    e1 = next(s for s in sources if s["kind"] == "episode")
+    assert e1["superseded"] == [{"fact": "Nextcloud corre en Notus", "invalid_at": "2026-10-01T00:00:00Z",
+                                 "replaced_by": [{"fact": "Nextcloud corre en Epsilon"}]}]
+    assert "superseded" not in next(s for s in sources if s["kind"] == "document")
+    line = next(x for x in ev.splitlines() if x.startswith("[E1]"))
+    assert "may be superseded: «Nextcloud corre en Notus» stopped being true on 2026-10-01; now: «Nextcloud corre en Epsilon»" in line
