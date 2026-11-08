@@ -13,7 +13,8 @@ TEXT_EXT = {".md", ".markdown", ".txt", ".rst", ".log"}
 HTML_EXT = {".html", ".htm"}
 PDF_EXT = {".pdf"}
 OFFICE_EXT = {".docx", ".pptx", ".xlsx", ".odt"}  # read with the standard library (officeextract, #124)
-ALLOWED_EXT = TEXT_EXT | HTML_EXT | PDF_EXT | OFFICE_EXT
+IMAGE_EXT = {".png", ".jpg", ".jpeg"}  # read with OCR (#135)
+ALLOWED_EXT = TEXT_EXT | HTML_EXT | PDF_EXT | OFFICE_EXT | IMAGE_EXT
 UPLOAD_TTL = 24 * 3600
 
 
@@ -62,6 +63,14 @@ def original_path(storage_ref: str, source_kind: str, source_config: dict, exter
     if source_kind == "directory":
         return source_file(source_config, external_id)
     return resolve(storage_ref)
+
+
+def scannable(filename: str) -> bool:
+    """Whether a folder or a repository brings this file in: images only when the OCR service is configured, so that the
+    diagrams of a documentation folder do not fill the list with errors (#135). An upload takes them always, and says how to
+    enable OCR when it is not."""
+    ext = ext_of(filename)
+    return ext in ALLOWED_EXT and (ext not in IMAGE_EXT or bool((settings.ocr_url or "").strip()))
 
 
 def ext_of(filename: str) -> str:

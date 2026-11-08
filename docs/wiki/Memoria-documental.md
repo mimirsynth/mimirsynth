@@ -12,7 +12,7 @@ Además de la memoria «destilada» (episodios → hechos), MimirSynth guarda **
 
 ## Cómo se indexa un documento
 1. Se **guarda el original** en el volumen del almacén (o, en una carpeta, se referencia sin copiar).
-2. Se **extrae el texto** (Markdown, texto plano, HTML, PDF, y Office: Word, PowerPoint, Excel y texto de OpenDocument).
+2. Se **extrae el texto** (Markdown, texto plano, HTML, PDF, y Office: Word, PowerPoint, Excel y texto de OpenDocument). Las páginas escaneadas y las imágenes se leen con **OCR** (ver abajo).
 3. El **detector de secretos** busca credenciales en el texto y, según la política del brain, las enmascara o deja el documento sin indexar (ver abajo).
 4. Si el mismo texto (sin contar mayúsculas ni espacios) **ya está indexado** en otro documento del brain, el documento queda como **duplicado** y se para aquí (ver abajo).
 5. Se **trocea por títulos y secciones**, conservando la ruta de títulos («Instalación › Requisitos»).
@@ -31,6 +31,22 @@ En el **recall** de los agentes (API REST y herramienta `recall` del MCP), los p
 - **Se puede desactivar** por petición (`docs=0`), y el agente puede pedir después más contexto de un pasaje o el fichero original. Ver [[Conectar agentes]].
 
 El presupuesto y el umbral se ajustan en [[Recuerdo e ingesta]].
+
+## PDF escaneados e imágenes (OCR)
+Con el servicio OCR en marcha (ver [[Instalación]]), MimirSynth lee:
+- las páginas de un PDF que no tienen texto, las únicas que manda un PDF mixto;
+- las imágenes `.png`, `.jpg` y `.jpeg`.
+
+Detalles:
+- **Tipo:** se reconoce por el contenido del fichero, no por su extensión.
+- **Progreso:** el trabajo lo muestra página a página y se puede cancelar entre páginas.
+- **Citas:** el recall cita la página.
+- **Límite:** como mucho **50 páginas** por documento por defecto (*Páginas con OCR por documento*, [[Referencia de ajustes]]). Las demás se quedan sin leer y el documento lo dice.
+- **Idiomas:** `spa+eng` por defecto (*Idiomas del OCR*).
+- **Secretos:** el texto leído pasa por el detector de secretos como cualquier otro.
+- **Carpetas y repositorios:** solo traen imágenes si el OCR está configurado.
+
+Quien administra un brain puede activar **Leer con el modelo de visión** en [[Conocimiento]]. Entonces lee las páginas el modelo de visión de un motor LLM en vez de Tesseract, y Tesseract lee las que el modelo no pueda. Cada página es una llamada al motor.
 
 ## Documentos duplicados
 Un documento cuyo texto extraído coincide con el de otro ya indexado en el brain queda como **duplicado**: no se trocea ni se calculan sus embeddings, así que el mismo contenido nunca ocupa dos sitios en el índice ni en el recall. Las reglas:
@@ -89,7 +105,7 @@ Toda acción queda en la [[Auditoría]].
 Cuando un pasaje contiene algo que quieres que el sistema **recuerde y razone** (no solo cite), usa **Promover a memoria**: crea una [propuesta](Propuestas) con el texto (que puedes editar) y su procedencia. Si eres curador se ingiere; si no, entra en cuarentena. El documento no cambia.
 
 ## Límites y consejos
-- PDF **escaneados** (solo imagen) no tienen texto que indexar.
+- Los PDF **escaneados** y las imágenes necesitan el servicio OCR; sin él no se indexan y el error dice cómo activarlo.
 - Documentos muy largos están acotados por *Texto máximo extraído* ([[Carpetas y límites]]).
 - Los documentos con mucha basura (menús, cabeceras repetidas) empeoran la búsqueda: limpia la fuente si puedes.
 - Cambiar el modelo de embeddings (Administración → Embeddings, ver [[Proveedores de IA]]) recalcula también los vectores de los documentos.

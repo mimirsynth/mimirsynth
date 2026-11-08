@@ -48,6 +48,9 @@ exec 9>"$DIR/.update.lock"; flock -n 9 || die "another update is running" "ya ha
 # naming the profile would create an empty, unused graphdata volume.
 DC="docker compose"
 if [ -n "$(docker compose --profile bundled ps -aq falkordb 2>/dev/null)" ]; then DC="docker compose --profile bundled"; fi
+# The same for the optional OCR service (#135): it is updated with the application when its container exists here.
+OCR=""
+if [ -n "$(docker compose --profile ocr ps -aq ocr 2>/dev/null)" ]; then DC="$DC --profile ocr"; OCR="ocr"; fi
 envget() { local v; v=$(grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true); v="${v%\"}"; v="${v#\"}"; printf '%s' "${v:-$2}"; }
 norm()   { printf '%s' "${1#v}"; }
 base()   { local v; v="$(norm "$1")"; printf '%s' "${v%%-*}"; }
@@ -142,7 +145,7 @@ newc="$(mktemp)"; trap 'rm -f "$newc"' EXIT
 have_new=0; [ "$COMPOSE_MODE" != keep ] && asset "$TARGET" > "$newc" 2>/dev/null && [ -s "$newc" ] && have_new=1
 say "Pulling the image..." "Descargando la imagen..."
 # first, so that a wrong version or no network aborts BEFORE touching the backup that is already there
-MIMIRSYNTH_VERSION="$TARGET" $DC pull mimirsynth || die "could not pull $TARGET: nothing was changed, the existing backup is intact" "no se pudo descargar $TARGET: no se ha cambiado nada, la copia que había sigue intacta"
+MIMIRSYNTH_VERSION="$TARGET" $DC pull mimirsynth $OCR || die "could not pull $TARGET: nothing was changed, the existing backup is intact" "no se pudo descargar $TARGET: no se ha cambiado nada, la copia que había sigue intacta"
 
 backup
 
@@ -158,7 +161,7 @@ if [ "$have_new" = 1 ]; then
   fi
 fi
 set_env_version "$TARGET"
-$DC up -d mimirsynth
+$DC up -d mimirsynth $OCR
 if verify "$TARGET"; then
   say "Updated to $TARGET. Backup of the previous state: $BACKUP_DIR" "Actualizado a $TARGET. Copia del estado anterior: $BACKUP_DIR"
 else

@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
-      - run: cd api && uv venv && uv pip install -e . pytest pyyaml   # pyyaml: the wiki index check (test_repo_tooling)
+      - run: cd api && uv venv && uv pip install -e ".[pdf]" pytest pyyaml   # pyyaml: the wiki index check (test_repo_tooling); pdf: the OCR tests read PDFs (#135)
       - name: Tests (con FalkorDB real)
         env:
           MIMIRSYNTH_TEST_FALKOR: localhost
@@ -59,3 +59,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: docker build -t mimirsynth:ci .
+      - name: The OCR service builds and reads a scanned image (#135)
+        run: |
+          docker build -t mimirsynth-ocr:ci ocr/
+          docker run -d --name ocr -p 127.0.0.1:8001:8001 --read-only --tmpfs /tmp --cap-drop ALL mimirsynth-ocr:ci
+          for i in $(seq 1 30); do curl -sf localhost:8001/health && break; sleep 1; done
+          curl -sf localhost:8001/health | grep -q '"spa"'
+          out=$(curl -sf -X POST --data-binary @ocr/testdata/sample.png "localhost:8001/ocr?lang=spa%2Beng")
+          echo "$out"
+          echo "$out" | grep -q 4471

@@ -23,7 +23,7 @@ Una fuente es un conector que sabe **listar** documentos (con un identificador e
 | Tipo | Qué es | Configuración |
 |---|---|---|
 | **Wiki por API** | Cualquier wiki con API de lectura. Están implementadas Outline, Confluence y Notion (ver «Wikis»); el conector es un adaptador con una interfaz pequeña, para sumar otras sin tocar el resto | Depende del adaptador (normalmente una URL y un token, con los secretos cifrados con el `secretbox`) más las colecciones que se indexan |
-| **Carpeta de archivos** | Una carpeta montada **en solo lectura** con ficheros `.md`, `.markdown`, `.txt`, `.rst`, `.log`, `.html`, `.htm` y `.pdf`, en subcarpetas. Los originales se **referencian donde están**, no se copian | Una raíz autorizada y una subcarpeta dentro de ella (ver «Carpetas y cola de trabajos») |
+| **Carpeta de archivos** | Una carpeta montada **en solo lectura** con ficheros `.md`, `.markdown`, `.txt`, `.rst`, `.log`, `.html`, `.htm`, `.pdf`, `.docx`, `.pptx`, `.xlsx` y `.odt` (y `.png`, `.jpg` y `.jpeg` si el OCR está configurado), en subcarpetas. Los originales se **referencian donde están**, no se copian | Una raíz autorizada y una subcarpeta dentro de ella (ver «Carpetas y cola de trabajos») |
 | **Repositorio Git** | Los documentos de un repositorio (README, `docs/`, ADR, changelog), sincronizados por commit (ver «Repositorios Git») | La dirección, la rama (vacía = la principal), las rutas que se incluyen y, para un repositorio privado, un token de solo lectura (cifrado con el `secretbox`) |
 | **Subida desde la UI** | Ficheros arrastrados al navegador, de cualquier tamaño (subida por partes) | Ninguna; cada brain tiene una fuente «Subidas» y el original va al almacén de ficheros |
 
@@ -66,7 +66,7 @@ Los originales viven en un **volumen del stack** que monta la aplicación (`MIMI
 
 1. **Descubrir:** el conector lista los documentos de la fuente.
 2. **Comparar:** se decide qué es nuevo, qué ha cambiado, qué sigue igual y qué ha desaparecido. Una carpeta compara tamaño y fecha de modificación y solo calcula el `sha256` de lo que cambió; una wiki compara la fecha de modificación y el título de cada página. Lo que sigue igual no se toca.
-3. **Extraer:** de Markdown, texto, HTML, RST y PDF a texto normalizado, conservando la estructura de títulos (se guarda junto al original). El PDF necesita `pypdf`, el extra opcional `pdf`, que la imagen del contenedor ya incluye; un PDF escaneado sin capa de texto no se indexa. Un documento cuyo texto supera el máximo configurado (100 MB por defecto, en Administración → Límites) no se indexa.
+3. **Extraer:** de Markdown, texto, HTML, RST, PDF y Office a texto normalizado, conservando la estructura de títulos (se guarda junto al original). El PDF necesita `pypdf`, el extra opcional `pdf`, que la imagen del contenedor ya incluye. Un PDF, PNG o JPEG se reconoce por sus primeros bytes, diga lo que diga su extensión; las páginas sin texto de un PDF, y las imágenes, se leen con OCR (ver «OCR»). Un documento cuyo texto supera el máximo configurado (100 MB por defecto, en Administración → Límites) no se indexa.
 4. **Secretos:** antes de trocear, el detector de secretos enmascara lo que tiene forma de credencial, o deja el documento sin indexar si el brain las bloquea (ver «Seguridad»).
 5. **Trocear:** por títulos y párrafos (~900 caracteres con un solape de 120, como los episodios), guardando la ruta de títulos y la posición de cada trozo en el texto.
    - **Duplicados:** si el texto extraído (sin contar mayúsculas ni espacios, la misma regla con la que el recall descarta pasajes repetidos) ya está indexado en otro documento del brain, el documento queda como `duplicate`, apunta al más antiguo y no se trocea ni se calculan sus embeddings. Aparece en Conocimiento con su propio filtro de estado y un enlace al original. Si el original se borra, desaparece de su fuente, cambia su texto o no se puede indexar, el duplicado más antiguo se indexa en su lugar. La deduplicación es por brain; entre brains ya marca el origen la federación. Si dos copias se indexan a la vez, o se reindexa una más antigua, gana siempre la más antigua. **Buscar duplicados** (administradores del brain) revisa los documentos indexados antes de que esto existiera, desde su texto normalizado y sin volver a extraerlos, como un trabajo con progreso; en el origen no se borra nada.
@@ -75,6 +75,16 @@ Los originales viven en un **volumen del stack** que monta la aplicación (`MIMI
 8. **Retirar:** un documento que ya no está en la fuente sale del índice y de la base de datos, junto con su texto guardado; el trabajo del escaneo anota cuántos se retiraron. *El primer diseño conservaba el registro como `deleted` para el historial; la implementación lo elimina.*
 
 Es idempotente y reanudable: si falla a mitad, la siguiente pasada continúa. Corre en segundo plano con el progreso a la vista (ver «Carpetas y cola de trabajos»). Cambiar de modelo de embeddings obliga a reindexar de forma explícita (Administración → Embeddings).
+
+## OCR
+
+PDF escaneados e imágenes (#135). Tesseract corre en un servicio aparte (`ocr/` en el repositorio, imagen `mimirsynth-ocr`, el perfil `ocr` del compose), al que MimirSynth llama por HTTP cuando `MIMIRSYNTH_OCR_URL` está definida; la imagen principal no cambia.
+- **Qué páginas:** las de un PDF que `pypdf` deja sin texto (menos de 16 letras o cifras), así que un PDF mixto solo manda sus páginas escaneadas. Como mucho *Páginas con OCR por documento* (50); las demás se quedan vacías y el documento dice cuántas.
+- **El protocolo:** el servicio responde con una línea JSON por página según las lee. El trabajo de indexación muestra el progreso y, si se cancela, cierra la conexión, lo que para el servicio entre páginas. Una página que falla no hace perder las demás.
+- **Citas:** cada página es una página del texto normalizado, y un trozo nunca abarca dos páginas, así que el recall cita la página correcta.
+- **Secretos:** el texto leído pasa por el detector de secretos como cualquier otro.
+- **Sin OCR:** un PDF escaneado o una imagen fallan con un error que dice cómo activarlo; un PDF mixto se indexa con sus páginas de texto y dice cuántas no pudo leer. Las carpetas y los repositorios solo traen imágenes si el OCR está configurado, para que los diagramas de una carpeta de documentación no llenen la lista de errores.
+- **Modelo de visión:** un brain puede activar el modelo de visión de un motor LLM (*Motor de visión para el OCR*, vacío: el predeterminado) en vez de Tesseract, y Tesseract lee las páginas que el modelo no pueda. El servicio sigue convirtiendo las páginas de un PDF en imágenes; una imagen suelta va directamente al modelo. Sus llamadas cuentan en el consumo de IA del brain como «OCR de documentos».
 
 ## Recuperación
 

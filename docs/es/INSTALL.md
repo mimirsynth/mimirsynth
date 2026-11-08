@@ -58,6 +58,16 @@ Abre la aplicación, introduce el código y crea la cuenta de administrador. Gua
 3. Crea un token de API para tus agentes y conecta el primero: ver [AGENTS.md](AGENTS.md).
 4. Opcional: correo SMTP (invitaciones y recuperación de contraseña), OIDC, doble factor obligatorio y carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md).
 
+## OCR para PDF escaneados e imágenes (opcional)
+
+Un PDF escaneado no tiene capa de texto, y una imagen (`.png`, `.jpg`) solo tiene píxeles: para indexarlos MimirSynth necesita OCR. Tesseract corre en **su propio contenedor**, así que la imagen principal no crece.
+1. Arráncalo con el perfil `ocr`, junto a los que ya uses: `docker compose --profile ocr up -d` (añade `--profile bundled` si usas el FalkorDB incluido).
+2. Añade `MIMIRSYNTH_OCR_URL=http://ocr:8001` al `.env` y ejecuta `docker compose up -d mimirsynth`.
+
+En **Conocimiento**, quien administra un brain ve si el OCR responde. La imagen lee castellano e inglés; para más idiomas, constrúyela con `docker build --build-arg LANGS="spa eng cat" -t mimirsynth-ocr ocr/` y haz que el servicio la use. En Administración → Ajustes → Documentos se eligen los idiomas (`spa+eng`) y el máximo de páginas que se leen con OCR por documento (50). El servicio no tiene autenticación: no publiques su puerto. `update.sh` lo actualiza junto con la aplicación.
+
+En vez de Tesseract, un brain puede leer sus páginas escaneadas con el **modelo de visión** de un motor LLM (Conocimiento → *Leer con el modelo de visión*). Entonces cada página es una llamada al motor, así que está desactivado por defecto. Una imagen suelta no necesita el servicio OCR en ese caso, pero un PDF sí, para convertir sus páginas en imágenes.
+
 ## HTTPS y proxy inverso
 No publiques el puerto 8000 a Internet sin TLS. Pon un proxy inverso (Caddy, Traefik, nginx…) delante, define `MIMIRSYNTH_PUBLIC_URL` con la dirección pública y `MIMIRSYNTH_COOKIE_SECURE=true`. Si subes ficheros grandes, comprueba el límite de tamaño de petición del proxy: las subidas se envían por partes (por defecto de 64 MB).
 

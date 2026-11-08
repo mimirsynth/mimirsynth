@@ -464,7 +464,7 @@ def _walk(base) -> list[tuple[str, os.stat_result]]:
     for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
         for fn in sorted(filenames):
-            if fn.startswith(".") or docstore.ext_of(fn) not in docstore.ALLOWED_EXT:
+            if fn.startswith(".") or not docstore.scannable(fn):
                 continue
             full = os.path.join(dirpath, fn)
             try:

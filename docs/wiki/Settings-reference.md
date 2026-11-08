@@ -61,6 +61,9 @@ Guide: [[Folders and limits]]
 | Maximum file size | `doc_max_mb` | `2048` MB | 1–20480 MB | Larger files are rejected when uploaded or when scanning folders. |
 | Size of each upload part | `doc_part_mb` | `64` MB | 1–64 MB | Uploads are sent in parts of this size (maximum 64). |
 | Maximum text extracted per document | `doc_text_max_mb` | `100` MB | 1–2048 MB | A document whose text exceeds this size is not indexed. |
+| OCR languages | `ocr_languages` | `spa+eng` | text | Languages Tesseract reads scanned PDFs and images with, joined with + (e.g. spa+eng). Each one has to be installed in the OCR service. |
+| OCR pages per document | `ocr_max_pages` | `50` | 1–2000 | Pages read with OCR at most in each document; the following ones are left without text and the document says so. |
+| Vision engine for OCR | `ocr_vision_engine` | — | text | Name of the LLM engine that reads the pages in the brains that turn the vision model on. It has to accept images. Empty: the default LLM engine. |
 
 ## Recall
 

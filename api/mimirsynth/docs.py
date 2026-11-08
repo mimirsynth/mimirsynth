@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from . import appsettings, docindex, docstore, index, jobs, secretguard
+from . import appsettings, docindex, docstore, index, jobs, ocr, secretguard
 from .config import settings
 from .deps import BrainCtx, admin_of_brain, audit, contributor_of_brain, reader
 from .docextract import ExtractError, chunk, extract
@@ -59,9 +59,13 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
                 raise RuntimeError("el índice documental requiere PostgreSQL con pgvector")
             src = db.get(DocSource, d.source_id)
             path = docstore.original_path(d.storage_ref, src.kind, src.config or {}, d.external_id)
-            text, title = extract(path, docstore.ext_of(d.filename) or path.suffix)
+            brain = db.get(Brain, d.brain_id)
+            rd = ocr.Reader(vision=_vision_engine(db, brain), brain_id=d.brain_id, check=job.check if job else None,
+                            progress=(lambda done, total: job.progress(done, total, "leyendo con OCR")) if job else None)
+            text, title = extract(path, docstore.ext_of(d.filename) or path.suffix, rd)
+            d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "ocr"}, **({"ocr": rd.info} if rd.info else {})}
             try:  # antes de trocear: lo que se enmascara no llega ni al texto normalizado, ni a los trozos, ni a los vectores (#116)
-                text, found = secretguard.guard(db.get(Brain, d.brain_id), text)
+                text, found = secretguard.guard(brain, text)
             except secretguard.Blocked as e:
                 d.meta = {**(d.meta or {}), "secrets": [{"rule": r, "action": "blocked"} for r in e.rules]}
                 docindex.delete_document(d.id)  # una versión anterior indexada no puede seguir en el índice
@@ -122,6 +126,14 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
     if promote:
         promote_duplicates(doc_id)
     return err
+
+
+def _vision_engine(db, brain: Brain | None) -> dict | None:
+    """The LLM engine that reads scanned pages, when the brain turns the vision model on (#135); None: Tesseract."""
+    if not brain or not brain.ocr_vision:
+        return None
+    from .llm import named
+    return named(db, appsettings.get("ocr_vision_engine"), "OCR")
 
 
 class _Duplicate(Exception):
@@ -243,7 +255,8 @@ def _out(d: Document, source_name: str = "") -> dict:
     return {"id": d.id, "source_id": d.source_id, "source": source_name, "title": d.title, "filename": d.filename, "mime": d.mime, "size": d.size,
             "sha256": d.sha256, "status": d.status, "error": d.error, "chunks": d.chunks, "progress": _PROGRESS.get(d.id),
             "created_at": d.first_seen_at, "updated_at": d.source_updated_at or d.last_seen_at, "url": d.url, "external_id": d.external_id,
-            "secrets": secretguard.describe((d.meta or {}).get("secrets")), "duplicate_of": (d.meta or {}).get("duplicate_of") if d.status == "duplicate" else None}
+            "secrets": secretguard.describe((d.meta or {}).get("secrets")), "duplicate_of": (d.meta or {}).get("duplicate_of") if d.status == "duplicate" else None,
+            "ocr": (d.meta or {}).get("ocr")}
 
 
 def _doc(ctx: BrainCtx, doc_id: int) -> Document:
@@ -275,6 +288,13 @@ def sources(ctx: BrainCtx = Depends(reader)):
         out.append({"id": s.id, "kind": s.kind, "name": s.name, "config": _public_config(s), "sync_interval": s.sync_interval, "enabled": s.enabled, "status": s.status, "last_sync_at": s.last_sync_at,
                     "last_error": s.last_error, "documents": sum(counts.values()), "by_status": counts})
     return {"enabled": index.enabled(), "sources": out}
+
+
+@router.get("/ocr")
+def ocr_status(ctx: BrainCtx = Depends(reader)):
+    """Whether scanned PDFs and images can be read here (#135): the service, its languages, and whether this brain uses the vision
+    model."""
+    return {**ocr.status(), "vision": bool(ctx.brain.ocr_vision)}
 
 
 SORTS = {"updated": func.coalesce(Document.source_updated_at, Document.last_seen_at), "title": func.lower(Document.title), "size": Document.size, "chunks": Document.chunks}
@@ -520,4 +540,4 @@ def _mime(ext: str) -> str:
             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
             ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".odt": "application/vnd.oasis.opendocument.text"}.get(ext, "application/octet-stream")
+            ".odt": "application/vnd.oasis.opendocument.text", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}.get(ext, "application/octet-stream")
