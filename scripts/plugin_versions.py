@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PLUGINS = {
     "integrations/claude-code/plugin": "integrations/claude-code/plugin/.claude-plugin/plugin.json",
     "integrations/hermes-agent/plugin": "integrations/hermes-agent/plugin/plugin.yaml",
+    "integrations/codex/plugin": "integrations/codex/plugin/.codex-plugin/plugin.json",
 }
 _SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 

@@ -22,6 +22,7 @@ DETECTOR = ROOT / "api" / "mimirsynth" / "secretscan.py"
 TARGETS = [   # folders that get a copy of LIB
     ROOT / "integrations" / "claude-code" / "plugin" / "scripts" / "mimirsynth_agent",
     ROOT / "integrations" / "hermes-agent" / "plugin" / "mimirsynth_agent",
+    ROOT / "integrations" / "codex" / "plugin" / "scripts" / "mimirsynth_agent",
 ]
 
 

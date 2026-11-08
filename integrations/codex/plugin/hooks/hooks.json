@@ -1,0 +1,8 @@
+{
+  "description": "MimirSynth: what changed at session start, recall before each prompt, and (only if capture is turned on) a note of the session, whose own file becomes one quarantined proposal at the next start.",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "python3 \"${PLUGIN_ROOT}/scripts/hook.py\" session-start", "commandWindows": "python \"${PLUGIN_ROOT}/scripts/hook.py\" session-start", "timeout": 15 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "python3 \"${PLUGIN_ROOT}/scripts/hook.py\" prompt", "commandWindows": "python \"${PLUGIN_ROOT}/scripts/hook.py\" prompt", "timeout": 10 }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "python3 \"${PLUGIN_ROOT}/scripts/hook.py\" session-end", "commandWindows": "python \"${PLUGIN_ROOT}/scripts/hook.py\" session-end", "timeout": 3 }] }]
+  }
+}

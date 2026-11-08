@@ -160,3 +160,14 @@ The setup asks for the server, the brain and the tokens (hidden, never through t
 - The **session capture** is off by default; with `capture` set to `draft` or `send`, each finished session that changed files or ended with a substantial answer becomes a draft or one proposal in quarantine, redacted, and only with a contributor token.
 
 Details, every command and what it does on your machine: [the plugin's README](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/hermes-agent/plugin/README.md).
+
+## Codex
+A native plugin for the Codex CLI (0.167 or later) recalls before every prompt, brings what changed at session start, and adds the skills `$mimirsynth:setup`, `$mimirsynth:status`, `$mimirsynth:search` and `$mimirsynth:remember`, with the same configuration as every other MimirSynth agent plugin (`~/.config/mimirsynth/config.json`). Install it with one command:
+```bash
+codex plugin marketplace add mimirsynth/mimirsynth && codex plugin add mimirsynth@mimirsynth
+```
+Then, once:
+1. Run `$mimirsynth:setup` in Codex: it prints the command that asks for the URL, the brain and the tokens, hidden, in your terminal. If MimirSynth is already set up for another agent on the machine, there is nothing to do.
+2. Open `/hooks` in Codex and trust the three `mimirsynth` hooks. Codex runs a plugin's hooks only once they are trusted, and asks again after each update; `$mimirsynth:status` says when they are not.
+
+The capture of what each session learned is **off** by default; when you turn it on, a finished session is read from Codex's own session file and becomes at most one proposal, redacted, in quarantine. To let the model call MimirSynth's tools too, add the brain's MCP server with `codex mcp add mimirsynth --url "https://your-server/api/brains/<slug>/mcp" --bearer-token-env-var MIMIRSYNTH_TOKEN`. Details in [the plugin's README](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/codex/README.md).
