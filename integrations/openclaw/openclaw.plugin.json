@@ -1,0 +1,66 @@
+{
+  "id": "mimirsynth",
+  "name": "MimirSynth",
+  "description": "The team's MimirSynth brain: recall before each prompt, what changed at session start, search and remember, and an optional, quarantined capture of each session.",
+  "categories": [
+    "memory"
+  ],
+  "activation": {
+    "onStartup": true
+  },
+  "skills": [
+    "skills"
+  ],
+  "contracts": {
+    "tools": [
+      "mimirsynth_search",
+      "mimirsynth_remember"
+    ]
+  },
+  "toolMetadata": {
+    "mimirsynth_search": {
+      "profiles": [
+        "minimal",
+        "coding",
+        "messaging",
+        "full"
+      ]
+    },
+    "mimirsynth_remember": {
+      "sideEffecting": true,
+      "profiles": [
+        "coding",
+        "messaging",
+        "full"
+      ]
+    }
+  },
+  "cliCommands": [
+    {
+      "name": "mimirsynth",
+      "description": "MimirSynth memory: setup, status, search, remember and session drafts",
+      "hasSubcommands": true
+    }
+  ],
+  "commandAliases": [
+    {
+      "name": "mimirsynth"
+    }
+  ],
+  "uiHints": {
+    "conversations": {
+      "label": "Use the brain with other people",
+      "help": "Recall, news, the MimirSynth tools and the capture also in group chats and with other senders. Off: only your own conversations see what the brain knows."
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "conversations": {
+        "type": "boolean",
+        "default": false
+      }
+    }
+  }
+}

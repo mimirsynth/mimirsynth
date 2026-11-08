@@ -171,3 +171,12 @@ Después, una vez:
 2. Abre `/hooks` en Codex y confía en los tres hooks de `mimirsynth`. Codex solo ejecuta los hooks de un plugin cuando confías en ellos, y vuelve a preguntar tras cada actualización; `$mimirsynth:status` avisa cuando no lo están.
 
 La captura de lo que aprendió cada sesión está **desactivada** por defecto; si la activas, una sesión terminada se lee del propio fichero de sesión de Codex y se convierte como mucho en una propuesta, redactada, en cuarentena. Para que el modelo pueda llamar también a las herramientas de MimirSynth, añade el servidor MCP del brain con `codex mcp add mimirsynth --url "https://tu-servidor/api/brains/<slug>/mcp" --bearer-token-env-var MIMIRSYNTH_TOKEN`. Detalles en [el README del plugin](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/codex/README.es.md).
+
+## OpenClaw
+[OpenClaw](https://github.com/openclaw/openclaw) usa MimirSynth con un plugin nativo: recall antes de cada prompt, qué cambió al empezar cada sesión, `mimirsynth_search` y `mimirsynth_remember` como herramientas del agente, `/mimirsynth status|search|drafts` en cualquier chat y una captura de sesiones opcional, desactivada por defecto. En la máquina donde corre el Gateway de OpenClaw (OpenClaw 2026.9.36 o posterior):
+```bash
+openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup
+```
+OpenClaw pide que aceptes las capacidades del plugin. `setup` pide, en la terminal y nunca por un chat, la URL, el brain, un token **lector** para el recall, opcionalmente un token **colaborador** para proponer (ocultos) y el modo de captura; escribe `~/.config/mimirsynth/config.json`, que comparten todas las integraciones de agentes de MimirSynth de esa máquina, y ofrece conceder el acceso a la conversación que OpenClaw exige antes de ejecutar el hook de recall de un plugin de terceros (`plugins.entries.mimirsynth.hooks.allowConversationAccess`). Compruébalo con `openclaw mimirsynth status`.
+
+Es un plugin acompañante: la memoria propia de OpenClaw sigue funcionando. Por defecto solo tus propias conversaciones ven el brain; los grupos y otros remitentes no, salvo que pongas `plugins.entries.mimirsynth.config.conversations` a `true`. Si MimirSynth está caído, no se inyecta nada y el asistente sigue. Detalles, la captura y cómo instalarlo desde un clon: [`integrations/openclaw`](https://github.com/MimirSynth/mimirsynth/tree/main/integrations/openclaw).
