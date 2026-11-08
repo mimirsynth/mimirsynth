@@ -32,7 +32,7 @@ export default function VocabAliasCleanup({ graph }: { graph: string }) {
   const d = pv.data;
   return (
     <FillArea><Stack gap="sm">
-      <Text size="sm" c="dimmed" maw={760}>
+      <Text size="sm" c="dimmed" className="ms-measure">
         {t("Alias que solo repiten el nombre de la entidad (sin contar mayúsculas ni espacios) o repiten otro alias. Los dejaron fusiones antiguas; las de ahora ya no los escriben. La página de la entidad no los muestra, pero siguen en el grafo. Limpiar los quita y deja los demás alias como están; antes se guarda una copia del grafo y el cambio se puede deshacer.")}{" "}
         <Btn kind="link" component={Link} to="/calidad?tab=dup">{t("Fusionar duplicados")}</Btn>
       </Text>

@@ -52,7 +52,7 @@ export default function BrainWebhooks({ brain }: { brain: Brain }) {
   const open = (h?: Hook) => { preview.reset(); setSample(""); setEdit({ id: h?.id ?? null, d: h ? { ...EMPTY, ...h, ...(h.config as Partial<Draft>) } : { ...EMPTY } }); };
   return (
     <Stack gap="sm">
-      <Text size="sm" c="dimmed">{t("Lo que pasa en la infraestructura (una alerta, un despliegue, un pipeline, una copia fallida) entra como propuesta de memoria episódica: «qué pasó y cuándo». Cada webhook tiene su dirección y su secreto, y una plantilla que lee el JSON de su emisor. Una alerta que se repite no crea una propuesta por aviso: se agrupa y, si se resuelve en {{n}} minutos, queda una sola con su inicio y su fin.", { n: d?.group_minutes ?? 15 })}</Text>
+      <Text size="sm" c="dimmed" className="ms-measure">{t("Lo que pasa en la infraestructura (una alerta, un despliegue, un pipeline, una copia fallida) entra como propuesta de memoria episódica: «qué pasó y cuándo». Cada webhook tiene su dirección y su secreto, y una plantilla que lee el JSON de su emisor. Una alerta que se repite no crea una propuesta por aviso: se agrupa y, si se resuelve en {{n}} minutos, queda una sola con su inicio y su fin.", { n: d?.group_minutes ?? 15 })}</Text>
       <Group><Btn kind="primary" icon="plus" onClick={() => open()}>{t("Crear webhook")}</Btn></Group>
       <MutationError error={q.error ?? rotate.error ?? remove.error} />
       {d && (d.items.length ? <DataTable fz="sm">

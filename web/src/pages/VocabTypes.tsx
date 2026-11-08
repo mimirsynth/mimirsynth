@@ -82,7 +82,7 @@ export default function VocabTypes({ graph, isAdmin, isCurator }: { graph: strin
     <FillArea>
       <Stack gap="sm">
         <Group justify="space-between">
-          <Text size="sm" c="dimmed">
+          <Text size="sm" c="dimmed" className="ms-measure">
             {t("El catálogo de tipos de la ontología guía qué tipos extrae el ingestor y propone el corrector. Renombrar o fusionar un tipo también reetiqueta sus entidades del grafo (se puede deshacer).")}
 {data.untyped > 0 && t(" Hay {{untyped}} entidades sin tipo.", { untyped: data.untyped })}
           </Text>

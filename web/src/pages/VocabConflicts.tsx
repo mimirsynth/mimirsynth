@@ -164,7 +164,7 @@ export default function VocabConflicts({ graph, role }: { graph: string; role: s
           })}</DataTable.Tbody>
         </DataTable>
       </Stack>}
-      {!!d?.generic_facts && <Text size="xs" c="dimmed">{t("{{n}} hechos con relaciones genéricas (RELATES_TO y parecidas) no se comparan: pueden unir cualquier cosa.", { n: d.generic_facts })}</Text>}
+      {!!d?.generic_facts && <Text size="xs" c="dimmed" className="ms-measure">{t("{{n}} hechos con relaciones genéricas (RELATES_TO y parecidas) no se comparan: pueden unir cualquier cosa.", { n: d.generic_facts })}</Text>}
       {d && (d.groups.length ? <Stack gap="xs">
         <Text fw={600} size="sm">{t("Posibles contradicciones ({{n}})", { n: d.total })}</Text>
         <Text size="xs" c="dimmed">{t("«Tipo del destino» es el tipo de entidad de los destinos: solo se comparan destinos del mismo tipo. «Decide tú» sale cuando las fechas no dicen cuál es el actual: o son iguales, o solo dicen cuándo se aprendió cada hecho.")}</Text>
