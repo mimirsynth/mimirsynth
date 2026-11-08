@@ -6,7 +6,52 @@
 - Docker con Compose v2 y unos 2 GB de RAM libres para la aplicación, PostgreSQL y FalkorDB.
 - Un endpoint compatible con OpenAI para **embeddings** (p. ej. [Ollama](https://ollama.com) con `nomic-embed-text`) y otro para el **LLM** que extrae los hechos ([qué modelo](CONFIGURATION.md#elegir-el-modelo-de-extracción)). Pueden ser locales o de un proveedor en la nube. Se configuran después, en la interfaz. Sin ellos la instancia arranca, pero no hay nada útil que ver: las propuestas no se ingieren y el recall no devuelve nada.
 
-## Antes de empezar
+## Instalar con un comando
+El instalador comprueba Docker, hace dos preguntas, genera los secretos, arranca todo y abre el navegador en el asistente de primer arranque. No tienes que editar `.env`.
+
+En **Linux** o **macOS**:
+```bash
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash
+```
+En **Windows**, en PowerShell, con [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) instalado:
+```powershell
+irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps1 | iex
+```
+Qué hace, en este orden:
+1. **Comprueba Docker y Compose v2.** En Linux, si falta Docker, ofrece instalarlo con el script oficial de Docker (`get.docker.com`, necesita `sudo`). En macOS y Windows te remite a Docker Desktop, y lo arranca si está instalado pero parado; en Windows, Docker Desktop necesita WSL2 (`wsl --install` en un PowerShell abierto como administrador).
+2. **Pregunta dónde vive tu grafo de conocimiento.** *Local* (la opción por defecto) arranca un FalkorDB incluido junto a MimirSynth. *Existente* pide el tipo (FalkorDB o Neo4j), el host, el puerto, el usuario y la contraseña de un servidor que ya tienes, y comprueba que responde antes de seguir. A un servidor en el mismo ordenador (`localhost`) el contenedor llega como `host.docker.internal`; en Linux debe escuchar en una dirección que alcancen los contenedores, no solo en `127.0.0.1`. La prueba completa de conexión (credenciales, versión, permisos) se hace en el asistente.
+3. **Ofrece un Ollama incluido** para los embeddings (el perfil `ollama`) y descarga `nomic-embed-text`. La imagen es una descarga de unos 3,5 GB y funciona con la CPU; si Ollama ya está en marcha en el ordenador, el instalador usa ese. En un Mac con Apple silicon la aplicación nativa de Ollama es más rápida: usa la GPU.
+4. **Escribe `docker-compose.yml` y `.env`** en `~/mimirsynth` (`%USERPROFILE%\mimirsynth` en Windows), con un `POSTGRES_PASSWORD` y un `MIMIRSYNTH_SESSION_SECRET` aleatorios, la versión de la release fijada en `MIMIRSYNTH_VERSION`, un puerto libre (el 8000 o el siguiente) y los perfiles elegidos en `COMPOSE_PROFILES`, para que un simple `docker compose up -d` en esa carpeta arranque después los mismos servicios.
+5. **Arranca los servicios**, espera a que responda `/api/health`, muestra la dirección y el **código de primer arranque**, y abre el navegador.
+
+Volver a ejecutarlo es seguro: si MimirSynth ya está instalado en esa carpeta, no cambia nada y ofrece actualizar con `update.sh` (en Linux; ver [Actualizar](#actualizar)).
+
+### Sin preguntas
+Cada respuesta tiene su opción, para scripts y automatización (`--help` las enumera). Con `--yes` no pregunta nada: FalkorDB incluido, sin Ollama salvo con `--ollama` y sin instalar Docker salvo con `--install-docker`.
+```bash
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash -s -- --yes --ollama
+MIMIRSYNTH_GRAPH_PASSWORD='…' ./install.sh --yes --graph existing --graph-type neo4j --graph-host grafo.example.com
+```
+En PowerShell los parámetros se llaman igual (`-Yes`, `-Ollama`, `-Graph existing`, `-GraphType`, `-GraphHost`, `-GraphPort`, `-GraphUser`, `-Dir`, `-Port`, `-Version`, `-Lang`, `-NoBrowser`, `-NoStart`):
+```powershell
+& ([scriptblock]::Create((irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps1))) -Yes -Ollama
+```
+La contraseña de una base de datos de grafos existente se lee de `MIMIRSYNTH_GRAPH_PASSWORD`, nunca de la línea de comandos, para que no quede en el historial. Los mensajes salen en inglés o en castellano según el idioma del sistema (`--lang es`), y el idioma por defecto de la instancia sigue al de los mensajes.
+
+Neo4j necesita una versión de MimirSynth con soporte de Neo4j. Hasta entonces, el instalador escribe la conexión en `.env`, pero la instancia solo habla con FalkorDB.
+
+### Comprobar la descarga
+Cada release enumera el SHA-256 de sus ficheros en sus notas y en `SHA256SUMS`. Para comprobar el instalador antes de ejecutarlo:
+```bash
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing && bash install.sh
+```
+
+## Instalación manual
+El instalador no hace nada que no puedas hacer a mano. Estos son los mismos pasos, para cuando quieras controlar cada uno.
+
+### Antes de empezar
 En un servidor Linux vacío (p. ej. un Debian o Ubuntu mínimo), instala `curl` y Docker y comprueba que está Compose v2. En macOS o Windows, instala [Docker Desktop](https://docs.docker.com/desktop/).
 ```bash
 sudo apt-get update && sudo apt-get install -y curl openssl
@@ -28,7 +73,7 @@ ollama pull qwen2.5:14b-instruct    # extracción de hechos: ver «Elegir el mod
   ```
 - **Ollama en otra máquina:** usa su dirección, p. ej. `http://192.168.1.20:11434/v1`.
 
-## Primera instalación
+### Descargar y arrancar
 Todo sale de la release oficial: un fichero de Compose y una plantilla de entorno. No necesitas el código fuente.
 ```bash
 mkdir mimirsynth && cd mimirsynth
@@ -45,14 +90,14 @@ Descarga la imagen oficial (`ghcr.io/mimirsynth/mimirsynth`, para amd64 y arm64)
 
 > No pongas comentarios al final de una línea con valor en `.env` (`CLAVE=valor # comentario`): Docker Compose los leería como parte del valor.
 
-### Asistente de primer arranque
-Una instancia sin administradores imprime un **código de instalación** en su registro:
+## Asistente de primer arranque
+Una instancia sin administradores imprime un **código de instalación** en su registro (el instalador te lo muestra):
 ```bash
 docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
 Abre la aplicación, introduce el código y crea la cuenta de administrador. Guarda `MIMIRSYNTH_SESSION_SECRET`: cifra los secretos guardados (claves de los proveedores, contraseña SMTP, secreto OIDC, semillas del doble factor…), así que restaurar una copia en otro servidor o copiar la base de datos a una instalación de pruebas exige el **mismo** valor. Con otro la aplicación arranca igual, pero lo dice: una línea en su log, un aviso arriba en Administración y `"secrets": "unreadable"` en `/api/health`; lo que necesita esos secretos responde con un error claro. Vuelve a poner el valor correcto y reinicia. Si se ha perdido, introduce de nuevo esos secretos y quita el doble factor de las cuentas afectadas (Administración → Usuarios); el aviso desaparece cuando ya no queda nada sin leer.
 
-### Primeros pasos
+## Primeros pasos
 1. En **Administración → Modelo LLM** y **Embeddings**, añade un motor (endpoint, clave y modelo) y márcalo como predeterminado. «Probar» comprueba que responde.
 2. Crea un **brain** (Administración → Brain → Brain activo → Crear brain) y, si quieres, aplica un paquete de ontología en Vocabulario → Ontología.
 3. Crea un token de API para tus agentes y conecta el primero: ver [AGENTS.md](AGENTS.md).
@@ -74,7 +119,7 @@ No publiques el puerto 8000 a Internet sin TLS. Pon un proxy inverso (Caddy, Tra
 PostgreSQL y FalkorDB no publican puertos fuera de la red de Compose. No los expongas.
 
 ## Actualizar
-La release incluye un script que hace la copia de seguridad, actualiza y comprueba de una vez:
+La release incluye un script que hace la copia de seguridad, actualiza y comprueba de una vez. El instalador lo deja en la carpeta de la instalación; si no, descárgalo:
 ```bash
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
 ./update.sh              # última versión estable; ./update.sh --check solo informa; --version 0.7.1 elige una
@@ -86,6 +131,8 @@ Hace, por este orden:
 4. **Comprueba** que responde con la versión nueva y está sana, y muestra la revisión de la base de datos. Si no se verifica, te dice cómo volver atrás.
 
 Para volver atrás: `./update.sh --rollback` devuelve el `docker-compose.yml` y el `.env` anteriores (y con ellos la imagen anterior), y guarda los fallidos como `*.rolledback`; añade `--with-db` para restaurar también la base de datos (lo escrito desde la copia se pierde). La vuelta atrás no restaura el volumen de documentos ni FalkorDB (están en la copia, para restaurarlos a mano si hace falta), y un FalkorDB externo no forma parte de la copia: guárdalo tú. Sin el script, a mano es `docker compose pull` y `docker compose --profile bundled up -d`, tras una copia de seguridad.
+
+`update.sh` funciona en Linux (necesita las herramientas de GNU). En Windows, ejecútalo desde WSL en la carpeta de la instalación; en macOS, haz una copia de seguridad y actualiza a mano como se indica arriba.
 
 ## Copias de seguridad
 Hay tres cosas que guardar, y deben ser coherentes entre sí:
@@ -118,6 +165,8 @@ Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTR
 
 ## Problemas frecuentes
 - **«define POSTGRES_PASSWORD» o «define MIMIRSYNTH_SESSION_SECRET» al arrancar:** faltan en `.env`.
+- **El instalador dice que Docker necesita `sudo`:** tu usuario se acaba de añadir al grupo `docker`, y eso surte efecto en el siguiente inicio de sesión. Mientras tanto el instalador usa `sudo`; cierra la sesión y vuelve a entrar para usar `docker` sin él.
+- **El instalador se para en «nada responde» con una base de datos de grafos existente:** comprueba desde ese ordenador el host, el puerto y el cortafuegos. Para escribir la configuración de todos modos, responde que quieres continuar o añade `--skip-graph-check`.
 - **Las propuestas aprobadas se quedan en «aprobada»:** no hay LLM configurado. Añade un motor en Administración → Modelo LLM.
 - **Los embeddings fallan con un error de conexión, con Ollama en el mismo host Linux:** Ollama solo escucha en `127.0.0.1`; ver [Preparar Ollama](#preparar-ollama). Si usas un `docker-compose.yml` propio, comprueba que el servicio `mimirsynth` tiene `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **El recall no devuelve nada:** comprueba los embeddings (Administración → Embeddings → Probar) y que el índice de texto esté sincronizado (pestaña Preguntar muestra su estado).

@@ -68,3 +68,46 @@ jobs:
           out=$(curl -sf -X POST --data-binary @ocr/testdata/sample.png "localhost:8001/ocr?lang=spa%2Beng")
           echo "$out"
           echo "$out" | grep -q 4471
+      - name: The installer installs from scratch with the bundled FalkorDB, and a second run detects it (#360)
+        run: |
+          docker tag mimirsynth:ci ghcr.io/mimirsynth/mimirsynth:ci   # the compose file's image at version "ci": nothing is pulled
+          ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/local" --no-browser | tee "$RUNNER_TEMP/local.log"
+          grep -q "First-start code: [A-Za-z0-9_-]\{16\}" "$RUNNER_TEMP/local.log"
+          cd "$RUNNER_TEMP/local"
+          [ "$(stat -c %a .env)" = 600 ]
+          grep -q '^COMPOSE_PROFILES=bundled$' .env
+          [ "$(grep -c '^POSTGRES_PASSWORD=[0-9a-f]\{64\}$' .env)" = 1 ]
+          curl -sf localhost:8000/api/health | grep -q '"graph":true'
+          "$GITHUB_WORKSPACE/install.sh" --yes --from "$GITHUB_WORKSPACE" --no-browser | grep -q "already installed"
+      - name: The installer connects to an existing FalkorDB on the host (#360)
+        run: |
+          docker run -d --name existing-falkor --network host falkordb/falkordb:v4.22.0   # listens on the host itself, port 6379
+          for i in $(seq 1 30); do (exec 3<>/dev/tcp/127.0.0.1/6379) 2>/dev/null && break; sleep 1; done
+          ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/existing" --no-browser \
+            --graph existing --graph-type falkordb --graph-host localhost --graph-port 6379 | tee "$RUNNER_TEMP/existing.log"
+          grep -q "The container reaches host.docker.internal:6379" "$RUNNER_TEMP/existing.log"
+          cd "$RUNNER_TEMP/existing"
+          grep -q '^MIMIRSYNTH_FALKOR_HOST=host.docker.internal$' .env
+          grep -q '^COMPOSE_PROFILES=$' .env
+          [ -z "$(docker compose ps -q falkordb)" ]
+          curl -sf localhost:8001/api/health | grep -q '"graph":true'
+      - name: The installer stops when an existing graph database does not answer (#360)
+        run: |
+          if ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/nothing" --no-start --graph existing --graph-host 127.0.0.1 --graph-port 6391; then exit 1; fi
+          [ ! -f "$RUNNER_TEMP/nothing/.env" ]
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck (install.sh, update.sh)
+        run: shellcheck install.sh && shellcheck -S warning update.sh
+      - name: install.ps1 parses, is plain ASCII (Windows PowerShell 5.1 reads it in the ANSI code page) and passes PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD/install.ps1", [ref]$null, [ref]$errs)
+          if ($errs) { $errs | ForEach-Object { $_.ToString() }; exit 1 }
+          if ([IO.File]::ReadAllBytes("$PWD/install.ps1") | Where-Object { $_ -gt 127 }) { throw "install.ps1 must be plain ASCII: write Spanish letters as \uXXXX" }
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path install.ps1 -Severity Error
+          if ($r) { $r | Format-Table -AutoSize | Out-String | Write-Host; exit 1 }

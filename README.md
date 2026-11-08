@@ -35,25 +35,19 @@ Status: **under active development** (0.x). It works end to end, but the API and
 **Full user guide in the [wiki](https://github.com/MimirSynth/mimirsynth/wiki)** (also [in Spanish](https://github.com/MimirSynth/mimirsynth/wiki/Inicio)). Technical documentation: [installation](docs/INSTALL.md), [configuration](docs/CONFIGURATION.md), [connecting agents](docs/AGENTS.md), [architecture](docs/ARCHITECTURE.md), [ontology](docs/ONTOLOGY.md), [document memory](docs/DOCUMENTS.md), [federation](docs/FEDERATION.md) and [notifications](docs/NOTIFICATIONS.md).
 
 ## Quick start
-You need Docker with Compose v2, an OpenAI-compatible endpoint for embeddings (e.g. Ollama with `nomic-embed-text`) and another for the extraction LLM ([which model](docs/CONFIGURATION.md#choosing-the-extraction-model)). Without both endpoints the instance starts, but there is nothing useful to see.
+You need Docker and two OpenAI-compatible endpoints: one for embeddings and one for the extraction LLM ([which model](docs/CONFIGURATION.md#choosing-the-extraction-model)). Without both the instance starts, but there is nothing useful to see.
 
-On a bare Linux server (Debian, Ubuntu), first install `curl` and Docker; on macOS or Windows, install Docker Desktop instead. If you run Ollama on the same Linux host, [prepare it](docs/INSTALL.md#preparing-ollama) so the container can reach it.
+One command installs MimirSynth, starts it and opens the browser on the first-start wizard. On Linux or macOS:
 ```bash
-sudo apt-get update && sudo apt-get install -y curl openssl
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER" && newgrp docker    # run docker without sudo
-docker compose version    # must answer v2.x
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash
 ```
-Then:
-```bash
-mkdir mimirsynth && cd mimirsynth
-curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/docker-compose.yml
-curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/env.example -o .env
-# edit .env: set POSTGRES_PASSWORD and MIMIRSYNTH_SESSION_SECRET (openssl rand -hex 32)
-docker compose --profile bundled up -d    # pulls the published image; includes FalkorDB (without the profile, point MIMIRSYNTH_FALKOR_HOST at your own)
-docker compose logs mimirsynth | grep -A3 "FIRST START"    # installation wizard code
+On Windows, in PowerShell, with Docker Desktop:
+```powershell
+irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps1 | iex
 ```
-Open `http://localhost:8000`, enter the code and create the administrator account. Then, under **Administration**, add the AI engines (**LLM model** and **Embeddings**, with "Test" to check them) and create a brain (**Brain → Active brain → Create brain**).
+On Linux it offers to install Docker if it is missing; on macOS and Windows install [Docker Desktop](https://docs.docker.com/desktop/) first. It asks whether to start a bundled FalkorDB or use your own FalkorDB or Neo4j, and whether to start a bundled Ollama for embeddings; it generates the secrets and prints the address and the first-start code. Options without questions, checksums and the manual installation: [docs/INSTALL.md](docs/INSTALL.md).
+
+In the browser, enter the code and create the administrator account. Then, under **Administration**, add the AI engines (**LLM model** and **Embeddings**, with "Test" to check them) and create a brain (**Brain → Active brain → Create brain**).
 
 ### Connect your first agent
 Under **My account → API tokens**, create a token for that brain with the **Contributor** role (it is shown only once). With Claude Code, over MCP:

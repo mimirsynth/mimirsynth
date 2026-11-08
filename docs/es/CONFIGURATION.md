@@ -16,6 +16,10 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_SESSION_SECRET` | – | Firma las sesiones y cifra los secretos guardados (obligatoria) |
 | `MIMIRSYNTH_PORT` | `8000` | Puerto publicado en el host |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
+| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | `falkordb` o `neo4j`, para una base de datos de grafos existente. Neo4j y las credenciales de abajo surten efecto desde la versión con soporte de Neo4j |
+| `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB existente |
+| `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | vacío | Un Neo4j existente (`bolt://host:7687`; base de datos vacía: la predeterminada del servidor) |
+| `COMPOSE_PROFILES` | vacío | Perfiles que arranca un simple `docker compose up -d`: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. Lo define el instalador |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | vacío | Grafos existentes a adoptar como brains en el primer arranque (`slug:Nombre,otro:Otro`) |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, OIDC opcional) o `off` (solo desarrollo, sin inicio de sesión) |
 | `MIMIRSYNTH_PUBLIC_URL` | vacío | URL pública, para OIDC, enlaces de invitación y **llaves de acceso** (su dominio es el identificador de la parte confiante: defínela, con HTTPS, antes de que nadie registre una) |

@@ -16,6 +16,10 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 | `MIMIRSYNTH_SESSION_SECRET` | – | Signs sessions and encrypts the secrets stored in the database (required) |
 | `MIMIRSYNTH_PORT` | `8000` | Port published on the host |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
+| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | `falkordb` or `neo4j`, for an existing graph database. Neo4j and the credentials below take effect from the version with Neo4j support |
+| `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | empty | Credentials of an existing FalkorDB |
+| `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | empty | An existing Neo4j (`bolt://host:7687`; empty database: the server's default) |
+| `COMPOSE_PROFILES` | empty | Profiles a plain `docker compose up -d` starts: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. The installer sets it |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | empty | Existing graphs to adopt as brains on first start (`slug:Name,other:Other`) |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (own accounts, optional OIDC) or `off` (development only, no sign-in) |
 | `MIMIRSYNTH_PUBLIC_URL` | empty | Public URL, for OIDC, invitation links and **passkeys** (its domain is the passkeys' relying-party ID: set it, over HTTPS, before anyone registers one) |
