@@ -17,7 +17,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 
 | Area | Routes | Role |
 |---|---|---|
-| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST /recall/{rid}/ratings` · `DELETE /recall/{rid}/ratings` · `POST /answer` | reader |
+| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST/DELETE /recall/{rid}/ratings` · `POST /answer` | reader |
 | | `GET /recall/quality` | curator |
 | | `PUT /recall/settings` | administrator |
 | **Text index** | `GET /index/status` | reader |

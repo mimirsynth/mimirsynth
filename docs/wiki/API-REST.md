@@ -17,7 +17,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 
 | Área | Rutas | Rol |
 |---|---|---|
-| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST /recall/{rid}/ratings` · `DELETE /recall/{rid}/ratings` · `POST /answer` | lector |
+| **Recall** | `POST /recall` · `GET /whoami` · `POST /news` · `POST /mcp` · `POST/DELETE /recall/{rid}/ratings` · `POST /answer` | lector |
 | | `GET /recall/quality` | curador |
 | | `PUT /recall/settings` | administrador |
 | **Índice de texto** | `GET /index/status` | lector |
