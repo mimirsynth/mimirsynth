@@ -8,6 +8,7 @@ called as Hermes's MemoryManager calls them. `.github/workflows/plugin-hermes-ag
 import importlib.util
 import io
 import json
+import re
 import sys
 import time
 import types
@@ -111,6 +112,9 @@ def test_the_plugin_hangs_together_and_carries_the_shared_library(hermes):
         assert (PLUGIN / "mimirsynth_agent" / f.name).read_bytes() == f.read_bytes()
     assert "register_memory_provider" in (PLUGIN / "__init__.py").read_text(encoding="utf-8")   # how Hermes tells a memory provider
     assert (PLUGIN / "README.md").exists() and (PLUGIN / "README.es.md").exists()
+    # Hermes's install scan refuses a plugin whose source holds something shaped like a leaked key (tools/skills_guard.py)
+    leaked = re.compile(r"ghp_[A-Za-z0-9]{36}|AKIA[0-9A-Z]{16}|sk-[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}")
+    assert not [f.name for f in PLUGIN.rglob("*") if f.is_file() and leaked.search(f.read_text(encoding="utf-8", errors="replace"))]
     registered = {}
     ctx = types.SimpleNamespace(register_memory_provider=lambda p: registered.setdefault("provider", p),
                                 register_command=lambda name, handler, **k: registered.setdefault(name, handler))
