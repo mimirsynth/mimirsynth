@@ -26,13 +26,13 @@ def fake_embedder(monkeypatch):
 @pytest.fixture()
 def graphs():
     """The graphs the tests import into, removed before and after."""
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     names = [f"imp{i}" for i in range(1, 12)]
 
     def clean():
         for g in names:
             if FALKOR and g in fc().list_graphs():
-                fc().select_graph(g).delete()
+                fc().delete_graph(g)
     clean()
     yield names
     clean()
@@ -87,7 +87,7 @@ def _repack(files: dict[str, bytes], manifest=None, links: tuple = ()) -> bytes:
 
 def _left(slug: str, graph: str | None = None) -> list[str]:
     """What an import that failed should not have left behind."""
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     from mimirsynth.models import Brain
     from mimirsynth.store import _factory
     with _factory()() as db:
@@ -123,14 +123,14 @@ def test_import_through_json_with_another_name(client, falkor, graphs, fake_embe
     assert item["state"] == "done", item
     assert item["graph"]["method"] == "json" and item["graph"]["fallback_reason"] == "not_requested" and not item["dump"]
     assert (item["graph"]["nodes"], item["graph"]["edges"]) == (3, 1) and item["vectors"]["graph_computed"] == 3   # two entities, one fact
-    from mimirsynth.db import client as fc
-    g = fc().select_graph("imp1")
+    from mimirsynth.graphdb import backend as fc
+    g = fc().graph("imp1")
     assert {r[0] for r in g.query("MATCH (n) RETURN n.uuid").result_set} == {"e1", "a", "b"}
     assert {r[0] for r in g.query("MATCH (n) RETURN DISTINCT n.group_id").result_set} == {"imp1"}
     assert g.query("MATCH (n:Entity:Host) RETURN n.name").result_set == [["Polaris"]]
     [[gid, fact, vec]] = g.query("MATCH ()-[e:RELATES_TO]->() RETURN e.group_id, e.fact, e.fact_embedding").result_set
     assert (gid, fact, len(vec)) == ("imp1", "wiki runs on Polaris", fake_embedder)
-    assert fc().select_graph(GRAPH).query("MATCH (n) RETURN count(n)").result_set[0][0] == 3       # the source is untouched
+    assert fc().graph(GRAPH).query("MATCH (n) RETURN count(n)").result_set[0][0] == 3       # the source is untouched
     with _factory()() as db:
         b = db.query(Brain).filter(Brain.slug == "imp1").one()
         assert b.name == "IMP1" and b.graph_name == "imp1"
@@ -159,16 +159,16 @@ def test_import_through_json_with_another_name(client, falkor, graphs, fake_embe
 def test_import_restores_the_dump_and_rewrites_group_id(client, falkor, graphs, fake_embedder):  # noqa: F811
     """Fast restore requested, same FalkorDB and the original graph gone (another instance): the dump goes in exactly, then to
     its new name."""
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     assert client.post("/api/brains", json={"slug": "src2", "name": "Source", "graph_name": GRAPH}).status_code == 201
     data = _export(client, "src2")
-    falkor.delete()
+    fc().delete_graph(GRAPH)
     up = _upload(client, data)
     item = _import(client, up["upload_id"], "imp2", dump=True)
     assert item["state"] == "done", item
     assert item["graph"]["method"] == "dump" and item["vectors"] == {"reused": True, "graph_computed": 1}   # only Polaris had none
     assert GRAPH not in fc().list_graphs()                                                         # restored under its name, then moved
-    g = fc().select_graph("imp2")
+    g = fc().graph("imp2")
     assert {r[0] for r in g.query("MATCH (n) RETURN DISTINCT n.group_id").result_set} == {"imp2"}
     assert g.query("MATCH (n:Entity {uuid:'a'}) RETURN n.name_embedding").result_set[0][0] == pytest.approx([0.1, 0.2])  # the dump's own
 
@@ -177,18 +177,18 @@ def test_import_restores_the_dump_and_rewrites_group_id(client, falkor, graphs, 
 def test_a_dump_that_does_not_match_the_json_copy_never_goes_in(client, falkor, graphs, fake_embedder):  # noqa: F811
     """Review of #154: the JSON files are validated but an RDB payload is not, so a package can carry clean JSON and a different
     dump. By default the dump is not used at all; with fast restore, what it restored is compared with the JSON copy and dropped."""
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     from mimirsynth.models import Audit
     from mimirsynth.store import _factory
     assert client.post("/api/brains", json={"slug": "src9", "name": "Source", "graph_name": GRAPH}).status_code == 201
     files = _files(_export(client, "src9"))
     falkor.query("CREATE (:Evil {uuid:'x1', group_id:'otro'}), (:Evil {uuid:'x2', payload:'?'})")      # in the dump only
-    files["graph/graph.dump"] = fc().connection.dump(GRAPH)
-    falkor.delete()                                                  # another instance: the dump's own name is free
+    files["graph/graph.dump"] = fc().dump(GRAPH)
+    fc().delete_graph(GRAPH)                                         # another instance: the dump's own name is free
     data = _repack(files)
 
     def evil(slug):
-        return fc().select_graph(slug).query("MATCH (n:Evil) RETURN count(n)").result_set[0][0]
+        return fc().graph(slug).query("MATCH (n:Evil) RETURN count(n)").result_set[0][0]
     item = _import(client, _upload(client, data)["upload_id"], "imp10")                            # the default
     assert item["state"] == "done" and item["graph"]["method"] == "json" and item["graph"]["fallback_reason"] == "not_requested"
     assert evil("imp10") == 0 and item["graph"]["nodes"] == 3
@@ -213,7 +213,7 @@ def test_import_only_the_structure(client, falkor, graphs):  # noqa: F811
     assert client.post("/api/brain-imports", json={"upload_id": up["upload_id"], "slug": "No Vale", "name": "x"}).status_code == 400
     item = _import(client, up["upload_id"], "imp3", mode="structure")
     assert item["state"] == "done" and item["counts"]["curation"] == {"ontology": True, "aliases": 1}
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     assert "imp3" not in fc().list_graphs()
     with _factory()() as db:
         bid = db.query(Brain).filter(Brain.slug == "imp3").one().id
@@ -300,7 +300,7 @@ def test_a_failure_in_the_middle_leaves_nothing(client, falkor, graphs, fake_emb
 @needs_falkor
 def test_an_import_cut_by_a_restart_is_undone_on_start(client, falkor, graphs):  # noqa: F811
     from mimirsynth import brainimport, jobs
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     from mimirsynth.models import Brain, Job, Membership, User
     from mimirsynth.store import _factory
     with _factory()() as db:
@@ -313,7 +313,7 @@ def test_an_import_cut_by_a_restart_is_undone_on_start(client, falkor, graphs): 
         db.add(j)
         db.commit()
         bid, jid = b.id, j.id
-    fc().select_graph("imp7").query("CREATE (:Entity {uuid:'x'})")
+    fc().graph("imp7").query("CREATE (:Entity {uuid:'x'})")
     work = brainimport._base() / ("f" * 32)
     work.mkdir(parents=True, exist_ok=True)
     brainimport._mark(work, {"slug": "imp7", "brain_id": bid, "graph": "imp7", "restored": None})

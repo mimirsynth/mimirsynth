@@ -117,18 +117,19 @@ def aux_graph(g) -> int:
 
 @pytest.fixture()
 def brain(client):
-    import falkordb
+    from mimirsynth import graphdb
     from sqlalchemy import select
 
     from mimirsynth import index
     from mimirsynth.models import Brain
     from mimirsynth.store import _factory
-    fc = falkordb.FalkorDB(host=FALKOR, port=6379)
+    graphdb.backend.cache_clear()
+    fc = graphdb.backend()
     try:
-        fc.select_graph(GRAPH).delete()
+        fc.delete_graph(GRAPH)
     except Exception:  # noqa: BLE001
         pass
-    g = fc.select_graph(GRAPH)
+    g = fc.graph(GRAPH)
     g.query("CREATE (:Episodic {uuid:'ep1', name:'Copias', content:'Las copias de seguridad se hacen cada noche a las tres.', valid_at:'2026-01-01T00:00:00Z'}), "
             "(:Episodic {uuid:'ep2', name:'Red', content:'El resolvedor DNS interno escucha en el puerto 53.', valid_at:'2026-01-02T00:00:00Z'})")
     g.query("CREATE (a:Entity {uuid:'e1', name:'Resolvedor', name_embedding: vecf32($v)})", {"v": vec("viejo", 16, "Resolvedor")})
@@ -143,7 +144,7 @@ def brain(client):
     assert client.get(f"/api/brains/rp/docs/{d['id']}").json()["status"] == "active"
     yield {"g": g, "new": new, "bid": bid, "doc": d}
     client.post("/api/brains/rp/delete", json={"confirm": "rp"})
-    g.delete()
+    fc.delete_graph(GRAPH)
 
 
 def test_fill_writes_a_shadow_column_and_leaves_the_one_in_use(client, brain):

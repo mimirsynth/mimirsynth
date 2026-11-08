@@ -491,10 +491,9 @@ def vocabulary(ctx: BrainCtx = Depends(reader)):
 # --- Consola Cypher de solo lectura -----------------------------------------------------------
 import re  # noqa: E402
 
-from falkordb.edge import Edge  # noqa: E402
-from falkordb.node import Node  # noqa: E402
-from falkordb.path import Path as FPath  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
+
+from .graphdb import Edge, Node, Path, backend  # noqa: E402
 
 _WRITE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|LOAD\s+CSV|FOREACH)\b", re.I)
 _HIDE = {"name_embedding", "fact_embedding", "summary_embedding", "embedding"}
@@ -514,21 +513,22 @@ def _node(n: Node) -> dict:
 
 
 def _edge(e: Edge) -> dict:
-    return {"_type": "edge", "id": str(e.id), "relation": e.relation, "source": str(e.src_node), "target": str(e.dest_node),
+    return {"_type": "edge", "id": str(e.id), "relation": e.relation, "source": str(e.source), "target": str(e.target),
             "properties": _props(e.properties)}
 
 
 def _val(v, nodes: dict, edges: dict):
+    v = backend().value(v)
     if isinstance(v, Node):
         d = _node(v); nodes[d["id"]] = d; return d
     if isinstance(v, Edge):
         d = _edge(v); edges[d["id"]] = d; return d
-    if isinstance(v, FPath):
-        for n in v.nodes():
+    if isinstance(v, Path):
+        for n in v.nodes:
             d = _node(n); nodes[d["id"]] = d
-        for e in v.edges():
+        for e in v.edges:
             d = _edge(e); edges[d["id"]] = d
-        return {"_type": "path", "length": v.edge_count()}
+        return {"_type": "path", "length": len(v.edges)}
     if isinstance(v, list):
         return [_val(x, nodes, edges) for x in v]
     if isinstance(v, dict):

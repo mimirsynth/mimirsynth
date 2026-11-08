@@ -304,12 +304,12 @@ def test_graph_counts_of_the_period(client, monkeypatch):  # noqa: F811
     from mimirsynth.config import settings
     from mimirsynth.models import Brain
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
+    dbm.backend.cache_clear()
     name = "zz-test-digest"
-    c = dbm.client()
+    c = dbm.backend()
     if name in c.list_graphs():
-        c.select_graph(name).delete()
-    g = c.select_graph(name)
+        c.delete_graph(name)
+    g = c.graph(name)
     old, new = "2026-10-01T10:00:00.000000Z", "2026-11-03T10:00:00.000000Z"
     g.query("CREATE (a:Entity {uuid:'a'}), (b:Entity {uuid:'b'}),"
             " (a)-[:RELATES_TO {uuid:'r1', created_at:$old}]->(b),"
@@ -319,7 +319,7 @@ def test_graph_counts_of_the_period(client, monkeypatch):  # noqa: F811
         n = digest._graph_counts(Brain(graph_name=name), datetime(2026, 11, 1, tzinfo=UTC))
         assert n == {"facts_new": 1, "facts_gone": 1}
     finally:
-        g.delete()
+        c.delete_graph(name)
 
 
 def test_what_changed_for_the_overview(client, monkeypatch):  # noqa: F811

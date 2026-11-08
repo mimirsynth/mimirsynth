@@ -19,11 +19,11 @@ def graph(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     for n in range(7):   # seven services, each «located at» two hosts: the newest one is clearly the current one
         g.query("CREATE (:Entity {uuid:$s, name:$sn}), (:Entity:Host {uuid:$a, name:$an}), (:Entity:Host {uuid:$b, name:$bn})",
                 {"s": f"s{n}", "sn": f"svc{n}", "a": f"a{n}", "an": f"old{n}", "b": f"b{n}", "bn": f"new{n}"})
@@ -34,8 +34,8 @@ def graph(monkeypatch):
         g.query("CREATE (a:Entity {uuid:$s, name:$sn})-[:RELATES_TO {uuid:$u, name:'LOCATED_AT', fact:'one host', valid_at:'2025-01-01T00:00:00Z', "
                 "created_at:'2025-01-01T00:00:00Z'}]->(:Entity:Host {uuid:$h, name:$hn})", {"s": f"x{n}", "sn": f"single{n}", "u": f"x{n}f", "h": f"h{n}", "hn": f"host{n}"})
     yield g
-    g.delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 def _setup(client, slug):  # noqa: F811
@@ -109,12 +109,12 @@ def repeated(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     name = GRAPH + "-rep"
     if name in c.list_graphs():
-        c.select_graph(name).delete()
-    g = c.select_graph(name)
+        c.delete_graph(name)
+    g = c.graph(name)
     g.query("CREATE (:Entity {uuid:'vw', name:'Vaultwarden'}), (:Entity {uuid:'al', name:'altair'}), (:Entity {uuid:'pg', name:'PostgreSQL'})")
     for u, s, t, fact, vec, when in (("r1", "vw", "al", "Vaultwarden runs on altair", [1, 0, 0], "2025-01-01T00:00:00Z"),
                                      ("r2", "vw", "al", "Vaultwarden is hosted on altair", [0.99, 0.05, 0], "2026-01-01T00:00:00Z"),
@@ -125,8 +125,8 @@ def repeated(monkeypatch):
         g.query("MATCH (a:Entity {uuid:$s}), (b:Entity {uuid:$t}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'RUNS_ON', fact:$f, valid_at:$w, "
                 "created_at:$w, fact_embedding: vecf32($v)}]->(b)", {"s": s, "t": t, "u": u, "f": fact, "v": vec, "w": when})
     yield name
-    g.delete()
-    dbm.client.cache_clear()
+    c.delete_graph(name)
+    dbm.backend.cache_clear()
 
 
 @needs_falkor
@@ -174,7 +174,7 @@ def test_the_obsolescence_pass_proposes_facts_past_their_shelf_life(client, repe
     ingest.ingest_proposal(p.id)
     gone = p.claims[0]["supersedes"]
     from mimirsynth import db as dbm
-    assert dbm.client().select_graph(repeated).query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.invalid_at", {"u": gone}).result_set[0][0]
+    assert dbm.backend().graph(repeated).query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.invalid_at", {"u": gone}).result_set[0][0]
 
 
 def test_the_noise_rules_are_conservative():
@@ -211,7 +211,7 @@ def test_the_noise_pass_and_the_stop_on_a_coverage_drop(client, repeated, monkey
     from mimirsynth.config import settings
     from mimirsynth.models import Brain, CuratorRun, HealthRun, Notification, Proposal, User
     from mimirsynth.store import _factory
-    g = dbm.client().select_graph(repeated)
+    g = dbm.backend().graph(repeated)
     g.query("MATCH (a:Entity {uuid:'vw'}) CREATE (a)-[:RELATES_TO {uuid:'nz', name:'RELATES_TO', fact:'Vaultwarden is related to it', "
             "created_at:'2026-01-01T00:00:00Z'}]->(:Entity {uuid:'it', name:'it'})")
     assert client.post("/api/brains", json={"slug": "cu6", "name": "CU6", "graph_name": repeated}).status_code == 201

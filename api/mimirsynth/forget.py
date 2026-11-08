@@ -112,17 +112,17 @@ def _graph_targets(g, uuid: str, m: Matcher) -> dict:
 
 
 def _snapshot_names(graph_name: str) -> list[str]:
-    from .db import client
-    return sorted(x for x in client().list_graphs() if x.startswith(f"_snap_{graph_name}_"))
+    from .graphdb import backend
+    return sorted(x for x in backend().list_graphs() if x.startswith(f"_snap_{graph_name}_"))
 
 
 def _snapshots(graph_name: str, uuid: str, m: Matcher) -> list[dict]:
     """The graph copies an entity merge keeps to undo it that still hold the entity, a duplicate merged into it or an episode naming it."""
-    from .db import client
+    from .db import graph
     hit = []
     for name in _snapshot_names(graph_name):
-        t = _graph_targets(client().select_graph(name), uuid, m)
-        has = bool(t["facts"]) or _exists(client().select_graph(name), uuid)
+        t = _graph_targets(graph(name), uuid, m)
+        has = bool(t["facts"]) or _exists(graph(name), uuid)
         if has or t["episodes"] or t["merged"]:
             hit.append({"name": name, "entity": has, "episodes": len(t["episodes"])})
     return hit
@@ -287,7 +287,7 @@ def _rewrite(eng: dict | None, m: Matcher, name: str, content: str) -> str | Non
 def run(brain_id: int, uuid: str, aliases: list[str], user_id: int | None, ctx=None) -> dict:
     """Deletes the entity and everything that names it, layer by layer. Returns the counts per layer (never names or text)."""
     from . import index, secretguard, usage
-    from .db import client, graph, rows
+    from .db import graph, rows
     from .models import Brain, Document, NotifyDelivery, Proposal, RecallRating, User
     from .store import _factory
     out: dict[str, dict] = {}
@@ -342,7 +342,7 @@ def run(brain_id: int, uuid: str, aliases: list[str], user_id: int | None, ctx=N
                            "without_rewrite": max(0, len(eps) - MAX_REWRITES)}
         snaps = 0
         for name in _snapshot_names(brain.graph_name):
-            s = client().select_graph(name)
+            s = graph(name)
             t = _graph_targets(s, uuid, m)
             if t["episodes"] or t["merged"] or t["facts"] or _exists(s, uuid):
                 _forget_in(s, uuid, t)

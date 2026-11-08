@@ -48,10 +48,10 @@ def _sql(sql: str, **p):
 
 
 def _graphs(*names):
-    from mimirsynth.db import client
+    from mimirsynth.graphdb import backend
     for g in names:
-        if g in client().list_graphs():
-            client().select_graph(g).delete()
+        if g in backend().list_graphs():
+            backend().delete_graph(g)
 
 
 @pytest.fixture()
@@ -90,11 +90,11 @@ def client(monkeypatch):
 def _source(c) -> int:
     """A brain with a graph whose entities and facts have their vectors, its episode index and an indexed document."""
     from mimirsynth import index
-    from mimirsynth.db import client as fc
+    from mimirsynth.graphdb import backend as fc
     from mimirsynth.models import Brain
     from mimirsynth.store import _factory
     v = c.fake.embed(["x"])[0]
-    fc().select_graph(GRAPH).query(
+    fc().graph(GRAPH).query(
         "CREATE (:Episodic {uuid:'e1', name:'nota', content:'Nextcloud runs on Notus, in rack 4', group_id:$g, valid_at:'2026-10-01T00:00:00Z'}) "
         "CREATE (a:Entity {uuid:'a', name:'Nextcloud', group_id:$g, name_embedding: vecf32($v)})"
         "-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Nextcloud runs on Notus', group_id:$g, fact_embedding: vecf32($v)}]->"
@@ -161,6 +161,6 @@ def test_another_model_computes_them_again(client, monkeypatch):
     assert item["vectors"]["graph_computed"] == 3                             # both entities and the fact
     assert item["vectors"]["doc_chunks"]["copied"] == 0 and item["vectors"]["doc_chunks"]["computed"] >= 1
     assert item["vectors"]["episode_chunks"]["copied"] == 0 and item["vectors"]["episode_chunks"]["computed"] == 1
-    from mimirsynth.db import client as fc
-    v = fc().select_graph(NEW[1]).query("MATCH (n:Entity {uuid:'a'}) RETURN n.name_embedding").result_set[0][0]
+    from mimirsynth.graphdb import backend as fc
+    v = fc().graph(NEW[1]).query("MATCH (n:Entity {uuid:'a'}) RETURN n.name_embedding").result_set[0][0]
     assert v == pytest.approx(Fake("nuevo").embed(["Nextcloud"])[0], abs=1e-6)

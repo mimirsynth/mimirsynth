@@ -238,12 +238,12 @@ def test_graph_sizes(client, token, monkeypatch):  # noqa: F811
     from mimirsynth import metrics
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
+    dbm.backend.cache_clear()
     graph = "zz-test-metrics"
-    c = dbm.client()
+    c = dbm.backend()
     if graph in c.list_graphs():
-        c.select_graph(graph).delete()
-    g = c.select_graph(graph)
+        c.delete_graph(graph)
+    g = c.graph(graph)
     g.query("CREATE (a:Entity {uuid:'a'}), (b:Entity {uuid:'b'}), (:Episodic {uuid:'e'}),"
             " (a)-[:RELATES_TO {uuid:'r1'}]->(b), (a)-[:RELATES_TO {uuid:'r2', invalid_at:'2020-01-01'}]->(b)")
     client.post("/api/brains", json={"slug": graph, "name": graph})
@@ -257,7 +257,7 @@ def test_graph_sizes(client, token, monkeypatch):  # noqa: F811
         g.query("CREATE (:Entity {uuid:'c'})")
         assert _value(_scrape(client, token)["mimirsynth_brain_entities"], "mimirsynth_brain_entities", brain=graph) == 2   # cached
     finally:
-        g.delete()
+        c.delete_graph(graph)
 
 
 def _signed_in(uid: int):

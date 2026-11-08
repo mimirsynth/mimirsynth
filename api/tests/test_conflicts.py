@@ -72,11 +72,11 @@ def falkor(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     for i, (src, rel, tgt, kind, when) in enumerate([("nas01", "LOCATED_AT", "Sala A", "Place", "2026-01-01T00:00:00Z"),
                                                       ("nas01", "LOCATED_AT", "Sala B", "Place", "2026-06-01T00:00:00Z"),
                                                       ("nas01", "LOCATED_AT", "VLAN 10", "Network", "2026-07-01T00:00:00Z"),
@@ -87,8 +87,8 @@ def falkor(monkeypatch):
                 "CREATE (a)-[:RELATES_TO {uuid:$u, name:$r, fact:$fact, valid_at:$w, created_at:$w, group_id:$g}]->(b)",
                 {"sa": f"s-{src}", "s": src, "ta": f"t-{tgt}", "t": tgt, "u": f"f{i}", "r": rel, "fact": f"{src} {rel} {tgt}", "w": when, "g": GRAPH})
     yield g
-    c.select_graph(GRAPH).delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 @pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")

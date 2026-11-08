@@ -166,19 +166,19 @@ def test_rename_brain_and_implicit_owners(client):
 @pytest.mark.skipif(not os.environ.get("MIMIRSYNTH_TEST_FALKOR"), reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
 def test_rename_slug_and_move_graph(client):
     from mimirsynth.config import settings
-    from mimirsynth.db import client as fdb
+    from mimirsynth.graphdb import backend as fdb
     settings.falkor_host = os.environ["MIMIRSYNTH_TEST_FALKOR"]; fdb.cache_clear()
     c = fdb()
     for g in ("zz_t_old", "zz_t_new"):
         if g in c.list_graphs():
-            c.select_graph(g).delete()
-    c.select_graph("zz_t_old").query("CREATE (:Entity {name:'a', group_id:'zz_t_old'})-[:R {group_id:'zz_t_old'}]->(:Entity {name:'b', group_id:'zz_t_old'})")
+            c.delete_graph(g)
+    c.graph("zz_t_old").query("CREATE (:Entity {name:'a', group_id:'zz_t_old'})-[:R {group_id:'zz_t_old'}]->(:Entity {name:'b', group_id:'zz_t_old'})")
     try:
         assert client.post("/api/brains", json={"slug": "mov", "name": "Mov", "graph_name": "zz_t_old"}).status_code == 201
         r = client.patch("/api/brains/mov", json={"slug": "movido", "graph_name": "zz_t_new"})
         assert r.status_code == 200, r.text
         assert r.json()["slug"] == "movido" and r.json()["graph_name"] == "zz_t_new" and r.json()["old_graph_kept"] == "zz_t_old"
-        assert c.select_graph("zz_t_new").query("MATCH ()-[e]->() RETURN e.group_id").result_set == [["zz_t_new"]]
+        assert c.graph("zz_t_new").query("MATCH ()-[e]->() RETURN e.group_id").result_set == [["zz_t_new"]]
         assert "zz_t_old" in c.list_graphs()  # el original se conserva
         assert client.patch("/api/brains/movido", json={"graph_name": "zz_t_new"}).status_code in (200, 409)
         assert client.post("/api/brains", json={"slug": "otro", "name": "O"}).status_code == 201
@@ -187,7 +187,7 @@ def test_rename_slug_and_move_graph(client):
     finally:
         for g in ("zz_t_old", "zz_t_new"):
             if g in c.list_graphs():
-                c.select_graph(g).delete()
+                c.delete_graph(g)
 
 
 def test_proposals_quarantine_flow(client):
@@ -594,13 +594,9 @@ def test_delete_brain_with_confirmation(client, monkeypatch):
     from mimirsynth import brains as bmod
     graphs = []
 
-    class FakeG:
-        def __init__(self, n): self.n = n
-        def delete(self): graphs.append(self.n)
-
-    class FakeC:
-        def select_graph(self, n): return FakeG(n)
-    monkeypatch.setattr(bmod, "client", lambda: FakeC())
+    class FakeB:
+        def delete_graph(self, n): graphs.append(n)
+    monkeypatch.setattr(bmod, "backend", lambda: FakeB())
     client.post("/api/brains", json={"slug": "borra", "name": "Borra", "graph_name": "g-borra"})
     tok = client.post("/api/brains/borra/tokens", json={"name": "t", "role": "reader"}).json()
     client.post("/api/brains/borra/proposals", json={"name": "p", "body": "x"})
@@ -714,17 +710,18 @@ def test_entity_types_edit_move_revert(client, monkeypatch):
 
 @pytest.mark.skipif(not os.environ.get("MIMIRSYNTH_TEST_FALKOR"), reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
 def test_merge_entities_real_falkor(client):
-    import falkordb
+    from mimirsynth import graphdb
     from mimirsynth.config import settings
     host = os.environ["MIMIRSYNTH_TEST_FALKOR"]
     settings.falkor_host = host
     from mimirsynth import db as dbm
-    dbm.client.cache_clear() if hasattr(dbm.client, "cache_clear") else None
-    c = falkordb.FalkorDB(host=host, port=6379)
+    dbm.backend.cache_clear()
+    graphdb.backend.cache_clear()
+    c = graphdb.backend()
     name = "zz-test-merge"
-    try: c.select_graph(name).delete()
+    try: c.delete_graph(name)
     except Exception: pass
-    g = c.select_graph(name)
+    g = c.graph(name)
     g.query("CREATE (k:Entity {uuid:'k', name:'Nextcloud'}), (d:Entity {uuid:'d', name:'Nextcloud 1.37'}), (b:Entity {uuid:'b', name:'Notus'}), (e:Episodic {uuid:'e'}), "
             "(d)-[:RELATES_TO {uuid:'r1', fact:'runs on notus'}]->(b), (b)-[:RELATES_TO {uuid:'r2', fact:'hosts'}]->(d), (e)-[:MENTIONS {uuid:'m1'}]->(d), (d)-[:RELATES_TO {uuid:'r3', fact:'same'}]->(k)")
     try:
@@ -741,9 +738,9 @@ def test_merge_entities_real_falkor(client):
         assert client.post(f"{base}/ops/{op['id']}/revert").status_code == 200
         assert n("MATCH (:Entity {uuid:'d'})-[r]-() RETURN count(r)") == 4 and n("MATCH (:Entity {uuid:'k'})-[r]-() RETURN count(r)") == 1
     finally:
-        g.delete()
+        c.delete_graph(name)
         for x in c.list_graphs():
-            if x.startswith(f"_snap_{name}_"): c.select_graph(x).delete()
+            if x.startswith(f"_snap_{name}_"): c.delete_graph(x)
 
 
 def test_ignore_duplicate_group(client):
@@ -756,17 +753,18 @@ def test_ignore_duplicate_group(client):
 
 @pytest.mark.skipif(not os.environ.get("MIMIRSYNTH_TEST_FALKOR"), reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
 def test_vocab_apply_after_ingest(client):
-    import falkordb
+    from mimirsynth import graphdb
     from mimirsynth import vocab_apply
     from mimirsynth.config import settings
     from mimirsynth.models import Brain
     host = os.environ["MIMIRSYNTH_TEST_FALKOR"]
     settings.falkor_host = host
-    c = falkordb.FalkorDB(host=host, port=6379)
+    graphdb.backend.cache_clear()
+    c = graphdb.backend()
     name = "zz-test-apply"
-    try: c.select_graph(name).delete()
+    try: c.delete_graph(name)
     except Exception: pass
-    g = c.select_graph(name)
+    g = c.graph(name)
     g.query("CREATE (k:Entity {uuid:'k', name:'Vesta', aliases:['Vesta']}), (n:Entity {uuid:'n', name:'Vesta'}), (o:Entity {uuid:'o', name:'Notus'}), (x:Entity {uuid:'x', name:'Otro'}), "
             "(n)-[:RELATES_TO {uuid:'e1', name:'HOSTED_ON', fact:'f1'}]->(o), (x)-[:RELATES_TO {uuid:'e2', name:'RunsOn', fact:'f2'}]->(o)")
     try:
@@ -786,22 +784,23 @@ def test_vocab_apply_after_ingest(client):
         assert client.post(f"/api/brains/ap/vocab/ops/{ops[0]['id']}/revert").status_code == 200
         assert n("MATCH (:Entity {uuid:'n'})-[r:RELATES_TO]->() RETURN count(r)") == 1
     finally:
-        g.delete()
+        c.delete_graph(name)
 
 
 @pytest.mark.skipif(not os.environ.get("MIMIRSYNTH_TEST_FALKOR"), reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
 def test_fact_edit_invalidate_delete_undo(client, monkeypatch):
-    import falkordb
+    from mimirsynth import graphdb
     from mimirsynth import facts_admin
     from mimirsynth.config import settings
     host = os.environ["MIMIRSYNTH_TEST_FALKOR"]
     settings.falkor_host = host
     monkeypatch.setattr(facts_admin, "get_embedder", lambda: type("E", (), {"embed": lambda self, t: [[0.1] * 4 for _ in t]})())
-    c = falkordb.FalkorDB(host=host, port=6379)
+    graphdb.backend.cache_clear()
+    c = graphdb.backend()
     name = "zz-test-facts"
-    try: c.select_graph(name).delete()
+    try: c.delete_graph(name)
     except Exception: pass
-    g = c.select_graph(name)
+    g = c.graph(name)
     g.query("CREATE (a:Entity {uuid:'a', name:'Vesta'}), (b:Entity {uuid:'b', name:'Cloudco'}), (e:Episodic {uuid:'e1', entity_edges:['f1']}), "
             "(a)-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Vesta esta en Cloudco', episodes:['e1'], group_id:name, created_at:'2026-01-01T00:00:00+00:00', fact_embedding: vecf32([0.5,0.5,0.5,0.5])}]->(b)".replace("group_id:name", "group_id:'x'"))
     n = lambda q: g.query(q).result_set[0][0]  # noqa: E731
@@ -822,7 +821,7 @@ def test_fact_edit_invalidate_delete_undo(client, monkeypatch):
         assert n("MATCH (:Entity {uuid:'a'})-[r {uuid:'f1'}]->(:Entity {uuid:'b'}) RETURN r.fact") == "Vesta esta en Cloudco" and n("MATCH (e:Episodic) RETURN e.entity_edges") == ["f1"]
         assert n("MATCH ()-[r {uuid:'f1'}]->() RETURN r.fact_embedding IS NOT NULL") is True
     finally:
-        g.delete()
+        c.delete_graph(name)
 
 
 def test_settings_admin(client):  # noqa: F811

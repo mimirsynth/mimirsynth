@@ -8,8 +8,9 @@ from sqlalchemy import select
 
 from datetime import datetime, timezone
 
-from .db import client, graph, rows
+from .db import graph, rows
 from .deps import BrainCtx, admin_of_brain, audit, curator_of_brain, reader
+from .graphdb import backend
 from .roles import allows
 from .models import BrainOntology, VocabAlias, VocabOp
 from .ontology import NAME
@@ -412,11 +413,11 @@ def snapshot_graph(graph_name: str, tag: str = "") -> str:
     """Copia de seguridad del grafo antes de fusionar o limpiar (nombre con «_»: no aparece en la lista de grafos). Conserva las
     últimas SNAP_KEEP."""
     name = f"_snap_{graph_name}_{datetime.now(timezone.utc):%Y%m%d%H%M%S}{f'_{tag}' if tag else ''}"
-    c = client()
-    c.select_graph(graph_name).copy(name)
+    c = backend()
+    c.copy_graph(graph_name, name)
     snaps = sorted(x for x in c.list_graphs() if x.startswith(f"_snap_{graph_name}_"))
     for old in snaps[:-SNAP_KEEP]:
-        c.select_graph(old).delete()
+        c.delete_graph(old)
     return name
 
 

@@ -122,19 +122,19 @@ def falkor(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     for f in (OLD, NEW, SAME_TIME_ELSEWHERE, OTHER_OF_WIKI):
         g.query("MERGE (a:Entity {uuid:$s, name:$s}) MERGE (b:Entity {uuid:$t, name:$t}) "
                 "CREATE (a)-[:RELATES_TO {uuid:$u, name:$n, fact:$fact, valid_at:$v, invalid_at:$i, expired_at:$i, created_at:$v, episodes:$eps}]->(b)",
                 {"s": f["source_uuid"], "t": f["target_uuid"], "u": f["uuid"], "n": f["name"], "fact": f["fact"], "v": f["valid_at"],
                  "i": f["invalid_at"], "eps": f["episodes"]})
     yield g
-    c.select_graph(GRAPH).delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 @pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")

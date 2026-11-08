@@ -23,19 +23,19 @@ def g(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     for name in [GRAPH, *[x for x in c.list_graphs() if x.startswith(f"_snap_{GRAPH}_")]]:
         if name in c.list_graphs():
-            c.select_graph(name).delete()
-    graph = c.select_graph(GRAPH)
+            c.delete_graph(name)
+    graph = c.graph(GRAPH)
     graph.query("CREATE (:Entity:Host {uuid:'k', name:'Lyra'}), (:Entity:Host {uuid:'d1', name:'lyra'}), (:Entity:Host {uuid:'d2', name:'Lyra VPS'}), "
                 "(:Entity:Host {uuid:'old', name:'Vaultwarden', aliases:['Vaultwarden', 'vaultwarden', 'Vaultwarden v1.30']}), (:Entity {uuid:'x', name:'X'})")
     graph.query("MATCH (a:Entity {uuid:'d1'}), (b:Entity {uuid:'x'}) CREATE (a)-[:RELATES_TO {uuid:'f1', name:'RUNS', fact:'lyra runs X'}]->(b)")
     yield graph
     for name in [GRAPH, *[x for x in c.list_graphs() if x.startswith(f"_snap_{GRAPH}_")]]:
-        c.select_graph(name).delete()
-    dbm.client.cache_clear()
+        c.delete_graph(name)
+    dbm.backend.cache_clear()
 
 
 def _aliases(g, uuid):
@@ -74,7 +74,7 @@ def test_cleanup_from_content_quality(client, g):  # noqa: F811
     """#202: preview, apply as a job after a copy of the graph, the change in the history, undo, and the role."""
     from sqlalchemy import select
     from test_control import _as
-    from mimirsynth.db import client as fclient
+    from mimirsynth.graphdb import backend as fclient
     from mimirsynth.main import app
     from mimirsynth.models import Audit
     from mimirsynth.store import _factory

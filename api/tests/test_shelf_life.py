@@ -21,11 +21,11 @@ def graph(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     g.query("CREATE (:Entity {uuid:'web', name:'web'}), (:Entity {uuid:'ip1', name:'10.0.0.1'}), (:Entity {uuid:'ip2', name:'10.0.0.2'}),"
             " (:Entity {uuid:'ip3', name:'10.0.0.3'}), (:Entity {uuid:'ops', name:'Ops'})")
     for uuid, name, target, valid, invalid, vec in (("old", "HAS_IP", "ip1", _ago(200), None, [1, 0, 0, 0]),
@@ -37,8 +37,8 @@ def graph(monkeypatch):
                 "invalid_at:$i, expired_at:$i, created_at:$c, fact_embedding: vecf32($e)}]->(b)",
                 {"t": target, "u": uuid, "n": name, "f": f"web {name} {target} ({uuid})", "v": valid, "i": invalid, "c": _ago(1), "e": vec})
     yield g
-    g.delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
 
 
 class Emb:

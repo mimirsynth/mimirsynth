@@ -1,4 +1,4 @@
-"""Recall híbrido: hechos del grafo (vectores en FalkorDB) + fragmentos de episodios (pgvector + texto completo)."""
+"""Recall híbrido: hechos del grafo (vectores en la base de datos de grafo) + fragmentos de episodios (pgvector + texto completo)."""
 import logging
 import re
 import time
@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from . import appsettings, index
 from .i18n import tr
 from .config import settings
-from .db import fact_status, graph, parse_ts, rows
+from .db import cosine, fact_status, graph, parse_ts, rows, vector
 from .embed import EmbeddingProvider, get_embedder
 from .graphapi import FACT_RETURN
 from .vocab import alias_map, resolve
@@ -57,7 +57,7 @@ def _fmt_date(v) -> str:
 def search_facts(graph_name: str, qvec: list[float], limit: int, amap: dict | None = None) -> list[dict]:
     res = graph(graph_name).query(
         "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.fact_embedding IS NOT NULL "
-        f"WITH r, a, b, (2 - vec.cosineDistance(r.fact_embedding, vecf32($v)))/2 AS score ORDER BY score DESC LIMIT $n RETURN {FACT_RETURN}, score",
+        f"WITH r, a, b, {cosine('r.fact_embedding', vector('$v'))} AS score ORDER BY score DESC LIMIT $n RETURN {FACT_RETURN}, score",
         {"v": qvec, "n": limit},
     )
     seen, out = set(), []

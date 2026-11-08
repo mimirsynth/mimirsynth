@@ -69,11 +69,11 @@ def env(monkeypatch):
     from mimirsynth import db as dbm
     from mimirsynth.config import settings
     monkeypatch.setattr(settings, "falkor_host", FALKOR)
-    dbm.client.cache_clear()
-    c = dbm.client()
+    dbm.backend.cache_clear()
+    c = dbm.backend()
     if GRAPH in c.list_graphs():
-        c.select_graph(GRAPH).delete()
-    g = c.select_graph(GRAPH)
+        c.delete_graph(GRAPH)
+    g = c.graph(GRAPH)
     g.query("CREATE (l:Entity:Host {uuid:'lyra', name:'Lyra', summary:$s}), (p:Entity {uuid:'pan', name:'Pangolin', summary:'Pangolin is a tunnel.'}),"
             " (h:Entity {uuid:'het', name:'Hetzner', summary:''}), (y:Entity {uuid:'hyp', name:'Hyperion', summary:'Hyperion is a NAS.\nHyperion stores backups'}),"
             " (l)-[:RELATES_TO {uuid:'f1', name:'RUNS', fact:'Lyra runs Pangolin'}]->(p),"
@@ -92,8 +92,8 @@ def env(monkeypatch):
     monkeypatch.setattr(sr, "engine", lambda: {"base_url": "http://llm", "model": "m", "api_key": ""})
     monkeypatch.setattr(jobs, "INLINE", True)
     yield g, asked
-    c.select_graph(GRAPH).delete()
-    dbm.client.cache_clear()
+    c.delete_graph(GRAPH)
+    dbm.backend.cache_clear()
     sr._PROGRESS.clear()
 
 

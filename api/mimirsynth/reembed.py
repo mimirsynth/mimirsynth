@@ -25,7 +25,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
 from . import appsettings, index, jobs
-from .db import client, graph, list_graphs, rows
+from .db import graph, list_graphs, rows, vector
+from .graphdb import backend
 from .embed import OpenAICompatEmbedder
 from .models import AppSetting, Brain, EmbeddingEngine, Job
 from .secretbox import unseal
@@ -237,7 +238,7 @@ def _fill_graph(name: str, emb, dim: int, tick, batch: int, pause: float, note=N
                 continue
             vecs = _embed(emb, [str(b["t"]).replace("\n", " ") for b in found], dim, note)
             g.query(f"UNWIND $rows AS r WITH r, r.u AS u MATCH {_match(kind, label, True)} "
-                    f"SET x.{vec}_reindex = vecf32(r.v), x.{vec}_reindex_src = r.t",
+                    f"SET x.{vec}_reindex = {vector('r.v')}, x.{vec}_reindex_src = r.t",
                     {"rows": [{"u": b["u"], "t": b["t"], "v": v} for b, v in zip(found, vecs)]})
             n += len(found)
             tick(len(found), f"grafo «{name}»: {label}")
@@ -256,9 +257,8 @@ def _wipe_graph(name: str) -> None:
 
 
 def _falkor_memory() -> tuple[int, int]:
-    """(usada, límite) de FalkorDB en bytes: `maxmemory` o, si no tiene, la memoria del sistema."""
-    info = client().connection.info("memory")
-    return int(info.get("used_memory", 0)), int(info.get("maxmemory") or info.get("total_system_memory") or 0)
+    """(usada, límite) del grafo en bytes; (0, 0) si la base de datos no lo dice (sin límite que comprobar)."""
+    return backend().memory() or (0, 0)
 
 
 # --- pgvector -------------------------------------------------------------------------------------

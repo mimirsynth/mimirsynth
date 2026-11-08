@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from .db import rows
+from .db import rows, vector
 from .deps import BrainCtx, curator_of_brain
 from .embed import gate, get_embedder
 from .entity_types import _record
@@ -34,7 +34,7 @@ def _set_embedding(ctx: BrainCtx, uuid: str, text: str) -> None:
     from .usage import scope
     with gate.writing(), scope(ctx.brain.id, "facts"):
         v = get_embedder().embed([text])[0]
-        ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() SET r.fact_embedding = vecf32($v)", {"u": uuid, "v": v})
+        ctx.graph.query(f"MATCH ()-[r:RELATES_TO {{uuid:$u}}]->() SET r.fact_embedding = {vector('$v')}", {"u": uuid, "v": v})
 
 
 def _label(f: dict) -> str:
@@ -59,7 +59,7 @@ def edit_fact(uuid: str, body: EditIn, ctx: BrainCtx = Depends(curator_of_brain)
             from .usage import scope
             with scope(ctx.brain.id, "facts"):
                 vec = get_embedder().embed([changes["fact"]])[0]
-        sets = ", ".join(f"r.{k} = ${k}" for k in changes) + (", r.fact_embedding = vecf32($v)" if "fact" in changes else "")
+        sets = ", ".join(f"r.{k} = ${k}" for k in changes) + (f", r.fact_embedding = {vector('$v')}" if "fact" in changes else "")
         ctx.graph.query(f"MATCH ()-[r:RELATES_TO {{uuid:$u}}]->() SET {sets}", {"u": uuid, **changes, **({"v": vec} if "fact" in changes else {})})
     op = _record(ctx, "fact.edit", f"Editado el hecho {_label(cur)}" + (f" (relación → {changes['name']})" if "name" in changes else ""),
                  uuid=uuid, before={k: cur[k] for k in changes}, after=changes)
