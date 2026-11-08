@@ -8,7 +8,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
-## [0.14.0] - 2026-11-07
+## [0.14.0] - 2026-11-08
 ### Added
 - a document passage that states something no longer true is marked «may be superseded», with what stopped being true and what is true now, and goes after the other passages; the current fact that replaced it joins the recall. Each passage also says when its page was last updated. (#286) (#287)
 - a screen that fails while rendering shows a notice with Retry instead of leaving the whole application blank. (#288)
@@ -29,6 +29,12 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - brain administrators replay the sample of real recalls from Ask → Quality, choosing a threshold, the weight by origin, the age by relation or the current state first, read how many queries would change and what they would gain or lose, and turn a real query into a reference query. (#291) (#320)
 - the curator's noise pass (off by default) proposes invalidating facts that say nothing useful: a placeholder at one end, a fact about the memory itself, a generic relation that adds nothing, or a change told as an event when a current fact already states the result; and the curator stops and notifies when the reference queries' coverage falls after its proposals were approved. (#300) (#321)
 - facts never recalled can be archived: each recall notes when its facts came back, the curator (off by default) proposes archiving current facts not recalled in 180 days and never confirmed, once the brain has been tracked that long; an archived fact stays in the graph, the recall leaves it out unless asked (`archived: true`), and Content quality → Curator restores it. (#297) (#322)
+- On a phone, Ask's results start with a link to the injected context, which comes after every card. (#324)
+- the curator can distil episodes that repeat the same lesson (Content quality → Curator, off by default): the brain's LLM writes one short dated note per group, at most five a day, a person always approves it one at a time, and once it is ingested the originals it covers, and that the curator left ticked, are deleted. (#297) (#333)
+- the right to be forgotten starts with a report: on an entity's page, the brain's owner sees, layer by layer, what deleting it would touch and what would stay to review, without changing anything. (#134) (#335)
+- the brain's owner can delete an entity and everything that names it, after its report and typing its name: the graph and its merge snapshots, its episodes (rewritten without it by the brain's LLM as proposals to review), the index, documents (blocked until they change at their source) and the database, with only counts kept in the audit log. (#134) (#338)
+- a Claude Code plugin, installable from this repository's marketplace: what changed in the brain at session start, recall before every prompt, `/mimirsynth:status`, `:search` and `:remember`, and an optional capture (off by default) that turns each session into at most one quarantined proposal, redacted with the server's own secret detector and only sent with a contributor token. (#105) (#339)
+- `GET /api/brains/{slug}/whoami` says who an API token is (brain, role, scopes, expiry, server version), and `POST /api/brains/{slug}/news` is `whats_new` over REST. (#105) (#339)
 
 ### Changed
 - the facts that join the recall by their link to a fact no longer true carry `similarity: null`. (#288)
@@ -36,6 +42,17 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - Ask shows «Expected» and «Extra» only while «Mark for a reference query» is on. (#311)
 - Ask says which question its results answer, and marks them when the question has changed; the result is announced to screen readers. (#303)
 - Ask's rating and marking buttons show their state as pressed instead of with gold or red fills. (#303)
+- In Ask, the injected context stays in view beside the results while they scroll, with its Copy button in the header instead of over the text. (#324)
+- In Ask, the rating buttons and the reference-query marks are headed «Rate» and «Reference query», and «Incorrect» stands apart in red because it proposes a correction. (#326)
+- In Ask's Answer mode, the evidence is split like Context: current facts with when they became true and what they replace, facts no longer true, fragments and passages. (#328)
+- Ask's facts show their entities as entity chips, its similarities and dates are written as the interface language writes them, and a passage's title says which section of its document it comes from. (#329)
+- In Ask, the switch to mark results for a reference query and its Save button sit under the results line, and Save shows only while marking. (#329)
+- Ask's results show their place in the order the agent reads them, and their relation in words with each entity coloured by its type. (#331)
+- Each result card in Ask is a single stop for Tab, with the arrow keys moving between its buttons, and the link to the injected context shows at every width. (#332)
+- In Ask's Answer mode, a citation jumps to its evidence below the answer instead of leaving the page, shows as a small chip inside the sentence, and the answer reads at about 70 characters a line. (#334)
+- Ask's facts, fragments and passages give their place, similarity and date in one line at the foot of the card, in the same order, and the timings say «ms» for each part. (#336)
+- Ask's search button says what it is doing while it works and leaves out the keyboard shortcut on touch screens, and the index controls come after the question. (#337)
+- In Ask, marked results show an accent border, results at the edge of the similarity threshold say so, and on a phone the results are brought into view when they arrive. (#337)
 
 ### Fixed
 - On the overview, the counts in «Needs your attention» and «What changed» share one column, so the labels line up and a long label wraps instead of being cut on a phone. (#280)
@@ -45,6 +62,15 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - Ask's question field has a label, its sections are second-level headings, and the injected context can be scrolled with the keyboard. (#303)
 - In Ask, Ctrl+Enter (⌘+Enter on a Mac) right after choosing Answer writes the answer instead of running a search. (#319)
 - Ask's result and answer lines are announced to screen readers on every search, not only sometimes. (#319)
+- the curator's noise pass no longer flags a fact under a generic relation when its text carries a number, a version, an identifier, a month or a negation, and its preview groups what it would propose by rule, with how many each rule finds. (#325) (#327)
+- Rating a result in Ask now says on its card that it was saved, and whether a correction was proposed, instead of nothing for most ratings. (#326)
+- A fragment or passage that states something no longer true is marked «May be superseded» in Answer's evidence too, and the model receives that warning, so it does not present it as current. (#328)
+- On a phone, Ask's tabs no longer wrap, its card buttons have full-size touch targets, and what it scrolls to is no longer hidden under the header. (#329)
+- In Ask, rating a fact «Incorrect» first asks what is wrong, and that text becomes the correction's reason, so the curator has something to decide on. (#330)
+- Changing a rating after «Incorrect» in Ask no longer says a correction was just proposed; it says the earlier one is still in the queue, with a link for curators. (#330)
+- A fact with no similarity in Ask's results now says why it is there: it replaces a fact no longer true, or a fragment or passage states it. (#331)
+- Ask's written answer no longer interrupts a screen reader while it is written; it is announced once when it is ready, and the focus is not lost when it ends. (#332)
+- the detail of a proposal made by the curator no longer fails to open, and saving the Curator tab no longer resets the archive period. (#297) (#333)
 
 ## [0.13.2] - 2026-11-07
 ### Added
