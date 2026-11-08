@@ -432,7 +432,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-ask-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
 .ms-ask-side:focus { outline: none; }  /* it takes the focus only so the next Tab enters the context */
 .ms-ask-jump .ms-cardlink { display: inline-block; padding-block: 4px; }  /* a line of its own: a target at least 24px tall */
+/* In one column the context is far below: the context box shows whole there, with no scroll inside the page's scroll. */
+@container (max-width: 860px) { .ms-ask-side .ms-codeblock pre { max-height: none; } }
 @container (min-width: 861px) {
+  /* beside the cards the context is in view, so the link to it is for the keyboard only: hidden until it has the focus */
+  .ms-ask-jump:not(:focus-within) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .ms-ask-side { position: sticky; top: 0; max-height: calc(100dvh - var(--app-shell-header-offset, 0px) - 160px); min-height: 240px; }
   .ms-ask-side .ms-codeblock { flex: 1; min-height: 0; display: flex; }
   .ms-ask-side .ms-codeblock pre { flex: 1; min-height: 0; max-height: none; }
@@ -609,8 +613,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-ask-actlabel { margin-right: 4px; }
 .ms-ask-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--ms-line); }
 .ms-btn.ms-ask-wrong { color: var(--ms-invalidado); }
-/* A card picked for something (marked for a reference query): its border in the accent, so a list can be scanned for them. */
-.ms-listcard[data-highlight] { border-color: var(--ms-accent); }
+/* A fact's place, similarity and date on the line of its entities, at its end: one line less per card. */
+.ms-ask-inlinemeta { margin-left: auto; }
+/* While marking for a reference query, the count and «Guardar» stay at the foot of the results, in reach of the marks. */
+.ms-ask-markbar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+  padding: 8px 12px; background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); }
 /* What «Incorrecto» sent, on its card: the words the curator will read, so the person sees what they said. */
 .ms-ask-sentnote { color: var(--ms-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
 /* Under a section heading of Ask's results: what decides the order of its cards. Close to the heading it explains. */
