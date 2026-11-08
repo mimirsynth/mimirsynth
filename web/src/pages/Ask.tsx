@@ -218,8 +218,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     </>;
   };
   const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
-  // Each result's place, as the agent reads them: facts first (current, then no longer true), then fragments, then passages.
+  // Each result's place, as the agent reads them in the injected context: one numbering across the sections, facts first (current,
+  // then no longer true), then fragments, then passages. Under each heading, what decides the order inside it.
   const rank = (n: number) => t("n.º {{n}}", { n });
+  const pulledIn = (list: Fact[]) => list.some((f) => simValue(f) === null);
+  const orderNote = (text: string) => <Text size="xs" c="dimmed" className="ms-ask-order">{text}</Text>;
   const isMarked = (key: string) => marking && !!marks[key];
   // a similarity within 0,05 of the threshold: what a small change of threshold would drop
   const edge = (x: { similarity?: number | null; score?: number }) => {
@@ -315,27 +318,39 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         <div className="ms-ask-wrap"><div className="ms-ask-cols">
           <Stack className="ms-ask-main" gap="xs">
             {/* In one column the context comes after every card: on a phone that is thousands of pixels down. */}
+            {(r.facts.length + r.chunks.length + (r.documents?.length ?? 0)) > 1 && <Text size="xs" c="dimmed">{t("Numerados en el orden en que el agente los lee en el contexto inyectado.")}</Text>}
             {r.context && <Text size="sm" className="ms-ask-jump"><CardLink to="ask-context">{t("Ir al contexto inyectado")}</CardLink></Text>}
             {!r.facts.length && !r.chunks.length && !!r.min_similarity && (
               <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: fmtNum(r.min_similarity) })}</Text>)}
             {!r.facts.length && !r.chunks.length && !r.documents?.length && <EmptyState>{t("El recall no ha traído nada para esta pregunta: ni hechos, ni fragmentos, ni pasajes.")}</EmptyState>}
-            {current.length > 0 && <Title order={2} size="h5">{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>}
+            {current.length > 0 && <>
+              <Title order={2} size="h5">{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>
+              {/* the graph's order: closeness, weighed down by shelf life and the source's trust where those apply */}
+              {orderNote(pulledIn(current)
+                ? t("Primero, los que sustituyen a algo de este resultado; después, por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable.")
+                : t("Por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable."))}
+            </>}
             {current.map(factCard)}
             {gone.length > 0 && <>
               <Title order={2} size="h5" mt="xs">{t("Hechos que dejaron de ser ciertos ({{n}})", { n: gone.length })}</Title>
+              {orderNote(pulledIn(gone) ? t("Por parecido a la pregunta; al final, los que afirma un fragmento o pasaje de este resultado.") : t("Por parecido a la pregunta."))}
               {gone.map(factCard)}
             </>}
-            {r.chunks.length > 0 && <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>}
+            {r.chunks.length > 0 && <>
+              <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>
+              {orderNote(t("Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta, con algo más de peso para lo reciente: por eso la similitud no siempre baja. Lo que puede estar superado va al final."))}
+            </>}
             {r.chunks.map((c, i) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ") + edge(c)}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(current.length + gone.length + i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ") + edge(c)}
                 highlight={isMarked(`c:${c.origin ?? ""}:${c.id}`)}
                 actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
+              {orderNote(t("Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta. Lo que puede estar superado va al final."))}
               {r.documents.map((p, i) => (
                 <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} highlight={isMarked(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
-                  meta={[rank(i + 1), sim(p) ?? t("sin similitud"), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) })].join(" · ")}
+                  meta={[rank(current.length + gone.length + r.chunks.length + i + 1), sim(p) ?? t("sin similitud"), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) })].join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
                   actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
             </>}
