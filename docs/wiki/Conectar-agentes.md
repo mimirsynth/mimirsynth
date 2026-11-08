@@ -146,3 +146,17 @@ La referencia completa de endpoints está en [[API REST]].
 - Guarda el token como un secreto (gestor de contraseñas, variable de entorno), no en el código.
 - Usa HTTPS ([[HTTPS y proxy inverso]]).
 - Un token por agente y por brain: así puedes revocar uno sin afectar al resto, y en la [[Auditoría]] sabes quién escribió qué.
+
+## Hermes Agent
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research) tiene MimirSynth como **proveedor de memoria**: el recall del brain llega al modelo antes de cada turno, lo que ha cambiado en el brain llega con el primer mensaje de cada sesión, y el agente tiene dos herramientas, `mimirsynth_search` y `mimirsynth_remember` (sus propuestas esperan en cuarentena). Se instala y se configura con una línea, en una terminal:
+```bash
+hermes plugins install mimirsynth/mimirsynth/integrations/hermes-agent/plugin && hermes memory setup mimirsynth
+```
+La configuración pide el servidor, el brain y los tokens (ocultos, nunca por el chat; un token de **lector** para consultar y uno de **colaborador** para proponer) y escribe `~/.config/mimirsynth/config.json`, el fichero que leen todas las integraciones de MimirSynth, así que una sola configuración sirve también para Claude Code y las demás. Un perfil de Hermes puede usar otro brain poniendo `MIMIRSYNTH_URL`, `MIMIRSYNTH_BRAIN` y `MIMIRSYNTH_TOKEN` en su `.env`.
+
+- `hermes mimirsynth status` (o `/mimirsynth status` en un chat) comprueba cada token; `search`, `remember` y `drafts` funcionan en los dos sitios.
+- Si MimirSynth no está o va lento, Hermes sigue sin memoria; un token caducado se avisa una vez.
+- La **captura de sesiones** está apagada por defecto; con `capture` en `draft` o `send`, cada sesión terminada que cambió ficheros o acabó con una respuesta sustancial se convierte en un borrador o en una propuesta en cuarentena, sin secretos, y solo con un token de colaborador.
+
+Los detalles, todos los comandos y qué hace en tu máquina: [el README del plugin](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/hermes-agent/plugin/README.es.md).

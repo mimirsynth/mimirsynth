@@ -146,3 +146,17 @@ The full endpoint reference is in [[REST API]].
 - Keep the token as a secret (password manager, environment variable), not in code.
 - Use HTTPS ([[HTTPS and reverse proxy]]).
 - One token per agent and per brain: that way you can revoke one without affecting the rest, and in the [[Audit log]] you know who wrote what.
+
+## Hermes Agent
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research) gets MimirSynth as a **memory provider**: the brain's recall reaches the model before each turn, what changed in the brain arrives with the first message of a session, and the agent has two tools, `mimirsynth_search` and `mimirsynth_remember` (its proposals wait in quarantine). Install it and configure it in one line, in a terminal:
+```bash
+hermes plugins install mimirsynth/mimirsynth/integrations/hermes-agent/plugin && hermes memory setup mimirsynth
+```
+The setup asks for the server, the brain and the tokens (hidden, never through the chat; a **reader** token to recall and a **contributor** token to propose) and writes `~/.config/mimirsynth/config.json`, the file every MimirSynth integration reads, so one setup serves Claude Code and the rest too. A Hermes profile can use another brain by setting `MIMIRSYNTH_URL`, `MIMIRSYNTH_BRAIN` and `MIMIRSYNTH_TOKEN` in its `.env`.
+
+- `hermes mimirsynth status` (or `/mimirsynth status` in a chat) checks each token; `search`, `remember` and `drafts` work in both places.
+- If MimirSynth is down or slow, Hermes carries on without memory; an expired token is said once.
+- The **session capture** is off by default; with `capture` set to `draft` or `send`, each finished session that changed files or ended with a substantial answer becomes a draft or one proposal in quarantine, redacted, and only with a contributor token.
+
+Details, every command and what it does on your machine: [the plugin's README](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/hermes-agent/plugin/README.md).

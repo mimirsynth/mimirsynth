@@ -1,0 +1,25 @@
+# The entry for Hermes Agent's plugin catalog (NousResearch/hermes-agent, plugin-catalog/mimirsynth.yaml), so that the plugin installs
+# with `hermes plugins install mimirsynth`. It is published by a pull request to that repository, opened by a MimirSynth maintainer
+# (the catalog only takes entries from the plugin's owners), after this version is merged:
+#   1. set `sha` to the full commit on main that carries the plugin's version, and `version` to the one in ../plugin/plugin.yaml;
+#   2. check it as the catalog's CI does: `hermes plugins validate integrations/hermes-agent/plugin` at that commit;
+#   3. copy this file, without these comments, to plugin-catalog/mimirsynth.yaml in a fork of NousResearch/hermes-agent and open the
+#      pull request, with the disclosure below in its description.
+# Each new version is another pull request that only moves `sha` and `version`.
+name: mimirsynth
+repo: https://github.com/mimirsynth/mimirsynth
+sha: 0000000000000000000000000000000000000000   # replace: the 40-character commit on main
+subdir: integrations/hermes-agent/plugin
+version: "0.1.0"
+title: MimirSynth
+description: "MimirSynth team memory provider — recall from a self-hosted MimirSynth brain before each turn, what changed in the brain at session start, and search/remember tools whose proposals wait in quarantine for a curator. Disclosure — every turn's message (up to 1,500 characters) is sent to the MimirSynth server you configure for recall, and what the agent remembers is sent there as a proposal; it reads the shared MimirSynth configuration ~/.config/mimirsynth/config.json (written by its own setup, it holds your MimirSynth tokens), or MIMIRSYNTH_* from the profile's .env; an optional session capture, off by default, keeps redacted session summaries in $HERMES_HOME/mimirsynth/sessions and, set to send, proposes one per finished session; a short background thread at session start fetches the news. No telemetry."
+maintainer: mimirsynth
+tier: community
+category: memory
+requires_hermes: ">=0.21.4"
+docs_url: https://github.com/mimirsynth/mimirsynth/wiki/Connect-agents
+capabilities:
+  provides_tools: []
+  provides_hooks: []
+  provides_middleware: []
+  requires_env: []

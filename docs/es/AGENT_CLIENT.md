@@ -89,7 +89,7 @@ Las reglas que sigue toda integración:
 - **La propuesta:** `name` «`<Agente>: <proyecto> — <primera línea de la tarea>`», `source` `text`, `source_description` «`<id-del-agente> session`», `origin` `auto` y `confidence` `capture_confidence`.
 - **Solo con un token de colaborador:** antes de enviar, la integración pregunta `whoami`; con cualquier otro rol se niega y lo dice, porque la propuesta de un curador se saltaría la cuarentena.
 - **Secretos:** todo se redacta antes de escribirse en disco o enviarse, con el propio detector del servidor (los hallazgos seguros y los posibles por igual, sustituidos por `[secret removed]`). Funciona por patrones y no es infalible.
-- **Dónde quedan los registros:** un fichero JSON por sesión, legible solo por su dueño, en `~/.config/mimirsynth/state/<id-del-agente>/sessions/` salvo que el agente dé al plugin una carpeta de datos propia. Los registros de más de 14 días se borran. Claude Code los guarda en la carpeta de datos de su plugin (`$CLAUDE_PLUGIN_DATA/sessions`) o en `~/.config/mimirsynth/state/sessions/`.
+- **Dónde quedan los registros:** un fichero JSON por sesión, legible solo por su dueño, en `~/.config/mimirsynth/state/<id-del-agente>/sessions/` salvo que el agente dé al plugin una carpeta de datos propia. Los registros de más de 14 días se borran. Claude Code los guarda en la carpeta de datos de su plugin (`$CLAUDE_PLUGIN_DATA/sessions`) o en `~/.config/mimirsynth/state/sessions/`; Hermes Agent, en la carpeta de cada perfil (`$HERMES_HOME/mimirsynth/sessions`).
 
 ## Qué hace toda integración
 
