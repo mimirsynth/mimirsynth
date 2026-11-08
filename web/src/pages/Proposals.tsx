@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Sheet, SheetRow, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
@@ -340,8 +340,11 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
   /** Shown in the review queue, where every proposal is pending: its state and the usual kind (adding) go without saying. */ inQueue?: boolean }) {
   const { t } = useTranslation();
   const paired = pairedFact(d, useRelated(ops, d).data?.facts);  // the fact it is read against: its text marks what it adds
-  const marks = !inQueue || d.kind === "correction" || d.confidence !== null;
-  return (<Stack gap="sm">
+  // A pending proposal in the queue: what it says and what the brain knows on the left, its sheet beside them (who, when, from where,
+  // the author's confidence, the decider). Elsewhere it keeps its history as steps.
+  const sheet = inQueue && d.status === "pending" && !d.correction;
+  const marks = !inQueue || d.kind === "correction" || (d.confidence !== null && !sheet);
+  const text = (<>
     {marks && <Group gap="xs">{(!inQueue || d.kind === "correction") && <KindPill kind={d.kind} />}{!inQueue && <Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>}
       {d.confidence !== null ? <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} <span className="ms-data">{fmtNum(d.confidence)}</span></Text>
         : !inQueue && <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {t("no indicada")}</Text>}</Group>}
@@ -351,11 +354,16 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
     {!!d.claims?.length && <ClaimsDetail claims={d.claims} />}
     {d.category === "curator.distil" && <DistilDetail d={d} ops={ops} />}
     <SecretsNotice found={d.secrets} />
+  </>);
+  if (sheet) return (<div className="ms-prop-wrap"><div className="ms-prop-layout">
+    <Stack gap="sm" className="ms-prop-text">{text}</Stack>
+    <ProposalSheet d={d} />
+    {context && <div className="ms-prop-rest">{context}</div>}
+  </div></div>);
+  return (<Stack gap="sm">
+    {text}
     {context}
-    {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
-      <Text size="xs" c="dimmed">{t("Enviada por {{who}}", { who: who(d) })} · <span className="ms-data">{fmt(d.created_at)}</span> · {[d.source_description, t(SOURCE[d.source] ?? d.source)].filter(Boolean).join(" · ")}</Text>
-      <DeciderView d={d} />
-    </Stack> : <Steps label={t("Historia de la propuesta")}>
+    <Steps label={t("Historia de la propuesta")}>
       <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed"><span title={d.author}>{who(d)}</span> · {fmt(d.created_at)}</Text>
         <Text size="xs" c="dimmed">{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</Text></Step>
       <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
@@ -383,8 +391,34 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
         {d.status === "pending" && <Text size="xs" c="dimmed">{t("Cuando se apruebe.")}</Text>}
         {d.status === "rejected" && <Text size="xs" c="dimmed">{t("No entra en el grafo.")}</Text>}
       </Step>}
-    </Steps>}
+    </Steps>
   </Stack>);
+}
+
+/** A pending proposal's own data, as a sheet beside its text: who sent it and when, from where, how sure its author said to be, and
+ *  what the decider made of it, its verdict first and in words, then its two answers. */
+function ProposalSheet({ d }: { d: Prop }) {
+  const { t } = useTranslation();
+  const dec = d.decision;
+  const answers = dec?.factual && dec.action;
+  // why it came to a person, said from the decider's answers rather than from its note (a sentence the server writes in Spanish)
+  const why = !answers ? null : dec.verdict === "approve" ? t("Factual y con la acción «aprobar», las dos por encima del umbral.")
+    : dec.factual.letter !== "A" && dec.factual.prob >= dec.threshold ? t("Puede no ser un hecho, traer instrucciones o salirse del ámbito del brain: revísala con cuidado.")
+      : t("No llega al umbral para aprobarse sola.");
+  return (<Sheet label={t("Ficha de la propuesta")}>
+    <SheetRow term={t("Enviada por")}><span title={d.author}>{who(d)}</span></SheetRow>
+    <SheetRow term={t("Cuándo")}><span className="ms-data">{fmt(d.created_at)}</span></SheetRow>
+    <SheetRow term={t("Procedencia")}>{[d.source_description, t(SOURCE[d.source] ?? d.source)].filter(Boolean).join(" · ")}</SheetRow>
+    <SheetRow term={t("Confianza del autor")}>{d.confidence !== null ? <span className="ms-data">{fmtNum(d.confidence)}</span> : <Text span c="dimmed" size="sm">{t("no indicada")}</Text>}</SheetRow>
+    {dec?.error && <SheetRow wide term={t("Decisor")}><Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: dec.engine, error: dec.error })}</Notice></SheetRow>}
+    {answers && <SheetRow wide term={t("Decisor")}><Stack gap={4}>
+      <Group gap={6}><Pill size="xs" tone={dec.verdict === "approve" ? "success" : "warn"}>{dec.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}</Pill></Group>
+      <Text size="sm">{why}</Text>
+      <Text size="xs" c="dimmed">{t("¿Es factual?")} {dec.factual.letter === "A" ? t("sí") : t("no")} · <span className="ms-data">{fmtNum(dec.factual.prob)}</span></Text>
+      <Text size="xs" c="dimmed">{t("Acción:")} {[t("aprobar"), t("revisar"), t("rechazar")][dec.action.index]} · <span className="ms-data">{fmtNum(dec.action.prob)}</span></Text>
+      <Text size="xs" c="dimmed">«{dec.engine}» · {dec.model} · {t("umbral")} <span className="ms-data">{fmtNum(dec.threshold)}</span></Text>
+    </Stack></SheetRow>}
+  </Sheet>);
 }
 
 /** What the decider said about a proposal, when it looked at it: its model and threshold, its two answers and its verdict. */

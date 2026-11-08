@@ -29,6 +29,7 @@ export { CodeBlock } from "./CodeBlock";
 export { Toolbar } from "./Toolbar";
 export { SecretReveal } from "./SecretReveal";
 export { Steps, Step } from "./Steps";
+export { Sheet, SheetRow } from "./Sheet";
 export { RuleList } from "./RuleList";
 export { HIDROMIEL, PIZARRA, NODE_PALETTE, HALO_PALETTE, CANVAS, typeColor } from "./palette";
 export { EntityChip, humanRelation } from "./EntityChip";

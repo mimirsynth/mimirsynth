@@ -584,10 +584,10 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-check { display: inline-grid; place-items: center; cursor: pointer; }
 .ms-queue-desc { display: contents; }  /* only groups the description for aria-describedby; the layout is its children's */
 /* What the brain already knows, beside a proposal: entity names link to their page in the accent colour */
-.ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); }  /* a section of the detail, ruled off like the rest, not a card inside its card */
+.ms-related { padding-top: 12px; border-top: 1px solid var(--ms-line); max-width: var(--ms-measure); }  /* a section of the detail, ruled off like the rest, not a card inside its card */
 .ms-section-title { margin: 0; font-family: var(--ms-display); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }  /* DESIGN.md's card label */
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
-.ms-proposal-text { font-size: 15px; line-height: 1.6; max-width: 72ch; }  /* the proposal itself, the thing being decided: on the panel, not in a card inside it */
+.ms-proposal-text { font-size: 15px; line-height: 1.6; max-width: var(--ms-measure); }  /* the proposal itself, the thing being decided: on the panel, not in a card inside it */
 .ms-pair { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 10px 12px; border-radius: var(--ms-radius);
   background: color-mix(in srgb, var(--ms-ink) 5%, var(--ms-raised)); }  /* the proposal and the fact it repeats, read one against the other; neutral: gold is the action's */
 .ms-added { background: color-mix(in srgb, var(--ms-accent) 22%, transparent); color: inherit; border-radius: 2px; padding: 0 1px;
@@ -622,3 +622,27 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 @media (pointer: coarse) { .ms-ask-main .ms-listcard-actions .ms-btn { min-width: 44px; } }
 /* On a phone a row of tabs scrolls sideways instead of wrapping its last tab under the others. */
 @media (max-width: 48em) { .ms-tabs .mantine-Tabs-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; } .ms-tabs .mantine-Tabs-tab { flex-shrink: 0; } }
+
+/* The Measure Rule (DESIGN.md): running text (prose, facts, notes) stops at about 72 characters; past that the eye loses the next line. */
+:root { --ms-measure: 72ch; }
+/* A record's sheet: each value under its label, ruled off from the content beside it. */
+.ms-sheet { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ms-sheet-list { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+.ms-sheet-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ms-sheet-row dt { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
+.ms-sheet-row dd { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ms-ink); overflow-wrap: anywhere; }
+/* A pending proposal in the queue: its text and what the brain knows on the left, at the measure, and its sheet (who sent it, when, from
+   where, the decider) beside them, where the panel had empty room. In a narrow panel the sheet comes after the text. */
+.ms-prop-wrap { container-type: inline-size; }
+.ms-prop-layout { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "text" "sheet" "rest"; gap: 16px; }
+.ms-prop-text { grid-area: text; min-width: 0; }
+.ms-prop-rest { grid-area: rest; min-width: 0; }
+.ms-prop-layout > .ms-sheet { grid-area: sheet; padding-top: 12px; border-top: 1px solid var(--ms-line); }
+/* under the text, the sheet lays its short rows side by side, so it does not push what the brain knows far down */
+.ms-prop-layout > .ms-sheet .ms-sheet-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 16px; }
+.ms-prop-layout > .ms-sheet .ms-sheet-row[data-wide] { grid-column: 1 / -1; }
+@container (min-width: 860px) {
+  .ms-prop-layout { grid-template-columns: minmax(0, var(--ms-measure)) minmax(240px, 300px); grid-template-areas: "text sheet" "rest sheet"; grid-template-rows: auto 1fr; column-gap: 32px; justify-content: space-between; }
+  .ms-prop-layout > .ms-sheet { align-self: start; padding: 0 0 0 20px; border-top: 0; border-left: 1px solid var(--ms-line); }
+  .ms-prop-layout > .ms-sheet .ms-sheet-list { display: flex; }
+}
