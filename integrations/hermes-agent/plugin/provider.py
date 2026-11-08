@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 NAME = "mimirsynth"                               # the provider's name: `memory.provider: mimirsynth`
 AGENT, SOURCE = "Hermes Agent", "hermes-agent"   # how a captured session's proposal names the agent, for people and for machines
 MIN_QUERY = 12                                    # shorter messages ("ok", "go on") are not worth a recall
+NEWS_WAIT = 2.0                                   # most seconds the first turn waits for the news of the session start
 FILE_TOOLS = ("write_file", "patch")              # Hermes's tools that change files
 _V4A_FILE = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$", re.MULTILINE)
 
@@ -331,7 +332,9 @@ class MimirSynthProvider(MemoryProvider):
                 return ""
             start = self._start
             if start is not None and start.is_alive():
-                start.join(float(conf.get("timeout")))   # the news, if they arrive in time; otherwise with the next message
+                # the news, if they arrive in time; otherwise with the next message. Bounded so that this wait plus the recall's own
+                # timeout stay under the limit Hermes gives a prefetch (8 s) with the default timeout (4 s)
+                start.join(min(float(conf.get("timeout")) / 2, NEWS_WAIT))
             with self._lock:
                 news, self._news = self._news, ""
             parts = [news] if news else []
