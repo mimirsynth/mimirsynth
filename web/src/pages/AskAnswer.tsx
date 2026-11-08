@@ -5,6 +5,7 @@ import { Fragment, useEffect, useRef, useState, type MutableRefObject, type Reac
 import { ApiError, fmtDay, langHeaders } from "../api";
 import { translateServer } from "../i18n";
 import { Btn, CardLink, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
+import { loadAsk, saveAsk } from "./askSession";
 
 /** One numbered piece of evidence: what the answer cites as [F1], [E1] or [D1]. */
 type Superseded = { fact: string; invalid_at: string | null; replaced_by: { fact: string }[] }[];
@@ -12,6 +13,7 @@ type Source = { ref: string; kind: "fact" | "episode" | "document"; id: string |
   status?: string; origin?: string; valid_at?: string | null; invalid_at?: string | null; replaces?: string; superseded?: Superseded };
 type Done = { citations: string[]; unknown: string[]; called: boolean; ms?: number };
 const CITE = /\[([FED])(\d{1,3})\]/g;
+type Kept = { asked: string; sources: Source[] | null; text: string; done: Done };
 
 /** Where a source leads: the fact's entity page, the episode in the Journal, the passage's document in Knowledge. Lent episodes and
  * documents live in another brain, so they have no link here. */
@@ -47,16 +49,20 @@ async function streamAnswer(graph: string, body: unknown, on: (ev: Record<string
 export default function AskAnswer({ graph, query, facts, chunks, trigger, answered, onBusy }:
   { graph: string; query: string; facts: number; chunks: number; trigger: number; answered: MutableRefObject<number>; onBusy?: (busy: boolean) => void }) {
   const { t } = useTranslation();
-  const [sources, setSources] = useState<Source[] | null>(null);
-  const [text, setText] = useState("");
-  const [done, setDone] = useState<Done | null>(null);
+  // The last answer this tab wrote for this question, back on screen after leaving the page (or the mode) and coming back: see askSession.
+  const [kept] = useState(() => { const k = loadAsk<Kept>(graph, "answer"); return k && query.trim() && k.asked === query.trim() ? k : null; });
+  const [sources, setSources] = useState<Source[] | null>(() => kept?.sources ?? null);
+  const [text, setText] = useState(() => kept?.text ?? "");
+  const [done, setDone] = useState<Done | null>(() => kept?.done ?? null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const head = useRef<HTMLDivElement>(null);
   // When it finishes, the button that started it may have lost the focus (it was busy): give it to the answer's line, as Context does.
   useEffect(() => { if (!busy && asked !== null && (!document.activeElement || document.activeElement === document.body)) head.current?.focus(); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
-  const [asked, setAsked] = useState<string | null>(null);
+  const [asked, setAsked] = useState<string | null>(() => kept?.asked ?? null);
   const abort = useRef<AbortController | null>(null);
+  // A finished answer is kept for this tab; one cut short or failed is not.
+  useEffect(() => { if (!busy && asked !== null && done && !error) saveAsk(graph, "answer", { asked, sources, text, done } satisfies Kept); }, [busy, done]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onBusy?.(busy); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (trigger !== answered.current) { answered.current = trigger; if (query.trim()) void go(); } }, [trigger]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { abort.current?.abort(); onBusy?.(false); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
