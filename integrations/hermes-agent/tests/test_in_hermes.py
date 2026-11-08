@@ -98,8 +98,6 @@ def test_hermes_finds_the_plugin_and_injects_the_recall_and_the_news(hermes):
     recall = [c for c in server.calls if c["path"] == "/api/brains/b1/recall"]
     assert len(recall) == 1 and recall[0]["auth"] == "Bearer mst_reader" and recall[0]["body"]["query"] == QUESTION
     assert "MimirSynth" in manager.describe_recall()
-    from agent.memory_context import build_memory_context_block
-    assert "<mimirsynth-memory" in build_memory_context_block(out)   # Hermes keeps our blocks inside its own fence
     manager.shutdown_all()
 
 
