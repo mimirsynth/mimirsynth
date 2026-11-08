@@ -107,7 +107,7 @@ export default function RefQueries({ graph }: { graph: string }) {
   const d = detail.data;
   return (
     <Stack gap="md">
-      <Notice tone="info">{t("Preguntas con lo que su recall debe traer y lo que no. Al ejecutarlas se cuentan los esperados encontrados y los falsos positivos, para cambiar el umbral de los pasajes, el modelo de embeddings o los pesos con datos. «Simular» prueba otros umbrales sin tocar los ajustes. Tras un cambio de modelo de embeddings se ejecutan solas y, si empeoran, se avisa.")}</Notice>
+      <Notice tone="info" role="note">{t("Preguntas con lo que su recall debe traer y lo que no. Al ejecutarlas se cuentan los esperados encontrados y los falsos positivos, para cambiar el umbral de los pasajes, el modelo de embeddings o los pesos con datos. «Simular» prueba otros umbrales sin tocar los ajustes. Tras un cambio de modelo de embeddings se ejecutan solas y, si empeoran, se avisa.")}</Notice>
       <Group gap="xs" align="flex-end">
         <Btn kind="primary" icon="play" disabled={!items.length} loading={run.isPending && !run.variables?.length} onClick={() => run.mutate([])}>{t("Ejecutar")}</Btn>
         <TextField label={t("Umbrales a simular")} placeholder="0,68 0,70 0,72" w={200} value={sweep} onChange={(e) => setSweep(e.currentTarget.value)} />

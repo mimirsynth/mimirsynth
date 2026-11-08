@@ -30,6 +30,8 @@ type Res = { recall_id?: string; query: string; facts: Fact[]; chunks: Chunk[]; 
 const simValue = (x: { similarity?: number | null; score?: number }) => { const v = x.similarity ?? x.score; return typeof v === "number" ? fmtNum(v, 2) : null; };
 type Mark = "expect" | "avoid";
 const KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘+Enter" : "Ctrl+Enter";
+// A touch screen with no keyboard to hand: the button does not offer a shortcut it cannot use.
+const TOUCH = typeof window !== "undefined" && !!window.matchMedia?.("(hover: none) and (pointer: coarse)").matches;
 type Rating = "useful" | "irrelevant" | "incorrect";
 type Scope = "brain" | "all";
 const SCOPE_KEY = "mimirsynth.askScope";  // the last scope chosen, per browser; a convenience, Ask works the same without it
@@ -76,7 +78,15 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const viewNow = () => scope === "all" ? "contexto" : new URLSearchParams(window.location.search).get("modo") ?? "contexto";
   const primary = () => { if (!q.trim()) return; if (viewNow() === "contexto") search(); else setAnswerTrigger((n) => n + 1); };
   // The button that had the focus is disabled while it works, so the focus falls to the page: give it to the results instead.
-  useEffect(() => { if (run.data && (!document.activeElement || document.activeElement === document.body)) resultsHead.current?.focus(); }, [run.data]);
+  useEffect(() => {
+    if (!run.data) return;
+    const head = resultsHead.current;
+    if (!document.activeElement || document.activeElement === document.body) head?.focus({ preventScroll: true });
+    // when they start low on the screen (a phone, under the controls), the results are brought up to its top
+    if (head && head.getBoundingClientRect().top > window.innerHeight * 0.6) {
+      head.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    }
+  }, [run.data]);
   useEffect(() => { run.reset(); }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
   // Valorar lo que devolvió el recall (útil, irrelevante, incorrecto): alimenta la pestaña Calidad.
   const rate = useMutation({
@@ -169,8 +179,14 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
   // Each result's place, as the agent reads them: facts first (current, then no longer true), then fragments, then passages.
   const rank = (n: number) => t("n.º {{n}}", { n });
+  const isMarked = (key: string) => marking && !!marks[key];
+  // a similarity within 0,05 of the threshold: what a small change of threshold would drop
+  const edge = (x: { similarity?: number | null; score?: number }) => {
+    const v = x.similarity ?? x.score, min = run.data?.min_similarity;
+    return typeof v === "number" && !!min && v < min + 0.05 ? ` · ${t("en el límite del umbral")}` : "";
+  };
   const factCard = (f: Fact, i: number, list: Fact[]) => (
-    <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)}
+    <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)} highlight={isMarked(`f:${f.uuid}`)}
       actions={cardActions(f.fact, `f:${f.uuid}`, "fact", f.uuid, { text: f.fact, kind: "fact" }, !f.origin)}
       tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<EntityChip name={f.source} type={f.source_type} to={entityLink(f.source_uuid, f.origin)} />
         <Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text><EntityChip name={f.target} type={f.target_type} to={entityLink(f.target_uuid, f.origin)} /></>}
@@ -201,13 +217,9 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const marked = Object.values(marks);
   const toRef = (): RefQuery => ({ query: r?.query ?? q, expect: marked.filter((m) => m.mark === "expect").map((m) => m.item), avoid: marked.filter((m) => m.mark === "avoid").map((m) => m.item),
     docs: null, note: "" });
+  const busyNow = view === "contexto" ? run.isPending || searchAll.isPending : answering;
   const ask = (
     <Stack gap="xs">
-      <Group gap="xs">
-        {status.data && <Pill tone={status.data.enabled ? "success" : "warn"}>{status.data.enabled ? t("índice: {{chunks}} fragmentos de {{episodes}} episodios", { chunks: status.data.chunks, episodes: status.data.episodes }) : t("índice de texto desactivado (requiere PostgreSQL)")}</Pill>}
-        {canSync && status.data?.enabled && <Btn size="row" loading={sync.isPending} onClick={() => sync.mutate()} icon="refresh">{t("Reindexar ahora")}</Btn>}
-        {sync.data && <Text size="xs" c="dimmed">{sync.data.reindexed} {t("episodios reindexados")}</Text>}
-      </Group>
       <TextArea autosize minRows={2} label={t("Pregunta")} placeholder={t("¿Dónde está Nextcloud ahora?")} value={q} onChange={(e) => setQ(e.currentTarget.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && q.trim()) { e.preventDefault(); primary(); } }} />
       <Group gap="md" align="flex-end">
@@ -220,8 +232,15 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       <Group align="flex-end">
         <NumberField size="xs" label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} w={80} />
         <NumberField size="xs" label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={100} />
-        <Btn kind="primary" disabled={!q.trim()} loading={view === "contexto" ? run.isPending || searchAll.isPending : answering} onClick={primary}>
-          {view === "contexto" ? t("Buscar ({{keys}})", { keys: KEYS }) : t("Responder ({{keys}})", { keys: KEYS })}</Btn>
+        {/* while it works the button says so in words, instead of a spinner in place of its label */}
+        <Btn kind="primary" disabled={!q.trim() || busyNow} onClick={primary}>
+          {busyNow ? (view === "contexto" ? t("Buscando…") : t("Redactando…"))
+            : view === "contexto" ? (TOUCH ? t("Buscar") : t("Buscar ({{keys}})", { keys: KEYS })) : (TOUCH ? t("Responder") : t("Responder ({{keys}})", { keys: KEYS }))}</Btn>
+      </Group>
+      <Group gap="xs">
+        {status.data && <Pill tone={status.data.enabled ? "success" : "warn"}>{status.data.enabled ? t("índice: {{chunks}} fragmentos de {{episodes}} episodios", { chunks: status.data.chunks, episodes: status.data.episodes }) : t("índice de texto desactivado (requiere PostgreSQL)")}</Pill>}
+        {canSync && status.data?.enabled && <Btn size="row" loading={sync.isPending} onClick={() => sync.mutate()} icon="refresh">{t("Reindexar ahora")}</Btn>}
+        {sync.data && <Text size="xs" c="dimmed">{sync.data.reindexed} {t("episodios reindexados")}</Text>}
       </Group>
       {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} trigger={answerTrigger} answered={answered} onBusy={setAnswering} />}
       {scope === "all" && <MutationError error={searchAll.error} />}
@@ -253,13 +272,14 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             </>}
             {r.chunks.length > 0 && <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>}
             {r.chunks.map((c, i) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ")}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ") + edge(c)}
+                highlight={isMarked(`c:${c.origin ?? ""}:${c.id}`)}
                 actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
               {r.documents.map((p, i) => (
-                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
+                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} highlight={isMarked(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
                   meta={[rank(i + 1), sim(p) ?? t("sin similitud"), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) })].join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
                   actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
