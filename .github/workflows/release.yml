@@ -120,16 +120,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Assets and their checksums
+        run: |
+          cp .env.example env.example
+          sha256sum docker-compose.yml env.example update.sh install.sh install.ps1 > SHA256SUMS
       - name: Release notes from CHANGELOG.md
         run: |
           v="${GITHUB_REF_NAME#v}"
           awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then echo "See the [changelog](CHANGELOG.md)." > notes.md; fi
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
           {
             echo
             echo "**Image:** \`ghcr.io/${GITHUB_REPOSITORY,,}:${v}\` (linux/amd64, linux/arm64)"
             echo "**Optional OCR service:** \`ghcr.io/${GITHUB_REPOSITORY,,}-ocr:${v}\` (the \`ocr\` profile of the compose file)"
-            echo "**Install:** download \`docker-compose.yml\` and \`env.example\` from this release's assets (see the installation guide). **Update:** \`update.sh\` (backup, update and checks in one step)."
+            echo
+            echo "**Install** with one command (see the installation guide):"
+            echo "- Linux and macOS: \`curl -fsSL ${base}/install.sh | bash\`"
+            echo "- Windows, with Docker Desktop: \`irm ${base}/install.ps1 | iex\` in PowerShell"
+            echo
+            echo "Or by hand, with \`docker-compose.yml\` and \`env.example\` from this release's assets. **Update:** \`update.sh\` (backup, update and checks in one step)."
+            echo
+            echo "**SHA-256 of the assets** (also in \`SHA256SUMS\`: \`sha256sum -c SHA256SUMS --ignore-missing\`):"
+            echo
+            echo '```'
+            cat SHA256SUMS
+            echo '```'
           } >> notes.md
       - name: Create the release
         env:
@@ -137,5 +153,5 @@ jobs:
         run: |
           flags=""
           case "$GITHUB_REF_NAME" in *-*) flags="--prerelease";; esac
-          cp .env.example env.example
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md $flags docker-compose.yml env.example update.sh
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md $flags \
+            docker-compose.yml env.example update.sh install.sh install.ps1 SHA256SUMS

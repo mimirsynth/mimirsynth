@@ -26,6 +26,21 @@ services:
       interval: 10s
       retries: 5
 
+  # Optional bundled Ollama for embeddings. Start it with `docker compose --profile ollama up -d` and
+  # MIMIRSYNTH_EMBEDDING_BASE_URL=http://ollama:11434/v1, then download the model once with
+  # `docker compose exec ollama ollama pull nomic-embed-text`. It runs on the CPU; models live in the ollamadata volume.
+  # It has no authentication: do not publish its port.
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:0.40.15
+    restart: unless-stopped
+    volumes:
+      - ollamadata:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      retries: 5
+
   # Optional OCR for scanned PDFs and images (Tesseract, Spanish and English). Start it with `docker compose --profile ocr up -d`
   # and MIMIRSYNTH_OCR_URL=http://ocr:8001. It is a separate image so the main one does not grow. It has no authentication: do not
   # publish its port.
@@ -54,6 +69,15 @@ services:
       MIMIRSYNTH_DATABASE_URL: "postgresql+psycopg://mimirsynth:${POSTGRES_PASSWORD}@postgres:5432/mimirsynth"
       MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-falkordb}"
       MIMIRSYNTH_FALKOR_PORT: "${MIMIRSYNTH_FALKOR_PORT:-6379}"
+      # An existing graph database (written by the installer): falkordb or neo4j. Neo4j and the credentials take effect from
+      # the version with Neo4j support.
+      MIMIRSYNTH_GRAPH_BACKEND: "${MIMIRSYNTH_GRAPH_BACKEND:-falkordb}"
+      MIMIRSYNTH_FALKOR_USERNAME: "${MIMIRSYNTH_FALKOR_USERNAME:-}"
+      MIMIRSYNTH_FALKOR_PASSWORD: "${MIMIRSYNTH_FALKOR_PASSWORD:-}"
+      MIMIRSYNTH_NEO4J_URI: "${MIMIRSYNTH_NEO4J_URI:-}"
+      MIMIRSYNTH_NEO4J_USER: "${MIMIRSYNTH_NEO4J_USER:-}"
+      MIMIRSYNTH_NEO4J_PASSWORD: "${MIMIRSYNTH_NEO4J_PASSWORD:-}"
+      MIMIRSYNTH_NEO4J_DATABASE: "${MIMIRSYNTH_NEO4J_DATABASE:-}"
       MIMIRSYNTH_DEFAULT_GRAPH: "${MIMIRSYNTH_DEFAULT_GRAPH:-default}"
       MIMIRSYNTH_BOOTSTRAP_GRAPHS: "${MIMIRSYNTH_BOOTSTRAP_GRAPHS:-}"
       MIMIRSYNTH_EMBEDDING_BASE_URL: "${MIMIRSYNTH_EMBEDDING_BASE_URL:-http://host.docker.internal:11434/v1}"
@@ -94,3 +118,4 @@ volumes:
   pgdata:
   graphdata:
   docstore:
+  ollamadata:
