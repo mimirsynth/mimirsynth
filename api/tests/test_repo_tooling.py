@@ -136,3 +136,23 @@ def test_the_rest_reference_routes_table():
     got = {(m, p): a for m, p, a in wr.api_routes(app)}
     assert got[("POST", b + "/recall")] == "reader" and got[("POST", "/api/brains")] == "instance" and got[("GET", "/api/config")] == "public"
     assert got[("GET", b + "/docs/{doc_id}")] == "reader" and ("GET", b + "/mcp") not in got     # converters dropped; 405-only routes left out
+
+
+def test_a_plugin_that_changes_raises_its_version():
+    """An agent only updates an installed plugin when its manifest's version changes (#369). CI: scripts/plugin_versions.py --base"""
+    pv = _script("plugin_versions")
+    folder = "integrations/claude-code/plugin"
+    changed = [f"{folder}/scripts/mimir.py", "docs/AGENT_CLIENT.md"]
+    assert pv.check(changed, {folder: "0.1.0"}, {folder: "0.2.0"}) == []
+    assert pv.check(changed, {folder: "0.1.0"}, {folder: "0.1.1"}) == []
+    same = pv.check(changed, {folder: "0.2.0"}, {folder: "0.2.0"})
+    assert len(same) == 1 and "raise it in" in same[0] and "plugin.json" in same[0]
+    assert pv.check(changed, {folder: "0.10.0"}, {folder: "0.9.0"})                     # compared as numbers, not as text
+    assert pv.check(changed, {folder: "1.0.0"}, {folder: "1.0.0-rc.1"})                 # a pre-release is lower than its release
+    assert pv.check(["docs/AGENT_CLIENT.md", "integrations/claude-code/README.md"], {folder: "0.2.0"}, {folder: "0.2.0"}) == []
+    assert pv.check([f"{folder}-old/x"], {folder: "0.2.0"}, {folder: "0.2.0"}) == []   # another folder whose name starts the same
+    assert pv.check(changed, {folder: None}, {folder: "0.1.0"}) == []                   # a new plugin
+    assert "not a semantic version" in pv.check(changed, {folder: "0.1.0"}, {folder: "v2"})[0]
+    for folder, manifest in pv.PLUGINS.items():                                          # every listed plugin is there, with a version
+        assert (ROOT / folder).is_dir()
+        pv.parse(pv.version_of((ROOT / manifest).read_text(encoding="utf-8")))

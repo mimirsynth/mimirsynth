@@ -155,7 +155,7 @@ Un plugin nuevo:
 
 ## Publicar un cambio en un plugin
 
-Un agente solo actualiza un plugin instalado cuando cambia la versión de su manifiesto (en Claude Code, `version` en `plugin/.claude-plugin/plugin.json`): con la misma versión, `/plugin update` y el refresco del marketplace lo dan por actual y las instalaciones existentes se quedan con los scripts viejos. Por eso **cualquier cambio en la carpeta de un plugin sube su versión**, también la copia de esta biblioteca que lleva (ejecutar `vendor.py` tras cambiar la biblioteca cambia todos los plugins que la llevan). Se sigue el versionado semántico: una corrección sube el parche; una funcionalidad nueva o una clave nueva del contrato, la versión menor.
+Un agente solo actualiza un plugin instalado cuando cambia la versión de su manifiesto (en Claude Code, `version` en `plugin/.claude-plugin/plugin.json`): con la misma versión, `/plugin update` y el refresco del marketplace lo dan por actual y las instalaciones existentes se quedan con los scripts viejos. Por eso **cualquier cambio en la carpeta de un plugin sube su versión**, también la copia de esta biblioteca que lleva (ejecutar `vendor.py` tras cambiar la biblioteca cambia todos los plugins que la llevan). Se sigue el versionado semántico: una corrección sube el parche; una funcionalidad nueva o una clave nueva del contrato, la versión menor. La comprobación `plugin-version` de cada pull request (`scripts/plugin_versions.py`) falla si cambió la carpeta de un plugin y su versión no subió; un plugin nuevo añade allí su carpeta y su manifiesto a `PLUGINS`.
 
 ## Cambiar el contrato
 
