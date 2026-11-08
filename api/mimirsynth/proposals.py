@@ -332,6 +332,8 @@ def bulk(body: BulkIn, ctx: BrainCtx = Depends(curator)):
             skipped.append({"id": pid, "reason": "correction"}); continue
         if body.verb == "approve" and claims_mod.replaces(p):  # it invalidates facts: one at a time, like a correction (#295)
             skipped.append({"id": pid, "reason": "replaces"}); continue
+        if body.verb == "approve" and (p.category or "") == "curator.distil":  # written by the LLM, may delete episodes (#297)
+            skipped.append({"id": pid, "reason": "distil"}); continue
         if body.verb == "approve" and any(f.get("action") == "flagged" for f in (p.secret_findings or [])):
             skipped.append({"id": pid, "reason": "secret"}); continue
         if body.verb == "approve" and p.related_verdict in KNOWN:

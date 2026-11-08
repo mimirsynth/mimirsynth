@@ -174,6 +174,14 @@ def ingest_proposal(pid: int, job=None) -> str:
         else:
             notify.resolve("ingest.failed", f"proposal:{p.id}")
         audit(db, None, f"proposal.{p.status}", brain, id=p.id)
+        if not err and p.episode_uuid and p.category == "curator.distil":   # the originals the note covers go (#297)
+            from . import distil
+            try:
+                p.ingest_report = {**(p.ingest_report or {}), "distil": distil.finish(db, brain, p)}
+            except Exception as e:  # noqa: BLE001  (the note is in; the originals simply stay)
+                log.exception("no se pudieron revisar los originales de la nota destilada %s", pid)
+                p.ingest_report = {**(p.ingest_report or {}), "distil_error": str(e)[:300]}
+            db.commit()
         if not err and p.episode_uuid:
             try:
                 from . import selftest   # does each new fact come back to a control question? (#296)

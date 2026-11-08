@@ -1,0 +1,12 @@
+{
+ "Al ingerir la nota se borran los marcados que la nota cubra: los que no digan nada que ella no diga. Los demás se quedan. Borrar no se puede deshacer.": "Once the note is ingested, the ticked ones it covers are deleted: those that say nothing it does not say. The others stay. Deleting cannot be undone.",
+ "Destilar episodios que repiten la misma lección": "Distil episodes that repeat the same lesson",
+ "Episodios que resume ({{n}})": "Episodes it sums up ({{n}})",
+ "La nota entró, pero no se pudieron revisar los originales: {{e}}": "The note went in, but its originals could not be checked: {{e}}",
+ "Notas destiladas por el curador (se aprueban una a una)": "Notes the curator distilled (approved one at a time)",
+ "Se queda: dice algo que la nota no recoge.": "Stays: it says something the note does not.",
+ "Se queda: estaba desmarcado.": "Stays: it was unticked.",
+ "Tras ingerirla: {{d}} borrados, {{k}} se quedan.": "Once ingested: {{d}} deleted, {{k}} stay.",
+ "Ya no estaba en el grafo.": "It was no longer in the graph.",
+ "{{n}} episodios casi iguales (similitud ≥ {{s}})": "{{n}} nearly identical episodes (similarity ≥ {{s}})"
+}

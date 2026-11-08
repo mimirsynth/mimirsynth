@@ -7,13 +7,13 @@ import { Btn, Check, EmptyState, MutationError, Notice, Panel, Pill } from "../u
 import { T } from "../i18n";
 
 type Fact = { uuid: string; fact: string; target: string; valid_at: string | null };
-type Finding = { pass: string; rule?: string; subject: string; relation: string; keep: Fact | null; replace: Fact[]; why?: string };
+type Finding = { pass: string; rule?: string; similarity?: number; episodes?: { uuid: string; name: string; valid_at: string | null; text: string }[]; subject: string; relation: string; keep: Fact | null; replace: Fact[]; why?: string };
 type Precision = { approved: number; rejected: number; pending: number; precision: number | null };
 type Settings = { enabled: boolean; passes: Record<string, boolean>; batch: number; precision: Record<string, Precision> };
 type Run = { id: number; day: string; status: string; reason: string; error: string; finished_at: string | null; findings: Record<string, number>;
   proposals: number[]; sample?: Record<string, Finding[]> };
 
-const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil"), noise: T("Ruido: hechos que no dicen nada útil"), archive: T("Archivar lo que nunca se recupera") };
+const PASS: Record<string, string> = { contradictions: T("Contradicciones en relaciones funcionales"), redundancy: T("Hechos repetidos entre las mismas entidades"), obsolescence: T("Hechos pasados de su vida útil"), noise: T("Ruido: hechos que no dicen nada útil"), archive: T("Archivar lo que nunca se recupera"), distil: T("Destilar episodios que repiten la misma lección") };
 
 // Why a finding that keeps nothing would leave: the noise pass says which of its rules it fell under (issue 325).
 const NOISE_RULE: Record<string, string> = { placeholder: T("Un extremo es un comodín («esto», «algo»), no una cosa del mundo."),
@@ -23,11 +23,17 @@ const RULE_NAME: Record<string, string> = { placeholder: T("Comodines"), meta: T
   change: T("Cambios contados como suceso") };
 const ALONE: Record<string, string> = { obsolescence: T("Pasado de su vida útil y sin confirmar."), archive: T("Sin recuperar en mucho tiempo y sin confirmar.") };
 
+const fkey = (f: Finding) => f.episodes?.[0]?.uuid ?? (f.keep ?? f.replace[0]).uuid;
+
 const RUN_STATUS: Record<string, string> = { done: T("terminada"), discarded: T("descartada"), error: T("con error"), running: T("en marcha"), stopped: T("detenida") };
 
 /** One finding: the fact the curator keeps and the ones it would replace, the evidence a person looks at before confirming. */
 function FindingRow({ f }: { f: Finding }) {
   const { t } = useTranslation();
+  if (f.pass === "distil") return (<Panel withBorder p="sm"><Stack gap={4}>
+    <Text size="sm" fw={600}>{f.subject} · {t("{{n}} episodios casi iguales (similitud ≥ {{s}})", { n: f.episodes?.length ?? 0, s: f.similarity ?? "" })}</Text>
+    {(f.episodes ?? []).map((e) => <Text key={e.uuid} size="xs" c="dimmed">{e.name} <span className="ms-data">({fmtDay(e.valid_at)})</span>: «{e.text}»</Text>)}
+  </Stack></Panel>);
   const why = f.rule ? NOISE_RULE[f.rule] : ALONE[f.pass];
   return (<Panel withBorder p="sm"><Stack gap={4}>
     <Text size="sm" fw={600}>{f.subject} · <span className="ms-data">{f.relation}</span></Text>
@@ -97,11 +103,11 @@ export default function CuratorPanel({ graph, isAdmin }: { graph: string; isAdmi
         {Object.keys(preview.data.by_rule ?? {}).length ? Object.entries(preview.data.by_rule ?? {}).map(([rule, n]) => <Stack key={rule} gap="xs">
           <Text size="sm" fw={600}>{RULE_NAME[rule] ? t(RULE_NAME[rule]) : rule} <span className="ms-data">· {t("{{n}} hallazgos", { n })}</span></Text>
           {preview.data!.findings.filter((f) => f.rule === rule).map((f) => <FindingRow key={f.replace[0].uuid} f={f} />)}
-        </Stack>) : preview.data.findings.map((f) => <FindingRow key={(f.keep ?? f.replace[0]).uuid} f={f} />)}
+        </Stack>) : preview.data.findings.map((f) => <FindingRow key={fkey(f)} f={f} />)}
       </Stack> : <EmptyState>{t("Ahora no propondría nada.")}</EmptyState>)}
       {waiting.map((r) => <Panel key={r.id} withBorder p="sm"><Stack gap="xs">
         <Group gap="xs"><Pill tone="warn">{t("Espera tu confirmación")}</Pill><Text size="sm">{t("La ejecución del {{day}} propondría {{n}} cambios. Mira la muestra: si es correcta, se crean las propuestas (cada una se decide aparte).", { day: fmtDay(r.day), n: Object.values(r.findings).reduce((a, b) => a + b, 0) })}</Text></Group>
-        {Object.values(r.sample ?? {}).flat().map((f) => <FindingRow key={(f.keep ?? f.replace[0]).uuid} f={f} />)}
+        {Object.values(r.sample ?? {}).flat().map((f) => <FindingRow key={fkey(f)} f={f} />)}
         <Group gap="xs"><Btn kind="primary" loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, verb: "confirm" })}>{t("Crear las propuestas")}</Btn>
           <Btn loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, verb: "discard" })}>{t("Descartar")}</Btn></Group>
       </Stack></Panel>)}

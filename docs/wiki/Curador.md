@@ -22,6 +22,14 @@ Y, también desactivado por defecto, el **ruido**: hechos vigentes que no dicen 
 
 Y, también desactivados por defecto, **hechos que nunca se recuperan**: hechos vigentes que ningún recall ha traído en los últimos 180 días (`archive_days`, ajustable por el API), aprendidos antes de eso y que nunca confirmó una persona ni una sonda. Aprobar uno lo **archiva**: sigue en el grafo sin cambios, pero el recall lo deja fuera salvo que se pida (`archived: true` en `POST /recall` o en el `recall` del MCP). La lista **Archivados** de esta pestaña restaura cualquiera con un clic. Cada recall registrado anota cuándo salieron sus hechos, y esta pasada solo propone cuando el brain lleva vigilado el periodo completo; antes, cualquier hecho antiguo parecería sin usar.
 
+Y, también desactivado por defecto, **destilar**: episodios que repiten la misma lección con palabras algo distintas.
+- **Grupos.** Varios episodios forman un grupo si mencionan la misma entidad y cada par se parece: coseno ≥ 0,85 (`distil_similarity`) entre sus vectores del índice de episodios. Un grupo necesita al menos 3 episodios (`distil_min`), y se prueba primero la entidad más concreta. Agrupar no llama a la IA, así que **Ver qué propondría** no cuesta nada.
+- **La nota.** Para cada grupo, el LLM del brain escribe una nota corta con la lección tal como está ahora y la fecha desde la que vale; si los originales no coinciden, manda el más reciente. Cada grupo es una llamada, como mucho 5 por ejecución diaria (`distil_calls`).
+- **Aprobación.** La propuesta (`curator.distil`) muestra sus originales. **Nunca se aprueba sola**: ni niveles de aprobación automática, ni decisor, ni aprobación en bloque. Una persona lee lo que escribió el LLM, una a una.
+- **Los originales.** Cada uno va marcado «borrar si la nota lo cubre»; desmarca antes de aprobar los que deban quedarse. Al ingerir la nota, un original está **cubierto** si cada hecho que salió solo de él sigue vigente y coincide con un hecho de la nota: las mismas dos entidades y la misma relación o un texto parecido. Los cubiertos y marcados se **borran**, y no se puede deshacer; los demás se quedan, y la propuesta dice qué aporta cada uno. Borrar un episodio quita los hechos que solo él sostiene y las entidades que se quedan sin nada; un hecho que también sostienen otros episodios se queda.
+
+Los tres ajustes van en `PUT …/curator/settings`; si una petición no trae alguno, conserva su valor.
+
 Cada pasada tiene su casilla y su precisión, que dice cuánto fiarse de ella.
 
 ## Se detiene si baja la cobertura
