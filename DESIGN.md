@@ -235,6 +235,8 @@ Spacing follows a small rhythm: 4px inside chips, 8px between related controls, 
 ### Named Rules
 **The One Height Rule.** Controls in a row are all 36px: buttons, fields, selects, segments and icon buttons.
 
+**The Measure Rule.** Running text (prose, a proposal, facts, notes) stops at about 72 characters (`--ms-measure`): past that the eye loses the start of the next line. Wider panels use the room for a second column, such as a record's sheet, not for longer lines.
+
 **The Page Owns the Height Rule.** Pages fill the window and their data area scrolls. Screens never size themselves against the viewport.
 
 ## Elevation & Depth
