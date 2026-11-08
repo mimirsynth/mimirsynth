@@ -190,6 +190,20 @@ def test_the_noise_rules_are_conservative():
     assert nr({**moved, "fact": "Vaultwarden se migró a altair"}, [{"fact": "Vaultwarden corre en altair"}]) is not None
 
 
+def test_a_generic_relation_is_judged_by_its_text():
+    """Issue 325: on a real brain the generic rule flagged facts whose text carried the information."""
+    rule = lambda s, t, fact: K.noise_rule({"source": s, "target": t, "name": "RelatesTo", "fact": fact}, [])
+    assert rule("Plex LXC150", "Plex", "Plex LXC150 en 1.43.5.11079 (fix 1.43.3.10861)") is None                    # a version
+    assert rule("Vaultwarden", "Epsilon", "Epsilon ya no aloja Vaultwarden") is None                                 # a negation
+    assert rule("claude-home", "Epsilon", "claude-home is not hosted on Epsilon.") is None
+    assert rule("canal GitHub", "GitHub", "el canal es GitHub (PRs con etiqueta ready-for-review)") is None          # an identifier
+    assert rule("Vaultwarden", "altair", "Vaultwarden runs there since March") is None                               # a date
+    assert rule("Vaultwarden", "altair", "Vaultwarden is related to altair") == "generic"                            # plain filler
+    assert rule("Vaultwarden", "altair", "Vaultwarden está relacionado con altair") == "generic"
+    assert K.noise_reason({"source": "Vaultwarden", "target": "altair", "name": "RelatesTo", "fact": "Vaultwarden is related to altair"},
+                          []) == K.NOISE_RULES["generic"]
+
+
 @needs_falkor
 def test_the_noise_pass_and_the_stop_on_a_coverage_drop(client, repeated, monkeypatch):  # noqa: F811
     from datetime import date, datetime, timedelta, timezone
@@ -203,13 +217,14 @@ def test_the_noise_pass_and_the_stop_on_a_coverage_drop(client, repeated, monkey
     assert client.post("/api/brains", json={"slug": "cu6", "name": "CU6", "graph_name": repeated}).status_code == 201
     pv = client.post("/api/brains/cu6/curator/preview?pass=noise").json()
     assert [f["replace"][0]["uuid"] for f in pv["findings"]] == ["nz"]
+    assert pv["by_rule"] == {"placeholder": 1} and pv["findings"][0]["rule"] == "placeholder"   # grouped by rule (issue 325)
     client.put("/api/brains/cu6/curator/settings", json={"enabled": True, "batch": 10, "passes": {"contradictions": False, "noise": True}})
     client.post("/api/brains/cu6/curator/run")
     run = client.get("/api/brains/cu6/curator/runs").json()["items"][0]
     assert run["findings"] == {"noise": 1} and len(run["proposals"]) == 1
     with _factory()() as db:
         p = db.get(Proposal, run["proposals"][0])
-        assert p.category == "curator.noise" and p.name.startswith("Curador: ruido")
+        assert p.category == "curator.noise" and p.name.startswith("Curador: ruido") and p.decision["curator"]["rule"] == "placeholder"
         bid, uid = p.brain_id, db.query(User).first().id
         today = date.today()
         db.add(HealthRun(brain_id=bid, day=today - timedelta(days=1), status="done", metrics={"coverage_items": {"a": 1, "b": 1}},

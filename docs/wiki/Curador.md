@@ -17,7 +17,7 @@ Y, también desactivados por defecto, **hechos pasados de su vida útil**: los h
 Y, también desactivado por defecto, el **ruido**: hechos vigentes que no dicen nada útil, según cuatro reglas conservadoras a propósito.
 - Un extremo es un comodín y no una cosa del mundo («it», «esto», «algo»…).
 - Un extremo es la propia memoria («el grafo», «la memoria», «episodio», «hecho»…). No cuentan nombres que pueden ser cosas reales, como «node» (Node.js), «memory» (RAM) o «edge».
-- Una relación genérica (`RELATES_TO`, `MENTIONS`…) cuyo texto no añade nada a sus dos entidades.
+- Una relación genérica (`RELATES_TO`, `MENTIONS`…) cuyo texto no añade nada a sus dos entidades. Decide el texto, no la relación: un texto con un número (una versión, una fecha, un puerto), un identificador (`ready-for-review`, `host.lan`), un mes o una negación («Epsilon ya no aloja Vaultwarden», «not») nunca es ruido, y «está relacionado con», «is related to» y similares no cuentan como contenido.
 - Un cambio contado como suceso («X se migró a Y») cuando otro hecho vigente entre las mismas entidades ya dice el resultado. Si es la única huella del cambio, se conserva.
 
 Y, también desactivados por defecto, **hechos que nunca se recuperan**: hechos vigentes que ningún recall ha traído en los últimos 180 días (`archive_days`, ajustable por el API), aprendidos antes de eso y que nunca confirmó una persona ni una sonda. Aprobar uno lo **archiva**: sigue en el grafo sin cambios, pero el recall lo deja fuera salvo que se pida (`archived: true` en `POST /recall` o en el `recall` del MCP). La lista **Archivados** de esta pestaña restaura cualquiera con un clic. Cada recall registrado anota cuándo salieron sus hechos, y esta pasada solo propone cuando el brain lleva vigilado el periodo completo; antes, cualquier hecho antiguo parecería sin usar.
@@ -28,7 +28,7 @@ Cada pasada tiene su casilla y su precisión, que dice cuánto fiarse de ella.
 Antes de proponer nada, el curador mira la [[Salud de la memoria]]. Si la cobertura de las consultas de referencia bajó más de *Salud de la memoria: avisar si la cobertura baja* respecto a la medición anterior, y entre medias se aprobaron propuestas suyas, ese día no propone nada. La ejecución termina **detenida**, con las cifras, y lo avisa la notificación **curator.stopped**.
 
 ## Activarlo
-Está **desactivado por defecto**. Un administrador del brain marca **Activar el curador en este brain**. Desde entonces se ejecuta una vez al día (el día es la clave de la ejecución: un reinicio nunca lo ejecuta dos veces), y **Ejecutar ahora** lo lanza al momento. **Ver qué propondría** lo muestra sin crear nada.
+Está **desactivado por defecto**. Un administrador del brain marca **Activar el curador en este brain**. Desde entonces se ejecuta una vez al día (el día es la clave de la ejecución: un reinicio nunca lo ejecuta dos veces), y **Ejecutar ahora** lo lanza al momento. **Ver qué propondría** lo muestra sin crear nada; en la pasada de ruido agrupa los hallazgos por regla, con cuántos encuentra cada una, para ver qué regla mete ruido antes de activarla.
 
 ## Una muestra antes de un lote
 Si una ejecución fuera a proponer **más de 5 cambios** a la vez (el lote, ajustable por el API), no propone nada. En su lugar, espera con una muestra de lo que cambiaría y de lo que conserva. Cuando se retira un servicio pueden caer decenas de hechos a la vez, y solo una persona distingue «sigue siendo útil» de «ya no vale». **Crear las propuestas** las crea todas, y cada una se sigue decidiendo aparte; **Descartar** deja la ejecución sin efecto.
@@ -40,4 +40,4 @@ Sus propuestas no tienen texto, solo afirmaciones: sujeto, relación, el valor q
 La pestaña dice cuántas de sus propuestas han aprobado y rechazado los curadores hasta ahora. Esa es la medida para confiar más en él más adelante ([#299](https://github.com/mimirsynth/mimirsynth/issues/299)).
 
 ## API
-`GET/PUT /api/brains/{slug}/curator/settings` (`enabled`, `passes`, `batch`; cambiarlos requiere un administrador del brain), `POST …/curator/preview`, `POST …/curator/run`, `GET …/curator/runs`, `POST …/curator/runs/{id}/confirm` y `…/discard`.
+`GET/PUT /api/brains/{slug}/curator/settings` (`enabled`, `passes`, `batch`; cambiarlos requiere un administrador del brain), `POST …/curator/preview` (con `by_rule` en la pasada de ruido), `POST …/curator/run`, `GET …/curator/runs`, `POST …/curator/runs/{id}/confirm` y `…/discard`.

@@ -17,7 +17,7 @@ And, also off by default, **facts past their shelf life**: the current facts tha
 And, also off by default, **noise**: current facts that say nothing useful, by four deliberately conservative rules.
 - One end is a placeholder, not a thing of the world («it», «esto», «something»…).
 - One end is the memory itself («the graph», «la memoria», «episode», «fact»…). Names that can be real things, such as «node» (Node.js), «memory» (RAM) or «edge», do not count.
-- A generic relation (`RELATES_TO`, `MENTIONS`…) whose text adds nothing beyond its two entities.
+- A generic relation (`RELATES_TO`, `MENTIONS`…) whose text adds nothing beyond its two entities. The text decides, not the relation: a text with a number (a version, a date, a port), an identifier (`ready-for-review`, `host.lan`), a month or a negation («Epsilon no longer hosts Vaultwarden», «ya no») is never noise, and «is related to», «está relacionado con» and the like do not count as content.
 - A change told as an event («X was moved to Y») when another current fact between the same entities already states the result. If it is the only trace of the change, it is kept.
 
 And, also off by default, **facts never recalled**: current facts that no recall brought in the last 180 days (`archive_days`, adjustable through the API), learned before that, never confirmed by a person or a probe. Approving one **archives** it: it stays in the graph untouched, but the recall leaves it out unless asked (`archived: true` in `POST /recall` or the MCP `recall`). The **Archived** list in this tab restores any of them with one click. Every logged recall notes when its facts came back, and this pass only proposes once the brain has been tracked for the whole period; before that, every old fact would look unused.
@@ -28,7 +28,7 @@ Each pass has its own checkbox and its own precision, which says how far to trus
 Before proposing anything, the curator looks at [[Memory health]]. If the reference queries' coverage fell more than *Memory health: notify when coverage falls* since the previous measurement, and some of its proposals were approved in between, it proposes nothing that day. The run ends **stopped**, with the numbers, and the **curator.stopped** notification says so.
 
 ## Turning it on
-It is **off by default**. A brain administrator ticks **Turn on the curator in this brain**. From then on it runs once a day (the day is the run's key: a restart never runs it twice), and **Run now** runs it at once. **See what it would propose** shows it without creating anything.
+It is **off by default**. A brain administrator ticks **Turn on the curator in this brain**. From then on it runs once a day (the day is the run's key: a restart never runs it twice), and **Run now** runs it at once. **See what it would propose** shows it without creating anything; for the noise pass it groups the findings by rule, with how many each rule finds, so a noisy rule shows before the pass is turned on.
 
 ## A sample before a batch
 If a run would propose **more than 5 changes** at once (the batch, adjustable through the API), it proposes nothing. Instead it waits with a sample of what it would change and what it keeps. When a service is decommissioned, dozens of facts can go at once, and only a person tells «still useful» from «now stale». **Create the proposals** creates them all, and each one is still decided on its own; **Discard** drops the run.
@@ -40,4 +40,4 @@ Its proposals have no text, only claims: subject, relation, the value kept and t
 The tab says how many of its proposals curators approved and rejected so far. That is the measure for trusting it more later ([#299](https://github.com/mimirsynth/mimirsynth/issues/299)).
 
 ## API
-`GET/PUT /api/brains/{slug}/curator/settings` (`enabled`, `passes`, `batch`; changing them needs a brain administrator), `POST …/curator/preview`, `POST …/curator/run`, `GET …/curator/runs`, `POST …/curator/runs/{id}/confirm` and `…/discard`.
+`GET/PUT /api/brains/{slug}/curator/settings` (`enabled`, `passes`, `batch`; changing them needs a brain administrator), `POST …/curator/preview` (with `by_rule` for the noise pass), `POST …/curator/run`, `GET …/curator/runs`, `POST …/curator/runs/{id}/confirm` and `…/discard`.

@@ -156,31 +156,63 @@ grafo-de-conocimiento el-grafo este-grafo la-memoria esta-memoria episodio episo
 _CHANGE = re.compile(r"\b(was|were|has been|have been|got) (changed|moved|migrated|updated|renamed|replaced|switched|upgraded)\b|"
                      r"\bse (cambi[oó]|movi[oó]|migr[oó]|actualiz[oó]|renombr[oó]|sustituy[oó])\b|\bha sido (cambiad|movid|migrad|actualizad|renombrad)", re.I)
 _WORD = re.compile(r"\w(?:[\w.-]*\w)?")
+# What makes a fact's text carry information even when its relation is generic (#325): a number (a version, a date, a port, an
+# address), an identifier (`ready-for-review`, `host.lan`, `a/b`, `x_y`), a month or a negation («Epsilon ya no aloja Vaultwarden»).
+_INFORMS = re.compile(r"\d|\w[-_./:@]\w|"
+                      r"\b(not|no|never|none|nobody|nothing|without|cannot|no longer|ya no|nunca|jam[aá]s|tampoco|ning[uú]n[oa]?|nadie|nada|sin)\b|"
+                      r"\w+n['’]t\b|"
+                      r"\b(january|february|march|april|may|june|july|august|september|october|november|december|"
+                      r"enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b", re.I)
+# The rules of the noise pass, in the order they are tried, with the reason a proposal shows.
+NOISE_RULES = {"placeholder": "one end is a placeholder, not a thing of the world",
+               "meta": "it is about the memory itself, not the world it describes",
+               "generic": "a generic relation that says nothing beyond its two entities",
+               "change": "a change told as an event, while a current fact between the same entities states the result"}
 
 
 def _name(s) -> str:
     return "-".join(str(s or "").lower().split())
 
 
+# The words a sentence only uses to say that two things are related: they carry nothing of their own.
+FILLER = frozenset("""related relates relation relationship linked associated connected with about have that
+está están esta relacionado relacionada relacionados relacionadas relaciona relación vinculado vinculada asociado asociada
+conectado conectada tiene tienen sobre""".split())
+
+
 def _content(text: str, minus: set[str]) -> set[str]:
-    """The words of four letters or more (or with a digit) of a fact that are not the names of its two entities."""
-    return {w for w in (x.lower() for x in _WORD.findall(text or "")) if (len(w) >= 4 or any(c.isdigit() for c in w)) and w not in minus}
+    """The words of four letters or more (or with a digit) of a fact that are not the names of its two entities nor filler."""
+    return {w for w in (x.lower() for x in _WORD.findall(text or ""))
+            if (len(w) >= 4 or any(c.isdigit() for c in w)) and w not in minus and w not in FILLER}
 
 
-def noise_reason(f: dict, others: list[dict]) -> str | None:
-    """Why a current fact is noise, or None. `others`: the other current facts between the same two entities."""
+def informs(text: str) -> bool:
+    """The fact's text carries something of its own: a number, an identifier, a month or a negation."""
+    return bool(_INFORMS.search(text or ""))
+
+
+def noise_rule(f: dict, others: list[dict]) -> str | None:
+    """The noise rule a current fact falls under (a key of NOISE_RULES), or None. `others`: the other current facts between
+    the same two entities."""
     from .conflicts import generic
     s, t = _name(f.get("source")), _name(f.get("target"))
     if s in PLACEHOLDERS or t in PLACEHOLDERS or len(s) < 2 or len(t) < 2:
-        return "one end is a placeholder, not a thing of the world"
+        return "placeholder"
     if s in META or t in META:
-        return "it is about the memory itself, not the world it describes"
+        return "meta"
+    text = f.get("fact") or ""
     names = set(_WORD.findall(f"{f.get('source') or ''} {f.get('target') or ''}".lower()))
-    if generic(f.get("name")) and len(_content(f.get("fact") or "", names)) < 2:
-        return "a generic relation that says nothing beyond its two entities"
-    if _CHANGE.search(f.get("fact") or "") and any(not _CHANGE.search(o.get("fact") or "") for o in others):
-        return "a change told as an event, while a current fact between the same entities states the result"
+    if generic(f.get("name")) and len(_content(text, names)) < 2 and not informs(text):   # the relation says nothing, the text may (#325)
+        return "generic"
+    if _CHANGE.search(text) and any(not _CHANGE.search(o.get("fact") or "") for o in others):
+        return "change"
     return None
+
+
+def noise_reason(f: dict, others: list[dict]) -> str | None:
+    """Why a current fact is noise, or None."""
+    rule = noise_rule(f, others)
+    return NOISE_RULES[rule] if rule else None
 
 
 def noise(brain_id: int) -> list[dict]:
@@ -198,10 +230,10 @@ def noise(brain_id: int) -> list[dict]:
         if f["uuid"] in busy:
             continue
         others = [o for o in pairs[tuple(sorted((str(f["source_uuid"]), str(f["target_uuid"]))))] if o["uuid"] != f["uuid"]]
-        why = noise_reason(f, others)
-        if why:
-            out.append({"pass": "noise", "subject": f["source"], "relation": f["name"], "keep": None,
-                        "replace": [{k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}], "why": why})
+        rule = noise_rule(f, others)
+        if rule:
+            out.append({"pass": "noise", "rule": rule, "subject": f["source"], "relation": f["name"], "keep": None,
+                        "replace": [{k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}], "why": NOISE_RULES[rule]})
             if len(out) >= MAX_FINDINGS:
                 break
     return out
@@ -301,7 +333,8 @@ def propose(brain_id: int, findings: list[dict]) -> list[int]:
                     else f"Curador: «{f['subject']}» {f['relation']} → {keep.get('target')}")[:255]
             p = Proposal(brain_id=brain_id, author_id=author.id, name=name, body="", source="text", status="pending", kind="memory",
                          source_description=f"curator: {f['pass']}", category=category(f["pass"]), claims=checked,
-                         related_verdict="new", decision={"curator": {"pass": f["pass"], "why": f["why"], "keep": f["keep"]}})
+                         related_verdict="new", decision={"curator": {"pass": f["pass"], "why": f["why"], "keep": f["keep"],
+                                                               **({"rule": f["rule"]} if f.get("rule") else {})}})
             db.add(p)
             db.commit()
             busy |= {x["uuid"] for x in f["replace"]}
@@ -435,11 +468,17 @@ def set_settings(body: SettingsIn, ctx: BrainCtx = Depends(admin_of_brain)):
 
 @router.post("/preview")
 def preview(pass_: str = Query("contradictions", alias="pass"), ctx: BrainCtx = Depends(curator)):
-    """What a pass would propose now, read-only, with its precision so far."""
+    """What a pass would propose now, read-only, with its precision so far. A pass with rules (noise) counts its findings by
+    rule and shows a sample of each, so a noisy rule shows before the pass is turned on (#325)."""
     if pass_ not in PASSES:
         raise HTTPException(422, "pasada desconocida")
     fs = FINDERS[pass_](ctx.brain.id)
-    return {"pass": pass_, "count": len(fs), "findings": fs[:SAMPLE * 5], "batch": config(ctx.brain)["batch"],
+    by_rule: dict[str, int] = {}
+    for f in fs:
+        if f.get("rule"):
+            by_rule[f["rule"]] = by_rule.get(f["rule"], 0) + 1
+    sample = [f for r in by_rule for f in [x for x in fs if x.get("rule") == r][:SAMPLE]] if by_rule else fs[:SAMPLE * 5]
+    return {"pass": pass_, "count": len(fs), "findings": sample, "by_rule": by_rule, "batch": config(ctx.brain)["batch"],
             "precision": precision(ctx.db, ctx.brain.id, pass_)}
 
 
