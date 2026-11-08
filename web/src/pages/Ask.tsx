@@ -56,8 +56,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const [mode, setMode] = useTabParam("contexto", "modo");   // «Responder» writes an answer with citations (issue 126); «Contexto» shows the recall
   const status = useQuery({ queryKey: ["index", graph], queryFn: () => get<{ enabled: boolean; chunks: number; episodes: number }>("index/status", { graph }) });
   const [rated, setRated] = useState<Record<string, Rating>>({});
-  const [rateMsg, setRateMsg] = useState("");
-  const run = useMutation({ mutationFn: () => send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }), onSuccess: () => { setMarks({}); setRated({}); setRateMsg(""); } });
+  const [rateNote, setRateNote] = useState<Record<string, string>>({});  // what a rating did, said on its own card
+  const run = useMutation({ mutationFn: () => send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }), onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); } });
   // The open brain pays for the query's embedding in the AI consumption (issue 176).
   const searchAll = useMutation({ mutationFn: () => send<AllBrainsResult>("POST", "search", { query: q, facts: nf, chunks: nc, brain: graph }) });
   const search = () => { if (!q.trim()) return; if (scope === "all") searchAll.mutate(); else run.mutate(); };
@@ -71,12 +71,30 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   // Valorar lo que devolvió el recall (útil, irrelevante, incorrecto): alimenta la pestaña Calidad.
   const rate = useMutation({
     mutationFn: (a: { key: string; kind: string; id: string; rating: Rating }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${run.data?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating }),
-    onSuccess: (r, a) => { setRated((m) => ({ ...m, [a.key]: a.rating })); setRateMsg(r.proposal_id ? t("Se ha propuesto la corrección del hecho (propuesta #{{id}}); la decide un curador.", { id: r.proposal_id }) : r.recorded_only ? t("Valoración guardada. Con tu rol no se propone la corrección: la verá un curador en Calidad.") : ""); } });
-  const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => run.data?.recall_id && <Group gap={4}>
-    {(["useful", "irrelevant", ...(canIncorrect ? ["incorrect"] : [])] as Rating[]).map((v) => (
+    onSuccess: (r, a) => {
+      setRated((m) => ({ ...m, [a.key]: a.rating }));
+      const said = a.rating === "useful" ? t("Valorado como útil.") : a.rating === "irrelevant" ? t("Valorado como irrelevante.") : t("Valorado como incorrecto.");
+      const then = r.proposal_id ? t("Se ha propuesto la corrección del hecho (propuesta #{{id}}); la decide un curador.", { id: r.proposal_id })
+        : r.recorded_only ? t("Con tu rol no se propone la corrección: la verá un curador en Calidad.") : "";
+      setRateNote((m) => ({ ...m, [a.key]: then ? `${said} ${then}` : said }));
+    } });
+  // Rating feeds Quality and is saved at once; «Incorrecto» also proposes a correction, so it stands apart, in the danger colour. A word
+  // before each group says which one it is: the marks for a reference query look the same and do something else.
+  const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => run.data?.recall_id && <Group gap={4} role="group" aria-label={t("Valorar")}>
+    <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Valorar")}</Text>
+    {(["useful", "irrelevant"] as Rating[]).map((v) => (
       <Btn key={v} size="row" kind="ghost" aria-pressed={rated[key] === v} icon={rated[key] === v ? "check" : undefined} onClick={() => rate.mutate({ key, kind, id, rating: v })}>
-        {v === "useful" ? t("Útil") : v === "irrelevant" ? t("Irrelevante") : t("Incorrecto")}</Btn>))}
+        {v === "useful" ? t("Útil") : t("Irrelevante")}</Btn>))}
+    {canIncorrect && <><span className="ms-ask-sep" aria-hidden="true" />
+      <Btn size="row" kind="ghost" className="ms-ask-wrong" aria-pressed={rated[key] === "incorrect"} icon={rated[key] === "incorrect" ? "check" : undefined}
+        onClick={() => rate.mutate({ key, kind, id, rating: "incorrect" })}>{t("Incorrecto")}</Btn></>}
   </Group>;
+  // A card's actions and, under them, what its rating did (a live region there from the start, so the result is announced).
+  const cardActions = (what: string, key: string, kind: string, id: string, item: Item, canIncorrect: boolean) => (
+    <Stack gap={4}>
+      <Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(what)}>{rateBtns(key, kind, id, canIncorrect)}{markBtns(key, item)}</Group>
+      {run.data?.recall_id && <Text size="xs" c="dimmed" role="status">{rateNote[key] ?? ""}</Text>}
+    </Stack>);
   const view = scope === "all" ? "contexto" : mode;  // across brains there is no written answer: it needs one brain's recall
   const sync = useMutation({ mutationFn: () => send<any>("POST", `brains/${graph}/index/sync`), onSuccess: () => status.refetch() });
   const canSync = ["curator", "admin", "owner"].includes(role);
@@ -113,7 +131,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
   const factCard = (f: Fact) => (
     <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)}
-      actions={<Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(f.fact)}>{rateBtns(`f:${f.uuid}`, "fact", f.uuid, !f.origin)}{markBtns(`f:${f.uuid}`, { text: f.fact, kind: "fact" })}</Group>}
+      actions={cardActions(f.fact, `f:${f.uuid}`, "fact", f.uuid, { text: f.fact, kind: "fact" }, !f.origin)}
       tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
         <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
       meta={`${sim(f) ?? t("sin similitud")} · ${validity(f)}`}>{f.fact}</ListCard>);
@@ -123,9 +141,11 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     if (n[key]?.mark === mark) delete n[key]; else n[key] = { mark, item: { ...item, text: item.text.slice(0, 200) } };
     return n;
   });
-  const markBtns = (key: string, item: Item) => canSync && marking && <Group gap={4}>
-    <Btn size="row" kind="ghost" aria-pressed={marks[key]?.mark === "expect"} icon="check" onClick={() => toggle(key, "expect", item)}>{t("Debe salir")}</Btn>
-    <Btn size="row" kind="ghost" aria-pressed={marks[key]?.mark === "avoid"} icon="close" onClick={() => toggle(key, "avoid", item)}>{t("Sobra")}</Btn>
+  // Marks are kept here until «Guardar como consulta de referencia»; the pressed one shows a check, like a rating.
+  const markBtns = (key: string, item: Item) => canSync && marking && <Group gap={4} role="group" aria-label={t("Consulta de referencia")}>
+    <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Consulta de referencia")}</Text>
+    <Btn size="row" kind="ghost" aria-pressed={marks[key]?.mark === "expect"} icon={marks[key]?.mark === "expect" ? "check" : undefined} onClick={() => toggle(key, "expect", item)}>{t("Debe salir")}</Btn>
+    <Btn size="row" kind="ghost" aria-pressed={marks[key]?.mark === "avoid"} icon={marks[key]?.mark === "avoid" ? "check" : undefined} onClick={() => toggle(key, "avoid", item)}>{t("Sobra")}</Btn>
   </Group>;
   // A fragment or a passage that states something no longer true (issues 282 and 286): the mark first, then what stopped being true and
   // what is true now, before its text, so it is not read as current.
@@ -169,7 +189,6 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       {scope === "all" && <MutationError error={searchAll.error} />}
       {scope === "all" && searchAll.data && <AskAllBrains r={searchAll.data} />}
       {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error} />}
-      {view === "contexto" && scope === "brain" && rateMsg && <Text size="xs" c="dimmed">{rateMsg}</Text>}
       {/* The live region is there before the first search and only its text changes: a node replaced on every search is not announced. */}
       {view === "contexto" && scope === "brain" && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">
         <Group gap="xs"><Text size="sm" role="status">{r ? t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 }) : ""}</Text>
@@ -192,7 +211,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>
             {r.chunks.map((c) => (
               <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmt(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
-                actions={<Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(c.name)}>{rateBtns(`c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, false)}{markBtns(`c:${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" })}</Group>}
+                actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
@@ -200,7 +219,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
                 <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
                   aside={[t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
-                  actions={<Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(p.title)}>{rateBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, false)}{markBtns(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" })}</Group>}>{p.text}</ListCard>))}
+                  actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
             </>}
           </Stack>
           {/* Beside the cards it stays in view while they scroll, and scrolls inside its own box. «Copiar» sits in its header, not over the text. */}

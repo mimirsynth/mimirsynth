@@ -599,6 +599,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-countrow > a, .ms-countrow > button { white-space: normal; text-align: left; justify-self: start; }
 /* Ask: a card's actions are 44px on a touch screen, as the review queue's decision; on a pointer they stay row-sized (28px). */
 @media (pointer: coarse) { .ms-ask-actions .ms-btn { --button-height: 44px !important; } }
+/* Ask's card actions: a word names each group (rate, reference query); «Incorrecto» stands apart in the danger colour, pressed or not. */
+.ms-ask-actlabel { margin-right: 4px; }
+.ms-ask-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--ms-line); }
+.ms-btn.ms-ask-wrong { color: var(--ms-invalidado); }
+.ms-btn.ms-ask-wrong[aria-pressed="true"] { color: var(--ms-invalidado) !important; background: color-mix(in srgb, var(--ms-invalidado) 12%, transparent) !important; }
 /* A toggle button that is on (a rating given, a result marked): the teal wash and teal text of the active state, never a fill; the
    word stays and `aria-pressed` says it to a screen reader. */
 .ms-btn[aria-pressed="true"] { background: var(--ms-hover) !important; color: var(--ms-accent) !important; }
