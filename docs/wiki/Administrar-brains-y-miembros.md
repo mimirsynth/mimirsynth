@@ -54,6 +54,20 @@ Cuánto se conserva lo que ya no sirve, solo para el **propietario** del brain (
 
 Un campo vacío usa el plazo de la instancia ([[Referencia de ajustes]]: `retention_rejected_days`, `retention_jobs_days`) y **0 conserva para siempre**. Por defecto no hay plazo, así que no se purga nada hasta que alguien lo fije. Una tarea diaria los aplica y deja un resumen (la tarjeta enseña el último); **Purgar ahora** la lanza en el momento. Cada cambio queda en la auditoría (`brain.retention`). La auditoría y los episodios nunca se purgan desde aquí.
 
+## Derecho al olvido
+
+MimirSynth invalida en vez de borrar: es la base de su línea temporal. Cuando alguien pide que se borren sus datos, invalidar no basta. El primer paso es un **informe**: en la página de una entidad, el propietario del brain abre **Derecho al olvido: ver qué se borraría**. El informe no cambia nada. El mismo informe es `POST /api/brains/{slug}/forget/report` con `entity` y `aliases`; necesita una sesión, no un token de API.
+
+- **Qué se busca:** la entidad, su nombre, sus alias y los otros nombres que se indiquen (un email, un apodo), como palabras completas y sin distinguir mayúsculas ni tildes. Se ignoran los de menos de tres caracteres.
+- **Qué dice, capa por capa**, con lo que haría el borrado en cada una:
+  - **Se borraría:** la entidad y sus hechos, los episodios que la mencionan, sus trozos en el índice, la muestra de consultas reales y los registros del recall con sus valoraciones, los resúmenes propuestos, los trabajos, los avisos, y las confirmaciones, sondas y fechas de sus hechos.
+  - **Se borraría su texto:** las propuestas conservan su estado, sus autores y sus fechas.
+  - **Se limpiaría:** las copias del grafo que se guardan para deshacer una fusión de entidades, así que deshacer sigue funcionando; las repeticiones de la muestra, los eventos de webhooks y la auditoría.
+  - **Se bloquearía:** un documento de Conocimiento que la nombra no se volvería a indexar hasta que cambie en su origen.
+  - **A revisar, nunca se borran solos:** hechos y resúmenes de otras entidades que la nombran, otras entidades con un nombre parecido y las consultas de referencia.
+  - **Fuera de alcance:** las copias de seguridad, los logs de la aplicación y otros sistemas.
+- **Auditoría:** se registra `forget.report` con el id de la entidad y los recuentos por capa, nunca nombres ni texto.
+
 ## Webhooks de entrada
 Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain: cada webhook tiene su dirección, su secreto y una plantilla para su emisor (Alertmanager, CheckMK, Uptime Kuma, Proxmox VE, GitHub Actions, GitLab CI o una genérica), con un tope diario de propuestas. Solo la ven los administradores del brain. Ver [[Webhooks de entrada]].
 

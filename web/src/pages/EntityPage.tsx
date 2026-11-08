@@ -8,6 +8,7 @@ import { fmt, get, send } from "../api";
 import { TypeDialog } from "./TypePicker";
 import EntityMiniGraph from "./EntityMiniGraph";
 import { ProbeDialog, ProbeMark, useProbes } from "./Probes";
+import { ForgetDialog } from "./Forget";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };
@@ -64,6 +65,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
     onSuccess: (r) => { setRetyping(false); setDone(r); refresh(); } });
   const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
   const [fullSummary, setFullSummary] = useState(false);
+  const [forgetting, setForgetting] = useState(false);
   const summary = e.summary && !e.summary_repeats ? e.summary : "";  // a summary that only repeats the facts is not shown (issue 194)
   return (<>
     {/* the way back and the day to read stay at the top (issue 200) */}
@@ -143,7 +145,9 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
             <Text size="xs" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Text>
             {["admin", "owner"].includes(role) && <Text size="xs" component={Link} to="/calidad?tab=corrector">{t("Revisar los tipos dudosos (Calidad del contenido → Tipos dudosos)")}</Text>}
             <Text size="xs" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Text>
+            {role === "owner" && !origin && <Btn kind="link" onClick={() => setForgetting(true)}>{t("Derecho al olvido: ver qué se borraría")}</Btn>}
           </>}
+          {forgetting && <ForgetDialog graph={graph} entity={e} onClose={() => setForgetting(false)} />}
         </Stack></Panel>
       </div>
     </Stack></FillArea>

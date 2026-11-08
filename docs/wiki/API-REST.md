@@ -45,6 +45,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Curador** | `PUT /curator/distil/{pid}` · `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curador |
 | | `PUT /curator/settings` | administrador |
 | **Hechos archivados** | `GET /archive` · `DELETE /archive/{uuid}` | curador |
+| **Derecho al olvido** | `POST /forget/report` | propietario |
 | **Hechos verificables** | `GET /verifiers` · `GET /probes` · `POST /probes/run` | curador |
 | | `PUT /verifiers/{vid}` | administrador |
 | **Revisión por categorías** | `GET /review/categories` · `POST /review/categories/{cat}/decide` | curador |
