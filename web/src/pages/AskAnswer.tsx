@@ -92,6 +92,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   }
   parts.push(<Fragment key="end">{text.slice(last)}</Fragment>);
   const cited = new Set(done?.citations ?? []);
+  const help = t("Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.");
   // The evidence as Context shows the recall: current facts, then those no longer true, then fragments and passages, with the same
   // warning on a fragment or passage that states something no longer true. The answer cites them by the same labels either way.
   const all = sources ?? [];
@@ -114,16 +115,18 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
     <Stack gap="xs">
       {/* The live region is there from the start and only its text changes, so each answer is announced. */}
       <div ref={head} tabIndex={-1} className="ms-ask-head"><Group gap="xs">
-        {busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Dejar de redactar")}</Btn>}
         {/* said while writing and again when done: the answer itself is not a live region, so this is what announces it */}
         <Text size="sm" role="status">{asked === null ? "" : busy ? t("Redactando la respuesta a «{{q}}»…", { q: asked }) : t("Respuesta a «{{q}}» lista.", { q: asked })}</Text>
         {asked !== null && asked !== query.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}
         {done?.ms !== undefined && <Text size="xs" c="dimmed">{t("{{ms}} ms", { ms: done.ms })}</Text>}
+        {busy && <Btn size="row" kind="ghost" onClick={() => abort.current?.abort()}>{t("Dejar de redactar")}</Btn>}
       </Group></div>
-      <Text size="xs" c="dimmed">{t("Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.")}</Text>
+      {/* what this mode does: before the first answer; after it, under the answer, where checking the citations happens */}
+      {asked === null && <Text size="xs" c="dimmed">{help}</Text>}
       <MutationError error={error} />
       {sources && (text ? <Notice tone="info" title={t("Respuesta")} role="region" aria-label={t("Respuesta")}><Text size="sm" className="ms-prose ms-answer-prose">{parts}</Text></Notice>
         : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
+      {text && !busy && <Text size="xs" c="dimmed">{help}</Text>}
       {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
       {!!sources?.length && <>
         <Title order={2} size="h5" mt="xs">{t("Pruebas ({{n}})", { n: sources.length })}</Title>
