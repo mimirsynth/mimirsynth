@@ -11,13 +11,13 @@ class FalkorBackend(GraphBackend):
     name = "falkordb"
     label = "FalkorDB"
 
-    def __init__(self, host: str, port: int):
-        self.host, self.port = host, port
+    def __init__(self, host: str, port: int, username: str | None = None, password: str | None = None):
+        self.host, self.port, self.username, self.password = host, port, username, password
 
     @cached_property
     def client(self):
         from falkordb import FalkorDB
-        return FalkorDB(host=self.host, port=self.port)
+        return FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
 
     def graph(self, name: str):
         return self.client.select_graph(name)
@@ -33,7 +33,7 @@ class FalkorBackend(GraphBackend):
 
     def graphiti_driver(self, name: str):
         from graphiti_core.driver.falkordb_driver import FalkorDriver
-        return FalkorDriver(host=self.host, port=self.port, database=name)
+        return FalkorDriver(host=self.host, port=self.port, username=self.username, password=self.password, database=name)
 
     def vector(self, expr: str) -> str:
         return f"vecf32({expr})"

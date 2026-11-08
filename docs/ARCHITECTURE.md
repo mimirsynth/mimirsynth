@@ -11,7 +11,7 @@ Facts are not overwritten: they are **invalidated** and their history is kept (b
 | Memory | What it stores | Where |
 |---|---|---|
 | Episodic | What happened, immutable | Graphiti episodes, plus an index of their text in PostgreSQL (pgvector + full-text search) |
-| Semantic | Entities and facts with validity dates | Graphiti on FalkorDB |
+| Semantic | Entities and facts with validity dates | Graphiti on FalkorDB or Neo4j |
 | Documents | What documents say | Chunks with vectors and full text in PostgreSQL; originals on a volume. See [DOCUMENTS.md](DOCUMENTS.md) |
 
 ## Components
@@ -31,7 +31,7 @@ browser ──────account or OIDC─┤
               LLM (extraction)  Embeddings   (any OpenAI-compatible endpoint)
 ```
 
-- **A single container** serves the API and the interface; PostgreSQL and FalkorDB are separate services (the `docker-compose.yml` includes both).
+- **A single container** serves the API and the interface; PostgreSQL and FalkorDB are separate services (the `docker-compose.yml` includes both). Instead of FalkorDB, an existing Neo4j 5.26+ can hold the graphs ([Configuration](CONFIGURATION.md#graph-database)).
 - **Ingestion:** `graphiti-core` is used as a library inside the application, on the same FalkorDB.
 - **AI providers** (LLM, embeddings and deciders) are configured in the interface, with keys encrypted in the database. Any OpenAI-compatible endpoint works (cloud, Ollama, a proxy…).
 
@@ -108,6 +108,6 @@ The environment only carries what is needed to start and connect (see `.env.exam
 
 ## Dependencies and licenses
 
-MimirSynth is published under Apache-2.0. Graphiti is Apache-2.0. **FalkorDB is *source-available* (SSPL)**, not a permissive open-source license: review its terms before offering MimirSynth as a service. Graph access goes through our own layer (`api/mimirsynth/graphdb`: one interface, with FalkorDB as its implementation) so the engine can be replaced: the modules never talk to a driver, and the Cypher that differs between databases (vectors, similarity) comes from the backend.
+MimirSynth is published under Apache-2.0. Graphiti is Apache-2.0. **FalkorDB is *source-available* (SSPL)**, not a permissive open-source license: review its terms before offering MimirSynth as a service. Graph access goes through our own layer (`api/mimirsynth/graphdb`: one interface, with FalkorDB and Neo4j as its implementations): the modules never talk to a driver, and the Cypher that differs between databases (vectors, similarity) comes from the backend. On FalkorDB a brain is a graph of its own; on Neo4j the brains share one database and the backend scopes each query to the brain's `group_id`.
 
 The web fonts (Oxanium, Instrument Sans and JetBrains Mono) are under the SIL Open Font License 1.1. They ship inside the image, served by the instance itself, so a browser never calls a third-party host for them.

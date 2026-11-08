@@ -13,6 +13,7 @@ from mimirsynth import health as H, recall as R
 from mimirsynth.main import app
 from mimirsynth.models import Brain, HealthRun, Job
 from mimirsynth.store import _factory
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 needs_falkor = pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
@@ -180,7 +181,7 @@ def test_redundancy_on_a_real_graph(monkeypatch):
                 ("e", "vw", "al", "Vaultwarden runs on altair", [1, 0, 0], "2026-01-01T00:00:00Z"),   # no longer true: not counted
                 ("f", "vw", "pg", "Vaultwarden stores its data in PostgreSQL", [0, 0, 1], None)):
             g.query("MATCH (a:Entity {uuid:$s}), (b:Entity {uuid:$d}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'X', fact:$f, "
-                    "fact_embedding: vecf32($v), invalid_at:$i, created_at:'2026-11-01T00:00:00Z'}]->(b)",
+                    "fact_embedding: " + gvec("$v") + ", invalid_at:$i, created_at:'2026-11-01T00:00:00Z'}]->(b)",
                     {"s": src, "d": dst, "u": uuid, "f": fact, "v": vec, "i": invalid})
         out = H.redundancy(g)
         assert out == {"redundancy": 0.4, "redundant_facts": 2, "current_facts": 5, "redundancy_sampled": False, "facts_truncated": False}

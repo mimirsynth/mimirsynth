@@ -20,7 +20,7 @@ Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un avi
 | Evento | Severidad | Cuándo |
 |---|---|---|
 | `model.unavailable` | crítico | El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica |
-| `graph.down` | crítico | El grafo (FalkorDB) no responde |
+| `graph.down` | crítico | La base de datos del grafo (FalkorDB o Neo4j) no responde |
 | `ingest.failed` | aviso | Una propuesta aprobada no se pudo ingerir tras sus reintentos |
 | `job.failed` | aviso | Cualquier otro trabajo en segundo plano ha fallado |
 | `docsource.error` | aviso | Una fuente de documentos no se pudo sincronizar |

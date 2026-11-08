@@ -9,6 +9,7 @@ import pytest
 from test_control import client  # noqa: F401
 
 from mimirsynth import verify as V
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 GRAPH = "zz-test-verify"
@@ -53,7 +54,7 @@ def graph(monkeypatch):
             "(:Entity {uuid:'wk', name:'Wiki'})")
     for u, s, t, fact in (("f1", "vw", "al", "Vaultwarden corre en altair"), ("f2", "wk", "er", "Wiki corre en eridani")):
         g.query("MATCH (a:Entity {uuid:$s}), (b:Entity {uuid:$t}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'RUNS_ON', fact:$f, valid_at:'2025-01-01T00:00:00Z', "
-                "created_at:'2025-01-01T00:00:00Z', fact_embedding: vecf32([1.0, 0.0])}]->(b)", {"s": s, "t": t, "u": u, "f": fact})
+                "created_at:'2025-01-01T00:00:00Z', fact_embedding: " + gvec("[1.0, 0.0]") + "}]->(b)", {"s": s, "t": t, "u": u, "f": fact})
     yield g
     c.delete_graph(GRAPH)
     dbm.backend.cache_clear()

@@ -22,7 +22,7 @@ EVENTS = {
     "ingest.failed": ("warning", "Una propuesta aprobada no se pudo ingerir tras los reintentos"),
     "job.failed": ("warning", "Un trabajo en segundo plano ha fallado"),
     "docsource.error": ("warning", "Una fuente de documentos no se pudo sincronizar"),
-    "graph.down": ("critical", "El grafo (FalkorDB) no responde"),
+    "graph.down": ("critical", "La base de datos del grafo (FalkorDB o Neo4j) no responde"),
     "update.available": ("info", "Hay una versión nueva de MimirSynth"),
     "security.lockout": ("warning", "Una cuenta se ha bloqueado por intentos fallidos"),
     "reindex.orphan": ("warning", "Un cambio de modelo de embeddings lleva tiempo sin terminar y sus vectores sombra ocupan memoria"),
@@ -43,7 +43,7 @@ EVENTS = {
 # like any server text. A third element replaces the severity in that table when it is not fixed.
 EVENT_DOCS = {
     "model.unavailable": ("El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica", ""),
-    "graph.down": ("El grafo (FalkorDB) no responde", ""),
+    "graph.down": ("La base de datos del grafo (FalkorDB o Neo4j) no responde", ""),
     "ingest.failed": ("Una propuesta aprobada no se pudo ingerir tras sus reintentos", ""),
     "job.failed": ("Cualquier otro trabajo en segundo plano ha fallado", ""),
     "docsource.error": ("Una fuente de documentos no se pudo sincronizar", ""),
@@ -219,11 +219,13 @@ def _ok(event: str, key: str) -> None:
 def check_health() -> None:
     """Grafo y modelos de IA: emite el problema si no responden `notify_health_failures` veces seguidas y lo resuelve cuando vuelven. Los fallos de PostgreSQL no se pueden avisar desde dentro (no habría dónde guardarlos): vigílalo con un monitor externo."""
     from .db import list_graphs
+    from .graphdb import backend
+    b = backend()
     try:
         list_graphs()
-        _ok("graph.down", "falkordb")
+        _ok("graph.down", b.name)
     except Exception as e:  # noqa: BLE001
-        _fail("graph.down", "El grafo (FalkorDB) no responde", str(e)[:300], "falkordb")
+        _fail("graph.down", "La base de datos del grafo no responde", f"{b.label}: {e}"[:300], b.name)
     try:
         from . import decider as _decider
         from .aistatus import _llm_ping

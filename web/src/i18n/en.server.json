@@ -93,7 +93,6 @@
  "El documento {{id}} aún no tiene texto extraído.": "Document {{id}} has no extracted text yet.",
  "El documento {{id}} no tiene el trozo {{chunk}}.": "Document {{id}} has no chunk {{chunk}}.",
  "El documento {{id}} tiene {{chars}} caracteres: offset={{offset}} se pasa del final.": "Document {{id}} has {{chars}} characters: offset={{offset}} is past the end.",
- "El grafo (FalkorDB) no responde": "The graph (FalkorDB) does not answer",
  "El hecho dejó de estar vigente mientras se revisaba la corrección: recházala.": "The fact stopped being current while the correction was being reviewed: reject it.",
  "El hecho es de «{{origin}}», que lo presta a este brain: es de solo lectura. Corrígelo en ese brain.": "The fact belongs to «{{origin}}», which lends it to this brain: it is read-only. Correct it in that brain.",
  "El hecho ya está invalidado desde {{date}}: no hay nada que corregir.": "The fact has been invalidated since {{date}}: there is nothing to correct.",

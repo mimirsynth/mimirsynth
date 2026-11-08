@@ -36,6 +36,7 @@ function Contents({ it }: { it: Item }) {
         {it.vectors ? ` · ${t("con vectores")}` : ""}{it.encrypted ? ` · ${t("cifrado")}` : ""}</Text>
       {masked > 0 && <Text size="xs" c="dimmed">{t("Secretos enmascarados: {{n}}.", { n: masked })}</Text>}
       {it.graph.dump_omitted === "secrets" && <Text size="xs" c="dimmed">{t("El grafo lleva un secreto: va solo como JSON enmascarado, sin la copia exacta.")}</Text>}
+      {it.graph.dump_omitted === "backend" && <Text size="xs" c="dimmed">{t("Esta base de datos de grafos no hace copias exactas: el grafo va solo como JSON.")}</Text>}
       {omitted > 0 && <Text size="xs" c="dimmed">{t("Originales que no van, por secretos o por no haberse podido revisar: {{n}}.", { n: omitted })}</Text>}
     </Stack>
   );

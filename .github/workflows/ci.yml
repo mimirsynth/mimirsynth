@@ -49,6 +49,49 @@ jobs:
           MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
           MIMIRSYNTH_TEST_FALKOR: localhost
         run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
+  api-neo4j:
+    # The same API suite against Neo4j (#357): the oldest version supported (5.26 LTS), Community. MIMIRSYNTH_TEST_NEO4J turns the
+    # graph tests on with the Neo4j backend (tests/conftest.py); the tests of FalkorDB's own dump skip there.
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26-community
+        env:
+          NEO4J_AUTH: neo4j/mimirsynth-ci
+        ports: ["7687:7687"]
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p mimirsynth-ci 'RETURN 1'"
+          --health-interval 5s --health-timeout 10s --health-retries 30
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: mimirsynth
+          POSTGRES_PASSWORD: mimirsynth
+          POSTGRES_DB: mimirsynth_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mimirsynth"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MIMIRSYNTH_TEST_NEO4J: bolt://localhost:7687
+      MIMIRSYNTH_NEO4J_USER: neo4j
+      MIMIRSYNTH_NEO4J_PASSWORD: mimirsynth-ci
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22}
+      - run: cd api && uv venv && uv pip install -e ".[pdf]" pytest pyyaml
+      - name: Tests (con Neo4j real)
+        run: cd api && .venv/bin/pytest -q --ignore=tests/test_docs_pg.py
+      - name: Cambio de modelo de embeddings (PostgreSQL + pgvector y Neo4j reales)
+        env:
+          MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
+        run: cd api && .venv/bin/pytest -q tests/test_reembed_pg.py
+      - name: Importar un brain (PostgreSQL + pgvector y Neo4j reales)
+        env:
+          MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
+        run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
   web:
     runs-on: ubuntu-latest
     steps:

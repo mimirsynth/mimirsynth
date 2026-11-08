@@ -16,6 +16,7 @@ from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_provider
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding
 from .config import settings
 from .db import list_graphs
+from .graphdb import backend
 from .models import Brain, User
 from .secretbox import SealedSecretError
 from .store import _factory, engine, init_db
@@ -60,7 +61,7 @@ async def lifespan(_: FastAPI):
     try:  # antes de servir: un cambio de modelo de embeddings cortado a medias deja cada grafo coherente con el motor por defecto
         from . import reembed
         reembed.recover_switch()
-    except Exception:  # noqa: BLE001  (sin FalkorDB no se puede comprobar; no impide arrancar)
+    except Exception:  # noqa: BLE001  (sin el grafo no se puede comprobar; no impide arrancar)
         logging.getLogger("mimirsynth").exception("no se pudo comprobar si quedó un cambio de modelo de embeddings a medias")
     try:
         docstore.purge_stale_uploads()
@@ -213,10 +214,10 @@ async def _probe(what: str, fn):
 
 @app.get("/api/health")
 async def health():
-    """Responder ya dice que la app está viva; `db` (PostgreSQL) y `graph` (FalkorDB) dicen si llega a cada uno. Con alguno caído
+    """Responder ya dice que la app está viva; `db` (PostgreSQL) y `graph` (FalkorDB o Neo4j) dicen si llega a cada uno. Con alguno caído
     responde 503 con el mismo cuerpo, para que un monitor externo distinga «app caída» (sin respuesta) de «app viva, BD caída»:
     las notificaciones no pueden avisar de la caída de PostgreSQL porque se guardan en él. Es pública: sin detalles del error."""
-    (db_ok, _), (graph_ok, graphs) = await asyncio.gather(_probe("PostgreSQL", _db_ping), _probe("FalkorDB", list_graphs))
+    (db_ok, _), (graph_ok, graphs) = await asyncio.gather(_probe("PostgreSQL", _db_ping), _probe(backend().label, list_graphs))
     body = {"ok": db_ok and graph_ok, "db": db_ok, "graph": graph_ok, "graphs": len(graphs) if graph_ok else None}
     if sealcheck.unreadable():  # only when it happens, and without failing: a restart loop would not bring the secret back (#193)
         body["secrets"] = "unreadable"

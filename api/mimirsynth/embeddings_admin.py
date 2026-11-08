@@ -182,9 +182,9 @@ def start_reindex(eid: int, user: User = Depends(require_admin), db: Session = D
     if _reindex_running(db):
         raise HTTPException(409, "hay un cambio de modelo en marcha: espera a que termine o cancélalo")
     est = reembed.last_estimate(e.id)  # la estimación completa la hace el trabajo al empezar; aquí solo se mira la última, si la hay
-    if est and not est["partial"] and not est["falkor"]["ok"]:
-        raise HTTPException(409, f"FalkorDB no tiene memoria libre suficiente: hacen falta unos {est['falkor']['need_bytes'] * reembed.FALKOR_MARGIN / 2**20:.0f} MB "
-                                 f"y quedan {est['falkor']['free_bytes'] / 2**20:.0f} MB")
+    if est and not est["partial"] and not est["graph_db"]["ok"]:
+        raise HTTPException(409, f"FalkorDB no tiene memoria libre suficiente: hacen falta unos {est['graph_db']['need_bytes'] * reembed.FALKOR_MARGIN / 2**20:.0f} MB "
+                                 f"y quedan {est['graph_db']['free_bytes'] / 2**20:.0f} MB")
     cur = default_embedding(db)
     audit(db, user, "embedding.reindex", None, name=e.name, model=e.model, dim=e.dim, previous=cur.model if cur else settings.embedding_model)
     db.commit()  # sin transacción abierta: el índice sombra se crea con CONCURRENTLY, que espera a las transacciones en curso

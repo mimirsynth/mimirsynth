@@ -5,6 +5,8 @@ import pytest
 
 from test_control import client  # noqa: F401
 
+from mimirsynth.db import parse_ts  # a date as Graphiti stores it: a string on FalkorDB, a temporal on Neo4j
+
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 OWN, LENT = "zz-test-entity-own", "zz-test-entity-lent"
 
@@ -57,7 +59,7 @@ def test_entity_page(client, graphs):  # noqa: F811
     groups = {(g["direction"], g["relation"]): g for g in r["groups"]}
     loc = groups[("out", "LOCATED_AT")]                                                     # both spellings, one group
     assert [f["uuid"] for f in loc["current"]] == ["l2", "l3"] and [f["uuid"] for f in loc["previous"]] == ["l1"]
-    assert loc["previous"][0]["invalid_at"] == "2026-06-01T00:00:00Z" and loc["current"][0]["other"] == {"uuid": "b", "name": "Room B", "labels": ["Place"]}
+    assert parse_ts(loc["previous"][0]["invalid_at"]) == parse_ts("2026-06-01T00:00:00Z") and loc["current"][0]["other"] == {"uuid": "b", "name": "Room B", "labels": ["Place"]}
     assert not loc["functional"] and not loc["conflict"]
     assert groups[("in", "BACKS_UP")]["current"][0]["other"]["name"] == "nightly backup"
     assert r["episodes"]["total"] == 1 and r["episodes"]["items"][0]["name"] == "Lab inventory"
