@@ -58,6 +58,16 @@ Open the application, enter the code and create the administrator account. Keep 
 3. Create an API token for your agents and connect the first one: see [AGENTS.md](AGENTS.md).
 4. Optional: SMTP email (invitations and password recovery), OIDC, mandatory two-factor and document folders. See [CONFIGURATION.md](CONFIGURATION.md).
 
+## OCR for scanned PDFs and images (optional)
+
+A scanned PDF has no text layer, and an image (`.png`, `.jpg`) is only pixels: to index them MimirSynth needs OCR. Tesseract runs in **its own container**, so the main image does not grow.
+1. Start it with the `ocr` profile, alongside the others you use: `docker compose --profile ocr up -d` (add `--profile bundled` if you use the bundled FalkorDB).
+2. Add `MIMIRSYNTH_OCR_URL=http://ocr:8001` to `.env` and run `docker compose up -d mimirsynth`.
+
+Under **Knowledge**, a brain administrator sees whether OCR answers. The image reads Spanish and English; for more languages, build it with `docker build --build-arg LANGS="spa eng cat" -t mimirsynth-ocr ocr/` and point the service at it. Under Administration → Settings → Documents you choose the languages (`spa+eng`) and the maximum of pages read with OCR per document (50). The service has no authentication: do not publish its port. `update.sh` updates it along with the application.
+
+Instead of Tesseract, a brain can read its scanned pages with the **vision model** of an LLM engine (Knowledge → *Read with the vision model*). Each page is then one call to the engine, so it is off by default. A lone image does not need the OCR service in that case, but a PDF still does, to turn its pages into images.
+
 ## HTTPS and reverse proxy
 Do not expose port 8000 to the Internet without TLS. Put a reverse proxy (Caddy, Traefik, nginx…) in front, set `MIMIRSYNTH_PUBLIC_URL` to the public address and `MIMIRSYNTH_COOKIE_SECURE=true`. If you upload large files, check the proxy's request-size limit: uploads are sent in parts (64 MB by default).
 

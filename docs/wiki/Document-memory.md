@@ -12,7 +12,7 @@ Besides the "distilled" memory (episodes → facts), MimirSynth stores **documen
 
 ## How a document is indexed
 1. The **original is stored** in the store volume (or, for a folder, referenced without copying).
-2. The **text is extracted** (Markdown, plain text, HTML, PDF, and Office: Word, PowerPoint, Excel and OpenDocument text).
+2. The **text is extracted** (Markdown, plain text, HTML, PDF, and Office: Word, PowerPoint, Excel and OpenDocument text). Scanned pages and images are read with **OCR** (see below).
 3. The **secret detector** looks for credentials in the text and, depending on the brain's policy, masks them or leaves the document unindexed (see below).
 4. If the same text (ignoring case and spacing) is **already indexed** in another document of the brain, the document is marked **duplicate** and stops here (see below).
 5. It is **chunked by headings and sections**, keeping the heading path ("Installation › Requirements").
@@ -31,6 +31,22 @@ In agents' **recall** (REST API and the MCP `recall` tool), document passages go
 - **Can be disabled** per request (`docs=0`), and the agent can ask afterwards for more context of a passage or for the original file. See [[Connect agents]].
 
 The budget and the threshold are adjusted in [[Recall and ingestion]].
+
+## Scanned PDFs and images (OCR)
+With the OCR service running (see [[Installation]]), MimirSynth reads:
+- the pages of a PDF that have no text, which a mixed PDF only sends;
+- `.png`, `.jpg` and `.jpeg` images.
+
+Details:
+- **Type:** it is recognised by the file's content, not by its extension.
+- **Progress:** the job shows it page by page and can be cancelled between pages.
+- **Citations:** the recall cites the page.
+- **Limit:** at most **50 pages** per document by default (*OCR pages per document*, [[Settings reference]]). The rest stay unread and the document says so.
+- **Languages:** `spa+eng` by default (*OCR languages*).
+- **Secrets:** the text read goes through the secret detector like any other.
+- **Folders and repositories:** they only bring images in when OCR is configured.
+
+A brain administrator can turn on **Read with the vision model** under [[Knowledge]]. The pages are then read by the vision model of an LLM engine instead of Tesseract, and Tesseract reads those the model cannot. Each page is one call to the engine.
 
 ## Duplicate documents
 A document whose extracted text matches one already indexed in the brain is marked **duplicate**: it is neither chunked nor embedded, so the same content never takes two places in the index or in recall. The rules:
@@ -89,7 +105,7 @@ Every action is recorded in the [[Audit log]].
 When a passage holds something you want the system to **remember and reason about** (not just quote), use **Promote to memory**: it creates a [proposal](Proposals) with the text (which you can edit) and its provenance. If you are a curator it is ingested; otherwise it goes into quarantine. The document does not change.
 
 ## Limits and tips
-- **Scanned** PDFs (image only) have no text to index.
+- **Scanned** PDFs and images need the OCR service; without it they are not indexed and the error says how to enable it.
 - Very long documents are bounded by *Maximum text extracted* ([[Folders and limits]]).
 - Documents with a lot of junk (menus, repeated headers) make search worse: clean the source if you can.
 - Changing the embedding model (Administration → Embeddings, see [[AI providers]]) recomputes the document vectors too.

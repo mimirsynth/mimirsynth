@@ -4,14 +4,17 @@ import { Group, Stack, Text, Title } from "@mantine/core";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { fmt, get, langHeaders, send } from "../api";
-import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, PasswordField, Pill, ProgressBar, SelectField, SidePanel, Tabs, TextArea, TextField, useTableView, type ColSort, type SortDir, type Tone, MutationError, ConfirmDialog, EmptyState, PageHeader, Segments, SearchBar, useServerTableView, useTabParam, ListCard, FilePicker } from "../ui";
+import { Btn, Check, Toggle, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Page, Pager, Panel, PasswordField, Pill, ProgressBar, SelectField, SidePanel, Tabs, TextArea, TextField, useTableView, type ColSort, type SortDir, type Tone, MutationError, ConfirmDialog, EmptyState, PageHeader, Segments, SearchBar, useServerTableView, useTabParam, ListCard, FilePicker } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import { Link, useSearchParams } from "react-router-dom";
 
 type Doc = {
   url?: string; id: number; source: string; title: string; filename: string; size: number; status: string; error: string; chunks: number;
-  progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string; secrets?: SecretFinding[]; duplicate_of?: number | null;
+  progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string; secrets?: SecretFinding[]; duplicate_of?: number | null; ocr?: OcrInfo | null;
 };
+// what OCR did with a scanned PDF or an image (issue 135)
+type OcrInfo = { engine?: "tesseract" | "vision"; pages?: number; of?: number; skipped?: number; unread?: number; failed?: number[]; tesseract?: number };
+type OcrStatus = { configured: boolean; reachable?: boolean; missing?: string[]; languages: string; vision: boolean };
 type Chunk = { chunk_idx: number; heading_path: string; page: number | null; text: string };
 type Hit = { document_id: number; chunk: number; title: string; citation: string; text: string; similarity: number; updated_at: string };
 type Source = { id: number; kind: string; name: string; documents: number; by_status: Record<string, number>; last_sync_at: string | null; last_error: string; status: string; enabled: boolean;
@@ -31,6 +34,24 @@ const lines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boo
 const noFiles = (s: Source) => s.kind === "git" && !!s.config.matched && Object.values(s.config.matched).every((n) => n === 0);
 type Repo = { name: string; url: string; branch: string; include: string; username: string; token: string; interval: number | "" };
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
+const ACCEPT = ".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf,.docx,.pptx,.xlsx,.odt,.png,.jpg,.jpeg";
+
+function OcrNotice({ ocr }: { ocr?: OcrInfo | null }) {
+  const { t } = useTranslation();
+  if (!ocr) return null;
+  const read = ocr.engine === "vision" ? t("Leído con el modelo de visión.") : ocr.engine === "tesseract" ? t("Leído con OCR (Tesseract).") : "";
+  return (
+    <Notice tone={ocr.unread || ocr.skipped || ocr.failed?.length ? "warn" : "info"} title={t("Texto leído con OCR")}>
+      <Stack gap={2}>
+        {read && <Text size="xs">{read} {ocr.of ? t("{{pages}} de {{of}} páginas, las que no tenían texto.", { pages: ocr.pages, of: ocr.of }) : ""}</Text>}
+        {!!ocr.tesseract && <Text size="xs">{t("{{n}} páginas que el modelo no pudo leer se leyeron con Tesseract.", { n: ocr.tesseract })}</Text>}
+        {!!ocr.skipped && <Text size="xs">{t("{{n}} páginas escaneadas se quedaron sin leer por el máximo de páginas con OCR por documento (Administración → Ajustes).", { n: ocr.skipped })}</Text>}
+        {!!ocr.unread && <Text size="xs">{t("{{n}} páginas parecen escaneadas y no se han leído: no hay servicio OCR. Se indexó el texto del resto.", { n: ocr.unread })}</Text>}
+        {!!ocr.failed?.length && <Text size="xs">{t("No se pudieron leer las páginas {{pages}}.", { pages: ocr.failed.join(", ") })}</Text>}
+      </Stack>
+    </Notice>);
+}
+
 const PART = 32 * 1024 * 1024; // las partes son más pequeñas que el límite habitual de los proxies (~100 MB)
 
 async function uploadFile(slug: string, file: File, progress: (done: number) => void): Promise<{ duplicate: boolean }> {
@@ -104,6 +125,9 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const roots = useQuery({ queryKey: ["docs-roots", graph], enabled: isAdmin, queryFn: () => get<{ roots: { name: string; available: boolean }[] }>("docs/roots", { graph }) });
   const refreshSrc = () => { for (const k of ["docs", "docs-sources", "jobs", "jobs-summary"]) qc.invalidateQueries({ queryKey: [k, graph] }); };
   const addSrc = useMutation({ mutationFn: (b: NonNullable<typeof newSrc>) => send("POST", "docs/sources", { name: b.name, root: b.root, subpath: b.subpath, sync_interval: b.interval === "" ? null : b.interval }, { graph }), onSuccess: () => { setNewSrc(null); refreshSrc(); } });
+  const ocrStatus = useQuery({ queryKey: ["docs-ocr", graph], enabled: isAdmin, queryFn: () => get<OcrStatus>("docs/ocr", { graph }) });
+  const vision = useMutation({ mutationFn: (on: boolean) => send("PATCH", `brains/${graph}`, { ocr_vision: on }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ["docs-ocr", graph] }); void qc.invalidateQueries({ queryKey: ["brains"] }); } });
   const adapters = useQuery({ queryKey: ["wiki-adapters", graph], enabled: isAdmin && instanceAdmin, queryFn: () => get<{ adapters: Adapter[] }>("docs/wiki/adapters", { graph }) });
   const ad = adapters.data?.adapters.find((a) => a.id === wiki?.adapter);
   const srcCols = useQuery({ queryKey: ["wiki-src-cols", graph, editSrc?.s.id], enabled: !!editSrc && editSrc.s.kind === "wiki" && instanceAdmin, retry: false, staleTime: 0,
@@ -187,8 +211,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                   onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
                   onDrop={(e) => { e.preventDefault(); setOver(false); if (enabled) void start(e.dataTransfer.files); }}>
                   <Group justify="center" gap="md">
-                    <Text size="sm">{t("Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt) o")}</Text>
-                    <FilePicker label={t("Elegir ficheros")} accept=".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf,.docx,.pptx,.xlsx,.odt" multiple disabled={!enabled} onFiles={(fl) => void start(fl)} />
+                    <Text size="sm">{t("Arrastra aquí ficheros (.md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt, .png, .jpg) o")}</Text>
+                    <FilePicker label={t("Elegir ficheros")} accept={ACCEPT} multiple disabled={!enabled} onFiles={(fl) => void start(fl)} />
                   </Group>
                 </div>)}
               {ups.length > 0 && (
@@ -198,6 +222,16 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                     : <Group key={u.key} gap={6}><Pill size="xs" tone={u.state === "error" ? "danger" : u.state === "listo" ? "success" : "neutral"}>{u.state}</Pill><Text size="sm">{u.name}</Text>{u.msg && <Text size="xs" c="dimmed">{u.msg}</Text>}</Group>)}
                   <Group><Btn size="row" onClick={() => setUps((u) => u.filter((x) => x.state === "subiendo"))}>{t("Limpiar lista")}</Btn></Group>
                 </Stack>)}
+              {isAdmin && ocrStatus.data && (
+                <Group gap="md">
+                  <Text size="xs" c="dimmed">{!ocrStatus.data.configured ? t("Los PDF escaneados y las imágenes necesitan el servicio OCR, que no está configurado en esta instancia.")
+                    : ocrStatus.data.reachable === false ? t("El servicio OCR no responde: los PDF escaneados y las imágenes darán error hasta que vuelva.")
+                    : ocrStatus.data.missing?.length ? t("Al servicio OCR le faltan idiomas: {{langs}}.", { langs: ocrStatus.data.missing.join(", ") })
+                    : t("Los PDF escaneados y las imágenes se leen con OCR ({{langs}}).", { langs: ocrStatus.data.languages })}</Text>
+                  <Toggle label={t("Leer con el modelo de visión")} checked={ocrStatus.data.vision} disabled={vision.isPending} onChange={(e) => vision.mutate(e.currentTarget.checked)}
+                    title={t("Las páginas escaneadas y las imágenes de este brain las lee el modelo de visión de un motor LLM en vez de Tesseract; Tesseract lee las que el modelo no pueda. Cada página es una llamada al motor.")} />
+                </Group>)}
+              <MutationError error={vision.error} />
               <Segments label={t("Estado")} value={f.status || "all"} onChange={(v) => setFilter({ status: v === "all" ? "" : v })}
                 data={[{ value: "all", label: t("Todos"), count: Object.values(docs.data?.status_counts ?? {}).reduce((a, b) => a + b, 0) }, ...Object.entries(LABEL).filter(([k]) => (docs.data?.status_counts[k] ?? 0) > 0 || f.status === k).map(([k, v]) => ({ value: k, label: v[0].toUpperCase() + v.slice(1), count: docs.data?.status_counts[k] ?? 0 }))]} />
               <Group gap="xs" justify="space-between">
@@ -299,6 +333,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             <Group gap={6}><Pill size="xs" tone={TONE[detail.data.status] ?? "neutral"}>{t(LABEL[detail.data.status] ?? detail.data.status)}</Pill><Pill size="xs">{human(detail.data.size)}</Pill><Pill size="xs">{detail.data.chunks} {t("trozos")}</Pill></Group>
             <Text size="xs" c="dimmed" className="ms-data">{t("{{filename}} · sha256 {{hash}}… · subido {{date}}", { filename: detail.data.filename, hash: detail.data.sha256.slice(0, 12), date: fmt(detail.data.created_at) })}</Text>
             {detail.data.error && <Notice tone="danger">{detail.data.error}</Notice>}
+            <OcrNotice ocr={detail.data.ocr} />
             <SecretsNotice found={detail.data.secrets} original />
             {detail.data.status === "duplicate" && detail.data.duplicate_of && <Notice title={t("Duplicado")}>
               <Stack gap={4}>
@@ -348,7 +383,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
         {full.isLoading && <EmptyState>{t("Cargando…")}</EmptyState>}
         <MutationError error={full.error} />
         {full.data && <Stack>{full.data.truncated && <Notice tone="warn">{t("El documento tiene {{chars}} caracteres: se muestra el primer megabyte. Descarga el original para verlo entero.", { chars: full.data.chars.toLocaleString(locale()) })}</Notice>}
-          <Text className="ms-prose">{full.data.text}</Text></Stack>}
+          <Text className="ms-prose">{full.data.text.split("\f").join("\n\n")}</Text></Stack>}
       </SidePanel>
       <SidePanel opened={!!ctxOf} onClose={() => setCtxOf(null)} title={ctxOf?.citation}>
         {context.isLoading && <EmptyState>{t("Cargando…")}</EmptyState>}

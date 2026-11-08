@@ -17,7 +17,7 @@ La barra de búsqueda de arriba acepta una frase en lenguaje natural o palabras 
 Sin búsqueda, ves la **tabla de documentos**.
 
 ### Subir ficheros
-Arrastra ficheros a la zona de subida o pulsa **Elegir ficheros**. Formatos: **Markdown, texto (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`), PDF y Office (`.docx`, `.pptx`, `.xlsx`, `.odt`)**: los títulos de Word y OpenDocument se convierten en encabezados, cada diapositiva empieza por su título, cada hoja por su nombre y cada fila de una tabla va en una línea. Se necesita al menos rol **colaborador**.
+Arrastra ficheros a la zona de subida o pulsa **Elegir ficheros**. Formatos: **Markdown, texto (`.md`, `.markdown`, `.txt`, `.rst`, `.log`), HTML (`.html`, `.htm`), PDF, Office (`.docx`, `.pptx`, `.xlsx`, `.odt`) e imágenes (`.png`, `.jpg`)**: las páginas escaneadas y las imágenes se leen con OCR ([[Memoria documental]]); los títulos de Word y OpenDocument se convierten en encabezados, cada diapositiva empieza por su título, cada hoja por su nombre y cada fila de una tabla va en una línea. Se necesita al menos rol **colaborador**.
 - Las subidas se envían **por partes** y puedes subir varios a la vez; verás el estado de cada una y un botón **Limpiar lista**.
 - El tamaño máximo de un fichero y de cada parte lo fija el administrador ([[Carpetas y límites]]).
 - Si subes un fichero **idéntico** a otro ya subido, no se guarda de nuevo.
@@ -42,6 +42,7 @@ La misma nota puede llegar dos veces: desde dos carpetas, desde una carpeta y un
 ### Detalle de un documento
 Al pulsar un documento se abre su panel:
 - Estado, tamaño y número de trozos; nombre de fichero, hash (sha256) y fecha de subida.
+- **Texto leído con OCR**, en un PDF escaneado o una imagen: si lo leyó Tesseract o el modelo de visión, cuántas páginas y las que quedaron sin leer.
 - **Secretos detectados**, si el detector de secretos encontró credenciales al indexar (ver abajo).
 - **Descargar original**, **Ver texto completo** (hasta el primer megabyte) y, en wikis, **Abrir en la wiki**; en repositorios, **Abrir en el repositorio**, que muestra el fichero en el commit indexado.
 - **Entidades mencionadas**: las entidades del grafo cuyo nombre aparece en el texto. Cada una abre el [[Grafo]] centrado en ella.

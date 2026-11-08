@@ -4,9 +4,9 @@ import re
 from html.parser import HTMLParser
 from pathlib import Path
 
-from . import appsettings
+from . import appsettings, ocr
 from .config import settings
-from .docstore import HTML_EXT, OFFICE_EXT, PDF_EXT, TEXT_EXT
+from .docstore import HTML_EXT, IMAGE_EXT, OFFICE_EXT, PDF_EXT, TEXT_EXT
 
 PAGE_BREAK = "\f"
 CHUNK_SIZE = 900
@@ -102,25 +102,68 @@ def _markdown(text: str) -> tuple[str, str]:
     return text, title
 
 
-def extract(path: Path, ext: str) -> tuple[str, str]:
-    """Devuelve (texto normalizado, título sugerido). El texto de un PDF separa páginas con \\f."""
+def _blank(page: str) -> bool:
+    """A page with no text worth the name (a page number at most): read with OCR when there is a way."""
+    return len(re.sub(r"\W", "", page)) < 16
+
+
+def _pdf(path: Path, rd: "ocr.Reader") -> tuple[str, str]:
+    try:
+        from pypdf import PdfReader
+    except ImportError as e:
+        raise ExtractError("leer PDF requiere el extra opcional «pdf» (pypdf)") from e
+    try:
+        doc = PdfReader(str(path))
+        pages = [(p.extract_text() or "").strip() for p in doc.pages]
+    except Exception as e:  # noqa: BLE001
+        raise ExtractError(f"PDF ilegible: {str(e)[:120]}") from e
+    title = str((doc.metadata or {}).get("/Title") or "") if doc.metadata else ""
+    blank = [i + 1 for i, p in enumerate(pages) if _blank(p)]
+    if blank:  # scanned pages (all of them, or some in a mixed PDF): OCR, up to the setting's maximum per document (#135)
+        cap = appsettings.get("ocr_max_pages")
+        todo, skipped = blank[:cap], len(blank) - min(len(blank), cap)
+        try:
+            texts = ocr.read_pdf(path, todo, rd)
+        except ocr.Unavailable as e:
+            if len(blank) == len(pages):
+                raise ExtractError(f"el PDF no tiene texto extraíble (parece escaneado); para leerlo {e}") from None
+            rd.info.update(unread=len(blank))  # a mixed PDF without OCR: its text pages are indexed, and it says how many were not
+            texts = {}
+        except RuntimeError as e:
+            raise ExtractError(str(e)) from None
+        for n, t in texts.items():
+            if t.strip():
+                pages[n - 1] = t.strip()
+        if texts:
+            rd.info.update(pages=len(todo), of=len(pages), **({"skipped": skipped} if skipped else {}))
+    text = PAGE_BREAK.join(pages)
+    if not text.replace(PAGE_BREAK, "").strip():
+        raise ExtractError("el PDF no tiene texto extraíble, ni con OCR" if rd.info.get("engine") else "el PDF no tiene texto extraíble")
+    return text, title.strip()
+
+
+def extract(path: Path, ext: str, rd: "ocr.Reader | None" = None) -> tuple[str, str]:
+    """Devuelve (texto normalizado, título sugerido). El texto de un PDF separa páginas con \\f. Un PDF, PNG o JPEG se reconoce por
+    su contenido, se llame como se llame; sus páginas sin texto se leen con OCR (`rd` dice cómo y recoge lo hecho en `rd.info`)."""
+    rd = rd or ocr.Reader()
     cap = appsettings.get("doc_text_max_mb") * 1024 * 1024
     ext = ext.lower()
-    if ext in PDF_EXT:
+    with path.open("rb") as f:
+        kind = ocr.sniff(f.read(16))
+    if kind == "pdf":
+        return _pdf(path, rd)
+    if kind in ocr.IMAGE_KINDS:
         try:
-            from pypdf import PdfReader
-        except ImportError as e:
-            raise ExtractError("leer PDF requiere el extra opcional «pdf» (pypdf)") from e
-        try:
-            rd = PdfReader(str(path))
-            pages = [(p.extract_text() or "").strip() for p in rd.pages]
-        except Exception as e:  # noqa: BLE001
-            raise ExtractError(f"PDF ilegible: {str(e)[:120]}") from e
-        text = PAGE_BREAK.join(pages)
-        title = str((rd.metadata or {}).get("/Title") or "") if rd.metadata else ""
-        if not text.replace(PAGE_BREAK, "").strip():
-            raise ExtractError("el PDF no tiene texto extraíble (¿escaneado?)")
-        return text, title.strip()
+            text = ocr.read_image(path, kind, rd)
+        except ocr.Unavailable as e:
+            raise ExtractError(f"para leer una imagen {e}") from None
+        except RuntimeError as e:
+            raise ExtractError(str(e)) from None
+        if not text.strip():
+            raise ExtractError("la imagen no tiene texto legible")
+        return _normalize(text), ""
+    if ext in PDF_EXT | IMAGE_EXT:
+        raise ExtractError(f"el contenido no es lo que dice la extensión ({ext}): no es un PDF, un PNG ni un JPEG")
     if ext in OFFICE_EXT:  # a zip: its size says little about its text, which is what is capped
         from .officeextract import OfficeError, extract as office
         try:
@@ -208,7 +251,7 @@ def chunk(text: str, size: int = CHUNK_SIZE, overlap: int = OVERLAP) -> list[dic
             chunks.append({"text": t, "char_start": a + lead, "char_end": a + lead + len(raw.strip()), "heading_path": path, "page": page_at(a + lead)})
 
     for path, s0, e0 in _sections(text):
-        paras = [(s0 + m.start(), s0 + m.end()) for m in re.finditer(r"\S[\s\S]*?(?=\n\s*\n|\Z)", text[s0:e0])]
+        paras = [(s0 + m.start(), s0 + m.end()) for m in re.finditer(r"\S[\s\S]*?(?=\n\s*\n|\f|\Z)", text[s0:e0])]  # a page break ends a paragraph
         cur_a = cur_b = None
         for a, b in paras:
             only_head = cur_a is not None and bool(_HEAD.match(text[cur_a:cur_b].strip()))  # un título nunca se queda solo
@@ -220,6 +263,8 @@ def chunk(text: str, size: int = CHUNK_SIZE, overlap: int = OVERLAP) -> list[dic
                 for x, y in _split_long(text, a, b, size, overlap):
                     emit(path, x, y)
                 continue
+            if cur_a is not None and page_at(a) != page_at(cur_a) and not only_head:  # a chunk never spans two pages: its citation is exact
+                emit(path, cur_a, cur_b); cur_a = None
             if cur_a is not None and b - cur_a > size and not only_head:
                 emit(path, cur_a, cur_b); cur_a = None
             if cur_a is None:
@@ -229,7 +274,8 @@ def chunk(text: str, size: int = CHUNK_SIZE, overlap: int = OVERLAP) -> list[dic
             emit(path, cur_a, cur_b)
     merged: list[dict] = []                          # los trozos diminutos se unen al anterior de su misma sección
     for c in chunks:
-        if merged and len(c["text"]) < MIN_CHUNK and merged[-1]["heading_path"] == c["heading_path"] and c["char_start"] - merged[-1]["char_end"] < 4:
+        if merged and len(c["text"]) < MIN_CHUNK and merged[-1]["heading_path"] == c["heading_path"] and c["char_start"] - merged[-1]["char_end"] < 4 \
+                and merged[-1]["page"] == c["page"]:
             p = merged[-1]; p["text"] += "\n" + c["text"]; p["char_end"] = c["char_end"]
         else:
             merged.append(c)

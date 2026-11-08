@@ -14,7 +14,7 @@ type Engine = Row & { rpm_now: number; price: [number, number] | null };
 type InstanceUsage = { days: number; engines: Engine[]; brains: { brain_id: number; slug: string; name: string; calls: number; tokens: number; errors_429: number; errors_5xx: number; cost: number; priced: boolean }[] };
 
 export const PURPOSE: Record<string, string> = {
-  extraction: T("Extracción de hechos"), decider: T("Decisor"), recall: T("Recall"), documents: T("Índice de documentos"), index: T("Índice de episodios"),
+  extraction: T("Extracción de hechos"), decider: T("Decisor"), recall: T("Recall"), documents: T("Índice de documentos"), ocr: T("OCR de documentos"), index: T("Índice de episodios"),
   facts: T("Edición de hechos"), retype: T("Corrector de tipos"), reindex: T("Cambio de modelo"), import: T("Importación"), answer: T("Respuestas redactadas"), summaries: T("Revisión de resúmenes"), curator: T("Curador"), forget: T("Derecho al olvido"), other: T("Otros"),
 };
 const KIND: Record<string, string> = { llm: T("LLM"), embedding: T("Embeddings"), decision: T("Decisor") };

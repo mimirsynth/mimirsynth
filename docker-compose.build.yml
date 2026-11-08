@@ -4,3 +4,6 @@ services:
   mimirsynth:
     build: .
     pull_policy: never
+  ocr:
+    build: ./ocr
+    pull_policy: never

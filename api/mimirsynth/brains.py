@@ -21,7 +21,7 @@ GRAPH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$")
 def _brain_out(b: Brain, role: str) -> dict:
     out = {"slug": b.slug, "name": b.name, "description": b.description, "graph_name": b.graph_name, "role": role}
     if rank(role) >= rank("admin"):  # la política de secretos solo la ve y la cambia quien administra el brain
-        out.update(secret_mode=b.secret_mode, secret_allow=b.secret_allow)
+        out.update(secret_mode=b.secret_mode, secret_allow=b.secret_allow, ocr_vision=bool(b.ocr_vision))
     return out
 
 
@@ -59,6 +59,7 @@ class BrainPatch(BaseModel):
     graph_name: str | None = None
     secret_mode: str | None = None
     secret_allow: str | None = Field(None, max_length=10000)
+    ocr_vision: bool | None = None
 
 
 def _count(g) -> tuple[int, int]:
@@ -118,6 +119,8 @@ def update_brain(body: BrainPatch, ctx: BrainCtx = Depends(admin_of_brain)):
         except ValueError as e:
             raise HTTPException(400, f"excepción de secretos no válida: {e}") from None
         changes["secret_allow"] = [b.secret_allow, body.secret_allow]
+    if body.ocr_vision is not None and body.ocr_vision != bool(b.ocr_vision):
+        changes["ocr_vision"] = [bool(b.ocr_vision), body.ocr_vision]
     moved = None
     if body.graph_name is not None and body.graph_name != b.graph_name:
         if not ctx.user.is_admin:

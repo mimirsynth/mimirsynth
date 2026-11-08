@@ -201,7 +201,7 @@ def match(entries: list[tuple[str, str, str]], include: list[str]) -> Matched:
     picked: dict[str, str] = {}
     counts = dict.fromkeys(include, 0)
     for mode, blob, path in entries:
-        if mode not in ("100644", "100755") or len(path) > 480 or docstore.ext_of(path) not in docstore.ALLOWED_EXT or excluded(path):
+        if mode not in ("100644", "100755") or len(path) > 480 or not docstore.scannable(path) or excluded(path):
             continue
         hits = [p for p in include if _hit(p, path)]
         for p in hits:

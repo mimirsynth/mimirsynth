@@ -138,6 +138,7 @@ class Brain(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     secret_mode: Mapped[str] = mapped_column(String(8), default="mask", server_default="mask")  # mask | block | warn (ver secretguard)
+    ocr_vision: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # scanned pages read by a vision model (#135)
     secret_allow: Mapped[str] = mapped_column(Text, default="", server_default="")  # excepciones del detector, una por línea
     retention: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # days per kind of data (#137); empty: the instance's
     ai_budget: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {limit, unit: tokens | cost, pause} (#132); empty: none

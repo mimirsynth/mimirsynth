@@ -26,6 +26,20 @@ services:
       interval: 10s
       retries: 5
 
+  # Optional OCR for scanned PDFs and images (Tesseract, Spanish and English). Start it with `docker compose --profile ocr up -d`
+  # and MIMIRSYNTH_OCR_URL=http://ocr:8001. It is a separate image so the main one does not grow. It has no authentication: do not
+  # publish its port.
+  ocr:
+    profiles: ["ocr"]
+    image: ghcr.io/mimirsynth/mimirsynth-ocr:${MIMIRSYNTH_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      OCR_WORKERS: "${OCR_WORKERS:-2}"  # documents read at the same time; Tesseract uses one CPU per page
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
   mimirsynth:
     image: ghcr.io/mimirsynth/mimirsynth:${MIMIRSYNTH_VERSION:-latest}
     restart: unless-stopped
@@ -62,6 +76,7 @@ services:
       MIMIRSYNTH_ACCOUNT_URL: "${MIMIRSYNTH_ACCOUNT_URL:-}"
       MIMIRSYNTH_DOC_STORE: "/data/documents"
       MIMIRSYNTH_DOC_MAX_MB: "${MIMIRSYNTH_DOC_MAX_MB:-2048}"
+      MIMIRSYNTH_OCR_URL: "${MIMIRSYNTH_OCR_URL:-}"  # http://ocr:8001 with the "ocr" profile; empty: scanned PDFs and images are not read
       MIMIRSYNTH_DOC_ROOTS_BASE: "/sources"  # source roots are registered under Administration and can only be inside this folder
     volumes:
       - type: bind  # host folder with the directories that can be document sources; always read-only

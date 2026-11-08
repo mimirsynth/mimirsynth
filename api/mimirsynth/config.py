@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     doc_max_mb: int = 2048  # tamaño máximo de un fichero subido
     doc_part_mb: int = 64  # tamaño máximo de cada parte de una subida
     doc_text_max_mb: int = 100  # texto extraído máximo por documento
+    ocr_url: str = ""  # the optional OCR service (#135), e.g. http://ocr:8001; empty: scanned PDFs and images are not read
+    ocr_languages: str = "spa+eng"  # Tesseract languages, joined with +
+    ocr_max_pages: int = 50  # pages read with OCR per document at most
+    ocr_vision_engine: str = ""  # LLM engine that reads pages for the brains that turn the vision model on; empty: the default engine
     doc_min_similarity: float = 0.66  # coseno mínimo para que un pasaje entre en el recall (calibrado con nomic-embed-text; depende del modelo de embeddings)
     doc_passages: int = 2  # pasajes documentales máximos en el recall
     recall_min_similarity: float = 0.55  # cosine a graph fact or an episode fragment needs to enter the recall (#281); 0: no threshold

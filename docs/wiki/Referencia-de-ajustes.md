@@ -61,6 +61,9 @@ Guía: [[Carpetas y límites]]
 | Tamaño máximo de un fichero | `doc_max_mb` | `2048` MB | 1–20480 MB | Los ficheros más grandes se rechazan al subirlos o al escanear carpetas. |
 | Tamaño de cada parte de una subida | `doc_part_mb` | `64` MB | 1–64 MB | Las subidas se envían por partes de este tamaño (máximo 64). |
 | Texto máximo extraído por documento | `doc_text_max_mb` | `100` MB | 1–2048 MB | Un documento cuyo texto supere este tamaño no se indexa. |
+| Idiomas del OCR | `ocr_languages` | `spa+eng` | texto | Idiomas con los que Tesseract lee los PDF escaneados y las imágenes, unidos con + (p. ej. spa+eng). Cada uno tiene que estar instalado en el servicio OCR. |
+| Páginas con OCR por documento | `ocr_max_pages` | `50` | 1–2000 | Páginas que se leen con OCR como mucho en cada documento; las siguientes se quedan sin texto y el documento lo dice. |
+| Motor de visión para el OCR | `ocr_vision_engine` | — | texto | Nombre del motor LLM que lee las páginas en los brains que activan el modelo de visión. Tiene que admitir imágenes. Vacío: el motor LLM predeterminado. |
 
 ## Recuerdo (recall)
 
