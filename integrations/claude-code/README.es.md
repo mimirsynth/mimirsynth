@@ -39,6 +39,8 @@ Pide:
 
 Lo guarda en `~/.config/mimirsynth/config.json`, que solo puedes leer tú. Las mismas claves pueden venir de variables `MIMIRSYNTH_*`, que tienen prioridad. Los hooks necesitan `python3` en el `PATH`.
 
+El fichero lo comparten todos los plugins de agentes de MimirSynth, y una entrada de `projects` puede dar a algunas carpetas otro brain con sus propios tokens: consulta [`docs/es/AGENT_CLIENT.md`](../../docs/es/AGENT_CLIENT.md). El plugin se apoya en la biblioteca cliente compartida, que lleva en `scripts/mimirsynth_agent/` (una copia de `integrations/shared/python/mimirsynth_agent`).
+
 ### Captura de lo aprendido en una sesión (desactivada por defecto)
 
 La decide `capture`:
@@ -50,7 +52,7 @@ Qué se guarda y se envía:
 - **Qué sesiones:** solo las que cambiaron ficheros o terminaron con una respuesta sustancial, y como mucho **una propuesta por sesión**.
 - **Qué contiene:** la tarea (el primer prompt), el resultado (la última respuesta) y los ficheros cambiados. Nunca el transcript.
 - **Cómo se envía:** con confianza baja (`capture_confidence`, 0,3), así que espera en **cuarentena**. Solo se envía con un token de **colaborador**: con uno de curador se aprobaría al momento, así que se rechaza y se avisa.
-- **Secretos:** antes de escribir nada en disco o enviarlo, se redacta con el propio detector del servidor (`scripts/secretscan.py` es el mismo fichero que `api/mimirsynth/secretscan.py`, y un test los mantiene iguales). Funciona por patrones y no es infalible: si dudas, lee los borradores.
+- **Secretos:** antes de escribir nada en disco o enviarlo, se redacta con el propio detector del servidor (`scripts/mimirsynth_agent/secretscan.py` es el mismo fichero que `api/mimirsynth/secretscan.py`, y un test los mantiene iguales). Funciona por patrones y no es infalible: si dudas, lee los borradores.
 - **Cuándo sale del equipo:** al empezar la siguiente sesión, no al terminar, porque Claude Code solo da 1,5 s a un plugin al cerrar.
 
 ### Otros plugins de memoria

@@ -24,6 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7   # the TypeScript agent client runs its contract tests against the test instance (#369)
+        with: {node-version: 22}
       - run: cd api && uv venv && uv pip install -e ".[pdf]" pytest pyyaml   # pyyaml: the wiki index check (test_repo_tooling); pdf: the OCR tests read PDFs (#135)
       - name: Tests (con FalkorDB real)
         env:
@@ -54,6 +56,15 @@ jobs:
       - uses: actions/setup-node@v7
         with: {node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json}
       - run: cd web && npm ci && npm run build && npm test   # npm test: the tooling in web/scripts (translation fragments)
+  agent-client:
+    # The shared client library's TypeScript port (#369): types, and the contract cases every implementation passes. The Python one
+    # and both ports against a test instance run in the api job (tests/test_agent_client.py, tests/test_agent_contract.py).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22, cache: npm, cache-dependency-path: integrations/shared/typescript/package-lock.json}
+      - run: cd integrations/shared/typescript && npm ci && npm run check && npm test
   docker:
     runs-on: ubuntu-latest
     steps:

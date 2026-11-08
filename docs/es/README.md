@@ -9,6 +9,7 @@
 | [INSTALL.md](INSTALL.md) | Instalar, actualizar y hacer copias de seguridad |
 | [CONFIGURATION.md](CONFIGURATION.md) | Variables de entorno y todo lo que se configura desde la interfaz |
 | [AGENTS.md](AGENTS.md) | Conectar agentes: tokens, recall, propuestas, MCP y documentos |
+| [AGENT_CLIENT.md](AGENT_CLIENT.md) | Plugins de agentes: el contrato de configuración compartido y la biblioteca cliente |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Cómo encaja todo: brains, roles, cuarentena y recall |
 | [DOCUMENTS.md](DOCUMENTS.md) | Memoria documental: fuentes, ingesta, recall y wikis |
 | [FEDERATION.md](FEDERATION.md) | Prestar lectura entre brains |

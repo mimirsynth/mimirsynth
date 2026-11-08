@@ -145,7 +145,9 @@ def main(argv: list[str]) -> int:
     except Exception:  # noqa: BLE001
         data = {}
     try:
-        EVENTS[argv[1]](data if isinstance(data, dict) else {})
+        data = data if isinstance(data, dict) else {}
+        mimir.CWD = data.get("cwd") or None   # a `projects` entry of the configuration may give this folder another brain
+        EVENTS[argv[1]](data)
     except Exception:  # noqa: BLE001  (a hook never breaks Claude Code)
         pass
     return 0

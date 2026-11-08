@@ -92,6 +92,8 @@ claude mcp add --transport http mimirsynth "$URL/api/brains/my-brain/mcp" --head
 ## Claude Code
 Connect it through the MCP server (above): that gives it `recall` and `remember` as tools. The [`integrations/claude-code`](../integrations/claude-code) folder adds the complement: a **plugin** (`/plugin marketplace add mimirsynth/mimirsynth`, then `/plugin install mimirsynth@mimirsynth`). It brings what changed at session start, injects recall into every prompt, adds `/mimirsynth:status`, `:search` and `:remember`, and can capture what each session learned as one quarantined proposal (off by default). The loose hook and script it replaces keep working. It uses two routes: `GET /api/brains/{slug}/whoami` (who the token is, for any token) and `POST /api/brains/{slug}/news` (`whats_new` over REST, `recall` scope).
 
+Every native agent plugin shares one configuration file, `~/.config/mimirsynth/config.json`, and one client library: see [AGENT_CLIENT.md](AGENT_CLIENT.md).
+
 ## Language
 Error messages, the MCP tool descriptions and instructions, and the headings of the recall context come in the caller's language: the `Accept-Language` header if it asks for a supported language (`es`, `en`), otherwise the language the token's owner chose in My account, otherwise the instance default. Stored memory (facts, episodes, documents) is returned as it was written.
 

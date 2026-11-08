@@ -9,6 +9,7 @@
 | [INSTALL.md](INSTALL.md) | Install, upgrade and back up |
 | [CONFIGURATION.md](CONFIGURATION.md) | Environment variables and everything configured from the interface |
 | [AGENTS.md](AGENTS.md) | Connect agents: tokens, recall, proposals, MCP and documents |
+| [AGENT_CLIENT.md](AGENT_CLIENT.md) | Agent plugins: the shared configuration contract and client library |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | How it fits together: brains, roles, quarantine and recall |
 | [DOCUMENTS.md](DOCUMENTS.md) | Document memory: sources, ingestion, recall and wikis |
 | [FEDERATION.md](FEDERATION.md) | Lending read access between brains |

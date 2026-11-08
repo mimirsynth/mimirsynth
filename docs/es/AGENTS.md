@@ -91,6 +91,8 @@ claude mcp add --transport http mimirsynth "$URL/api/brains/mi-brain/mcp" --head
 ## Claude Code
 Conéctalo por el servidor MCP (arriba): así tiene `recall` y `remember` como herramientas. La carpeta [`integrations/claude-code`](../../integrations/claude-code/README.es.md) añade el complemento: un **plugin** (`/plugin marketplace add mimirsynth/mimirsynth` y después `/plugin install mimirsynth@mimirsynth`). Trae lo que ha cambiado al empezar la sesión, inyecta el recall en cada prompt, añade `/mimirsynth:status`, `:search` y `:remember`, y puede capturar lo aprendido en cada sesión como una propuesta en cuarentena (desactivado por defecto). El hook y el script sueltos a los que sustituye siguen funcionando. Usa dos rutas: `GET /api/brains/{slug}/whoami` (quién es el token, para cualquier token) y `POST /api/brains/{slug}/news` (`whats_new` por REST, alcance `recall`).
 
+Todos los plugins nativos de agentes comparten un fichero de configuración, `~/.config/mimirsynth/config.json`, y una biblioteca cliente: consulta [AGENT_CLIENT.md](AGENT_CLIENT.md).
+
 ## Idioma
 Los mensajes de error, las descripciones e instrucciones de las herramientas del MCP y los encabezados del contexto del recall llegan en el idioma de quien llama: el de la cabecera `Accept-Language` si pide uno disponible (`es`, `en`); si no, el que la persona dueña del token eligió en «Mi cuenta»; si no, el de la instancia. La memoria guardada (hechos, episodios, documentos) se devuelve tal como se escribió.
 
