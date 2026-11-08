@@ -2,7 +2,21 @@
 
 # Resumen
 
-Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Salvo los bloques **Necesita tu atención** y **Lo que ha cambiado**, es de solo lectura.
+Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Salvo los bloques **Para empezar**, **Necesita tu atención** y **Lo que ha cambiado**, es de solo lectura.
+
+## Para empezar
+Hasta que hayas probado las partes principales de MimirSynth, la pantalla de inicio empieza con la lista **Para empezar**. Cada paso se marca solo cuando ocurre en cualquiera de tus brains (en todos, para un administrador de la instancia), sin que nadie lo marque, y muestra el día en que ocurrió:
+
+| Paso | Se marca cuando | Se explica en |
+|---|---|---|
+| Un agente hace su primer recall | un agente hace un recall con un token de API | [[Conectar agentes]] |
+| Llega la primera propuesta de un agente | un agente envía una propuesta | [[Propuestas]] |
+| Se aprueba la primera propuesta | la aprueba un curador, el decisor o un nivel de autoaprobación (la de un curador, aprobada tal como la envía, no cuenta) | [[Propuestas]] |
+| Añades el primer documento o carpeta | un brain tiene un documento, o una carpeta, una wiki o un repositorio como fuente | [[Conocimiento]] |
+| Haces tu primera pregunta en Preguntar | buscas o pides tú una respuesta en [[Preguntar]] | [[Preguntar]] |
+| Conectas un segundo agente o invitas a otra persona | un brain tiene dos tokens de API vigentes o dos miembros (para un administrador, la instancia tiene dos usuarios) | [[Administrar brains y miembros]] |
+
+Cada paso pendiente enlaza con la pantalla donde se hace y con su página de esta wiki. Un paso marcado no se desmarca aunque después desaparezca lo que lo mostró (un token revocado, un registro de recall pasado su retención). La lista desaparece cuando todos los pasos están hechos; **Cerrar la lista** la oculta para siempre, quede lo que quede. La lista es tuya: cada persona ve la suya.
 
 ## Necesita tu atención
 Los curadores y superiores ven primero una lista corta de lo que **espera la decisión de una persona** en el brain, cada línea con su número y un enlace a la herramienta donde se decide:

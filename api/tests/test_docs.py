@@ -256,4 +256,4 @@ def test_public_config_official_links(client, monkeypatch):
     c = client.get("/api/config").json()
     assert c["name"] == "MimirSynth" and c["links"]["repo"] == brand.REPO_URL == "https://github.com/MimirSynth/mimirsynth"
     monkeypatch.setattr(brand, "PUBLISHED", False)  # un fork sin repositorio público puede ocultar los enlaces
-    assert client.get("/api/config").json()["links"] == {"docs": "", "repo": "", "feedback": ""}
+    assert client.get("/api/config").json()["links"] == {"docs": "", "repo": "", "feedback": "", "wiki": ""}

@@ -733,6 +733,7 @@ class RecallLog(Base):
     rid: Mapped[str] = mapped_column(String(32), unique=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    token_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # the API token it came through (an agent); empty: a session (#363)
     query_hash: Mapped[str] = mapped_column(String(64))
     query_len: Mapped[int] = mapped_column(Integer, default=0)
     query_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -811,3 +812,13 @@ class DigestSubscription(Base):
     last_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # last summary considered (sent or empty)
     last_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # the waiting counters of that summary: unchanged ones are not repeated
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class OnboardingState(Base):
+    """A person's getting-started checklist on the home screen (#363): when each step was first seen done, so a step stays ticked after
+    the data that showed it is gone (a recall log past its retention), and whether the person closed the card."""
+    __tablename__ = "onboarding_states"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    done: Mapped[dict] = mapped_column(JSON, default=dict)  # {step: ISO time it was first seen done}
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
