@@ -160,3 +160,14 @@ La configuración pide el servidor, el brain y los tokens (ocultos, nunca por el
 - La **captura de sesiones** está apagada por defecto; con `capture` en `draft` o `send`, cada sesión terminada que cambió ficheros o acabó con una respuesta sustancial se convierte en un borrador o en una propuesta en cuarentena, sin secretos, y solo con un token de colaborador.
 
 Los detalles, todos los comandos y qué hace en tu máquina: [el README del plugin](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/hermes-agent/plugin/README.es.md).
+
+## Codex
+Un plugin nativo para el CLI de Codex (0.167 o posterior) hace el recall antes de cada prompt, trae lo que cambió al empezar la sesión y añade las skills `$mimirsynth:setup`, `$mimirsynth:status`, `$mimirsynth:search` y `$mimirsynth:remember`, con la misma configuración que el resto de plugins de agente de MimirSynth (`~/.config/mimirsynth/config.json`). Se instala con un comando:
+```bash
+codex plugin marketplace add mimirsynth/mimirsynth && codex plugin add mimirsynth@mimirsynth
+```
+Después, una vez:
+1. Ejecuta `$mimirsynth:setup` en Codex: muestra el comando que pide la URL, el brain y los tokens, ocultos, en tu terminal. Si MimirSynth ya está configurado para otro agente en la máquina, no hay nada que hacer.
+2. Abre `/hooks` en Codex y confía en los tres hooks de `mimirsynth`. Codex solo ejecuta los hooks de un plugin cuando confías en ellos, y vuelve a preguntar tras cada actualización; `$mimirsynth:status` avisa cuando no lo están.
+
+La captura de lo que aprendió cada sesión está **desactivada** por defecto; si la activas, una sesión terminada se lee del propio fichero de sesión de Codex y se convierte como mucho en una propuesta, redactada, en cuarentena. Para que el modelo pueda llamar también a las herramientas de MimirSynth, añade el servidor MCP del brain con `codex mcp add mimirsynth --url "https://tu-servidor/api/brains/<slug>/mcp" --bearer-token-env-var MIMIRSYNTH_TOKEN`. Detalles en [el README del plugin](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/codex/README.es.md).

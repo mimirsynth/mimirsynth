@@ -1,0 +1,21 @@
+{
+  "name": "mimirsynth",
+  "version": "0.1.0",
+  "description": "MimirSynth memory for Codex: recall before every prompt, what changed at session start, and an optional, quarantined capture of what each session learned.",
+  "author": { "name": "MimirSynth" },
+  "homepage": "https://github.com/mimirsynth/mimirsynth/tree/main/integrations/codex",
+  "repository": "https://github.com/mimirsynth/mimirsynth",
+  "license": "Apache-2.0",
+  "keywords": ["memory", "knowledge-graph", "recall", "mimirsynth"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "MimirSynth",
+    "shortDescription": "Your team's memory before every prompt",
+    "longDescription": "Recalls what your MimirSynth brain knows before each prompt, says what changed at session start, searches and proposes memories, and, only if you turn it on, proposes what each session learned for a curator to review.",
+    "developerName": "MimirSynth",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://github.com/mimirsynth/mimirsynth"
+  }
+}

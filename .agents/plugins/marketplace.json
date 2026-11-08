@@ -1,0 +1,13 @@
+{
+  "name": "mimirsynth",
+  "interface": { "displayName": "MimirSynth" },
+  "plugins": [
+    {
+      "name": "mimirsynth",
+      "source": "./integrations/codex/plugin",
+      "description": "MimirSynth memory for Codex: recall before every prompt, what changed at session start, and an optional, quarantined capture of what each session learned.",
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}

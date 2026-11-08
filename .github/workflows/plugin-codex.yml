@@ -1,0 +1,37 @@
+name: Codex plugin
+# The Codex plugin (#370) end to end: the real Codex CLI installs it from this repository's marketplace into a throwaway CODEX_HOME and
+# runs against a test instance, with a stand-in for the model, so no account or API key is needed. Its unit tests also run in the api
+# job of ci.yml; this job adds the real agent.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "integrations/codex/**"
+      - "integrations/shared/**"
+      - ".agents/plugins/**"
+      - "api/tests/test_codex_plugin.py"
+      - "api/tests/test_agent_contract.py"
+      - ".github/workflows/plugin-codex.yml"
+  pull_request:
+    paths:
+      - "integrations/codex/**"
+      - "integrations/shared/**"
+      - ".agents/plugins/**"
+      - "api/tests/test_codex_plugin.py"
+      - "api/tests/test_agent_contract.py"
+      - ".github/workflows/plugin-codex.yml"
+permissions:
+  contents: read
+jobs:
+  codex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22}
+      - name: Codex CLI (the version the plugin was tested with)
+        run: npm install -g @openai/codex@0.167.0 && codex --version
+      - run: cd api && uv venv && uv pip install -e . pytest
+      - name: The plugin in the real Codex, against a test instance
+        run: cd api && MIMIRSYNTH_TEST_CODEX="$(command -v codex)" .venv/bin/pytest -q -rs tests/test_codex_plugin.py
