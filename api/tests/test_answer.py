@@ -7,7 +7,8 @@ import pytest
 from test_control import client  # noqa: F401
 
 OUT = {"facts": [{"uuid": "f1", "fact": "Nextcloud corre en Epsilon", "status": "current", "valid_at": "2026-10-01T00:00:00Z",
-                  "source_uuid": "nc", "score": 0.8},
+                  "source_uuid": "nc", "target_uuid": "ep", "source": "Nextcloud", "target": "Epsilon", "source_type": "Service",
+                  "name": "RUNS_ON", "score": 0.8},
                  {"uuid": "f2", "fact": "Nextcloud corre en Notus", "status": "invalidated", "valid_at": "2025-01-01T00:00:00Z",
                   "invalid_at": "2026-10-01T00:00:00Z", "source_uuid": "nc", "score": 0.7},
                  {"uuid": "f3", "fact": "Polaris está en el rack 4", "status": "current", "origin": "otro", "source_uuid": "po", "score": 0.5}],
@@ -57,6 +58,9 @@ def test_an_answer_cites_its_evidence_and_counts_its_cost(client, answer_env):  
     assert head["type"] == "sources" and head["recall_id"]
     assert [s["ref"] for s in head["sources"]] == ["F1", "F2", "F3", "E1", "D1"]   # current facts first, then the past ones
     by = {s["ref"]: s for s in head["sources"]}
+    # a fact carries its two ends and the relation, as Context shows them; what the recall did not give is left out
+    assert (by["F1"]["source"], by["F1"]["target"], by["F1"]["source_type"], by["F1"]["name"], by["F1"]["target_entity"]) == ("Nextcloud", "Epsilon", "Service", "RUNS_ON", "ep")
+    assert "target_type" not in by["F1"] and "source" not in by["F2"]
     assert by["F1"]["entity"] == "nc" and by["F2"]["origin"] == "otro" and by["F3"]["status"] == "invalidated" and by["E1"]["id"] == "ep1" and by["D1"]["id"] == 3
     assert "".join(x["text"] for x in lines if x["type"] == "delta").startswith("Nextcloud corre en Epsilon [F1]")
     assert done == {**done, "type": "done", "citations": ["F1", "F3", "D1"], "unknown": ["F9"], "called": True}  # F9 was never evidence

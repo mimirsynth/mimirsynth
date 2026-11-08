@@ -105,7 +105,10 @@ def evidence(out: dict) -> tuple[list[dict], str]:
                 else f"true since {_date(f.get('valid_at') or f.get('created_at'))}")
         sources.append({"ref": ref, "kind": "fact", "id": f["uuid"], "text": f["fact"], "entity": f.get("source_uuid"),
                         "status": f.get("status"), "origin": f.get("origin"), "valid_at": f.get("valid_at") or f.get("created_at"),
-                        "invalid_at": f.get("invalid_at"), **({"replaces": f["replaces"]} if f.get("replaces") else {})})
+                        "invalid_at": f.get("invalid_at"), **({"replaces": f["replaces"]} if f.get("replaces") else {}),
+                        # its two ends and the relation, so the evidence shows them as Context does
+                        **{k: f.get(k) for k in ("source", "target", "source_type", "target_type", "name") if f.get(k)},
+                        **({"target_entity": f["target_uuid"]} if f.get("target_uuid") else {})})
         lines.append(f"[{ref}] fact ({when}): {_clean(f['fact'])}")
     for i, c in enumerate(out["chunks"], 1):
         ref = f"E{i}"

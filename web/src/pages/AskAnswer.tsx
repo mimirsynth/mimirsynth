@@ -4,21 +4,24 @@ import { Link } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { ApiError, fmtDay, langHeaders } from "../api";
 import { translateServer } from "../i18n";
-import { Btn, CardLink, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
+import { Btn, CardLink, EmptyState, EntityChip, humanRelation, ListCard, MutationError, Notice, Pill } from "../ui";
 import { loadAsk, saveAsk } from "./askSession";
 
 /** One numbered piece of evidence: what the answer cites as [F1], [E1] or [D1]. */
 type Superseded = { fact: string; invalid_at: string | null; replaced_by: { fact: string }[] }[];
 type Source = { ref: string; kind: "fact" | "episode" | "document"; id: string | number; text: string; title?: string; entity?: string;
-  status?: string; origin?: string; valid_at?: string | null; invalid_at?: string | null; replaces?: string; superseded?: Superseded };
+  status?: string; origin?: string; valid_at?: string | null; invalid_at?: string | null; replaces?: string; superseded?: Superseded;
+  /** A fact's two ends and its relation, shown as Context shows them. */
+  source?: string; target?: string; source_type?: string | null; target_type?: string | null; target_entity?: string; name?: string };
 type Done = { citations: string[]; unknown: string[]; called: boolean; ms?: number };
 const CITE = /\[([FED])(\d{1,3})\]/g;
 type Kept = { asked: string; sources: Source[] | null; text: string; done: Done };
 
 /** Where a source leads: the fact's entity page, the episode in the Journal, the passage's document in Knowledge. Lent episodes and
  * documents live in another brain, so they have no link here. */
+const entityPage = (uuid: string, origin?: string) => `/entidad/${uuid}${origin ? `?origen=${origin}` : ""}`;
 export function sourceLink(s: Source): string | null {
-  if (s.kind === "fact") return s.entity ? `/entidad/${s.entity}${s.origin ? `?origen=${s.origin}` : ""}` : null;
+  if (s.kind === "fact") return s.entity ? entityPage(s.entity, s.origin) : null;
   if (s.origin) return null;
   return s.kind === "episode" ? `/diario?episodio=${s.id}` : `/conocimiento?doc=${s.id}`;
 }
@@ -67,6 +70,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   useEffect(() => { if (trigger !== answered.current) { answered.current = trigger; if (query.trim()) void go(); } }, [trigger]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => { abort.current?.abort(); onBusy?.(false); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
   const evAnchor = (ref: string) => `ev-${ref}`;
+  const citeAnchor = (ref: string) => `cita-${ref}`;
   const label = (ref: string) => {
     const n = ref.slice(1);
     return ref[0] === "F" ? t("hecho {{n}}", { n }) : ref[0] === "E" ? t("episodio {{n}}", { n }) : t("doc {{n}}", { n });
@@ -89,11 +93,13 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   // The answer with each [F1]/[E1]/[D1] turned into a link to its source; a label that was not in the evidence is marked, not linked.
   const parts: ReactNode[] = [];
   let last = 0;
+  const first = new Set<string>();  // the sources whose first citation has been placed: that one carries the id «Volver a la cita» goes to
   for (const m of text.matchAll(CITE)) {
     const ref = `${m[1]}${Number(m[2])}`, s = byRef.get(ref);
+    const id = s && !first.has(ref) ? (first.add(ref), citeAnchor(ref)) : undefined;
     parts.push(<Fragment key={`t${m.index}`}>{text.slice(last, m.index)}</Fragment>);
     parts.push(!s ? <Pill key={`c${m.index}`} size="xs" tone="danger" title={t("Esta cita no estaba entre las pruebas: no lleva a ningún sitio.")}>{t("cita sin origen")}</Pill>
-      : <CardLink key={`c${m.index}`} to={evAnchor(ref)} className="ms-cite" title={`${s.text}${s.origin ? ` · ${s.origin}` : ""}`}>{label(ref)}</CardLink>);
+      : <CardLink key={`c${m.index}`} id={id} to={evAnchor(ref)} className="ms-cite" title={`${s.text}${s.origin ? ` · ${s.origin}` : ""}`}>{label(ref)}</CardLink>);
     last = (m.index ?? 0) + m[0].length;
   }
   parts.push(<Fragment key="end">{text.slice(last)}</Fragment>);
@@ -140,13 +146,25 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
           <Fragment key={head}>
             <Title order={3} size="h6" mt="xs">{head}</Title>
             {list.map((s) => {
-              const to = sourceLink(s);
+              const ends = s.kind === "fact" && !!s.source && !!s.target;  // with its ends, a fact leads to their pages through the chips
+              const to = ends ? null : sourceLink(s);
+              const isCited = cited.has(s.ref);
+              const back = isCited && first.has(s.ref);
               return (
                 <ListCard key={s.ref} anchor={evAnchor(s.ref)} invalid={s.status === "invalidated"} notice={notice(s.superseded)} meta={when(s)}
                   note={s.replaces ? <>{t("Sustituye a")} «{s.replaces}»</> : undefined}
-                  tags={<>{to ? <Link to={to} className="ms-nolink"><Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill></Link>
-                    : <Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill>}
-                    {s.origin && <Pill size="xs">{s.origin}</Pill>}{s.title && <Text size="xs" c="dimmed">{s.title}</Text>}</>}>{s.text}</ListCard>);
+                  tags={<>
+                    <Pill size="xs" tone={isCited ? "alt" : undefined}>{isCited ? t("{{ref}} · citado", { ref: label(s.ref) }) : label(s.ref)}</Pill>
+                    {s.origin && <Pill size="xs">{s.origin}</Pill>}
+                    {ends ? <>
+                      <EntityChip name={s.source ?? ""} type={s.source_type} to={s.entity ? entityPage(s.entity, s.origin) : undefined} />
+                      {s.name && <Text size="xs" c="dimmed" title={s.name}>{humanRelation(s.name)}</Text>}
+                      <EntityChip name={s.target ?? ""} type={s.target_type} to={s.target_entity ? entityPage(s.target_entity, s.origin) : undefined} />
+                    </> : s.title && <Text size="xs" c="dimmed">{s.title}</Text>}</>}
+                  actions={(to || back) ? <Group gap="md">
+                    {back && <CardLink to={citeAnchor(s.ref)}>{t("Volver a la cita")}</CardLink>}
+                    {to && <Link to={to} className="ms-cardlink">{s.kind === "episode" ? t("Abrir el episodio en el Diario") : s.kind === "document" ? t("Abrir el documento en Conocimiento") : t("Abrir la entidad")}</Link>}
+                  </Group> : undefined}>{s.text}</ListCard>);
             })}
           </Fragment>))}
       </>}
