@@ -1,0 +1,9 @@
+{
+ "Numerados en el orden en que el agente los lee en el contexto inyectado.": "Numbered in the order the agent reads them in the injected context.",
+ "Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta, con algo más de peso para lo reciente: por eso la similitud no siempre baja. Lo que puede estar superado va al final.": "By merging two searches, by closeness and by the question's words, with a little more weight for what is recent: that is why the similarity does not always go down. What may be superseded goes last.",
+ "Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta. Lo que puede estar superado va al final.": "By merging two searches, by closeness and by the question's words. What may be superseded goes last.",
+ "Por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable.": "By closeness to the question, with less weight for what is past its shelf life or comes from a less trusted source.",
+ "Por parecido a la pregunta.": "By closeness to the question.",
+ "Por parecido a la pregunta; al final, los que afirma un fragmento o pasaje de este resultado.": "By closeness to the question; last, those a fragment or passage of this result states.",
+ "Primero, los que sustituyen a algo de este resultado; después, por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable.": "First, those that replace something in this result; then by closeness to the question, with less weight for what is past its shelf life or comes from a less trusted source."
+}

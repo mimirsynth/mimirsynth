@@ -613,6 +613,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-listcard[data-highlight] { border-color: var(--ms-accent); }
 /* What «Incorrecto» sent, on its card: the words the curator will read, so the person sees what they said. */
 .ms-ask-sentnote { color: var(--ms-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
+/* Under a section heading of Ask's results: what decides the order of its cards. Close to the heading it explains. */
+.ms-ask-order { margin-top: -4px; max-width: 70ch; }
 .ms-ask-wrongform { max-width: 560px; padding-top: 4px; }  /* «¿Qué está mal?» under the buttons, at a readable width */
 .ms-btn.ms-ask-wrong[aria-pressed="true"] { color: var(--ms-invalidado) !important; background: color-mix(in srgb, var(--ms-invalidado) 12%, transparent) !important; }
 /* A toggle button that is on (a rating given, a result marked): the teal wash and teal text of the active state, never a fill; the
