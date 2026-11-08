@@ -1,0 +1,77 @@
+name: Plugin · OpenClaw
+# The native OpenClaw plugin (#373): types, its tests against a stand-in for OpenClaw's API, the package, and that a real OpenClaw installs
+# it and registers its tools, hooks and commands. Its checks against a test instance run in the api job (tests/test_openclaw_plugin.py).
+on:
+  push:
+    branches: [main]
+    paths:
+      - integrations/openclaw/**
+      - integrations/shared/typescript/**
+      - integrations/shared/contract/**
+      - api/mimirsynth/secretscan.py
+      - .github/workflows/plugin-openclaw.yml
+  pull_request:
+    paths:
+      - integrations/openclaw/**
+      - integrations/shared/typescript/**
+      - integrations/shared/contract/**
+      - api/mimirsynth/secretscan.py
+      - .github/workflows/plugin-openclaw.yml
+permissions:
+  contents: read
+jobs:
+  plugin:
+    runs-on: ubuntu-latest
+    defaults:
+      run: {working-directory: integrations/openclaw}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22, cache: npm, cache-dependency-path: integrations/openclaw/package-lock.json}
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: The package carries the bundle (with no relative imports left), the manifest and the skill
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          tar tzf "$RUNNER_TEMP"/mimirsynth-openclaw-*.tgz | tee "$RUNNER_TEMP/files.txt"
+          for f in package/dist/index.js package/openclaw.plugin.json package/skills/mimirsynth/SKILL.md package/README.md; do grep -qx "$f" "$RUNNER_TEMP/files.txt"; done
+          ! grep -nE '(from|import\() *"\.\.?/' dist/index.js   # bundled: no relative imports left
+          node -e "import('./dist/index.js').then(m => { if (m.default.id !== 'mimirsynth') process.exit(1) })"
+
+  openclaw:
+    # The packed plugin in a real OpenClaw: the oldest version it declares (openclaw.install.minHostVersion) and the current one.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        openclaw: ["2026.9.36", "2026.11.2"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 24, cache: npm, cache-dependency-path: integrations/openclaw/package-lock.json}
+      - name: Pack the plugin
+        working-directory: integrations/openclaw
+        run: npm ci && npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Install OpenClaw ${{ matrix.openclaw }} in a folder of its own
+        run: |
+          mkdir -p "$RUNNER_TEMP/oc" && cd "$RUNNER_TEMP/oc" && echo '{"private":true}' > package.json
+          npm install --no-audit --no-fund "openclaw@${{ matrix.openclaw }}"
+      - name: Install the plugin, grant it conversation access and inspect what it registered
+        env:
+          OPENCLAW_HOME: ${{ runner.temp }}/home
+          OPENCLAW_STATE_DIR: ${{ runner.temp }}/home/.openclaw
+          OPENCLAW_CONFIG_PATH: ${{ runner.temp }}/home/.openclaw/openclaw.json
+          MIMIRSYNTH_CONFIG: ${{ runner.temp }}/mimirsynth.json
+          MIMIRSYNTH_URL: http://127.0.0.1:9
+          MIMIRSYNTH_BRAIN: ci
+          MIMIRSYNTH_TOKEN: mst_not_a_real_token
+        run: |
+          mkdir -p "$OPENCLAW_STATE_DIR"
+          oc="$RUNNER_TEMP/oc/node_modules/.bin/openclaw"
+          "$oc" plugins install "npm-pack:$(ls "$RUNNER_TEMP"/mimirsynth-openclaw-*.tgz)" --force --accept-capabilities
+          "$oc" config set plugins.entries.mimirsynth.hooks.allowConversationAccess true
+          "$oc" plugins inspect mimirsynth --runtime --json > "$RUNNER_TEMP/inspect.json"
+          node integrations/openclaw/test/host-check.mjs "$RUNNER_TEMP/inspect.json"
+          "$oc" mimirsynth status | tee "$RUNNER_TEMP/status.txt"
+          grep -q "Recall token: cannot reach MimirSynth" "$RUNNER_TEMP/status.txt"

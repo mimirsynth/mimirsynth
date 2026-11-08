@@ -1,0 +1,61 @@
+{
+  "name": "@mimirsynth/openclaw",
+  "version": "0.1.0",
+  "description": "MimirSynth for OpenClaw: recall before each prompt, what changed at session start, search and remember, and an optional, quarantined capture of each session.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/mimirsynth/mimirsynth/tree/main/integrations/openclaw",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mimirsynth/mimirsynth.git",
+    "directory": "integrations/openclaw"
+  },
+  "keywords": ["openclaw", "openclaw-plugin", "memory", "mimirsynth"],
+  "type": "module",
+  "main": "./dist/index.js",
+  "files": [
+    "dist/**",
+    "skills/**",
+    "openclaw.plugin.json",
+    "README.md",
+    "README.es.md"
+  ],
+  "engines": {
+    "node": ">=22.6"
+  },
+  "openclaw": {
+    "extensions": ["./dist/index.js"],
+    "runtimeExtensions": ["./dist/index.js"],
+    "install": {
+      "npmSpec": "@mimirsynth/openclaw",
+      "clawhubSpec": "clawhub:@mimirsynth/openclaw",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.9.36"
+    },
+    "compat": {
+      "pluginApi": ">=2026.9.36"
+    },
+    "build": {
+      "openclawVersion": "2026.11.2"
+    }
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.9.36"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/index.js --legal-comments=none",
+    "prepack": "npm run build",
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test test/plugin.test.ts",
+    "test:live": "node --experimental-strip-types --no-warnings --test test/live.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "esbuild": "0.25.5",
+    "typescript": "~5.8.3"
+  }
+}

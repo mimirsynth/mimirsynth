@@ -171,3 +171,12 @@ Then, once:
 2. Open `/hooks` in Codex and trust the three `mimirsynth` hooks. Codex runs a plugin's hooks only once they are trusted, and asks again after each update; `$mimirsynth:status` says when they are not.
 
 The capture of what each session learned is **off** by default; when you turn it on, a finished session is read from Codex's own session file and becomes at most one proposal, redacted, in quarantine. To let the model call MimirSynth's tools too, add the brain's MCP server with `codex mcp add mimirsynth --url "https://your-server/api/brains/<slug>/mcp" --bearer-token-env-var MIMIRSYNTH_TOKEN`. Details in [the plugin's README](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/codex/README.md).
+
+## OpenClaw
+[OpenClaw](https://github.com/openclaw/openclaw) gets MimirSynth through a native plugin: recall before each prompt, what changed at the start of each session, `mimirsynth_search` and `mimirsynth_remember` as agent tools, `/mimirsynth status|search|drafts` in any chat, and an optional session capture that is off by default. On the machine where OpenClaw's Gateway runs (OpenClaw 2026.9.36 or later):
+```bash
+openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup
+```
+OpenClaw asks you to accept the plugin's capabilities. `setup` asks, in the terminal and never through a chat, for the URL, the brain, a **reader** token for recall, optionally a **contributor** token to propose (hidden) and the capture mode; it writes `~/.config/mimirsynth/config.json`, shared with every MimirSynth agent integration on that machine, and offers to grant the conversation access OpenClaw requires before it runs a third-party plugin's recall hook (`plugins.entries.mimirsynth.hooks.allowConversationAccess`). Check it with `openclaw mimirsynth status`.
+
+It is a companion plugin: OpenClaw's own memory keeps working. By default only your own conversations see the brain; group chats and other senders do not, unless you set `plugins.entries.mimirsynth.config.conversations` to `true`. If MimirSynth is down, nothing is injected and the assistant carries on. Details, the capture and how to install it from a clone: [`integrations/openclaw`](https://github.com/MimirSynth/mimirsynth/tree/main/integrations/openclaw).
