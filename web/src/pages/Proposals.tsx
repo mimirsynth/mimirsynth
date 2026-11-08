@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Sheet, SheetRow, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Sheet, SheetRow, Steps, EntityChip, ListCard, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
@@ -448,6 +448,7 @@ type Ops = {
 /** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
  *  duplicate, a contradiction, or nothing at all, which makes it new knowledge. Only for pending proposals that add knowledge. */
 type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
+  source_type?: string | null; target_type?: string | null;
   valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related";
   /** More than half of the proposal's words are not in this fact (the API's `mostly_new`). */ mostly_new?: boolean };
 /** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
@@ -491,22 +492,23 @@ const isChecking = (d: Prop | undefined, rel: { isPending: boolean }) => !!d && 
 /** A pending addition never checked against what the brain knows (it arrived without an engine, or the check failed): a batch leaves it
  *  aside, as the API does, until the queue has checked it. */
 const isUnchecked = (p: Prop, llm: boolean) => llm && p.status === "pending" && p.kind !== "correction" && !p.purged_at && !p.related_verdict;
-/** One fact the brain knows: its text (struck through when no longer true) with how close it is, then who it joins and its dates. */
-function FactLine({ f }: { f: RelatedFact }) {
+/** One fact the brain knows, as a card of its own, as Ask shows a fact: its text (struck through when no longer true), its two
+ *  entities as chips with the relation between them, and on that line how close it is and since when it holds. Its mark (no longer
+ *  true, nearly the same, very similar) at the top right; `label` heads the one the proposal is read against. */
+function FactCard({ f, label }: { f: RelatedFact; label?: string }) {
   const { t } = useTranslation();
-  return (<Stack gap={2}>
-    <Group gap={6} wrap="nowrap" align="flex-start">
-      <Text size="sm" className={f.invalid_at ? "ms-fact-old" : undefined}>{f.fact}</Text>
-      {f.invalid_at && f.relevance !== "related" ? <Pill size="xs" tone="danger">{t("Ya no es cierto")}</Pill>
-        : f.relevance === "repeats" ? <Pill size="xs" tone="neutral">{t("Casi igual")}</Pill>
-        : f.relevance === "close" && !f.mostly_new ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : null}
-    </Group>
-    <Text size="xs" c="dimmed">
-      {f.source_uuid ? <Link to={`/entidad/${f.source_uuid}`}>{f.source}</Link> : f.source} → <span title={f.name}>{humanRelation(f.name)}</span> → {f.target_uuid ? <Link to={`/entidad/${f.target_uuid}`}>{f.target}</Link> : f.target}
-      {f.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(f.valid_at) })}` : ""}{f.invalid_at ? ` · ${t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) })}` : ""}
-      {f.score != null && <> · {t("similitud")} <span className="ms-data">{fmtNum(f.score)}</span></>}
-    </Text>
-  </Stack>);
+  const mark = f.invalid_at && f.relevance !== "related" ? <Pill size="xs" tone="danger">{t("Ya no es cierto")}</Pill>
+    : f.relevance === "repeats" ? <Pill size="xs" tone="neutral">{t("Casi igual")}</Pill>
+      : f.relevance === "close" && !f.mostly_new ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : undefined;
+  const when = f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : f.valid_at ? t("desde {{date}}", { date: fmtDay(f.valid_at) }) : "";
+  const data = [f.score != null ? `${t("sim")} ${fmtNum(f.score, 2)}` : "", when].filter(Boolean).join(" · ");
+  return (<ListCard title={label} aside={mark} invalid={!!f.invalid_at}
+    tags={<>
+      <EntityChip name={f.source} type={f.source_type} to={f.source_uuid ? `/entidad/${f.source_uuid}` : undefined} />
+      <Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text>
+      <EntityChip name={f.target} type={f.target_type} to={f.target_uuid ? `/entidad/${f.target_uuid}` : undefined} />
+      {data && <span className="ms-listcard-meta ms-data ms-fact-data" title={f.invalid_at ? t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) }) : undefined}>{data}</span>}
+    </>}>{f.fact}</ListCard>);
 }
 
 /** The proposal's text with what it adds to a fact marked: its words (four letters or more, as the API counts them) the fact does not
@@ -587,14 +589,19 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
     {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
     {verdict && (known ? <Notice tone="warn">{verdict.text}</Notice>
       : <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>)}
-    {paired && <div className="ms-pair">
-      <Text size="xs" fw={600} c="dimmed">{t("Lo que dice el brain")}</Text>
-      <FactLine f={paired} />
-    </div>}
-    {close.map((f) => <FactLine key={f.uuid} f={f} />)}
+    {/* the fact the proposal is read against first, headed as such; then the other close ones under their own heading; then, folded
+        and last, those that only share its subject, with why they are folded */}
+    {paired && <FactCard f={paired} label={t("Lo que dice el brain")} />}
+    {close.length > 0 && <>
+      <Text component="h4" className="ms-related-group">{paired ? t("Otros hechos parecidos ({{n}})", { n: close.length }) : t("Hechos parecidos ({{n}})", { n: close.length })}</Text>
+      {close.map((f) => <FactCard key={f.uuid} f={f} />)}
+    </>}
     {related.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={more ? "chevronDown" : "chevronRight"} aria-expanded={more} aria-controls={`ms-rel-${d.id}`}
       onClick={() => setMore(!more)}>{related.length === 1 ? t("1 hecho solo relacionado") : t("{{n}} hechos solo relacionados", { n: related.length })}</Btn></Group>}
-    {related.length > 0 && <Stack gap={8} id={`ms-rel-${d.id}`} className="ms-fold" hidden={!more}>{related.map((f) => <FactLine key={f.uuid} f={f} />)}</Stack>}
+    {related.length > 0 && <Stack gap={8} id={`ms-rel-${d.id}`} className="ms-fold" hidden={!more}>
+      <Text size="sm" c="dimmed">{t("Comparten tema con la propuesta, pero no dicen lo mismo: están para dar contexto, no como prueba.")}</Text>
+      {related.map((f) => <FactCard key={f.uuid} f={f} />)}
+    </Stack>}
   </Stack></section>);
 }
 

@@ -97,7 +97,7 @@ def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
     def fake_recall(brain_id, graph, query, n_facts, n_chunks, max_chars, n_docs=None, **kw):
         calls.append((query, n_facts, n_chunks, n_docs))
         return {"facts": [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A",
-                           "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "score": 0.8, "extra": "dropped"}]}
+                           "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "score": 0.8, "source_type": "Device", "extra": "dropped"}]}
     monkeypatch.setattr(recall, "recall", fake_recall)
     monkeypatch.setattr(ratings, "log", lambda *a, **k: logged.append(a))
     contrib, curator = _brain(client, "inbox-rel")
@@ -106,7 +106,7 @@ def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
     assert client.get(url, headers=contrib).status_code == 403  # a reviewer's read
     r = client.get(url, headers=curator).json()
     assert r["facts"] == [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A", "source_uuid": None,
-                           "target_uuid": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8,
+                           "target_uuid": None, "source_type": "Device", "target_type": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8,
                            "relevance": "related", "mostly_new": True}]
     assert calls[0][0].startswith("NAS movido") and calls[0][1:] == (5, 0, 0)  # facts only: no fragments, no documents
     assert logged == []  # not an agent's recall: nothing for the recall ratings
