@@ -9,6 +9,7 @@ import pytest
 
 from test_control import client  # noqa: F401
 from test_reembed import FACTS, GRAPH, all_with, aux_props, default_model, env, in_use, one, shadow, vec  # noqa: F401
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 pytestmark = pytest.mark.skipif(not os.environ.get("MIMIRSYNTH_TEST_FALKOR"), reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
 
@@ -65,7 +66,7 @@ def test_switch_needs_a_finished_fill(env, client):  # noqa: F811
 def test_changes_after_the_fill_are_caught_up_before_switching(ready, client):  # noqa: F811
     g = ready["g"]
     g.query("MATCH (x:Entity {uuid:'e1'}) SET x.name = 'Cloudco Europa'")              # cambia después del relleno
-    g.query("CREATE (:Entity {uuid:'e9', name:'Nueva', name_embedding: vecf32($v)})", {"v": vec("viejo", 4, "Nueva")})
+    g.query("CREATE (:Entity {uuid:'e9', name:'Nueva', name_embedding: " + gvec("$v") + "})", {"v": vec("viejo", 4, "Nueva")})
     switch(client)
     assert client.get("/api/embedding-engines/reindex").json()["switch_job"]["status"] == "done"
     v = in_use(g)

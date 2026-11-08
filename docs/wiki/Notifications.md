@@ -20,7 +20,7 @@ What changed in a brain (new facts, proposals waiting…) is not an alert: each 
 | Event | Severity | When |
 |---|---|---|
 | `model.unavailable` | critical | The default LLM, embedding or decider engine does not answer the periodic check |
-| `graph.down` | critical | The graph (FalkorDB) does not answer |
+| `graph.down` | critical | The graph database (FalkorDB or Neo4j) does not answer |
 | `ingest.failed` | warning | An approved proposal could not be ingested after its retries |
 | `job.failed` | warning | Any other background job failed |
 | `docsource.error` | warning | A document source could not be synced |

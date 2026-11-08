@@ -69,8 +69,7 @@ services:
       MIMIRSYNTH_DATABASE_URL: "postgresql+psycopg://mimirsynth:${POSTGRES_PASSWORD}@postgres:5432/mimirsynth"
       MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-falkordb}"
       MIMIRSYNTH_FALKOR_PORT: "${MIMIRSYNTH_FALKOR_PORT:-6379}"
-      # An existing graph database (written by the installer): falkordb or neo4j. Neo4j and the credentials take effect from
-      # the version with Neo4j support.
+      # An existing graph database (written by the installer): falkordb or neo4j (5.26+). See docs/CONFIGURATION.md.
       MIMIRSYNTH_GRAPH_BACKEND: "${MIMIRSYNTH_GRAPH_BACKEND:-falkordb}"
       MIMIRSYNTH_FALKOR_USERNAME: "${MIMIRSYNTH_FALKOR_USERNAME:-}"
       MIMIRSYNTH_FALKOR_PASSWORD: "${MIMIRSYNTH_FALKOR_PASSWORD:-}"

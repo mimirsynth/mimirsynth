@@ -121,5 +121,19 @@ docker compose up -d
 ```
 The format is `slug:Name`. It only applies on first start (when there are no brains yet). Slugs must be lowercase letters, digits and hyphens. An external FalkorDB is not part of the backups made by `update.sh`: save it yourself ([[Upgrade and backups]]).
 
+## Installing with Neo4j
+If your graphs live in Neo4j (5.26 LTS or later, Community or Enterprise), do not use `--profile bundled`:
+```bash
+# in .env
+MIMIRSYNTH_GRAPH_BACKEND=neo4j
+MIMIRSYNTH_NEO4J_URI=bolt://my-neo4j:7687
+MIMIRSYNTH_NEO4J_USER=neo4j
+MIMIRSYNTH_NEO4J_PASSWORD=…
+# optional: a database other than the server's default
+MIMIRSYNTH_NEO4J_DATABASE=
+docker compose up -d
+```
+All brains share that database: a brain is the nodes whose `group_id` is its name, as Graphiti writes them, and `MIMIRSYNTH_BOOTSTRAP_GRAPHS` adopts existing `group_id`s the same way. An export then carries only the graph's JSON copy, and the Cypher console refuses `CALL`, `SHOW` and `USE`. Details and supported versions in [the configuration reference](https://github.com/MimirSynth/mimirsynth/blob/main/docs/CONFIGURATION.md#graph-database). Neo4j is not part of the backups made by `update.sh`: save it yourself.
+
 ## Development mode (no sign-in)
 `MIMIRSYNTH_AUTH_MODE=off` disables sign-in and makes everyone a local administrator. **Only for development on your own machine**; never use it on a reachable server.

@@ -496,6 +496,7 @@ from pydantic import BaseModel  # noqa: E402
 from .graphdb import Edge, Node, Path, backend  # noqa: E402
 
 _WRITE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|LOAD\s+CSV|FOREACH)\b", re.I)
+_UNSCOPED = re.compile(r"\b(CALL|SHOW|USE)\b", re.I)
 _HIDE = {"name_embedding", "fact_embedding", "summary_embedding", "embedding"}
 MAX_ROWS = 500
 
@@ -544,6 +545,8 @@ def cypher(req: CypherReq, ctx: BrainCtx = Depends(reader)):
         raise HTTPException(400, "consulta vacía")
     if _WRITE.search(q):
         raise HTTPException(400, "solo se permiten consultas de lectura")
+    if backend().shared_database and _UNSCOPED.search(q):  # a procedure or another database would see the other brains
+        raise HTTPException(400, "con Neo4j la consola no admite CALL, SHOW ni USE: los brains comparten la base de datos")
     import time
 
     t = time.time()

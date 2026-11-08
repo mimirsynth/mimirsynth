@@ -1,0 +1,4 @@
+{
+ "La base de datos del grafo (FalkorDB o Neo4j) no responde": "The graph database (FalkorDB or Neo4j) does not answer",
+ "con Neo4j la consola no admite CALL, SHOW ni USE: los brains comparten la base de datos": "with Neo4j the console does not accept CALL, SHOW or USE: the brains share the database"
+}

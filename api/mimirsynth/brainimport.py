@@ -191,14 +191,32 @@ def upload_complete(uid: str, user: User = Depends(require_admin)):
         raise HTTPException(400, f"paquete rechazado: {e}") from None
 
 
+def _source_backend(man: dict) -> dict:
+    """The graph database a package came from: `graph_backend`, or FalkorDB for a package from before #357."""
+    gb = man.get("graph_backend")
+    if isinstance(gb, dict) and isinstance(gb.get("name"), str):
+        return {"name": gb["name"], "version": gb.get("version") if isinstance(gb.get("version"), dict) else {}}
+    return {"name": "falkordb", "version": man.get("falkordb") if isinstance(man.get("falkordb"), dict) else {}}
+
+
+def _dump_blocker(man: dict) -> str | None:
+    """Why this instance cannot restore the package's dump, whatever the package holds; None when it can."""
+    b, theirs = backend(), _source_backend(man)
+    if not b.can_dump() or theirs["name"] != b.name:
+        return "other_backend"
+    here = b.version().get("graph_module")
+    return None if here and here == theirs["version"].get("graph_module") else "falkordb_version"
+
+
 def _summary(man: dict) -> dict:
     from .embed import resolve_embedding
-    emb, here = resolve_embedding(), backend().version().get("graph_module")
+    emb, blocker = resolve_embedding(), _dump_blocker(man)
     theirs = man.get("embedding") or {}
     g = man.get("graph") or {}
     return {"slug": (man.get("brain") or {}).get("slug"), "created_at": man.get("created_at"), "mimirsynth": man.get("mimirsynth"),
             "graph": {"nodes": g.get("nodes"), "edges": g.get("edges"), "dump": bool(g.get("dump")),
-                      "same_falkordb": bool(here) and here == (man.get("falkordb") or {}).get("graph_module")},
+                      "backend": _source_backend(man)["name"], "here": backend().name, "dump_blocker": blocker,
+                      "same_falkordb": blocker is None},  # same_falkordb: the field before #357, the same as «no blocker»
             "counts": man.get("counts") or {}, "options": man.get("options") or {},
             "embedding": {"model": theirs.get("model"), "dim": theirs.get("dim"), "same": _same_model(man, emb)}}
 
@@ -584,14 +602,13 @@ def _graph(job: jobs.JobCtx, stage: Path, man: dict, slug: str, reuse: bool, mad
     g, b = man["graph"], backend()
     orig = g.get("name") if isinstance(g.get("name"), str) else ""
     dump = stage / "graph" / "graph.dump"
-    here = b.version().get("graph_module")
     reason, mismatch = None, None
     if not use_dump:
         reason = "not_requested"
     elif not dump.exists():
         reason = g.get("dump_omitted") or "no_dump"
-    elif not here or here != (man.get("falkordb") or {}).get("graph_module"):
-        reason = "falkordb_version"
+    elif blocker := _dump_blocker(man):
+        reason = blocker
     elif not GRAPH.match(orig) or (orig != slug and b.exists(orig)):
         reason = "name_taken"  # the payload carries its name: it is restored under it and then copied
     else:

@@ -8,6 +8,7 @@ import pytest
 from test_control import client  # noqa: F401
 
 from mimirsynth import curator as K
+from mimirsynth.db import parse_ts, vector as gvec  # the active backend's vector literal (#357)
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 GRAPH = "zz-test-curator"
@@ -89,7 +90,7 @@ def test_a_small_batch_is_proposed_and_approving_applies_it(client, graph, monke
         p = db.get(Proposal, pid)
         old = p.claims[0]["supersedes"]
         assert p.status == "ingested" and p.ingest_report["claims"]["superseded"] == [old]
-    assert graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.invalid_at", {"u": old}).result_set[0][0] == "2026-01-01T00:00:00Z"
+    assert parse_ts(graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.invalid_at", {"u": old}).result_set[0][0]) == parse_ts("2026-01-01T00:00:00Z")
     client.post(f"/api/brains/cu2/proposals/{other}/reject", json={"note": "the old host is still in use"})
     prec = client.get("/api/brains/cu2/curator/settings").json()["precision"]["contradictions"]
     assert prec == {"approved": 1, "rejected": 1, "pending": 5, "precision": 0.5}
@@ -123,7 +124,7 @@ def repeated(monkeypatch):
                                      ("r5", "vw", "pg", "Vaultwarden uses PostgreSQL 14", [0, 0, 1], "2025-01-01T00:00:00Z"),
                                      ("r6", "vw", "pg", "Vaultwarden uses PostgreSQL 16", [0, 0, 1], "2026-01-01T00:00:00Z")):
         g.query("MATCH (a:Entity {uuid:$s}), (b:Entity {uuid:$t}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'RUNS_ON', fact:$f, valid_at:$w, "
-                "created_at:$w, fact_embedding: vecf32($v)}]->(b)", {"s": s, "t": t, "u": u, "f": fact, "v": vec, "w": when})
+                "created_at:$w, fact_embedding: " + gvec("$v") + "}]->(b)", {"s": s, "t": t, "u": u, "f": fact, "v": vec, "w": when})
     yield name
     c.delete_graph(name)
     dbm.backend.cache_clear()

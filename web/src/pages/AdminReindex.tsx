@@ -11,7 +11,7 @@ type Job = { id: number; status: string; done: number; total: number | null; mes
 type Shadow = { engine_id: number; engine: string; model: string; dim: number; state: "running" | "failed" | "ready" | "switching"; started_at: string; updated_at: string };
 type Status = { job: Job | null; switch_job: Job | null; shadow: Shadow | null; orphan: boolean };
 type Estimate = { partial: boolean; graphs: number; graphs_estimated: number; graph_items: number; chunks: number; calls: number;
-  falkor: { need_bytes: number; free_bytes: number | null; ok: boolean }; postgres: { need_bytes: number } };
+  graph_db: { backend: string; need_bytes: number; free_bytes: number | null; ok: boolean }; postgres: { need_bytes: number } };
 export type EngineRef = { id: number; name: string; model: string; dim?: number };
 
 const KEY = ["embedding-reindex"];
@@ -28,15 +28,15 @@ export function StartReindex({ engine, onClose }: { engine: EngineRef | null; on
   const e = est.data;
   return (
     <ConfirmDialog opened={!!engine} onClose={onClose} tone="primary" title={t("Calcular los vectores del modelo nuevo")} action={t("Calcular en sombra")}
-      subject={engine && `${engine.name} · ${engine.model}${engine.dim ? ` · ${engine.dim}d` : ""}`} disabled={!e || !e.falkor.ok}
+      subject={engine && `${engine.name} · ${engine.model}${engine.dim ? ` · ${engine.dim}d` : ""}`} disabled={!e || !e.graph_db.ok}
       warning={t("Se calculan con este motor los vectores de todos los brains y se guardan aparte: nada de lo que se usa cambia hasta el intercambio, que se confirma después. Puede tardar y consume llamadas al motor.")}
       onConfirm={() => start.mutateAsync()}>
       {!e ? <Text size="sm" c="dimmed">{t("Estimando…")}</Text> : <Stack gap={4}>
         <Text size="sm">{t("Hasta {{items}} elementos del grafo y {{chunks}} trozos: unas {{calls}} llamadas al motor.", { items: e.graph_items.toLocaleString(), chunks: e.chunks.toLocaleString(), calls: e.calls.toLocaleString() })}</Text>
-        <Text size="sm">{t("Memoria en FalkorDB: unos {{need}}; libre: {{free}}.", { need: mb(e.falkor.need_bytes), free: mb(e.falkor.free_bytes) })}</Text>
+        <Text size="sm">{t("Memoria en {{db}}: unos {{need}}; libre: {{free}}.", { db: e.graph_db.backend, need: mb(e.graph_db.need_bytes), free: mb(e.graph_db.free_bytes) })}</Text>
         <Text size="sm">{t("PostgreSQL: unos {{need}} más. El espacio libre en disco no se puede consultar desde aquí: compruébalo tú.", { need: mb(e.postgres.need_bytes) })}</Text>
         {e.partial && <Text size="xs" c="dimmed">{t("Estimación parcial: {{done}} de {{graphs}} grafos.", { done: e.graphs_estimated, graphs: e.graphs })}</Text>}
-        {!e.falkor.ok && <Notice tone="danger">{t("FalkorDB no tiene memoria libre suficiente para los vectores nuevos.")}</Notice>}
+        {!e.graph_db.ok && <Notice tone="danger">{t("FalkorDB no tiene memoria libre suficiente para los vectores nuevos.")}</Notice>}
       </Stack>}
       <MutationError error={est.error} />
     </ConfirmDialog>

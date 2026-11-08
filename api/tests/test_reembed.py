@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from test_control import client  # noqa: F401
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 pytestmark = pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
@@ -72,11 +73,11 @@ def env(client, monkeypatch):  # noqa: F811
         pass
     g = c.graph(GRAPH)
     for i, n in enumerate(ENTITIES):
-        g.query("CREATE (:Entity {uuid:$u, name:$n, name_embedding: vecf32($v)})", {"u": f"e{i}", "n": n, "v": vec("viejo", 4, n)})
-    g.query("CREATE (:Community {uuid:'c1', name:'Servidores', name_embedding: vecf32($v)})", {"v": vec("viejo", 4, "Servidores")})
+        g.query("CREATE (:Entity {uuid:$u, name:$n, name_embedding: " + gvec("$v") + "})", {"u": f"e{i}", "n": n, "v": vec("viejo", 4, n)})
+    g.query("CREATE (:Community {uuid:'c1', name:'Servidores', name_embedding: " + gvec("$v") + "})", {"v": vec("viejo", 4, "Servidores")})
     for (u, f), (a, b) in zip(FACTS.items(), [("e0", "e1"), ("e2", "e0")]):
         g.query("MATCH (a:Entity {uuid:$a}), (b:Entity {uuid:$b}) CREATE (a)-[:RELATES_TO {uuid:$u, name:'X', fact:$f, group_id:$g, "
-                "created_at:'2026-01-01T00:00:00+00:00', fact_embedding: vecf32($v)}]->(b)", {"a": a, "b": b, "u": u, "f": f, "g": GRAPH, "v": vec("viejo", 4, f)})
+                "created_at:'2026-01-01T00:00:00+00:00', fact_embedding: " + gvec("$v") + "}]->(b)", {"a": a, "b": b, "u": u, "f": f, "g": GRAPH, "v": vec("viejo", 4, f)})
     client.post("/api/brains", json={"slug": "reemb", "name": "Reemb", "graph_name": GRAPH})
     old = client.post("/api/embedding-engines", json={"name": "local-viejo", "base_url": "http://o/v1", "model": "viejo"}).json()
     new = client.post("/api/embedding-engines", json={"name": "local-nuevo", "base_url": "http://n/v1", "model": "nuevo"}).json()
@@ -120,7 +121,7 @@ def default_model(client) -> str:  # noqa: F811
 def test_fill_computes_shadow_vectors_and_changes_nothing_in_use(env, client):  # noqa: F811
     g = env["g"]
     est = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
-    assert est["graph_items"] == 6 and est["calls"] == 1 and est["falkor"]["ok"] and est["falkor"]["need_bytes"] > 6 * 8 * 4 and not est["partial"]
+    assert est["graph_items"] == 6 and est["calls"] == 1 and est["graph_db"]["ok"] and est["graph_db"]["need_bytes"] > 6 * 8 * 4 and not est["partial"]
     r = client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
     assert r.status_code == 202
     job = client.get("/api/embedding-engines/reindex").json()["job"]
@@ -208,7 +209,7 @@ def test_space_check_blocks_the_start(env, client, monkeypatch):  # noqa: F811
     from mimirsynth import reembed
     monkeypatch.setattr(reembed, "_falkor_memory", lambda: (1000, 1100))  # 100 bytes libres
     est = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
-    assert est["falkor"]["ok"] is False and est["falkor"]["free_bytes"] == 100
+    assert est["graph_db"]["ok"] is False and est["graph_db"]["free_bytes"] == 100
     r = client.post(f"/api/embedding-engines/{env['new']['id']}/reindex")
     assert r.status_code == 409 and "memoria" in r.json()["detail"]
     assert client.get("/api/embedding-engines/reindex").json()["job"] is None and aux_props(env["g"]) == 0
@@ -269,7 +270,7 @@ def test_estimate_uses_a_bounded_number_of_cheap_queries(env, client, monkeypatc
     monkeypatch.setattr(reembed, "graph", lambda name: Counting(real(name), seen))
     est = client.get(f"/api/embedding-engines/{env['new']['id']}/reindex/estimate").json()
     assert est["graph_items"] == 806 and not est["partial"]                             # 403 entidades, 1 comunidad, 402 hechos
-    assert 200 * 400 < est["falkor"]["need_bytes"]                                      # y el texto se estima con la muestra
+    assert 200 * 400 < est["graph_db"]["need_bytes"]                                      # y el texto se estima con la muestra
     assert len(seen) <= 2 * len(reembed.ITEMS) * est["graphs"]                          # por grafo, un recuento y una muestra por tipo como mucho
     assert not [q for q in seen if "sum(" in q or "WHERE" in q]                         # sin agregar el texto ni filtrar todo el grafo
     assert all("LIMIT" in q or q.rstrip().endswith("RETURN count(x)") for q in seen)

@@ -6,6 +6,7 @@ import pytest
 from test_control import client  # noqa: F401
 
 from mimirsynth import conflicts as C
+from mimirsynth.db import parse_ts  # a date as Graphiti stores it: a string on FalkorDB, a temporal on Neo4j
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 GRAPH = "zz-test-conflicts"
@@ -108,7 +109,7 @@ def test_scan_resolve_undo_and_notice(client, falkor):  # noqa: F811
     r = client.post("/api/brains/cf/conflicts/resolve", json={"keep": "f2", "invalidate": ["f1"]}).json()
     assert r["ok"] and len(r["ops"]) == 1
     f1 = falkor.query("MATCH ()-[r:RELATES_TO {uuid:'f1'}]->() RETURN r.invalid_at").result_set[0][0]
-    assert f1 == "2026-06-01T00:00:00Z"                                                   # se invalida con la fecha del que se queda
+    assert parse_ts(f1) == parse_ts("2026-06-01T00:00:00Z")                                                   # se invalida con la fecha del que se queda
     assert client.get("/api/brains/cf/conflicts").json()["total"] == 0
     assert client.post("/api/brains/cf/conflicts/resolve", json={"keep": "f2", "invalidate": ["f1"]}).status_code == 409
     assert client.post("/api/brains/cf/conflicts/resolve", json={"keep": "f1", "invalidate": ["f2"]}).status_code == 409   # el que se queda ya no está vigente

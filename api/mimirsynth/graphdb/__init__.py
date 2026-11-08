@@ -1,7 +1,10 @@
 """The graph database behind the brains, behind one interface (#357).
 
 Every module reaches the graph through `db.graph()` / `db.list_graphs()` or through `backend()`, never through a driver of its own.
-One backend per instance: today FalkorDB, where each brain is a graph of its own (a «partition»).
+One backend per instance, chosen with `MIMIRSYNTH_GRAPH_BACKEND`, and each brain is a «partition» of it:
+- FalkorDB (`falkor.py`): a graph of its own per brain.
+- Neo4j 5.26+ (`neo4j.py`): one database, where a brain is the nodes whose `group_id` is its name, as Graphiti already writes them.
+  The Cypher the modules write is scoped to the partition by the backend, so it reads the same on both.
 
 What a backend gives:
 - `graph(name)`: a handle whose `query(cypher, params=None, timeout=None)` and `ro_query(...)` return a result with `header` and
@@ -56,6 +59,7 @@ class Path:
 class GraphBackend(ABC):
     name: str   # stable key: notifications, export manifests
     label: str  # what people read: «FalkorDB»
+    shared_database = False  # True: the brains share one database and the backend scopes each query to one brain (Neo4j)
 
     @abstractmethod
     def graph(self, name: str) -> Graph: ...
@@ -110,5 +114,11 @@ class GraphBackend(ABC):
 @lru_cache
 def backend() -> GraphBackend:
     from ..config import settings
+    kind = (settings.graph_backend or "falkordb").strip().lower()
+    if kind == "neo4j":
+        from .neo4j import Neo4jBackend
+        return Neo4jBackend(settings.neo4j_uri, settings.neo4j_user or "neo4j", settings.neo4j_password, settings.neo4j_database or None)  # compose passes an empty user
+    if kind != "falkordb":
+        raise ValueError(f"MIMIRSYNTH_GRAPH_BACKEND={settings.graph_backend!r}: it must be «falkordb» or «neo4j»")
     from .falkor import FalkorBackend
-    return FalkorBackend(settings.falkor_host, settings.falkor_port)
+    return FalkorBackend(settings.falkor_host, settings.falkor_port, settings.falkor_username or None, settings.falkor_password or None)

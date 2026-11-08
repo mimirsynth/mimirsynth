@@ -23,6 +23,11 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_PORT` | `8000` | Puerto del host en el que se publica la aplicación. Solo Compose |
 | `MIMIRSYNTH_FALKOR_HOST` | `falkordb` (compose) / `localhost` | Host de FalkorDB |
 | `MIMIRSYNTH_FALKOR_PORT` | `6379` | Puerto de FalkorDB |
+| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | La base de datos de grafos: `falkordb` o `neo4j` (Neo4j 5.26 o posterior). Ver [[Instalación]] |
+| `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB con usuarios ACL |
+| `MIMIRSYNTH_NEO4J_URI` | vacío | Dirección de Neo4j (`bolt://host:7687` o `neo4j://host:7687`) |
+| `MIMIRSYNTH_NEO4J_USER` / `_PASSWORD` | `neo4j` / vacío | Credenciales de Neo4j |
+| `MIMIRSYNTH_NEO4J_DATABASE` | vacío | Base de datos de Neo4j para todos los brains; vacío: la predeterminada del servidor |
 | `MIMIRSYNTH_DATABASE_URL` | SQLite local | Base de datos del plano de control. En producción, PostgreSQL con pgvector (`postgresql+psycopg://…`). El compose oficial la construye a partir de `POSTGRES_PASSWORD`: no la pongas en `.env` |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | vacío | Grafos existentes a adoptar como brains **solo en el primer arranque**: `slug:Nombre,otro:Otro`. Las entradas con formato inválido se ignoran con un aviso |
 | `MIMIRSYNTH_DEFAULT_GRAPH` | `default` | Grafo por defecto |

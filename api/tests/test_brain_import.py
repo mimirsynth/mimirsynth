@@ -13,6 +13,8 @@ from test_control import client  # noqa: F401
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 needs_falkor = pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+NEO4J = bool(os.environ.get("MIMIRSYNTH_TEST_NEO4J"))  # the suite on Neo4j (#357): no exact copy (dump), the JSON copy only
+needs_dump = pytest.mark.skipif(not FALKOR or NEO4J, reason="la copia exacta (DUMP) solo existe en FalkorDB")
 
 
 @pytest.fixture()
@@ -117,7 +119,9 @@ def test_import_through_json_with_another_name(client, falkor, graphs, fake_embe
     docs = _seed("src1")
     up = _upload(client, _export(client, "src1"))
     man = up["manifest"]
-    assert not up["encrypted"] and man["slug"] == "src1" and man["graph"] == {"nodes": 3, "edges": 1, "dump": True, "same_falkordb": True}
+    b = "neo4j" if NEO4J else "falkordb"
+    assert not up["encrypted"] and man["slug"] == "src1" and man["graph"] == {"nodes": 3, "edges": 1, "dump": not NEO4J, "same_falkordb": not NEO4J,
+                                                                               "backend": b, "here": b, "dump_blocker": "other_backend" if NEO4J else None}
     assert man["embedding"]["same"] is True
     item = _import(client, up["upload_id"], "imp1")
     assert item["state"] == "done", item
@@ -155,7 +159,7 @@ def test_import_through_json_with_another_name(client, falkor, graphs, fake_embe
     assert client.get("/api/brains").json() and any(x["slug"] == "imp1" for x in client.get("/api/brains").json())
 
 
-@needs_falkor
+@needs_dump
 def test_import_restores_the_dump_and_rewrites_group_id(client, falkor, graphs, fake_embedder):  # noqa: F811
     """Fast restore requested, same FalkorDB and the original graph gone (another instance): the dump goes in exactly, then to
     its new name."""
@@ -173,7 +177,7 @@ def test_import_restores_the_dump_and_rewrites_group_id(client, falkor, graphs, 
     assert g.query("MATCH (n:Entity {uuid:'a'}) RETURN n.name_embedding").result_set[0][0] == pytest.approx([0.1, 0.2])  # the dump's own
 
 
-@needs_falkor
+@needs_dump
 def test_a_dump_that_does_not_match_the_json_copy_never_goes_in(client, falkor, graphs, fake_embedder):  # noqa: F811
     """Review of #154: the JSON files are validated but an RDB payload is not, so a package can carry clean JSON and a different
     dump. By default the dump is not used at all; with fast restore, what it restored is compared with the JSON copy and dropped."""

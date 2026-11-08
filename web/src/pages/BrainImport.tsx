@@ -8,7 +8,7 @@ import { Btn, Check, EmptyState, FilePicker, ListCard, MutationError, Notice, Pa
 
 type Manifest = {
   slug: string; created_at: string; mimirsynth: string; counts: { proposals?: number; documents?: number }; options: { vectors?: boolean };
-  graph: { nodes: number; edges: number; dump: boolean; same_falkordb: boolean }; embedding: { model: string; same: boolean };
+  graph: { nodes: number; edges: number; dump: boolean; backend?: string; here?: string; dump_blocker?: string | null; same_falkordb: boolean }; embedding: { model: string; same: boolean };
 };
 type Upload = { upload_id: string; encrypted: boolean; manifest: Manifest | null };
 type State = "queued" | "running" | "done" | "failed" | "cancelled";
@@ -26,7 +26,8 @@ const STATES: Record<State, { label: string; tone: "neutral" | "success" | "dang
 };
 const WHY_JSON: Record<string, string> = {
   no_dump: T("el paquete no trae la copia exacta"), secrets: T("la copia exacta se quedó fuera por un secreto"),
-  falkordb_version: T("otra versión de FalkorDB"), name_taken: T("su grafo original existe en esta instancia"), restore_failed: T("la copia exacta no se pudo restaurar"),
+  falkordb_version: T("otra versión de FalkorDB"), backend: T("la base de datos de origen no hace copias exactas"),
+  other_backend: T("esta instancia usa otra base de datos de grafos"), name_taken: T("su grafo original existe en esta instancia"), restore_failed: T("la copia exacta no se pudo restaurar"),
   dump_mismatch: T("la copia exacta no coincidía con la copia JSON y se descartó"),
 };
 const PART = 32 * 1024 * 1024; // como en los documentos: por debajo del límite habitual de los proxies
@@ -115,6 +116,7 @@ export default function BrainImport({ onOpen }: { onOpen: (slug: string) => void
           {mode === "full" && <Check checked={dump} onChange={(e) => setDump(e.currentTarget.checked)}
             disabled={!!up.manifest && (!up.manifest.graph.dump || !up.manifest.graph.same_falkordb)} label={t("Restauración rápida (usar la copia exacta)")}
             description={up.manifest && !up.manifest.graph.dump ? t("Este paquete no trae la copia exacta del grafo.")
+              : up.manifest && up.manifest.graph.dump_blocker === "other_backend" ? t("La copia exacta solo se restaura en FalkorDB, y esta instancia usa otra base de datos de grafos: el grafo entra por su copia JSON.")
               : up.manifest && !up.manifest.graph.same_falkordb ? t("Esta instancia tiene otra versión de FalkorDB: la copia exacta no se puede usar.")
               : t("Solo para paquetes que hayas exportado tú. La copia exacta entra en FalkorDB tal cual, sin validarla como la copia JSON; después se compara con ella y, si no coincide, se descarta. Cifrar un paquete no lo hace de confianza: cualquiera con la contraseña puede hacer uno.")} />}
           {up.encrypted && <PasswordField label={t("Contraseña del paquete")} value={pw} onChange={(e) => setPw(e.currentTarget.value)} autoComplete="off" />}

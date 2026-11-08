@@ -10,6 +10,7 @@ import pytest
 from test_control import client  # noqa: F401
 
 from mimirsynth import packcrypt
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 GRAPH = "zz-test-export"
@@ -55,8 +56,8 @@ def falkor(monkeypatch):
             c.delete_graph(g)
     g = c.graph(GRAPH)
     g.query("CREATE (:Episodic {uuid:'e1', name:'ep', content:'Polaris hosts the wiki', group_id:$g})", {"g": GRAPH})
-    g.query("CREATE (a:Entity {uuid:'a', name:'wiki', group_id:$g, name_embedding: vecf32([0.1, 0.2])})"
-            "-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'wiki runs on Polaris', group_id:$g, fact_embedding: vecf32([0.3, 0.4])}]->"
+    g.query("CREATE (a:Entity {uuid:'a', name:'wiki', group_id:$g, name_embedding: " + gvec("[0.1, 0.2]") + "})"
+            "-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'wiki runs on Polaris', group_id:$g, fact_embedding: " + gvec("[0.3, 0.4]") + "}]->"
             "(:Entity:Host {uuid:'b', name:'Polaris', group_id:$g})", {"g": GRAPH})
     c.graph(f"_snap_{GRAPH}_20260101000000").query("CREATE (:Entity {uuid:'old'})")
     yield g
@@ -122,7 +123,8 @@ def test_export_contents_secrets_and_download_once(client, falkor):  # noqa: F81
     jid = r.json()["id"]
     item = client.get("/api/brains/exp/exports").json()["items"][0]
     assert item["id"] == jid and item["state"] == "ready", item
-    assert item["graph"]["dump_omitted"] is None and item["graph"]["nodes"] == 3 and item["graph"]["edges"] == 1
+    no_dump = "backend" if os.environ.get("MIMIRSYNTH_TEST_NEO4J") else None   # Neo4j has no exact copy (#357)
+    assert item["graph"]["dump_omitted"] == no_dump and item["graph"]["nodes"] == 3 and item["graph"]["edges"] == 1
     assert item["secrets"]["masked"] == {"github_token": 2}                      # the proposal and the leaky document
     got = client.get(f"/api/brains/exp/exports/{jid}/download")
     assert got.status_code == 200 and "exp-" in got.headers["content-disposition"]
@@ -131,7 +133,11 @@ def test_export_contents_secrets_and_download_once(client, falkor):  # noqa: F81
         files = _members(t)
     man = json.loads(files["manifest.json"])
     assert man["format"] == "mimirsynth-brain" and man["format_version"] == 1 and man["brain"] == {"slug": "exp", "graph_name": GRAPH}
-    assert man["falkordb"].get("graph_module") and man["embedding"]["model"]
+    if no_dump:   # Neo4j: the backend and its version, without FalkorDB's key
+        assert man["graph_backend"]["name"] == "neo4j" and man["graph_backend"]["version"].get("neo4j") and "falkordb" not in man
+    else:         # FalkorDB: both, the old key for the importers from before #357
+        assert man["graph_backend"]["name"] == "falkordb" and man["falkordb"].get("graph_module") == man["graph_backend"]["version"]["graph_module"]
+    assert man["embedding"]["model"]
     assert {f["path"] for f in man["files"]} == set(files) - {"manifest.json"}
     assert all(f["size"] == len(files[f["path"]]) for f in man["files"])
     assert set(man["excluded"]) >= {"members", "api_tokens", "ai_engines", "notification_channels", "graph_snapshots"}
@@ -163,6 +169,9 @@ def test_export_contents_secrets_and_download_once(client, falkor):  # noqa: F81
         bid = db.query(Brain).filter(Brain.slug == "exp").one().id  # other tests export too
         acts = [a.action for a in db.query(Audit).filter(Audit.action.like("brain.export%"), Audit.brain_id == bid)]
     assert acts == ["brain.export", "brain.export.download"]
+    if no_dump:
+        assert "graph/graph.dump" not in files
+        return
     # the dump restores the same graph, under its own name (the payload carries it)
     dump = files["graph/graph.dump"]
     from mimirsynth.graphdb import backend as fc

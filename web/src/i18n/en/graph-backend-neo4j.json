@@ -1,0 +1,8 @@
+{
+ "Esta base de datos de grafos no hace copias exactas: el grafo va solo como JSON.": "This graph database makes no exact copies: the graph goes only as JSON.",
+ "La base de datos del grafo (FalkorDB o Neo4j) no responde": "The graph database (FalkorDB or Neo4j) is not responding",
+ "La copia exacta solo se restaura en FalkorDB, y esta instancia usa otra base de datos de grafos: el grafo entra por su copia JSON.": "The exact copy can only be restored on FalkorDB, and this instance uses another graph database: the graph goes in through its JSON copy.",
+ "Memoria en {{db}}: unos {{need}}; libre: {{free}}.": "Memory in {{db}}: about {{need}}; free: {{free}}.",
+ "esta instancia usa otra base de datos de grafos": "this instance uses another graph database",
+ "la base de datos de origen no hace copias exactas": "the database it came from makes no exact copies"
+}

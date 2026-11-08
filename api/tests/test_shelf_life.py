@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from test_control import client  # noqa: F401
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
 GRAPH = "zz-test-shelf-life"
@@ -34,7 +35,7 @@ def graph(monkeypatch):
                                                      ("gone", "HAS_IP", "ip1", _ago(400), _ago(300), [0.7, 0.3, 0, 0]),
                                                      ("owner", "OWNED_BY", "ops", _ago(500), None, [0.6, 0.4, 0, 0])):
         g.query("MATCH (a:Entity {uuid:'web'}), (b:Entity {uuid:$t}) CREATE (a)-[:RELATES_TO {uuid:$u, name:$n, fact:$f, valid_at:$v, "
-                "invalid_at:$i, expired_at:$i, created_at:$c, fact_embedding: vecf32($e)}]->(b)",
+                "invalid_at:$i, expired_at:$i, created_at:$c, fact_embedding: " + gvec("$e") + "}]->(b)",
                 {"t": target, "u": uuid, "n": name, "f": f"web {name} {target} ({uuid})", "v": valid, "i": invalid, "c": _ago(1), "e": vec})
     yield g
     c.delete_graph(GRAPH)

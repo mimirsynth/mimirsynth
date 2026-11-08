@@ -16,7 +16,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_SESSION_SECRET` | – | Firma las sesiones y cifra los secretos guardados (obligatoria) |
 | `MIMIRSYNTH_PORT` | `8000` | Puerto publicado en el host |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
-| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | `falkordb` o `neo4j`, para una base de datos de grafos existente. Neo4j y las credenciales de abajo surten efecto desde la versión con soporte de Neo4j |
+| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | `falkordb` o `neo4j`: ver [Base de datos de grafos](#base-de-datos-de-grafos) |
 | `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB existente |
 | `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | vacío | Un Neo4j existente (`bolt://host:7687`; base de datos vacía: la predeterminada del servidor) |
 | `COMPOSE_PROFILES` | vacío | Perfiles que arranca un simple `docker compose up -d`: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. Lo define el instalador |
@@ -26,6 +26,23 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_COOKIE_SECURE` | `false` | `true` si sirves por HTTPS |
 | `MIMIRSYNTH_EMBEDDING_*`, `MIMIRSYNTH_LLM_*` | vacío | Motores por defecto si aún no hay ninguno configurado en la interfaz |
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del host montada en solo lectura en `/sources` |
+
+## Base de datos de grafos
+Cada instancia guarda los grafos de conocimiento de sus brains en una base de datos de grafos, que se elige con `MIMIRSYNTH_GRAPH_BACKEND`:
+
+| Backend | Versiones soportadas | Un brain es | Conexión |
+|---|---|---|---|
+| `falkordb` (por defecto) | FalkorDB 4.x (la CI usa v4.22.0) | un grafo propio | El incluido (perfil `bundled`) o uno existente: `MIMIRSYNTH_FALKOR_HOST` / `_PORT`, y `_USERNAME` / `_PASSWORD` si tiene usuarios ACL |
+| `neo4j` | Neo4j 5.26 LTS o posterior, Community o Enterprise (la CI usa 5.26 Community) | los nodos cuyo `group_id` es su nombre, en una sola base de datos | `MIMIRSYNTH_NEO4J_URI` (`bolt://` o `neo4j://`), `_USER`, `_PASSWORD` y `_DATABASE` (vacío: la predeterminada del servidor) |
+
+Qué cambia con Neo4j:
+- Los brains comparten la base de datos. MimirSynth limita cada consulta al `group_id` del brain, igual que hace Graphiti con las suyas. La consola Cypher de solo lectura rechaza `CALL`, `SHOW` y `USE`, que verían más allá de ese límite.
+- Enterprise se usa igual, con una sola base de datos. MimirSynth no crea una base de datos por brain.
+- Una exportación lleva solo la copia JSON del grafo, porque Neo4j no tiene una copia exacta (volcado) como la de FalkorDB. Un paquete exportado desde FalkorDB entra en Neo4j por su copia JSON, y al revés.
+- La comprobación de memoria libre antes de cambiar el modelo de embeddings solo existe con FalkorDB. Con Neo4j, vigila tú la memoria del servidor.
+- 5.26 es la versión más antigua cuyo Cypher pone etiquetas y tipos de relación a partir de los datos, algo que necesita la copia de un brain (la instantánea antes de fusionar entidades o el cambio de nombre del grafo de un brain).
+
+Hay un backend por instancia, y cambiarlo no mueve los datos. Para llevar brains de uno a otro, expórtalos e impórtalos en una instancia con el otro backend.
 
 ## Proveedores de IA
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.

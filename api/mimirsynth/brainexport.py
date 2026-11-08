@@ -3,9 +3,12 @@ brain is and nothing that only makes sense in this instance.
 
 What goes in, under a versioned `manifest.json`:
 - `graph/graph.dump`: the graph's `DUMP`, exact and fast to restore on the same FalkorDB version. The payload carries the graph's
-  name: restore it under that key in an instance that does not have it, then copy it to another name if needed.
-- `graph/nodes.jsonl` and `graph/edges.jsonl`: the same graph as JSON, for another FalkorDB version. Graphiti's vectors only with
-  the vectors option.
+  name: restore it under that key in an instance that does not have it, then copy it to another name if needed. Only FalkorDB
+  has one (`dump_omitted: "backend"` elsewhere).
+- `graph/nodes.jsonl` and `graph/edges.jsonl`: the same graph as JSON, for another FalkorDB version or another graph database
+  (#357). Graphiti's vectors only with the vectors option.
+- `graph_backend` in the manifest: the graph database it came from (`name`, `version`). An export from FalkorDB also keeps the
+  `falkordb` key, which older importers read.
 - `brain.json`, `ontology.json`, `vocabulary.json` (aliases, change history, type corrections), `proposals.jsonl`,
   `ref_queries.json` (#115) and `documents/` (sources without their secrets, metadata, normalized text and originals).
 - `vectors/` (optional): the chunks of the search index with their embeddings.
@@ -113,6 +116,13 @@ def _props(props: dict, guard: _Guard, vectors: bool) -> tuple[dict, dict, bool]
             v, hit = [x for x, _ in checked], hit or any(h for _, h in checked)
         out[k] = v
     return out, vec, hit
+
+
+def _backend_info() -> dict:
+    """The manifest's record of the graph database: `graph_backend`, and `falkordb` too from FalkorDB for older importers."""
+    b = backend()
+    v = b.version()
+    return {"graph_backend": {"name": b.name, "version": v}, **({"falkordb": v} if b.name == "falkordb" else {})}
 
 
 def _graph(job: jobs.JobCtx, name: str, stage: Path, guard: _Guard, vectors: bool, say) -> dict:
@@ -318,7 +328,7 @@ def build(job: jobs.JobCtx, brain_id: int, vectors: bool, password: str | None) 
         files = sorted(p for p in stage.rglob("*") if p.is_file())
         secret_summary = {"masked": guard.masked, "flagged": guard.flagged}
         manifest = {"format": "mimirsynth-brain", "format_version": FORMAT_VERSION, "created_at": _now().isoformat(), "mimirsynth": app_version,
-                    "falkordb": backend().version(), "embedding": {"model": emb["model"], "dim": emb["dim"]},
+                    **_backend_info(), "embedding": {"model": emb["model"], "dim": emb["dim"]},
                     "brain": {"slug": slug, "graph_name": graph["name"]}, "options": {"vectors": vectors, "encrypted": bool(password)},
                     "graph": graph, "counts": counts, "vectors": vec, "secrets": secret_summary, "excluded": EXCLUDED,
                     "files": [{"path": p.relative_to(stage).as_posix(), "size": p.stat().st_size, "sha256": _sha256(p)} for p in files]}

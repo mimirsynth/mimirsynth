@@ -381,7 +381,8 @@ def _wipe_pg() -> None:
 # --- estimación, descarte y trabajo ---------------------------------------------------------------
 
 def estimate(e: EmbeddingEngine, deadline: float | None = None) -> dict:
-    """Cuánto hay que calcular, cuántas llamadas al motor supone y si FalkorDB tiene memoria libre para los vectores sombra.
+    """Cuánto hay que calcular, cuántas llamadas al motor supone y si el grafo tiene memoria libre para los vectores sombra (solo FalkorDB
+    la dice: con Neo4j `free_bytes` es None y no frena el cambio).
     Con consultas acotadas (ver `_estimate_graph`): es una cota superior, que no descuenta lo ya calculado. Con `deadline`
     (time.monotonic()) se para al llegar y la estimación queda marcada como parcial. En PostgreSQL se estima lo que ocuparán la columna
     y el índice HNSW, pero el espacio libre en disco no se puede consultar por SQL."""
@@ -403,7 +404,7 @@ def estimate(e: EmbeddingEngine, deadline: float | None = None) -> dict:
     batch = appsettings.get("reindex_batch")
     return {"engine": e.name, "model": e.model, "dim": e.dim, "partial": partial, "graphs": len(graphs), "graphs_estimated": done,
             "graph_items": n_graph, "chunks": n_pg, "calls": math.ceil((n_graph + n_pg) / 16), "batches": math.ceil(n_graph / batch) + math.ceil(n_pg / batch),
-            "falkor": {"need_bytes": falkor_need, "free_bytes": free, "ok": free is None or free >= falkor_need * FALKOR_MARGIN},
+            "graph_db": {"backend": backend().label, "need_bytes": falkor_need, "free_bytes": free, "ok": free is None or free >= falkor_need * FALKOR_MARGIN},
             "postgres": {"need_bytes": int(n_pg * (e.dim * 4 + 8) * 2), "database_bytes": pg_size},  # la columna y, aprox., otro tanto el índice HNSW
             "at": _now().isoformat(timespec="seconds")}
 
@@ -427,7 +428,7 @@ def last_estimate(eid: int) -> dict | None:
 
 
 def check_space(est: dict) -> None:
-    f = est["falkor"]
+    f = est["graph_db"]
     if not f["ok"]:
         raise RuntimeError(f"FalkorDB no tiene memoria libre suficiente para los vectores nuevos: hacen falta unos {f['need_bytes'] * FALKOR_MARGIN / 2**20:.0f} MB "
                            f"(con margen) y quedan {f['free_bytes'] / 2**20:.0f} MB")
@@ -472,7 +473,7 @@ def _fill(ctx: "jobs.JobCtx", p: dict) -> dict:
     est = estimate(e)  # aquí, en el trabajo, y no en la petición que lo lanza
     check_space(est)
     ctx.note(f"estimación: hasta {est['graph_items']} elementos del grafo y {est['chunks']} trozos, unas {est['calls']} llamadas al motor; "
-             f"memoria en FalkorDB: unos {est['falkor']['need_bytes'] / 2**20:.0f} MB")
+             f"memoria en el grafo: unos {est['graph_db']['need_bytes'] / 2**20:.0f} MB")
     batch, pause = appsettings.get("reindex_batch"), appsettings.get("reindex_pause")
     _mark(e, "running")
     pg = index.enabled()

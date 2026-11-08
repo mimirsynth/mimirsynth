@@ -8,9 +8,16 @@ class Settings(BaseSettings):
     static_dir: str = ""  # directorio del build de la web; si existe se sirve en /
     cors_origins: str = "*"
 
-    # Grafo (conector GraphStore: hoy FalkorDB)
+    # Graph database (#357): one backend per instance, `falkordb` or `neo4j`
+    graph_backend: str = "falkordb"
     falkor_host: str = "localhost"
     falkor_port: int = 6379
+    falkor_username: str = ""  # FalkorDB ACL, for an existing server that asks for it
+    falkor_password: str = ""
+    neo4j_uri: str = ""  # bolt://host:7687 or neo4j://host:7687
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = ""
+    neo4j_database: str = ""  # empty: the server's default database
     default_graph: str = "default"
     bootstrap_graphs: str = ""  # grafos existentes a adoptar como brains al arrancar: "docs:Docs,otro"
 

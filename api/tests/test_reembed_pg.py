@@ -17,6 +17,7 @@ if PG and FALKOR:
     os.environ["MIMIRSYNTH_REINDEX_BATCH"] = "3"
 
 import pytest  # noqa: E402
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 pytestmark = pytest.mark.skipif(not (PG and FALKOR), reason="necesita PostgreSQL con pgvector (MIMIRSYNTH_TEST_PG) y FalkorDB (MIMIRSYNTH_TEST_FALKOR)")
 GRAPH = "zz-test-reembed-pg"
@@ -132,7 +133,7 @@ def brain(client):
     g = fc.graph(GRAPH)
     g.query("CREATE (:Episodic {uuid:'ep1', name:'Copias', content:'Las copias de seguridad se hacen cada noche a las tres.', valid_at:'2026-01-01T00:00:00Z'}), "
             "(:Episodic {uuid:'ep2', name:'Red', content:'El resolvedor DNS interno escucha en el puerto 53.', valid_at:'2026-01-02T00:00:00Z'})")
-    g.query("CREATE (a:Entity {uuid:'e1', name:'Resolvedor', name_embedding: vecf32($v)})", {"v": vec("viejo", 16, "Resolvedor")})
+    g.query("CREATE (a:Entity {uuid:'e1', name:'Resolvedor', name_embedding: " + gvec("$v") + "})", {"v": vec("viejo", 16, "Resolvedor")})
     old = client.post("/api/embedding-engines", json={"name": "viejo", "base_url": "http://o/v1", "model": "viejo"}).json()
     new = client.post("/api/embedding-engines", json={"name": "nuevo", "base_url": "http://n/v1", "model": "nuevo"}).json()
     assert old["is_default"] and old["dim"] == 16 and new["dim"] == 8

@@ -15,6 +15,7 @@ if PG and FALKOR:
     os.environ["MIMIRSYNTH_FALKOR_HOST"] = FALKOR
 
 import pytest  # noqa: E402
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 pytestmark = pytest.mark.skipif(not (PG and FALKOR), reason="necesita PostgreSQL con pgvector (MIMIRSYNTH_TEST_PG) y FalkorDB (MIMIRSYNTH_TEST_FALKOR)")
 GRAPH = "zz-test-import-pg"
@@ -96,9 +97,9 @@ def _source(c) -> int:
     v = c.fake.embed(["x"])[0]
     fc().graph(GRAPH).query(
         "CREATE (:Episodic {uuid:'e1', name:'nota', content:'Nextcloud runs on Notus, in rack 4', group_id:$g, valid_at:'2026-10-01T00:00:00Z'}) "
-        "CREATE (a:Entity {uuid:'a', name:'Nextcloud', group_id:$g, name_embedding: vecf32($v)})"
-        "-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Nextcloud runs on Notus', group_id:$g, fact_embedding: vecf32($v)}]->"
-        "(:Entity {uuid:'b', name:'Notus', group_id:$g, name_embedding: vecf32($v)})", {"g": GRAPH, "v": v})
+        "CREATE (a:Entity {uuid:'a', name:'Nextcloud', group_id:$g, name_embedding: " + gvec("$v") + "})"
+        "-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Nextcloud runs on Notus', group_id:$g, fact_embedding: " + gvec("$v") + "}]->"
+        "(:Entity {uuid:'b', name:'Notus', group_id:$g, name_embedding: " + gvec("$v") + "})", {"g": GRAPH, "v": v})
     assert c.post("/api/brains", json={"slug": "pgsrc", "name": "Source", "graph_name": GRAPH}).status_code == 201
     body = b"# Racks\n\nNotus is in rack 4.\n\nPolaris is in rack 7.\n"
     up = c.post("/api/brains/pgsrc/docs/uploads", json={"filename": "racks.md", "size": len(body)}).json()

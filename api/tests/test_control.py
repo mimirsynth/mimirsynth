@@ -13,6 +13,7 @@ from mimirsynth.main import app  # noqa: E402
 from mimirsynth.models import Membership, User  # noqa: E402
 from mimirsynth.roles import allows, rank  # noqa: E402
 from mimirsynth.store import _factory  # noqa: E402
+from mimirsynth.db import vector as gvec  # the active backend's vector literal (#357)
 
 
 @pytest.fixture()
@@ -802,7 +803,7 @@ def test_fact_edit_invalidate_delete_undo(client, monkeypatch):
     except Exception: pass
     g = c.graph(name)
     g.query("CREATE (a:Entity {uuid:'a', name:'Vesta'}), (b:Entity {uuid:'b', name:'Cloudco'}), (e:Episodic {uuid:'e1', entity_edges:['f1']}), "
-            "(a)-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Vesta esta en Cloudco', episodes:['e1'], group_id:name, created_at:'2026-01-01T00:00:00+00:00', fact_embedding: vecf32([0.5,0.5,0.5,0.5])}]->(b)".replace("group_id:name", "group_id:'x'"))
+            "(a)-[:RELATES_TO {uuid:'f1', name:'HOSTED_ON', fact:'Vesta esta en Cloudco', episodes:['e1'], group_id:'x', created_at:'2026-01-01T00:00:00+00:00', fact_embedding: " + gvec("[0.5,0.5,0.5,0.5]") + "}]->(b)")
     n = lambda q: g.query(q).result_set[0][0]  # noqa: E731
     try:
         client.post("/api/brains", json={"slug": "fa", "name": "Fa", "graph_name": name})

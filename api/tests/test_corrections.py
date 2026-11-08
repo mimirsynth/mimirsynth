@@ -8,6 +8,7 @@ from test_control import client  # noqa: F401
 from test_mcp import rpc
 from test_mcp_tools import _tok, call
 
+from mimirsynth.db import parse_ts  # a date as Graphiti stores it: a string on FalkorDB, a temporal on Neo4j
 from mimirsynth.main import app
 
 FALKOR = os.environ.get("MIMIRSYNTH_TEST_FALKOR")
@@ -123,7 +124,7 @@ def test_correction_quarantine_apply_replacement_and_reactivate(client, graphs, 
     monkeypatch.setattr(corrections, "_check", check)
     d = client.get(f"/api/brains/co/proposals/{p5}").json()
     assert d["status"] == "pending" and "applied_at" not in d["correction"] and d["reviewed_at"] is None
-    assert _state(graphs, "f1")[0] == "2026-10-01T00:00:00Z"                                # the graph was not touched
+    assert parse_ts(_state(graphs, "f1")[0]) == parse_ts("2026-10-01T00:00:00Z")           # the graph was not touched
 
     # over MCP it stays pending even with a curator token; over REST a curator applies it and, without a replacement, it is done
     err, txt = call(c, "co", curator, "correct", fact_uuid="f3", reason="Ahora usa PHP 8.3")
