@@ -23,9 +23,11 @@ export function Radio(p: RadioProps) { return <MRadio {...p} size="sm" className
 export const RadioGroup = MRadio.Group;
 
 /** Aviso en línea (información, atención o error), con icono. El color lo decide `tone`. */
-export function Notice({ tone = "info", title, children }: { tone?: "info" | "warn" | "danger" | "success"; title?: string; children?: ReactNode } & Omit<AlertProps, "color" | "title" | "children" | "icon">) {
+/** `role`/`aria-label`: for a notice that is content rather than an alarm (a written answer as it streams), so a screen reader does not
+ *  interrupt with every piece of it; by default it is an alert. */
+export function Notice({ tone = "info", title, children, role, "aria-label": label }: { tone?: "info" | "warn" | "danger" | "success"; title?: string; children?: ReactNode; role?: string; "aria-label"?: string } & Omit<AlertProps, "color" | "title" | "children" | "icon">) {
   return (
-    <MAlert className="ms-notice" data-tone={tone} title={title} icon={<Icon name={tone === "info" ? "info" : tone === "success" ? "check" : "alert"} size={18} />}>{children}</MAlert>
+    <MAlert className="ms-notice" data-tone={tone} title={title} role={role} aria-label={label} icon={<Icon name={tone === "info" ? "info" : tone === "success" ? "check" : "alert"} size={18} />}>{children}</MAlert>
   );
 }
 

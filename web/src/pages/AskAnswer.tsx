@@ -52,6 +52,9 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   const [done, setDone] = useState<Done | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const head = useRef<HTMLDivElement>(null);
+  // When it finishes, the button that started it may have lost the focus (it was busy): give it to the answer's line, as Context does.
+  useEffect(() => { if (!busy && asked !== null && (!document.activeElement || document.activeElement === document.body)) head.current?.focus(); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
   const [asked, setAsked] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => { onBusy?.(busy); }, [busy]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -110,15 +113,16 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   return (
     <Stack gap="xs">
       {/* The live region is there from the start and only its text changes, so each answer is announced. */}
-      <Group gap="xs">
+      <div ref={head} tabIndex={-1} className="ms-ask-head"><Group gap="xs">
         {busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Dejar de redactar")}</Btn>}
-        <Text size="sm" role="status">{asked !== null ? t("Respuesta a «{{q}}»", { q: asked }) : ""}</Text>
+        {/* said while writing and again when done: the answer itself is not a live region, so this is what announces it */}
+        <Text size="sm" role="status">{asked === null ? "" : busy ? t("Redactando la respuesta a «{{q}}»…", { q: asked }) : t("Respuesta a «{{q}}» lista.", { q: asked })}</Text>
         {asked !== null && asked !== query.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}
         {done?.ms !== undefined && <Text size="xs" c="dimmed">{t("{{ms}} ms", { ms: done.ms })}</Text>}
-      </Group>
+      </Group></div>
       <Text size="xs" c="dimmed">{t("Redacta una respuesta solo con lo que devuelve el recall y cita de dónde sale cada afirmación. Si no hay información, lo dice sin preguntar al modelo. Revisa las citas: el modelo puede equivocarse al resumir.")}</Text>
       <MutationError error={error} />
-      {sources && (text ? <Notice tone="info" title={t("Respuesta")}><Text size="sm" className="ms-prose">{parts}</Text></Notice>
+      {sources && (text ? <Notice tone="info" title={t("Respuesta")} role="region" aria-label={t("Respuesta")}><Text size="sm" className="ms-prose">{parts}</Text></Notice>
         : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
       {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
       {!!sources?.length && <>
