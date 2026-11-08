@@ -68,6 +68,14 @@ MimirSynth invalidates instead of deleting, which is the base of its timeline. W
   - **Out of reach:** backups, application logs and other systems.
 - **Audit:** the audit log records `forget.report` with the entity's id and the counts per layer, never names or text.
 
+**Deleting.** Under the report, **Delete for good** asks for the entity's name typed exactly, then runs as a job (`POST …/forget/run` with `entity`, `aliases` and `confirm`). It does what the report says, and it cannot be undone:
+- **Before deleting episodes:** each episode that mentions the entity is sent to the brain's LLM, up to 50, to be written again without it. When something useful is left and the rewrite no longer names it, it becomes a pending proposal (category `forget.rewrite`) that a curator decides. Without an LLM, or with the AI budget spent, the episodes are deleted without a rewrite.
+- **The graph:** the entity, its facts, the duplicates merged into it and the episodes are deleted. Deleting an episode removes only the facts no other episode supports; a shared fact just loses the reference. The graph copies kept to undo merges get the same deletions inside.
+- **Documents:** a document that names it loses its chunks and is **blocked**. A sync does not index it again until it changes at its source. Re-indexing it by hand answers 409 unless it is asked on purpose (`unblock=true`).
+- **The database:** proposals lose their text, and pending ones are rejected. Finished jobs are deleted, while running ones are reported as pending. In the cleaned tables, whatever names the entity becomes `[olvidado]`. Undoing old vocabulary changes that named it may stop working.
+- **What stays:** what was «to review» is not touched. Note it down before deleting, because afterwards the entity no longer exists and the report cannot be made again.
+- **Afterwards:** the job's parameters, which name the person, are wiped when it ends. Its result and the audit row (`forget.run`) keep only counts per layer.
+
 ## Incoming webhooks
 Alerts, deployments and other events from your tools as the brain's episodic memory: each webhook has its address, its secret and a template for its emitter (Alertmanager, CheckMK, Uptime Kuma, Proxmox VE, GitHub Actions, GitLab CI or a generic one), with a daily cap of proposals. Only brain administrators see this card. See [[Incoming webhooks]].
 

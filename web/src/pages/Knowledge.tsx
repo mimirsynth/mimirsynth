@@ -21,7 +21,7 @@ type Adapter = { id: string; label: string; collection_label: string; fields: { 
 type Up = { key: string; name: string; size: number; done: number; state: "subiendo" | "listo" | "duplicado" | "error"; msg?: string };
 
 const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger", duplicate: "neutral" };
-const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: T("en cola"), error: "error", duplicate: T("duplicado") };
+const LABEL: Record<string, string> = { active: "indexado", indexing: "indexando", pending: T("en cola"), error: "error", duplicate: T("duplicado"), blocked: T("bloqueado por un derecho al olvido") };
 // what a source is, in the table and its filter
 const KIND: Record<string, string> = { upload: T("subidas"), wiki: "wiki", git: T("repositorio"), directory: T("carpeta") };
 // the paths a new Git source indexes, one per line in the form (the server checks them again)

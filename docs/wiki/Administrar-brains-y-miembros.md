@@ -68,6 +68,14 @@ MimirSynth invalida en vez de borrar: es la base de su línea temporal. Cuando a
   - **Fuera de alcance:** las copias de seguridad, los logs de la aplicación y otros sistemas.
 - **Auditoría:** se registra `forget.report` con el id de la entidad y los recuentos por capa, nunca nombres ni texto.
 
+**Borrar.** Debajo del informe, **Borrar para siempre** pide escribir el nombre de la entidad tal cual y lo ejecuta como un trabajo (`POST …/forget/run` con `entity`, `aliases` y `confirm`). Hace lo que dice el informe y no se puede deshacer:
+- **Antes de borrar los episodios:** cada episodio que la menciona se envía al LLM del brain, hasta 50, para que lo reescriba sin ella. Si queda algo útil y la reescritura ya no la nombra, se convierte en una propuesta pendiente (categoría `forget.rewrite`) que decide un curador. Sin LLM, o con el presupuesto de IA agotado, los episodios se borran sin reescribir.
+- **El grafo:** se borran la entidad, sus hechos, los duplicados fusionados en ella y los episodios. Al borrar un episodio solo desaparecen los hechos que no sostiene otro episodio; un hecho compartido solo pierde la referencia. Las copias del grafo que se guardan para deshacer fusiones reciben los mismos borrados por dentro.
+- **Documentos:** un documento que la nombra pierde sus trozos y queda **bloqueado**. La sincronización no lo vuelve a indexar hasta que cambie en su origen. Reindexarlo a mano responde 409 salvo que se pida a propósito (`unblock=true`).
+- **La base de datos:** las propuestas pierden su texto, y las pendientes se rechazan. Los trabajos terminados se borran; los que están en marcha se cuentan como pendientes. En las tablas que se limpian, lo que la nombra pasa a `[olvidado]`. Deshacer cambios antiguos del vocabulario que la nombraban puede dejar de funcionar.
+- **Lo que se queda:** lo que estaba «a revisar» no se toca. Apúntalo antes de borrar, porque después la entidad ya no existe y el informe no se puede repetir.
+- **Al terminar:** los parámetros del trabajo, que nombran a la persona, se borran. Su resultado y la fila de auditoría (`forget.run`) solo guardan recuentos por capa.
+
 ## Webhooks de entrada
 Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain: cada webhook tiene su dirección, su secreto y una plantilla para su emisor (Alertmanager, CheckMK, Uptime Kuma, Proxmox VE, GitHub Actions, GitLab CI o una genérica), con un tope diario de propuestas. Solo la ven los administradores del brain. Ver [[Webhooks de entrada]].
 
