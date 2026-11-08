@@ -18,7 +18,9 @@ router = APIRouter(prefix="/api/brains/{slug}")
 FACT_RETURN = (
     "r.uuid AS uuid, r.name AS name, r.fact AS fact, r.valid_at AS valid_at, r.invalid_at AS invalid_at, "
     "r.expired_at AS expired_at, r.created_at AS created_at, r.reference_time AS reference_time, "
-    "r.episodes AS episodes, a.name AS source, a.uuid AS source_uuid, b.name AS target, b.uuid AS target_uuid"
+    "r.episodes AS episodes, a.name AS source, a.uuid AS source_uuid, b.name AS target, b.uuid AS target_uuid, "
+    # each end's type (its first label besides Entity), so the interface can colour and name it as the rest of the app does
+    "head([l IN labels(a) WHERE l <> 'Entity']) AS source_type, head([l IN labels(b) WHERE l <> 'Entity']) AS target_type"
 )
 
 

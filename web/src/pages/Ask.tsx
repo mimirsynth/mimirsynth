@@ -10,9 +10,9 @@ import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
-import { EmptyState, EntityChip, Form } from "../ui";
+import { EmptyState, EntityChip, Form, humanRelation } from "../ui";
 
-type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score?: number; similarity?: number | null; origin?: string; replaces?: string };
+type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; source_type?: string | null; target_type?: string | null; score?: number; similarity?: number | null; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
 const entityLink = (uuid: string, origin?: string) => `/entidad/${uuid}${origin ? `?origen=${origin}` : ""}`;
 type Superseded = { uuid: string; fact: string; invalid_at: string | null; replaced_by: { uuid: string; fact: string }[] }[];
@@ -151,7 +151,10 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     if (f.status !== "invalidated") {
       if (!f.replaces) return undefined;
       const old = gone.find((g) => g.origin === f.origin && g.fact === f.replaces);
-      return <>{t("Sustituye a")} {old ? factRef(old.origin, old.uuid, old.fact) : <>«{f.replaces}»</>}</>;
+      return <>
+        <div>{t("Sustituye a")} {old ? factRef(old.origin, old.uuid, old.fact) : <>«{f.replaces}»</>}</div>
+        {simValue(f) === null && <div className="ms-ask-why">{t("Está aquí por esa sustitución, no por parecerse a la pregunta.")}</div>}
+      </>;
     }
     const now = current.filter((c) => c.origin === f.origin && c.replaces === f.fact);
     const by = statedBy(f);
@@ -159,15 +162,18 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     return <>
       {now.length > 0 && <div>{t("Ahora:")} {now.map((c, i) => <Fragment key={c.uuid}>{i ? " · " : ""}{factRef(c.origin, c.uuid, c.fact)}</Fragment>)}</div>}
       {by.length > 0 && <div>{t("Lo dice:")} {by.map((x, i) => <Fragment key={x.anchor}>{i ? " · " : ""}«<CardLink to={x.anchor}>{x.name}</CardLink>»</Fragment>)}</div>}
+      {simValue(f) === null && by.length > 0 && <div className="ms-ask-why">{t("Está aquí porque lo afirma ese texto, no por parecerse a la pregunta.")}</div>}
     </>;
   };
   const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
-  const factCard = (f: Fact) => (
+  // Each result's place, as the agent reads them: facts first (current, then no longer true), then fragments, then passages.
+  const rank = (n: number) => t("n.º {{n}}", { n });
+  const factCard = (f: Fact, i: number, list: Fact[]) => (
     <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)}
       actions={cardActions(f.fact, `f:${f.uuid}`, "fact", f.uuid, { text: f.fact, kind: "fact" }, !f.origin)}
-      tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<EntityChip name={f.source} to={entityLink(f.source_uuid, f.origin)} />
-        <Text size="xs" className="ms-data">{f.name}</Text><EntityChip name={f.target} to={entityLink(f.target_uuid, f.origin)} /></>}
-      meta={`${sim(f) ?? t("sin similitud")} · ${validity(f)}`}>{f.fact}</ListCard>);
+      tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<EntityChip name={f.source} type={f.source_type} to={entityLink(f.source_uuid, f.origin)} />
+        <Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text><EntityChip name={f.target} type={f.target_type} to={entityLink(f.target_uuid, f.origin)} /></>}
+      meta={`${rank(i + 1 + (list === gone ? current.length : 0))} · ${sim(f) ?? t("sin similitud")} · ${validity(f)}`}>{f.fact}</ListCard>);
   // Marcar un resultado como «debe salir» o «sobra» para guardarla como consulta de referencia. Se guarda el principio del texto.
   const toggle = (key: string, mark: Mark, item: Item) => setMarks((m) => {
     const n = { ...m };
@@ -245,15 +251,15 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
               {gone.map(factCard)}
             </>}
             {r.chunks.length > 0 && <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>}
-            {r.chunks.map((c) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmtDay(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
+            {r.chunks.map((c, i) => (
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[rank(i + 1), fmtDay(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
                 actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
-              {r.documents.map((p) => (
+              {r.documents.map((p, i) => (
                 <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
-                  aside={[t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
+                  aside={[rank(i + 1), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
                   actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
             </>}
