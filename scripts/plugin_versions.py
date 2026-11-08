@@ -23,6 +23,7 @@ PLUGINS = {
     "integrations/hermes-agent/plugin": "integrations/hermes-agent/plugin/plugin.yaml",
     "integrations/codex/plugin": "integrations/codex/plugin/.codex-plugin/plugin.json",
     "integrations/openclaw": "integrations/openclaw/package.json",
+    "integrations/opencode": "integrations/opencode/package.json",
 }
 _SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
