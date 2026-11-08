@@ -4,6 +4,14 @@
 
 Un **agente** (Claude Code, un bot, un script, otro servicio) habla con MimirSynth con un **token de API**. Hay dos operaciones: **leer** memoria (*recall*) y **escribir** memoria (*propuestas*, que por MCP se llama `remember`). Un agente que hable el **Model Context Protocol (MCP)** se conecta al servidor MCP propio del brain con una sola línea; cualquier otro cliente usa la API HTTP.
 
+## Lo más rápido: Conectar un agente
+**Administración → Brain → Conectar un agente** lo hace en una pantalla, para Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw o cualquier otro cliente MCP:
+1. Elige el agente y crea allí un token para él (colaborador por defecto, o lector), o elige uno de los tuyos. El secreto de un token solo se muestra al crearlo: con uno anterior, los fragmentos llevan `mst_…` donde va el tuyo.
+2. Copia lo que necesita, ya relleno con este servidor, el brain y el token: para un plugin nativo, el fichero compartido `~/.config/mimirsynth/config.json` y la línea que instala el plugin (su setup encuentra después cada respuesta en el fichero); para cualquier otro cliente, el servidor MCP del brain en la forma `mcpServers`, o su dirección y su cabecera.
+3. Arranca el agente. El panel se pone en verde («Tu agente está conectado») unos segundos después de la primera llamada del agente con ese token, pida lo que pida, y luego hace un recall de prueba con lo que ese token puede ver, para que veas lo que recibe el agente. El recall de prueba es una vista previa: no queda registrado ni cuenta como un recall del agente.
+
+La lista «Para empezar» de la pantalla de inicio enlaza aquí. El resto de esta página es lo mismo a mano.
+
 ## 1. Crea un token
 En [[Mi cuenta]] → **Tokens de API** (o en [[Administrar brains y miembros]]):
 1. Elige el **brain** al que accederá.

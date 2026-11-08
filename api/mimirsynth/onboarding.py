@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .deps import current_user
+from .deps import aware, current_user
 from .models import ApiToken, Brain, DocSource, Document, Membership, OnboardingState, Proposal, RecallLog, User
 from .store import get_db
 
@@ -63,6 +63,16 @@ def _check(db: Session, user: User, step: str, ids: list[int]) -> bool:
             people = db.scalar(select(func.count(func.distinct(Membership.user_id))).where(Membership.brain_id.in_(ids)))
         return (people or 0) >= 2
     raise ValueError(step)
+
+
+def token_activity(db: Session, tok: ApiToken) -> dict:
+    """What an agent has done with one token (#362, the «Connect an agent» panel), from what every call already records: its last
+    authenticated call (each one refreshes `last_used_at`, whatever it asks for) and the recalls it made, by the same
+    `recall_logs.token_id` that ticks `agent_recall` above. A recall log goes with its retention period, so `recalls` counts the kept ones."""
+    n, last = db.execute(select(func.count(RecallLog.id), func.max(RecallLog.created_at))
+                         .where(RecallLog.brain_id == tok.brain_id, RecallLog.token_id == tok.id)).one()
+    return {"id": tok.id, "connected": tok.last_used_at is not None, "last_used_at": aware(tok.last_used_at), "recalls": n or 0,
+            "last_recall_at": aware(last)}
 
 
 def _state(db: Session, user: User) -> OnboardingState:
