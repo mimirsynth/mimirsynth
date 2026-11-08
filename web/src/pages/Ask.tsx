@@ -10,7 +10,7 @@ import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
-import { EmptyState, EntityChip, Form, humanRelation } from "../ui";
+import { EmptyState, EntityChip, Form, humanRelation, Toolbar } from "../ui";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; source_type?: string | null; target_type?: string | null; score?: number; similarity?: number | null; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
@@ -116,7 +116,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   // A card's actions and, under them, what its rating did (a live region there from the start, so the result is announced).
   const cardActions = (what: string, key: string, kind: string, id: string, item: Item, canIncorrect: boolean) => (
     <Stack gap={4}>
-      <Group gap="md" className="ms-ask-actions" role="group" aria-label={actionsLabel(what)}>{rateBtns(key, kind, id, canIncorrect)}{markBtns(key, item)}</Group>
+      {/* One stop for Tab per card (the arrows move inside): with 13 cards of 3 to 5 buttons each, Tab no longer walks 50 buttons. */}
+      <Toolbar className="ms-ask-actions" label={actionsLabel(what)}>{rateBtns(key, kind, id, canIncorrect)}{markBtns(key, item)}</Toolbar>
       {wrong?.key === key && <div className="ms-ask-wrongform"><Form onSubmit={sendWrong}>
         <TextArea label={t("¿Qué está mal?")} description={t("Lo lee el curador que decide la corrección: qué dice mal el hecho y, si lo sabes, qué es lo cierto.")}
           autosize minRows={2} maxLength={500} autoFocus value={wrong.note} onChange={(e) => setWrong({ key, note: e.currentTarget.value })}

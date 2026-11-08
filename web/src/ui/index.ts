@@ -26,6 +26,7 @@ export { useServerTableView } from "./useServerTableView";
 export { useTabParam } from "./useTabParam";
 export { ListCard, CardLink } from "./ListCard";
 export { CodeBlock } from "./CodeBlock";
+export { Toolbar } from "./Toolbar";
 export { SecretReveal } from "./SecretReveal";
 export { Steps, Step } from "./Steps";
 export { RuleList } from "./RuleList";

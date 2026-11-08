@@ -426,14 +426,12 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
    box, as tall as that area allows. In one column it goes last, and a link at the top of the results leads to it. */
 .ms-ask-side-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
 .ms-ask-side:focus { outline: none; }  /* it takes the focus only so the next Tab enters the context */
-.ms-ask-jump { display: none; }
 .ms-ask-jump .ms-cardlink { display: inline-block; padding-block: 4px; }  /* a line of its own: a target at least 24px tall */
 @container (min-width: 861px) {
   .ms-ask-side { position: sticky; top: 0; max-height: calc(100dvh - var(--app-shell-header-offset, 0px) - 160px); min-height: 240px; }
   .ms-ask-side .ms-codeblock { flex: 1; min-height: 0; display: flex; }
   .ms-ask-side .ms-codeblock pre { flex: 1; min-height: 0; max-height: none; }
 }
-@container (max-width: 860px) { .ms-ask-jump { display: block; } }
 .ms-graph-canvas { position: absolute; inset: 0; }
 /* entity page (issue 200): a top card in two columns (head and summary | graph), then facts and episodes about 70 / 30 */
 .ms-entity-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "head graph" "summary graph"; grid-template-rows: auto 1fr; gap: 8px 20px; align-items: start; }
@@ -599,6 +597,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-countrow > a, .ms-countrow > button { white-space: normal; text-align: left; justify-self: start; }
 /* Ask: a card's actions are 44px on a touch screen, as the review queue's decision; on a pointer they stay row-sized (28px). */
 @media (pointer: coarse) { .ms-ask-actions .ms-btn { --button-height: 44px !important; } }
+.ms-ask-actions[role="toolbar"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--mantine-spacing-md); }
 /* Ask's card actions: a word names each group (rate, reference query); «Incorrecto» stands apart in the danger colour, pressed or not. */
 .ms-ask-actlabel { margin-right: 4px; }
 .ms-ask-sep { width: 1px; align-self: stretch; margin: 4px 6px; background: var(--ms-line); }
