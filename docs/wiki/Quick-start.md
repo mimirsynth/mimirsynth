@@ -45,6 +45,8 @@ Which extraction model: locally, an *instruct* model of about **14B parameters o
 ## 5. Create a brain
 Press **Create your first brain** (or **Administration → Brain → Active brain → Create brain**), give it a name and, if you like, a description, and apply an **ontology package** under *Vocabulary → Ontology*. See [[Brains and members]].
 
+With the first brain in place, a **guided tour** of eight steps shows the navigation, the brain switcher, proposals, the graph, Ask and administration. It appears once per person, on whichever device they first open, and Escape or **Skip tour** closes it. To see it again, open the **help menu** (the question mark at the bottom of the sidebar), which also links to the documentation, the source code and where to report a bug.
+
 ## 6. Add your first memory
 Go to **Proposals → new proposal**: write a title and a text with a concrete fact, with exact names and dates ("On 12 October we migrated the production database to server db02"). As administrator it is approved on submission and ingestion starts (you will see the progress under **Jobs**). When it finishes, look at **Facts**, **Journal** and **Graph**.
 

@@ -45,6 +45,8 @@ Qué modelo de extracción: en local, un modelo *instruct* de unos **14B paráme
 ## 5. Crea un brain
 Pulsa **Crea tu primer brain** (o **Administración → Brain → Brain activo → Crear brain**), ponle nombre y, si quieres, una descripción, y aplica un **paquete de ontología** en *Vocabulario → Ontología*. Ver [[Administrar brains y miembros]].
 
+Con el primer brain creado aparece un **recorrido guiado** de ocho pasos por la navegación, el selector de brain, las propuestas, el grafo, Preguntar y la administración. Sale una vez por persona, en el dispositivo en que entre primero, y se cierra con Escape o con **Saltar recorrido**. Para verlo de nuevo, abre el **menú de ayuda** (el signo de interrogación abajo en la barra lateral), que también enlaza a la documentación, al código y a dónde contar un error.
+
 ## 6. Mete tu primera memoria
 Ve a **Propuestas → nueva propuesta**: escribe un título y un texto con un dato concreto, con nombres y fechas exactas («El 12 de octubre migramos la base de datos de producción al servidor db02»). Como administrador se aprueba al enviarla y empieza a ingerirse (verás el progreso en **Trabajos**). Cuando termine, mira **Hechos**, **Diario** y **Grafo**.
 
