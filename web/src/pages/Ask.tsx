@@ -231,7 +231,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       {view === "contexto" && scope === "brain" && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">
         <Group gap="xs"><Text size="sm" role="status">{r ? t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 }) : ""}</Text>
           {r && r.query !== q.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}</Group>
-        {r && <Text size="xs" c="dimmed" className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms (embedding {{e}} · hechos {{f}} · fragmentos {{c}})", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</Text>}
+        {r && <Text size="xs" c="dimmed" className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms en total: embedding {{e}} ms · hechos {{f}} ms · fragmentos {{c}} ms", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</Text>}
         {r && canSync && <Group gap="md" mt={6} className="ms-ask-marking">
           <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />
           {marking && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
@@ -253,14 +253,14 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             </>}
             {r.chunks.length > 0 && <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>}
             {r.chunks.map((c, i) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[rank(i + 1), fmtDay(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ")}
                 actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
               {r.documents.map((p, i) => (
                 <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
-                  aside={[rank(i + 1), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
+                  meta={[rank(i + 1), sim(p) ?? t("sin similitud"), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) })].join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
                   actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
             </>}

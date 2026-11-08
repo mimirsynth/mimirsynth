@@ -2073,7 +2073,6 @@
  "{{length}} modelos disponibles": "{{length}} models available",
  "{{long_tail_facts}} hechos en tipos con ≤2 usos": "{{long_tail_facts}} facts in types with ≤2 uses",
  "{{ms}} ms": "{{ms}} ms",
- "{{ms}} ms (embedding {{e}} · hechos {{f}} · fragmentos {{c}})": "{{ms}} ms (embedding {{e}} · facts {{f}} · fragments {{c}})",
  "{{name}} (no disponible)": "{{name}} (not available)",
  "{{nodes}} nodos · {{links}} hechos": "{{nodes}} nodes · {{links}} facts",
  "{{n}} brains consultados · {{ms}} ms": "{{n}} brains searched · {{ms}} ms",
