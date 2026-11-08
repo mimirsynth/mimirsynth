@@ -4,6 +4,67 @@
 
 Claude Code connects to MimirSynth through the **MCP server** that every brain exposes: that gives the agent `recall` and `remember` as tools. This folder adds the complement, a **recall hook** that injects memory into every prompt without the agent having to ask for it, and a script to send learnings as proposals from the command line. See [`docs/AGENTS.md`](../../docs/AGENTS.md) for tokens, roles and the API.
 
+## The plugin (recommended)
+
+The `plugin/` folder is a Claude Code plugin that packs the recall hook and more:
+- **What changed at session start.** It brings the facts learned and invalidated since the last session (`POST /news`, the REST face of the MCP's `whats_new`), inside `<mimirsynth-news>`.
+- **Recall before every prompt.** As the loose hook does, inside `<mimirsynth-memory>`. You set the size (`max_chars`, 4000) and the timeout (`timeout`, 4 s). If the server does not answer, nothing is injected and the prompt carries on. An expired or revoked token is said.
+- **Four commands:**
+
+| Command | What it does |
+|---|---|
+| `/mimirsynth:setup` | Tells you how to configure it. Tokens never go through the conversation: you run `cli.py setup` in your terminal, which asks for them hidden |
+| `/mimirsynth:status` | Connection, brain, role, scopes and expiry of each token, server version, capture mode, drafts, and other memory hooks on this machine |
+| `/mimirsynth:search <query>` | Recall on demand, with more results |
+| `/mimirsynth:remember [title]` | Claude writes a memory from the conversation and sends it once you agree; with no title, it reviews the drafts the capture left |
+
+- **Optional capture of what each session learned**, explained below.
+
+### Install
+
+In Claude Code:
+```
+/plugin marketplace add mimirsynth/mimirsynth
+/plugin install mimirsynth@mimirsynth
+```
+Then configure it in a terminal; `/mimirsynth:setup` shows the exact path:
+```bash
+python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py setup
+```
+It asks for:
+- the URL and the brain;
+- a **reader** token for recall;
+- optionally a **contributor** token to propose;
+- the capture mode.
+
+It writes `~/.config/mimirsynth/config.json`, readable only by you. The same keys can come from `MIMIRSYNTH_*` environment variables, which take precedence. The hooks need `python3` on the `PATH`.
+
+### Capturing what a session learned (off by default)
+
+`capture` decides it:
+- **`off`** (the default): nothing about the sessions is written or sent.
+- **`draft`**: each session is kept on this machine, already redacted, until you review it with `/mimirsynth:remember`.
+- **`send`**: at the **next** session start, each finished session becomes a proposal.
+
+What is recorded and sent:
+- **Which sessions:** only those that changed files or ended with a substantial answer, as at most **one proposal per session**.
+- **What it holds:** the task (the first prompt), the outcome (the last answer) and the files changed. Never the transcript.
+- **How it is sent:** with low confidence (`capture_confidence`, 0.3), so it waits in **quarantine**. It is only sent with a **contributor** token: with a curator's it would be approved at once, so it is refused and said.
+- **Secrets:** before anything is written to disk or sent, it is redacted with the server's own detector (`scripts/secretscan.py` is the same file as `api/mimirsynth/secretscan.py`, and a test keeps them equal). It works by patterns and is not infallible: read the drafts if in doubt.
+- **When it leaves the machine:** at the next start, not at the end of the session, because Claude Code gives a plugin only 1.5 s when a session ends.
+
+### Other memory plugins
+
+If another plugin or hook also injects memory, the session start says so (it does not block anything). MimirSynth's blocks are marked so you can tell them apart. If `mimirsynth_recall.py` is still in `settings.json`, it says that too.
+
+### Moving from the loose scripts
+
+1. Install the plugin. Your `~/.config/mimirsynth/config.json` keeps working, with the same keys.
+2. Remove the `mimirsynth_recall.py` hook from `~/.claude/settings.json`, or the context is injected twice. `/mimirsynth:status` warns while it is there.
+3. `mimirsynth_remember.py` can stay for scripts. Inside Claude Code, `/mimirsynth:remember` does the same.
+
+The loose scripts below keep working as they were.
+
 ## 1. Connect over MCP
 
 1. In MimirSynth: My account → API tokens → create a token for your brain. **Contributor** is recommended: it can read and propose, and what it proposes goes into quarantine until a curator or the decider approves it. A *Reader* token is enough if the agent should only query.

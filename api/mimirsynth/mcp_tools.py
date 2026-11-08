@@ -295,7 +295,7 @@ def _since(raw: str, lang: str) -> datetime:
     return d.astimezone(timezone.utc)
 
 
-def whats_new(ctx: BrainCtx, request: Request, body: NewsIn, lang: str) -> str:
+def whats_new(ctx: BrainCtx, request: Request, body: NewsIn, lang: str, counts: dict | None = None) -> str:
     """Hechos aprendidos e invalidados desde `since`, del más antiguo al más reciente; con `since` se pagina con `offset`.
     Sin `since`, desde donde se quedó la última llamada sin fecha de este token (la primera vez, la última semana). Si no cabe todo, la
     marca queda en el último hecho mostrado y la llamada siguiente sigue desde ahí, así que no se pierde nada; si cabe, pasa a ser ahora."""
@@ -324,6 +324,8 @@ def whats_new(ctx: BrainCtx, request: Request, body: NewsIn, lang: str) -> str:
             facts += [{**_fact(f, amap=g.amap), "origin": g.origin} for f in rows(res)]
         facts.sort(key=lambda f: (parse_ts(at(f)) or now, f["uuid"]))
         sections.append((kind, facts[offset:offset + body.limit], total, at))
+    if counts is not None:   # how many facts each section has, for callers that only want to know whether there is news (#105)
+        counts.update({kind: n for kind, _, n, _ in sections})
     out = _Out(body.max_chars)
     out.add(tr("# Novedades desde {{since}}, de lo más antiguo a lo más reciente", lang, since=since.strftime("%Y-%m-%d %H:%M UTC")), force=True)
     if not any(n for _, _, n, _ in sections):

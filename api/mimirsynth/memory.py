@@ -54,6 +54,30 @@ def do_recall(body: RecallIn, request: Request, bg: BackgroundTasks, ctx: BrainC
     return {**out, "recall_id": ratings.log(ctx, body.query, out, bg, body)}  # to rate what it returned (#110), logged after answering
 
 
+@router.get("/whoami")
+def whoami(request: Request, ctx: BrainCtx = Depends(reader)):
+    """Who is asking and with what (#105, the Claude Code plugin's status): the brain, the effective role, the server's version and, with
+    an API token, its name, scopes and expiry. Any token may call it, whatever its scopes."""
+    from .main import VERSION
+    tok = getattr(request.state, "token", None)
+    return {"brain": ctx.brain.slug, "name": ctx.brain.name, "role": ctx.role, "version": VERSION,
+            "token": {"name": tok.name, "scopes": tok.scopes or list(SCOPES), "expires_at": tok.expires_at} if tok else None}
+
+
+@router.post("/news")
+def news(request: Request, ctx: BrainCtx = Depends(reader), since: str = "", limit: int = 30, max_chars: int = 6000):
+    """What changed in the brain: `whats_new` of the MCP over REST (#105, the Claude Code plugin's session start). Without `since`, from
+    where this token's last call without a date stopped. `added` and `gone` say how many facts each section has."""
+    from . import mcp_tools
+    counts: dict = {}
+    try:
+        body = mcp_tools.NewsIn(since=since, limit=max(1, min(limit, 100)), max_chars=max(500, min(max_chars, 30000)))
+        text = mcp_tools.whats_new(ctx, request, body, language(request), counts)
+    except mcp_tools.ToolError as e:
+        raise HTTPException(422, str(e))
+    return {"text": text, "added": counts.get("added", 0), "gone": counts.get("gone", 0)}
+
+
 @router.get("/index/status")
 def index_status(ctx: BrainCtx = Depends(reader)):
     return index.status(ctx.brain.id)

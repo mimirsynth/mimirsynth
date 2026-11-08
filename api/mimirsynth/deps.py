@@ -45,13 +45,15 @@ def _scope_of(request: Request, slug: str) -> str | None:
     rest = request.url.path.split(f"/api/brains/{slug}", 1)[-1]
     if rest.startswith("/mcp"):
         return None
+    if rest == "/whoami":   # any token may ask who it is (the Claude Code plugin's status, #105)
+        return None
     if rest.startswith("/tokens"):
         return "tokens"
     if rest == "/docs" or rest.startswith("/docs/"):
         return "documents"
     if request.method == "POST" and rest in ("/proposals", "/proposals/corrections"):
         return "propose"
-    if request.method in ("GET", "HEAD") or rest in ("/recall", "/query", "/answer") or rest.startswith("/recall/"):
+    if request.method in ("GET", "HEAD") or rest in ("/recall", "/query", "/answer", "/news") or rest.startswith("/recall/"):
         return "recall"
     return None
 

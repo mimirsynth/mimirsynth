@@ -7,7 +7,25 @@ Hay dos formas de conectar [Claude Code](https://claude.com/claude-code) a un br
 | Forma | Qué da | Cuándo |
 |---|---|---|
 | **Servidor MCP** (recomendada) | Claude recibe las herramientas `recall` y `remember` y decide cuándo leer la memoria y cuándo proponer algo | Siempre: una orden y nada que instalar |
+| **Plugin** | Lo que ha cambiado al empezar la sesión, recall antes de cada prompt, `/mimirsynth:status`, `:search` y `:remember`, y una captura opcional de lo aprendido en cada sesión | Si usas Claude Code a diario: sustituye al hook de recall |
 | **Hook de recall** | Antes de **cada** prompt, un script consulta el recall e inyecta el contexto, sin que Claude tenga que pedirlo | Cuando quieres la memoria presente en cada turno |
+
+## El plugin
+
+Se instala desde Claude Code:
+```
+/plugin marketplace add mimirsynth/mimirsynth
+/plugin install mimirsynth@mimirsynth
+```
+Después ejecuta `/mimirsynth:setup`, que muestra la orden que lo configura en tu terminal. Los tokens nunca pasan por la conversación.
+
+Qué hace:
+- **Al empezar la sesión:** trae los hechos aprendidos e invalidados desde la sesión anterior.
+- **En cada prompt:** inyecta el recall, y si falla no bloquea nada.
+- **Estado:** `/mimirsynth:status` dice si cada token sigue valiendo, su rol y cuándo caduca.
+- **Captura (desactivada por defecto):** puede convertir cada sesión que cambió ficheros en **una** propuesta en cuarentena. El texto se redacta con el propio detector de secretos del servidor y solo se envía con un token de colaborador.
+
+Detalles, los modos de captura y cómo pasar del hook suelto: [`integrations/claude-code`](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/claude-code/README.es.md). El plugin y el servidor MCP conviven.
 
 ## Por MCP (recomendada)
 1. Crea un token del brain con el rol **Colaborador** en [[Mi cuenta]] → **Tokens de API** ([[Conectar agentes]]). Con un token de **Lector** Claude solo puede usar `recall`.

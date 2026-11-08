@@ -1,0 +1,10 @@
+{
+  "description": "MimirSynth: what changed at session start, recall before each prompt, and (only if capture is turned on) a local record of the session that becomes one quarantined proposal.",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" session-start", "timeout": 15 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" prompt", "timeout": 10 }] }],
+    "PostToolUse": [{ "matcher": "Edit|Write|MultiEdit|NotebookEdit", "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" tool", "timeout": 5 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" stop", "timeout": 5 }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hook.py\" session-end", "timeout": 2 }] }]
+  }
+}
