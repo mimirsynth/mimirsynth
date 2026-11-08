@@ -8,7 +8,8 @@
   QUERY_TEXT_DAYS: real queries carry people's prompts.
 - **Who rates:** anyone who can read the brain, with a request limit. «Incorrect» on a fact of the brain, from a contributor or
   above, opens a correction proposal (#109) that a curator decides; it never invalidates anything by itself. From a reader it is
-  only recorded, and the quality view lists it.
+  only recorded, and the quality view lists it. Each person can take back their own rating while the recall can be rated; a
+  correction it proposed stays in the queue.
 - **Quality view:** per kind of item and per similarity range, how much was useful, irrelevant or incorrect, next to the total
   number of recalls (a few clicks are not a trend). This is what tells whether to raise or lower a threshold.
 - **Retention:** ratings and their logs follow the brain's `ratings_days` period (#137).
@@ -127,12 +128,18 @@ class RateIn(BaseModel):
     note: str = Field("", max_length=500)
 
 
-def rate(ctx: BrainCtx, request: Request, rid: str, body: RateIn) -> dict:
+def _open_log(ctx: BrainCtx, rid: str) -> RecallLog:
+    """The recall to rate, within the limit of ratings per minute and while it can still be rated."""
     if not ratelimit.allow(f"rate:{ctx.user.id}", *LIMIT):
         raise HTTPException(429, "demasiadas valoraciones seguidas: espera un minuto")
     entry = ctx.db.scalar(select(RecallLog).where(RecallLog.rid == rid, RecallLog.brain_id == ctx.brain.id))
     if not entry or _now() - _aware(entry.created_at) > timedelta(hours=RATE_HOURS):
         raise HTTPException(404, "recall no encontrado o ya no se puede valorar")
+    return entry
+
+
+def rate(ctx: BrainCtx, request: Request, rid: str, body: RateIn) -> dict:
+    entry = _open_log(ctx, rid)
     it = find_item(entry, body.kind, body.id, body.text)
     if not it:
         raise HTTPException(404, "ese elemento no está en lo que devolvió el recall")
@@ -146,6 +153,16 @@ def rate(ctx: BrainCtx, request: Request, rid: str, body: RateIn) -> dict:
     out = {"ok": True, "rating": r.rating, "proposal_id": r.proposal_id, "recorded_only": False}
     if body.rating == "incorrect" and it["kind"] == "fact" and not it.get("origin") and not r.proposal_id:
         if allows(ctx.role, "contributor"):  # a curator decides; nothing is invalidated from here
+            # One correction per person and fact while it waits: rating «incorrect» again, after taking it back or in another recall,
+            # points to the one already in the queue instead of opening a second.
+            from .models import Proposal
+            same = next((p for p in ctx.db.scalars(select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction",
+                                                                         Proposal.status == "pending", Proposal.author_id == ctx.user.id))
+                         if (p.correction or {}).get("fact_uuid") == it["id"]), None)
+            if same:
+                r.proposal_id = same.id
+                ctx.db.commit()
+                return {**out, "proposal_id": same.id, "existing": True}
             from .corrections import CorrectionIn, create
             reason = "Valorado como incorrecto al consultar la memoria" + (f": {body.note.strip()}" if body.note.strip() else "")
             try:
@@ -163,6 +180,26 @@ def rate(ctx: BrainCtx, request: Request, rid: str, body: RateIn) -> dict:
 @router.post("/{rid}/ratings")
 def rate_endpoint(rid: str, body: RateIn, request: Request, ctx: BrainCtx = Depends(reader)):
     return rate(ctx, request, rid, body)
+
+
+@router.delete("/{rid}/ratings")
+def unrate_endpoint(rid: str, kind: str = Query(pattern="^(fact|chunk|doc)$"), id: str = Query(min_length=1, max_length=80),
+                    ctx: BrainCtx = Depends(reader)):
+    """Takes back the caller's own rating of one item: a rating clicked by mistake would otherwise stay in Quality. Only the caller's, and
+    while the recall can still be rated. A correction that «incorrect» proposed stays in the queue, because a curator decides it: its
+    number comes back so the interface can say so."""
+    entry = _open_log(ctx, rid)
+    it = find_item(entry, kind, id)
+    if not it:
+        raise HTTPException(404, "ese elemento no está en lo que devolvió el recall")
+    r = ctx.db.scalar(select(RecallRating).where(RecallRating.log_id == entry.id, RecallRating.kind == it["kind"], RecallRating.item_id == it["id"],
+                                                 RecallRating.user_id == ctx.user.id))
+    if not r:
+        return {"ok": True, "removed": False, "proposal_id": None}
+    pid = r.proposal_id
+    ctx.db.delete(r)
+    ctx.db.commit()
+    return {"ok": True, "removed": True, "proposal_id": pid}
 
 
 def _bucket(sim) -> str | None:

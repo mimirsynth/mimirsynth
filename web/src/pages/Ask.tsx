@@ -36,7 +36,7 @@ const TOUCH = typeof window !== "undefined" && !!window.matchMedia?.("(hover: no
 type Rating = "useful" | "irrelevant" | "incorrect";
 type Scope = "brain" | "all";
 /** What the recall left on screen, kept for this tab so Back restores it: see askSession. */
-type Kept = { q: string; facts: number; chunks: number; data: Res; marks: Record<string, { mark: Mark; item: Item }>; rated: Record<string, Rating>; marking: boolean };
+type Kept = { q: string; facts: number; chunks: number; data: Res; marks: Record<string, { mark: Mark; item: Item }>; rated: Record<string, Rating>; marking: boolean; notes?: Record<string, string> };
 const SCOPE_KEY = "mimirsynth.askScope";  // the last scope chosen, per browser; a convenience, Ask works the same without it
 const storedScope = (): Scope => { try { return localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "brain"; } catch { return "brain"; } };
 
@@ -77,12 +77,13 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const status = useQuery({ queryKey: ["index", graph], queryFn: () => get<{ enabled: boolean; chunks: number; episodes: number }>("index/status", { graph }) });
   const [rated, setRated] = useState<Record<string, Rating>>(() => kept?.rated ?? {});
   const [rateNote, setRateNote] = useState<Record<string, ReactNode>>({});  // what a rating did, said on its own card
+  const [notes, setNotes] = useState<Record<string, string>>(() => kept?.notes ?? {});  // what «Incorrecto» said was wrong, shown on its card
   // «Incorrecto» on a fact proposes its correction: first it asks what is wrong, on the card, so the curator has something to decide on.
   const [wrong, setWrong] = useState<{ key: string; note: string } | null>(null);
   const focusWrong = (key: string) => document.getElementById(`ms-wrong-${key}`)?.focus();
   const limits = useRef({ facts: nf, chunks: nc });  // those of the search on screen, kept with it
   const run = useMutation({ mutationFn: () => { limits.current = { facts: nf, chunks: nc }; return send<Res>("POST", `brains/${graph}/recall`, { query: q, facts: nf, chunks: nc }); }, onMutate: () => setKept(null),
-    onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); setWrong(null); } });
+    onSuccess: () => { setMarks({}); setRated({}); setRateNote({}); setNotes({}); setWrong(null); } });
   const r = run.data ?? kept?.data;  // the recall on screen: this search's, or the one kept for this question
   /** The question and limits into the address, replacing the entry: the page stays one step of Back. Defaults are left out. */
   const remember = () => setParams((p) => {
@@ -113,20 +114,33 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   useEffect(() => { if (graph !== shownGraph.current) { shownGraph.current = graph; run.reset(); setKept(null); } }, [graph]);  // eslint-disable-line react-hooks/exhaustive-deps -- results of another brain are not this one's
   // Valorar lo que devolvió el recall (útil, irrelevante, incorrecto): alimenta la pestaña Calidad.
   const rate = useMutation({
-    mutationFn: (a: { key: string; kind: string; id: string; rating: Rating; note?: string }) => send<{ proposal_id: number | null; recorded_only: boolean }>("POST", `brains/${graph}/recall/${r?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating, note: a.note ?? "" }),
+    mutationFn: (a: { key: string; kind: string; id: string; rating: Rating; note?: string }) => send<{ proposal_id: number | null; recorded_only: boolean; existing?: boolean }>("POST", `brains/${graph}/recall/${r?.recall_id}/ratings`, { kind: a.kind, id: a.id, rating: a.rating, note: a.note ?? "" }),
     onSuccess: (r, a) => {
       setRated((m) => ({ ...m, [a.key]: a.rating }));
+      // the note goes with a new correction; one already in the queue keeps the note it was proposed with, so this one is not shown as sent
+      setNotes(({ [a.key]: _, ...m }) => (a.rating === "incorrect" && a.note && r.proposal_id && !r.existing ? { ...m, [a.key]: a.note } : m));
       if (a.rating === "incorrect") { setWrong(null); focusWrong(a.key); }
       const said = a.rating === "useful" ? t("Valorado como útil.") : a.rating === "irrelevant" ? t("Valorado como irrelevante.") : t("Valorado como incorrecto.");
       // The proposal a rating «incorrecto» created stays when the rating changes: a curator decides it, and saying otherwise would lie.
       const proposal = r.proposal_id && (canSync ? <Link to="/propuestas?estado=pending&tipo=correction">{t("propuesta #{{id}}", { id: r.proposal_id })}</Link>
         : t("propuesta #{{id}}", { id: r.proposal_id }));
       const then = r.proposal_id
-        ? (a.rating === "incorrect"
+        ? (a.rating === "incorrect" && !r.existing   // rated again: the one already in the queue, not a new one
           ? <>{t("Se ha propuesto su corrección:")} {proposal}.{!canSync && <> {t("La decide un curador.")}</>}</>
           : <>{t("La corrección que se propuso antes sigue en la cola:")} {proposal}.{canSync ? <> {t("Si ya no hace falta, recházala allí.")}</> : <> {t("La decide un curador.")}</>}</>)
         : r.recorded_only ? t("Con tu rol no se propone la corrección: la verá un curador en Calidad.") : null;
       setRateNote((m) => ({ ...m, [a.key]: then ? <>{said} {then}</> : said }));
+    } });
+  const unrate = useMutation({
+    mutationFn: (a: { key: string; kind: string; id: string }) => send<{ removed: boolean; proposal_id: number | null }>("DELETE", `brains/${graph}/recall/${r?.recall_id}/ratings`, undefined, { kind: a.kind, id: a.id }),
+    onSuccess: (res, a) => {
+      setRated(({ [a.key]: _, ...m }) => m);
+      setNotes(({ [a.key]: _, ...m }) => m);
+      const proposal = res.proposal_id && (canSync ? <Link to="/propuestas?estado=pending&tipo=correction">{t("propuesta #{{id}}", { id: res.proposal_id })}</Link>
+        : t("propuesta #{{id}}", { id: res.proposal_id }));
+      setRateNote((m) => ({ ...m, [a.key]: res.proposal_id
+        ? <>{t("Valoración retirada.")} {t("La corrección que se propuso antes sigue en la cola:")} {proposal}.{canSync ? <> {t("Si ya no hace falta, recházala allí.")}</> : <> {t("La decide un curador.")}</>}</>
+        : t("Valoración retirada.") }));
     } });
   const canPropose = ["contributor", "curator", "admin", "owner"].includes(role);
   const sendWrong = () => {
@@ -139,12 +153,16 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => r?.recall_id && <Group gap={4} role="group" aria-label={t("Valorar")}>
     <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Valorar")}</Text>
     {(["useful", "irrelevant"] as Rating[]).map((v) => (
-      <Btn key={v} size="row" kind="ghost" aria-pressed={rated[key] === v} icon={rated[key] === v ? "check" : undefined} onClick={() => rate.mutate({ key, kind, id, rating: v })}>
+      <Btn key={v} size="row" kind="ghost" aria-pressed={rated[key] === v} icon={rated[key] === v ? "check" : undefined}
+        title={rated[key] === v ? t("Pulsa otra vez para retirar la valoración") : undefined}
+        onClick={() => (rated[key] === v ? unrate.mutate({ key, kind, id }) : rate.mutate({ key, kind, id, rating: v }))}>
         {v === "useful" ? t("Útil") : t("Irrelevante")}</Btn>))}
     {canIncorrect && <><span className="ms-ask-sep" aria-hidden="true" />
       <Btn size="row" kind="ghost" className="ms-ask-wrong" aria-pressed={rated[key] === "incorrect"} icon={rated[key] === "incorrect" ? "check" : undefined}
         aria-expanded={canPropose && rated[key] !== "incorrect" ? wrong?.key === key : undefined} id={`ms-wrong-${key}`}
-        onClick={() => (canPropose && rated[key] !== "incorrect" ? setWrong(wrong?.key === key ? null : { key, note: "" }) : rate.mutate({ key, kind, id, rating: "incorrect" }))}>{t("Incorrecto")}</Btn></>}
+        title={rated[key] === "incorrect" ? t("Pulsa otra vez para retirar la valoración") : undefined}
+        onClick={() => (rated[key] === "incorrect" ? unrate.mutate({ key, kind, id })
+          : canPropose ? setWrong(wrong?.key === key ? null : { key, note: "" }) : rate.mutate({ key, kind, id, rating: "incorrect" }))}>{t("Incorrecto")}</Btn></>}
   </Group>;
   // A card's actions and, under them, what its rating did (a live region there from the start, so the result is announced).
   const cardActions = (what: string, key: string, kind: string, id: string, item: Item, canIncorrect: boolean) => (
@@ -160,6 +178,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
           <Btn size="row" kind="ghost" onClick={() => { setWrong(null); focusWrong(key); }}>{t("Cancelar")}</Btn>
         </Group>
       </Form></div>}
+      {rated[key] === "incorrect" && notes[key] && <Text size="xs" className="ms-ask-sentnote">{t("Tu nota: «{{note}}»", { note: notes[key] })}</Text>}
       {r?.recall_id && <Text size="xs" c="dimmed" role="status">{rateNote[key] ?? ""}</Text>}
     </Stack>);
   const view = scope === "all" ? "contexto" : mode;  // across brains there is no written answer: it needs one brain's recall
@@ -240,9 +259,9 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   // Kept for this tab as it changes, so leaving for an entity and coming back with Back finds it as it was (the notes under the ratings
   // are not kept: the pressed button says the rating).
   useEffect(() => {
-    if (run.data) saveAsk(graph, "context", { q: run.data.query, ...limits.current, data: run.data, marks, rated, marking } satisfies Kept);
-    else if (kept) saveAsk(graph, "context", { ...kept, marks, rated, marking } satisfies Kept);
-  }, [run.data, kept, marks, rated, marking]);  // eslint-disable-line react-hooks/exhaustive-deps
+    if (run.data) saveAsk(graph, "context", { q: run.data.query, ...limits.current, data: run.data, marks, rated, marking, notes } satisfies Kept);
+    else if (kept) saveAsk(graph, "context", { ...kept, marks, rated, marking, notes } satisfies Kept);
+  }, [run.data, kept, marks, rated, marking, notes]);  // eslint-disable-line react-hooks/exhaustive-deps
   // Marks not saved as a reference query are kept in this tab; closing it or leaving the app would lose them, so the browser asks first.
   const unsaved = marking && marked.length > 0;
   useEffect(() => {
@@ -281,7 +300,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
       {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} trigger={answerTrigger} answered={answered} onBusy={setAnswering} />}
       {scope === "all" && <MutationError error={searchAll.error} />}
       {scope === "all" && searchAll.data && <AskAllBrains r={searchAll.data} />}
-      {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error} />}
+      {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error ?? unrate.error} />}
       {/* The live region is there before the first search and only its text changes: a node replaced on every search is not announced. */}
       {view === "contexto" && scope === "brain" && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">
         <Group gap="xs"><Text size="sm" role="status">{r ? t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 }) : ""}</Text>

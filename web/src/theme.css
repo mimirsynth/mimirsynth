@@ -611,6 +611,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-btn.ms-ask-wrong { color: var(--ms-invalidado); }
 /* A card picked for something (marked for a reference query): its border in the accent, so a list can be scanned for them. */
 .ms-listcard[data-highlight] { border-color: var(--ms-accent); }
+/* What «Incorrecto» sent, on its card: the words the curator will read, so the person sees what they said. */
+.ms-ask-sentnote { color: var(--ms-ink); overflow-wrap: anywhere; white-space: pre-wrap; }
 .ms-ask-wrongform { max-width: 560px; padding-top: 4px; }  /* «¿Qué está mal?» under the buttons, at a readable width */
 .ms-btn.ms-ask-wrong[aria-pressed="true"] { color: var(--ms-invalidado) !important; background: color-mix(in srgb, var(--ms-invalidado) 12%, transparent) !important; }
 /* A toggle button that is on (a rating given, a result marked): the teal wash and teal text of the active state, never a fill; the
