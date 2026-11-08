@@ -155,7 +155,7 @@ A new plugin:
 
 ## Releasing a plugin change
 
-An agent only updates an installed plugin when the version in its manifest changes (for Claude Code, `version` in `plugin/.claude-plugin/plugin.json`): with the same version, `/plugin update` and the marketplace refresh report it as current and existing installs keep the old scripts. So **any change under a plugin's folder bumps its version**, the vendored copy of this library included (running `vendor.py` after changing the library changes every plugin that carries it). Follow semantic versioning: a fix bumps the patch, a new feature or a new key of the contract the minor version.
+An agent only updates an installed plugin when the version in its manifest changes (for Claude Code, `version` in `plugin/.claude-plugin/plugin.json`): with the same version, `/plugin update` and the marketplace refresh report it as current and existing installs keep the old scripts. So **any change under a plugin's folder bumps its version**, the vendored copy of this library included (running `vendor.py` after changing the library changes every plugin that carries it). Follow semantic versioning: a fix bumps the patch, a new feature or a new key of the contract the minor version. The `plugin-version` check of every pull request (`scripts/plugin_versions.py`) fails when a plugin's folder changed and its version did not go up; a new plugin adds its folder and manifest to `PLUGINS` there.
 
 ## Changing the contract
 

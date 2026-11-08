@@ -12,3 +12,10 @@ jobs:
       - uses: actions/checkout@v7
       - name: The description has a «## Changelog» entry (or the label no-changelog)
         run: python3 scripts/changelog.py --check-pr "$GITHUB_EVENT_PATH"
+  plugin-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 0}   # the base branch, to compare the plugins with it
+      - name: A plugin that changed raises its version (or installed copies never update)
+        run: python3 scripts/plugin_versions.py --base "origin/$GITHUB_BASE_REF"
