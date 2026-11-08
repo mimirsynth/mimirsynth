@@ -670,3 +670,37 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-prop-layout > .ms-sheet { align-self: start; padding: 0 0 0 20px; border-top: 0; border-left: 1px solid var(--ms-line); }
   .ms-prop-layout > .ms-sheet .ms-sheet-list { display: flex; }
 }
+
+/* Help menu of the sidebar (HelpMenu): the same surface and rule as the other floating panels */
+.ms-menu { background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 4px; }
+.ms-menu .mantine-Menu-item { color: var(--ms-ink); font-size: 13px; min-height: 36px; }
+.ms-menu .mantine-Menu-item[data-hovered] { background: var(--ms-hover); color: var(--ms-accent); }
+@media (pointer: coarse) { .ms-menu .mantine-Menu-item { min-height: 44px; } }
+
+/* Guided tour (Tour, issue 364): the target is lit by a hole in the shade (a spread outline, not a shadow on a surface), the card beside it.
+   On a phone the card is docked full width at the edge away from the target. Movement only for whoever has not asked for less. */
+.ms-tour { position: fixed; inset: 0; z-index: 1000; pointer-events: none; --ms-tour-shade: color-mix(in srgb, var(--ms-pozo) 62%, transparent); }
+.ms-tour > * { pointer-events: auto; }
+.ms-tour-shade { position: fixed; inset: 0; background: var(--ms-tour-shade); }
+.ms-tour-spot { position: fixed; border-radius: var(--ms-radius); outline: 2px solid var(--ms-hidromiel); outline-offset: 0; box-shadow: 0 0 0 200vmax var(--ms-tour-shade); }
+.ms-tour-card { position: fixed; width: min(360px, calc(100% - 32px)); background: var(--ms-raised); color: var(--ms-ink); border: 1px solid var(--ms-line); border-radius: var(--ms-radius-lg);
+  padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 8px; }
+.ms-tour-card:focus { outline: none; }  /* the card takes the focus only to be read out; its buttons show theirs */
+.ms-tour-card[data-mode="center"] { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.ms-tour-card[data-mode="dock"] { left: 16px; right: 16px; width: auto; }
+.ms-tour-card[data-edge="top"] { top: 16px; }
+.ms-tour-card[data-edge="bottom"] { bottom: 16px; }
+.ms-tour-count { font-size: 12px; color: var(--ms-muted); letter-spacing: 0.04em; }
+.ms-tour-title { margin: 0; font-size: 18px; line-height: 1.3; }
+.ms-tour-body { font-size: 14px; line-height: 1.5; max-width: var(--ms-measure); }
+.ms-tour-dots { display: flex; gap: 6px; padding: 2px 0; }
+.ms-tour-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--ms-line); }
+.ms-tour-dots span[data-on] { background: var(--ms-accent); }
+.ms-tour-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.ms-tour-nav { display: flex; gap: 8px; margin-left: auto; }
+@media (pointer: coarse) { .ms-tour-actions .ms-btn { --button-height: 44px !important; } }
+@media (prefers-reduced-motion: no-preference) {
+  .ms-tour-spot { transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease; }
+  .ms-tour-card { animation: ms-tour-in 0.18s ease-out; }
+  @keyframes ms-tour-in { from { opacity: 0; } to { opacity: 1; } }
+}

@@ -70,6 +70,20 @@ def update_profile(body: ProfileIn, user: User = Depends(current_user), db: Sess
     return {"ok": True, "name": user.display_name or user.name}
 
 
+class TourIn(BaseModel):
+    seen: bool = True
+
+
+@router.post("/me/tour")
+def tour(body: TourIn, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """The guided tour of the interface (#364): finished or skipped (`seen`), so it is not shown again on any device; `seen: false`
+    shows it again on the next visit. Replaying it from the help menu needs no call: it is marked seen again when it ends."""
+    u = db.get(User, user.id)
+    u.tour_seen_at = datetime.now(timezone.utc) if body.seen else None
+    db.commit()
+    return {"tour_seen": body.seen}
+
+
 @router.post("/me/avatar")
 async def upload_avatar(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     if getattr(request.state, "token", None) is not None:

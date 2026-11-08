@@ -19,6 +19,8 @@ Las pantallas no usan los primitivos de Mantine para estos elementos: usan siemp
 | Pestañas | `Tabs` | Siempre subrayadas, también las de segundo nivel. |
 | Diálogo | `Modal` | Centrado, con título en la tipografía de títulos. |
 | Menú lateral | `NavItem` | Con icono (`icon`). |
+| Menú de ayuda | `HelpMenu` | Botón de la barra lateral que abre un menú de entradas: enlaces a otra pestaña (`href`) o acciones (`onClick`, volver a ver el recorrido). |
+| Recorrido guiado | `Tour` | Una tarjeta por paso junto al elemento que explica (`target` = su `data-tour`), que se ilumina sobre el resto en sombra. Diálogo modal: la aplicación queda inerte, el foco va a la tarjeta en cada paso y vuelve al acabar; las flechas pasan de paso y Escape lo salta. En móvil la tarjeta se acopla al borde contrario al objetivo; `onStep` deja a la pantalla abrir el menú. Sin movimiento con `prefers-reduced-motion`. Las decisiones (cuándo empieza, adónde lleva cada paso, dónde va la tarjeta) están en `tourLogic.ts`, con sus pruebas en `scripts/tour.test.mjs`. |
 | Iconos | `Icon`, `IconButton` | Tabler Icons (MIT). Se piden por nombre; para añadir uno, registrarlo en `ui/Icon.tsx`. |
 | Deslizador | `Slider`, `SliderField` | `SliderField` añade etiqueta y valor. |
 | Barra de progreso | `ProgressBar` | Con texto. |

@@ -2,14 +2,16 @@ import { applyInstanceDefault, setLanguage, type Lang } from "./i18n";
 import { T } from "./i18n";
 import { useTranslation } from "react-i18next";
 import { AppShell, Burger, Center, Group, Stack, Text, Title } from "@mantine/core";
-import { Avatar, Btn, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState, ErrorBoundary } from "./ui";
+import { Avatar, Btn, HelpMenu, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState, ErrorBoundary, shouldAutoStart } from "./ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useMediaQuery } from "@mantine/hooks";
 import { ApiError, Brain, get, Me, send } from "./api";
 import Logo from "./Logo";
 import { AcceptScreen, AuthScreen, ChangePasswordScreen, TwoFactorSetupScreen } from "./pages/AuthPages";
 import type { Summary } from "./pages/Notifications";
+import GuidedTour from "./pages/GuidedTour";
 // Each screen is its own chunk, loaded the first time it is opened: the first visit downloads the shell and one screen, not all fifty.
 const Overview = lazy(() => import("./pages/Overview"));
 const Journal = lazy(() => import("./pages/Journal"));
@@ -36,12 +38,12 @@ const NAV = [
     { to: "/conocimiento", icon: "knowledge" as const, label: T("Conocimiento") },
   ] },
   { section: T("Explorar"), items: [
-    { to: "/preguntar", icon: "ask" as const, label: T("Preguntar") },
-    { to: "/grafo", icon: "graph" as const, label: T("Grafo") },
+    { to: "/preguntar", icon: "ask" as const, label: T("Preguntar"), tour: "ask" },
+    { to: "/grafo", icon: "graph" as const, label: T("Grafo"), tour: "graph" },
     { to: "/consulta", icon: "query" as const, label: T("Consulta") },
   ] },
   { section: T("Curación"), items: [
-    { to: "/propuestas", icon: "proposals" as const, label: T("Propuestas") },
+    { to: "/propuestas", icon: "proposals" as const, label: T("Propuestas"), tour: "proposals" },
     { to: "/calidad", icon: "quality" as const, label: T("Calidad del contenido"), curators: true },
     { to: "/vocabulario", icon: "vocabulary" as const, label: T("Vocabulario") },
     { to: "/trabajos", icon: "jobs" as const, label: T("Trabajos") },
@@ -97,6 +99,18 @@ export default function App() {
     refetchInterval: (q) => ((q.state.data?.active ?? 0) > 0 ? 3000 : 20000) });
   const bell = useQuery({ queryKey: ["notifications-summary"], enabled: !!me.data, queryFn: () => get<Summary>("notifications/summary"), refetchInterval: 30000 });
   const name = cfg.data?.name ?? "…";
+  // The guided tour (issue 364) starts on its own once, for whoever has not finished or skipped it, as soon as there is a brain to show; the
+  // help menu replays it. On a phone its steps point into the navigation, so the menu opens for them and closes at the end.
+  const narrow = useMediaQuery("(max-width: 48em)") ?? false;
+  const [tour, setTour] = useState(false);
+  const tourStarted = useRef(false);
+  const hasBrain = !!brains.data?.some((b) => b.slug === brain);
+  useEffect(() => {
+    if (shouldAutoStart({ tourSeen: me.data?.tour_seen, hasBrain, startedHere: tourStarted.current })) { tourStarted.current = true; setTour(true); }
+  }, [me.data?.tour_seen, hasBrain]);
+  const tourSeen = useMutation({ mutationFn: () => send("POST", "me/tour", { seen: true }), onSuccess: () => qc.setQueryData<Me>(["me"], (m) => (m ? { ...m, tour_seen: true } : m)) });
+  const closeTour = (persist: boolean) => { setTour(false); if (narrow) setMenu(false); if (persist) tourSeen.mutate(); };
+  const replayTour = () => { tourStarted.current = true; setTour(true); };
 
   if (loc.pathname.startsWith("/acceso/")) return <AcceptScreen token={loc.pathname.slice("/acceso/".length)} name={name} />;
   if (me.error instanceof ApiError && me.error.status === 401) return <AuthScreen name={name} />;
@@ -124,11 +138,11 @@ export default function App() {
       </AppShell.Header>
       <AppShell.Navbar p="xs" className="ms-navbar">
         <div className="ms-nav-top"><Logo size={30} name={name} /></div>
-        <div className="ms-nav-scroll">
+        <div className="ms-nav-scroll" data-tour="nav">
           {NAV.map((g) => (
             <div key={g.section} className="ms-nav-group">
               <div className="ms-nav-section">{t(g.section)}</div>
-              {g.items.filter((n) => !("curators" in n) || ["curator", "admin", "owner"].includes(cur?.role ?? "")).map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"}
+              {g.items.filter((n) => !("curators" in n) || ["curator", "admin", "owner"].includes(cur?.role ?? "")).map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"} data-tour={"tour" in n ? n.tour : undefined}
                 active={n.to === "/hechos" && loc.pathname.startsWith("/entidad/") ? true : undefined}  // an entity page belongs to Facts
                 rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("trabajos en cola o en marcha")}>{active.data!.active}</Pill> : undefined} />)}
             </div>))}
@@ -137,18 +151,21 @@ export default function App() {
           <NavItem icon="bell" component={RouterLink} to="/notificaciones" label={t("Notificaciones")}
             rightSection={bell.data?.unread ? <Pill size="xs" tone={bell.data.worst === "critical" ? "danger" : "warn"} title={t("avisos sin leer")}>{bell.data.unread}</Pill>
               : bell.data?.open ? <Pill size="xs" title={t("problemas abiertos")}>{bell.data.open}</Pill> : undefined} />
-          <div>
+          <div data-tour="brain">
             <SelectField size="xs" aria-label={t("Brain activo")} value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
           </div>
           <UserCard to="/cuenta" label={`Mi cuenta · ${me.data.name}${cur ? t(" · rol {{role}}", { role: cur.role }) : ""}`} avatar={<Avatar src={me.data.avatar} name={me.data.name} size={26} />} name={me.data.name}>
             {me.data.auth_mode !== "off" && <RoundButton label={t("Cerrar sesión")} onClick={() => logout.mutate()}><Icon name="logout" /></RoundButton>}
           </UserCard>
           <div className="ms-iconrow">
-            {cfg.data?.links?.docs && <RoundLink href={cfg.data.links.docs} label={t("Documentación")}><Icon name="docs" /></RoundLink>}
-            {cfg.data?.links?.repo && <RoundLink href={cfg.data.links.repo} label={t("Código fuente")}><Icon name="repo" /></RoundLink>}
-            {cfg.data?.links?.feedback && <RoundLink href={cfg.data.links.feedback} label={t("Comentarios y errores")}><Icon name="feedback" /></RoundLink>}
+            <HelpMenu label={t("Ayuda")} tour="help" items={[
+              { label: t("Ver el recorrido guiado"), icon: "tour", onClick: replayTour },
+              ...(cfg.data?.links?.docs ? [{ label: t("Documentación"), icon: "docs" as const, href: cfg.data.links.docs }] : []),
+              ...(cfg.data?.links?.repo ? [{ label: t("Código fuente"), icon: "repo" as const, href: cfg.data.links.repo }] : []),
+              ...(cfg.data?.links?.feedback ? [{ label: t("Comentarios y errores"), icon: "feedback" as const, href: cfg.data.links.feedback }] : []),
+            ]} />
             <ThemeButton />
-            <RoundLink to="/admin" label={t("Administración")}><Icon name="admin" /></RoundLink>
+            <RoundLink to="/admin" label={t("Administración")} tour="admin"><Icon name="admin" /></RoundLink>
           </div>
           <div className="ms-version">{name} v{cfg.data?.version ?? ""}</div>
         </div>
@@ -185,6 +202,7 @@ export default function App() {
         </Suspense>
         </ErrorBoundary>
       </AppShell.Main>
+      <GuidedTour opened={tour && !!cur} onClose={closeTour} onStep={(s) => { if (narrow) setMenu(!!s.target); }} />
     </AppShell>
   );
 }

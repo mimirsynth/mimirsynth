@@ -1,0 +1,20 @@
+{
+ "Atrás": "Back",
+ "Ayuda": "Help",
+ "Brains, personas, modelos de IA y ajustes de la instancia. Lo que ves aquí depende de tu rol.": "Brains, people, AI models and the instance's settings. What you see here depends on your role.",
+ "Cada brain es una memoria separada, con sus propias personas y permisos. Aquí eliges con cuál trabajas: todas las pantallas muestran el brain activo.": "Each brain is a separate memory, with its own people and permissions. Here you choose the one you work with: every screen shows the active brain.",
+ "El grafo": "The graph",
+ "El menú reparte la aplicación en tres partes: Memoria, con lo que el brain sabe; Explorar, para preguntar y recorrer el grafo; y Curación, para revisar lo que entra.": "The menu splits the application in three: Memory, with what the brain knows; Explore, to ask and walk the graph; and Curation, to review what comes in.",
+ "Haz una pregunta con tus palabras y obtén una respuesta con los hechos del brain que la respaldan.": "Ask a question in your own words and get an answer with the brain's facts that back it.",
+ "La documentación, el código, dónde contar un error y este recorrido, por si quieres volver a verlo.": "The documentation, the source code, where to report a bug, and this tour, in case you want to see it again.",
+ "La navegación": "Navigation",
+ "Las entidades y sus relaciones, dibujadas. Pulsa una entidad para ver sus hechos o despliega sus vecinos para seguir el hilo.": "Entities and their relations, drawn. Select an entity to see its facts, or expand its neighbours to follow the thread.",
+ "Lo que tus agentes y tus compañeros quieren guardar llega como propuesta. Quien cura el brain la aprueba, la corrige o la rechaza antes de que entre en la memoria.": "What your agents and your colleagues want to keep arrives as a proposal. Whoever curates the brain approves, corrects or rejects it before it enters the memory.",
+ "Paso {{n}} de {{total}}": "Step {{n}} of {{total}}",
+ "Propuestas y curación": "Proposals and curation",
+ "Saltar recorrido": "Skip tour",
+ "Te damos la bienvenida a MimirSynth": "Welcome to MimirSynth",
+ "Terminar": "Finish",
+ "Un recorrido de un minuto por lo principal de la interfaz. Puedes saltarlo y volver a verlo cuando quieras desde el menú de ayuda.": "A one-minute tour of the main parts of the interface. You can skip it and replay it whenever you like from the help menu.",
+ "Ver el recorrido guiado": "Replay the guided tour"
+}
