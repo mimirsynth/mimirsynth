@@ -2,13 +2,14 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
-import { ApiError, langHeaders } from "../api";
+import { ApiError, fmtDay, langHeaders } from "../api";
 import { translateServer } from "../i18n";
 import { Btn, EmptyState, ListCard, MutationError, Notice, Pill } from "../ui";
 
 /** One numbered piece of evidence: what the answer cites as [F1], [E1] or [D1]. */
+type Superseded = { fact: string; invalid_at: string | null; replaced_by: { fact: string }[] }[];
 type Source = { ref: string; kind: "fact" | "episode" | "document"; id: string | number; text: string; title?: string; entity?: string;
-  status?: string; origin?: string };
+  status?: string; origin?: string; valid_at?: string | null; invalid_at?: string | null; replaces?: string; superseded?: Superseded };
 type Done = { citations: string[]; unknown: string[]; called: boolean; ms?: number };
 const CITE = /\[([FED])(\d{1,3})\]/g;
 
@@ -88,6 +89,24 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   }
   parts.push(<Fragment key="end">{text.slice(last)}</Fragment>);
   const cited = new Set(done?.citations ?? []);
+  // The evidence as Context shows the recall: current facts, then those no longer true, then fragments and passages, with the same
+  // warning on a fragment or passage that states something no longer true. The answer cites them by the same labels either way.
+  const all = sources ?? [];
+  const groups: [string, Source[]][] = [
+    [t("Hechos vigentes ({{n}})", { n: all.filter((s) => s.kind === "fact" && s.status !== "invalidated").length }), all.filter((s) => s.kind === "fact" && s.status !== "invalidated")],
+    [t("Hechos que dejaron de ser ciertos ({{n}})", { n: all.filter((s) => s.kind === "fact" && s.status === "invalidated").length }), all.filter((s) => s.kind === "fact" && s.status === "invalidated")],
+    [t("Fragmentos de episodios ({{n}})", { n: all.filter((s) => s.kind === "episode").length }), all.filter((s) => s.kind === "episode")],
+    [t("Pasajes de documentos ({{n}})", { n: all.filter((s) => s.kind === "document").length }), all.filter((s) => s.kind === "document")],
+  ];
+  const notice = (sup?: Superseded) => (sup?.length ? <>
+    <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill>
+    {sup.map((x, i) => (
+      <div key={i}>
+        <div>{t("Dejó de ser cierto el {{date}}:", { date: fmtDay(x.invalid_at) })} «{x.fact}»</div>
+        {x.replaced_by.length > 0 && <div>{t("Ahora:")} {x.replaced_by.map((r) => `«${r.fact}»`).join(" · ")}</div>}
+      </div>))}
+  </> : undefined);
+  const when = (s: Source) => (s.kind !== "fact" ? undefined : s.invalid_at ? `${fmtDay(s.valid_at)} → ${fmtDay(s.invalid_at)}` : s.valid_at ? t("desde {{date}}", { date: fmtDay(s.valid_at) }) : undefined);
   return (
     <Stack gap="xs">
       {/* The live region is there from the start and only its text changes, so each answer is announced. */}
@@ -103,15 +122,20 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
         : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
       {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
       {!!sources?.length && <>
-        <Title order={2} size="h6" mt="xs">{t("Pruebas ({{n}})", { n: sources.length })}</Title>
-        {sources.map((s) => {
-          const to = sourceLink(s);
-          return (
-            <ListCard key={s.ref} invalid={s.status === "invalidated"}
-              tags={<>{to ? <Link to={to} className="ms-nolink"><Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill></Link>
-                : <Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill>}
-                {s.origin && <Pill size="xs">{s.origin}</Pill>}{s.title && <Text size="xs" c="dimmed">{s.title}</Text>}</>}>{s.text}</ListCard>);
-        })}
+        <Title order={2} size="h5" mt="xs">{t("Pruebas ({{n}})", { n: sources.length })}</Title>
+        {groups.filter(([, list]) => list.length).map(([head, list]) => (
+          <Fragment key={head}>
+            <Title order={3} size="h6" mt="xs">{head}</Title>
+            {list.map((s) => {
+              const to = sourceLink(s);
+              return (
+                <ListCard key={s.ref} invalid={s.status === "invalidated"} notice={notice(s.superseded)} meta={when(s)}
+                  note={s.replaces ? <>{t("Sustituye a")} «{s.replaces}»</> : undefined}
+                  tags={<>{to ? <Link to={to} className="ms-nolink"><Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill></Link>
+                    : <Pill size="xs" tone={cited.has(s.ref) ? "alt" : undefined}>{label(s.ref)}</Pill>}
+                    {s.origin && <Pill size="xs">{s.origin}</Pill>}{s.title && <Text size="xs" c="dimmed">{s.title}</Text>}</>}>{s.text}</ListCard>);
+            })}
+          </Fragment>))}
       </>}
     </Stack>
   );

@@ -77,8 +77,25 @@ def _clean(text: str) -> str:
     return unclosable(" ".join((text or "").split())[:TEXT])
 
 
+def _superseded(c: dict) -> list[dict]:
+    """What a fragment or a passage states that is no longer true (#282, #286), as the interface shows it."""
+    return [{"fact": s["fact"], "invalid_at": s.get("invalid_at"), "replaced_by": [{"fact": r["fact"]} for r in s.get("replaced_by") or []]}
+            for s in c.get("superseded") or []]
+
+
+def _superseded_line(c: dict) -> str:
+    """The same warning for the engine, so it does not present an old statement as current."""
+    out = []
+    for s in c.get("superseded") or []:
+        line = f"may be superseded: «{_clean(s['fact'])}» stopped being true on {_date(s.get('invalid_at'))}"
+        now = [_clean(r["fact"]) for r in s.get("replaced_by") or []]
+        out.append(line + (f"; now: «{'» · «'.join(now)}»" if now else ""))
+    return f" [{' | '.join(out)}]" if out else ""
+
+
 def evidence(out: dict) -> tuple[list[dict], str]:
-    """The recall as numbered sources (for the interface) and as the evidence text (for the engine)."""
+    """The recall as numbered sources (for the interface) and as the evidence text (for the engine). A source carries what the
+    interface needs to split current facts from those no longer true and to warn on a fragment or passage that may be superseded."""
     sources, lines = [], []
     cur = [f for f in out["facts"] if f.get("status") != "invalidated"]
     old = [f for f in out["facts"] if f.get("status") == "invalidated"]
@@ -87,19 +104,20 @@ def evidence(out: dict) -> tuple[list[dict], str]:
         when = (f"no longer true since {_date(f.get('invalid_at'))}" if f.get("status") == "invalidated"
                 else f"true since {_date(f.get('valid_at') or f.get('created_at'))}")
         sources.append({"ref": ref, "kind": "fact", "id": f["uuid"], "text": f["fact"], "entity": f.get("source_uuid"),
-                        "status": f.get("status"), "origin": f.get("origin")})
+                        "status": f.get("status"), "origin": f.get("origin"), "valid_at": f.get("valid_at") or f.get("created_at"),
+                        "invalid_at": f.get("invalid_at"), **({"replaces": f["replaces"]} if f.get("replaces") else {})})
         lines.append(f"[{ref}] fact ({when}): {_clean(f['fact'])}")
     for i, c in enumerate(out["chunks"], 1):
         ref = f"E{i}"
         sources.append({"ref": ref, "kind": "episode", "id": c.get("episode_uuid"), "chunk": c.get("id"), "title": c.get("name"),
-                        "text": (c.get("text") or "")[:300], "origin": c.get("origin")})
-        lines.append(f"[{ref}] episode «{_clean(c.get('name') or '')}» ({_date(c.get('valid_at'))}): {_clean(c.get('text') or '')}")
+                        "text": (c.get("text") or "")[:300], "origin": c.get("origin"), **({"superseded": _superseded(c)} if c.get("superseded") else {})})
+        lines.append(f"[{ref}] episode «{_clean(c.get('name') or '')}» ({_date(c.get('valid_at'))}){_superseded_line(c)}: {_clean(c.get('text') or '')}")
     for i, p in enumerate(out.get("documents") or [], 1):
         ref = f"D{i}"
         where = p["title"] + (f" › {p['heading_path']}" if p.get("heading_path") else "")
         sources.append({"ref": ref, "kind": "document", "id": p["document_id"], "chunk": p.get("chunk_idx"), "title": where,
-                        "text": (p.get("text") or "")[:300], "origin": p.get("origin")})
-        lines.append(f"[{ref}] document passage «{_clean(where)}»: {_clean(p.get('text') or '')}")
+                        "text": (p.get("text") or "")[:300], "origin": p.get("origin"), **({"superseded": _superseded(p)} if p.get("superseded") else {})})
+        lines.append(f"[{ref}] document passage «{_clean(where)}»{_superseded_line(p)}: {_clean(p.get('text') or '')}")
     return sources, "\n".join(lines)
 
 
