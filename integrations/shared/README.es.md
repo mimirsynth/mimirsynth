@@ -16,3 +16,5 @@ Un plugin de Python lleva una copia exacta de `python/mimirsynth_agent/`, porque
 ```bash
 python integrations/shared/vendor.py
 ```
+
+y sube la versión de cada plugin que haya cambiado (en Claude Code, `plugin/.claude-plugin/plugin.json`): un agente solo actualiza un plugin instalado cuando cambia su versión.

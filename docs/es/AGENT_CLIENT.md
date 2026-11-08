@@ -153,6 +153,10 @@ Un plugin nuevo:
 1. **Python:** añade su carpeta a `TARGETS` en `integrations/shared/vendor.py` y ejecútalo; el test existente mantiene igual su copia. Sus propios tests de extremo a extremo pueden usar el fixture `agent_instance`.
 2. **JavaScript:** importa `integrations/shared/typescript/src/index.ts` (o lo empaqueta); sus tests de extremo a extremo pueden leer las mismas variables `MIMIRSYNTH_CONTRACT_*`, que pone un test de `api/tests` que use `agent_instance`, como hace `test_the_typescript_port_against_a_test_instance`.
 
+## Publicar un cambio en un plugin
+
+Un agente solo actualiza un plugin instalado cuando cambia la versión de su manifiesto (en Claude Code, `version` en `plugin/.claude-plugin/plugin.json`): con la misma versión, `/plugin update` y el refresco del marketplace lo dan por actual y las instalaciones existentes se quedan con los scripts viejos. Por eso **cualquier cambio en la carpeta de un plugin sube su versión**, también la copia de esta biblioteca que lleva (ejecutar `vendor.py` tras cambiar la biblioteca cambia todos los plugins que la llevan). Se sigue el versionado semántico: una corrección sube el parche; una funcionalidad nueva o una clave nueva del contrato, la versión menor.
+
 ## Cambiar el contrato
 
 La versión 1 está congelada: las integraciones dependen de ella. Añadir una clave con valor por defecto, o un alias de la captura, es compatible. Renombrar o quitar una clave, o cambiar un valor por defecto, el orden de las capas o cómo se lee un valor, no lo es: sube `CONTRACT_VERSION` en las dos bibliotecas y en `cases.json`, actualiza esta página en los dos idiomas, y se comprueba cada plugin contra él.

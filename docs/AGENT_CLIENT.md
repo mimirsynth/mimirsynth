@@ -153,6 +153,10 @@ A new plugin:
 1. **Python:** add its folder to `TARGETS` in `integrations/shared/vendor.py` and run it; the existing test then keeps its copy equal. Its own end-to-end tests can take the `agent_instance` fixture.
 2. **JavaScript:** import `integrations/shared/typescript/src/index.ts` (or bundle it); its end-to-end tests can read the same `MIMIRSYNTH_CONTRACT_*` variables, set by a test in `api/tests` that uses `agent_instance`, as `test_the_typescript_port_against_a_test_instance` does.
 
+## Releasing a plugin change
+
+An agent only updates an installed plugin when the version in its manifest changes (for Claude Code, `version` in `plugin/.claude-plugin/plugin.json`): with the same version, `/plugin update` and the marketplace refresh report it as current and existing installs keep the old scripts. So **any change under a plugin's folder bumps its version**, the vendored copy of this library included (running `vendor.py` after changing the library changes every plugin that carries it). Follow semantic versioning: a fix bumps the patch, a new feature or a new key of the contract the minor version.
+
 ## Changing the contract
 
 Version 1 is frozen: integrations rely on it. Adding a key with a default, or a capture alias, is compatible. Renaming or removing a key, or changing a default, the order of the layers or how a value is read, is not: it bumps `CONTRACT_VERSION` in both libraries and in `cases.json`, updates this page in both languages, and every plugin is checked against it.
