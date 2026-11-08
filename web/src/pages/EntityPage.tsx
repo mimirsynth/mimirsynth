@@ -206,7 +206,7 @@ function FactItem({ f, graph, canEdit, link }: { f: EFact; graph: string; canEdi
       <div className="ms-tl-row">
         <Stack gap={0} className="ms-tl-body">
           <Group gap={6}><EntityChip name={f.other.name} type={f.other.labels[0]} to={link(f.other)} />
-            <Text size="sm" td={old ? "line-through" : undefined} c={old ? "dimmed" : undefined}>{f.fact}</Text></Group>
+            <Text size="sm" className="ms-measure" td={old ? "line-through" : undefined} c={old ? "dimmed" : undefined}>{f.fact}</Text></Group>
           <Text size="xs" c="dimmed">
             {old ? t("Válido {{from}} → {{to}}", { from: day(f.valid_at ?? f.created_at), to: day(f.invalid_at) }) : t("Vigente desde {{from}}", { from: day(f.valid_at ?? f.created_at) })}
             {" · "}{t("aprendido {{date}}", { date: day(f.created_at) })}
