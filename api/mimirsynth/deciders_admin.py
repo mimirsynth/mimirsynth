@@ -120,8 +120,9 @@ def triage_proposal(pid: int) -> None:
     with _factory()() as db:
         d, p = default_decider(db), db.get(Proposal, pid)
         from .claims import actions_only, replaces
-        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings) or p.kind == "correction" or replaces(p) or actions_only(p):
-            return  # a flagged possible secret is decided by a person (#116); a correction or a claim that replaces facts, always (#109, #295)
+        if not d or not p or p.status != "pending" or secretguard.flagged(p.secret_findings) or p.kind == "correction" or replaces(p) or actions_only(p) \
+                or (p.category or "") == "curator.distil":
+            return  # a flagged possible secret is decided by a person (#116); a correction, a claim that replaces facts or a distilled note, always (#109, #295, #297)
         brain = db.get(Brain, p.brain_id)
         try:
             context = decider.scope(brain.name, brain.description, get_ontology(db, brain.id))  # el decisor no supone ningún dominio

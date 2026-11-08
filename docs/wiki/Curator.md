@@ -22,6 +22,14 @@ And, also off by default, **noise**: current facts that say nothing useful, by f
 
 And, also off by default, **facts never recalled**: current facts that no recall brought in the last 180 days (`archive_days`, adjustable through the API), learned before that, never confirmed by a person or a probe. Approving one **archives** it: it stays in the graph untouched, but the recall leaves it out unless asked (`archived: true` in `POST /recall` or the MCP `recall`). The **Archived** list in this tab restores any of them with one click. Every logged recall notes when its facts came back, and this pass only proposes once the brain has been tracked for the whole period; before that, every old fact would look unused.
 
+And, also off by default, **distil**: episodes that repeat the same lesson in slightly different words.
+- **Grouping.** Episodes form a group when they mention the same entity and every pair of them is close: cosine ≥ 0.85 (`distil_similarity`) over their vectors in the episode index. A group needs at least 3 episodes (`distil_min`), and the most specific entity is tried first. Grouping needs no AI call, so **See what it would propose** is free.
+- **The note.** For each group, the brain's LLM writes one short note that states the lesson as it stands now and the date it holds from; the most recent original wins when they disagree. Each group is one call, with at most 5 per daily run (`distil_calls`).
+- **Approval.** The proposal (`curator.distil`) shows its originals. It is **never approved on its own**: no auto-approval tier, no decider and no bulk approval. A person reads what the LLM wrote, one at a time.
+- **The originals.** Each one is ticked «delete if the note covers it»; untick the ones that must stay before approving. Once the note is ingested, an original is **covered** when every fact that came only from it is current and matches a fact of the note: the same two entities, and the same relation or a close text. Covered, ticked originals are **deleted**, and this cannot be undone; the others stay, and the proposal says what each one adds. Deleting an episode removes the facts only it supports and the entities left with nothing; a fact other episodes also support stays.
+
+The three settings are part of `PUT …/curator/settings`; a request that leaves one out keeps its value.
+
 Each pass has its own checkbox and its own precision, which says how far to trust it.
 
 ## It stops if coverage falls

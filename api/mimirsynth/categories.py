@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from . import claims as claims_mod
-from . import ingest, secretguard
+from . import distil, ingest, secretguard
 from .deps import BrainCtx, admin_of_brain, audit, brain_access
 from .models import Brain, Proposal
 from .store import _factory
@@ -116,6 +116,9 @@ def decide(cat: str, body: DecideIn, ctx: BrainCtx = Depends(curator)):
         if body.verb == "approve" and p.kind == "correction":   # a correction is applied when approved: one at a time, from its detail
             skipped.append({"id": p.id, "reason": "correction"})
             continue
+        if body.verb == "approve" and distil.by_hand(p):   # a note the LLM wrote, that may delete its originals: one at a time (#297)
+            skipped.append({"id": p.id, "reason": "distil"})
+            continue
         if body.verb == "approve":
             _approve(ctx.db, ctx.brain, p, ctx.user.id, "human", body.note)
         else:
@@ -136,6 +139,8 @@ class TierIn(BaseModel):
 def set_tier(cat: str, body: TierIn, ctx: BrainCtx = Depends(admin_of_brain)):
     """Switches a category to automatic approval, only while it has earned it; switching it off is always possible."""
     pr = precision(ctx.db, ctx.brain.id, cat)
+    if body.enabled and cat == distil.CATEGORY:
+        raise HTTPException(409, "una nota destilada la escribe el LLM y puede borrar episodios: siempre la aprueba una persona")
     if body.enabled and (pr["decided"] < body.min or (pr["precision"] or 0) < body.bar):
         raise HTTPException(409, f"la categoría no lo ha ganado: {pr['approved']} aprobadas de {pr['decided']} decididas por personas; "
                                  f"hacen falta {body.min} decisiones y una precisión de {body.bar:g}")
@@ -173,7 +178,7 @@ def run_tiers() -> int:
                                 f"{t['bar']:g}. Sus propuestas vuelven a esperar a un curador.", brain_id=b.id, key=f"autoapprove:{b.slug}:{cat}")
                     continue
                 for p in pend.get(cat, [])[:BATCH]:
-                    if secretguard.flagged(p.secret_findings) or p.kind == "correction":
+                    if secretguard.flagged(p.secret_findings) or p.kind == "correction" or distil.by_hand(p):
                         continue
                     _approve(db, b, p, None, "auto", f"aprobada automáticamente: precisión {pr['precision']} en {pr['decided']} decisiones")
                     audit(db, None, "proposal.approved", b, id=p.id, category=cat, by="auto", precision=pr["precision"])

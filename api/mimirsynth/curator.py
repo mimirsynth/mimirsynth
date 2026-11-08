@@ -15,7 +15,7 @@ each proposal (as a correction, one at a time), and only then the change is appl
   stale» (reviewer, #300).
 - **Preview.** `POST /curator/preview` runs a pass read-only and says what it would propose, with the pass's **precision** so far:
   the share of its proposals that curators approved (`category`: `curator.contradictions`).
-- **Cost.** These passes read the graph, with no AI calls.
+- **Cost.** These passes read the graph, with no AI calls, except `distil` (#297): one call to the brain's LLM per group, at most `distil_calls` a run.
 """
 import logging
 import re
@@ -35,9 +35,10 @@ log = logging.getLogger("mimirsynth.curator")
 router = APIRouter(prefix="/api/brains/{slug}/curator")
 curator = brain_access("curator")
 KIND = "curator.run"
-PASSES = ("contradictions", "redundancy", "obsolescence", "noise", "archive")
-DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False, "archive": False},
-           "batch": 5, "archive_days": 180}
+PASSES = ("contradictions", "redundancy", "obsolescence", "noise", "archive", "distil")
+DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False, "archive": False,
+                                        "distil": False},
+           "batch": 5, "archive_days": 180, "distil_similarity": 0.85, "distil_min": 3, "distil_calls": 5}
 MAX_REDUNDANT = 3000   # candidate facts whose embeddings the redundancy pass reads per run (the most recent first)
 MAX_FINDINGS = 200   # per run: what is past it waits for the next one
 SAMPLE = 10
@@ -277,7 +278,14 @@ def archive_pass(brain_id: int) -> list[dict]:
             for f in found]
 
 
-FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence, "noise": noise, "archive": archive_pass}
+def distil_pass(brain_id: int) -> list[dict]:
+    """Findings of the distil pass (#297): groups of episodes that repeat the same lesson about one entity. Read-only, no LLM."""
+    from . import distil
+    return distil.find(brain_id)
+
+
+FINDERS = {"contradictions": contradictions, "redundancy": redundancy, "obsolescence": obsolescence, "noise": noise, "archive": archive_pass,
+           "distil": distil_pass}
 
 
 def precision(db, brain_id: int, pass_: str) -> dict:
@@ -313,6 +321,12 @@ def propose(brain_id: int, findings: list[dict]) -> list[int]:
         if not author:
             raise RuntimeError("the brain has nobody to write the curator's proposals for")
         for f in findings:
+            if f["pass"] == "distil":   # one call to the brain's LLM writes the note (#297)
+                from . import distil
+                pid = distil.propose(db, b, author, f)
+                if pid:
+                    ids.append(pid)
+                continue
             if busy & {x["uuid"] for x in f["replace"]}:
                 continue
             keep = f.get("keep") or {}   # the obsolescence pass keeps nothing: the fact just stops being current
@@ -411,6 +425,8 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
             ctx.check()
             ctx.progress(0, 0, name)
             fs = FINDERS[name](bid)
+            if name == "distil":   # each group is one LLM call: at most distil_calls a day, the rest waits for the next run
+                fs = fs[:int(cfg.get("distil_calls") or DEFAULT["distil_calls"])]
             found[name] = fs
             if len(fs) > cfg["batch"]:
                 waiting = True   # many changes at once: a person looks at a sample first
@@ -438,6 +454,9 @@ class SettingsIn(BaseModel):
     passes: dict[str, bool] = Field(default_factory=dict)
     batch: int = Field(DEFAULT["batch"], ge=1, le=100)
     archive_days: int = Field(DEFAULT["archive_days"], ge=30, le=3650)
+    distil_similarity: float = Field(DEFAULT["distil_similarity"], ge=0.5, le=0.99)
+    distil_min: int = Field(DEFAULT["distil_min"], ge=2, le=50)
+    distil_calls: int = Field(DEFAULT["distil_calls"], ge=1, le=50)
 
 
 def _run_out(db, r: CuratorRun, full: bool = False) -> dict:
@@ -459,8 +478,10 @@ def set_settings(body: SettingsIn, ctx: BrainCtx = Depends(admin_of_brain)):
     unknown = set(body.passes) - set(PASSES)
     if unknown:
         raise HTTPException(422, f"pasadas desconocidas: {', '.join(sorted(unknown))}")
-    ctx.brain.curator = {"enabled": body.enabled, "passes": {**DEFAULT["passes"], **body.passes}, "batch": body.batch,
-                         "archive_days": body.archive_days, "by": ctx.user.id}
+    was = config(ctx.brain)   # what the request leaves out keeps its value (the tab only sends what it shows)
+    tuned = {k: getattr(body, k) if k in body.model_fields_set else was[k]
+             for k in ("archive_days", "distil_similarity", "distil_min", "distil_calls")}
+    ctx.brain.curator = {"enabled": body.enabled, "passes": {**DEFAULT["passes"], **body.passes}, "batch": body.batch, **tuned, "by": ctx.user.id}
     ctx.db.commit()
     audit(ctx.db, ctx.user, "curator.settings", ctx.brain, enabled=body.enabled, passes=body.passes, batch=body.batch)
     return get_settings(ctx)

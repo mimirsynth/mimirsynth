@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
 import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, QueueList, RowOpen, focusedQueueItem, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Steps, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
@@ -13,8 +13,8 @@ import { fmt, fmtDay, fmtNum, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
-  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[] } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
-  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null;
+  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
+  kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null; category?: string;
   /** Whether its new facts came back to a control question after ingesting (issue 296). */
   selftest?: { checked_at: string; retrievable?: boolean | null; skipped?: string; error?: string; results?: { fact_uuid: string; fact: string; question: string; found: boolean; rank: number | null; outranked_by: string[] }[] } | null };
 /** A structured claim of the proposal, compared with the brain's current facts when it was sent, and what approving it did. */
@@ -302,6 +302,39 @@ function SelfTest({ s }: { s: NonNullable<Prop["selftest"]> }) {
   </Stack></Notice>);
 }
 
+/** A distilled note's originals (issue 297): which may be deleted once it is ingested, and afterwards what happened to each. */
+type DistilEp = { uuid: string; name: string; valid_at: string | null; text: string };
+type DistilOut = { deleted: { uuid: string; name: string; facts: number }[]; kept: { uuid: string; name: string; why: string; facts?: string[] }[] };
+const DISTIL_KEPT: Record<string, string> = { says_more: T("Se queda: dice algo que la nota no recoge."), unticked: T("Se queda: estaba desmarcado."),
+  gone: T("Ya no estaba en el grafo.") };
+
+function DistilDetail({ d, ops }: { d: Prop; ops: Ops }) {
+  const { t } = useTranslation();
+  const cur = d.decision?.curator ?? {};
+  const eps: DistilEp[] = cur.episodes ?? [];
+  const [ticked, setTicked] = useState<string[]>(cur.delete ?? []);
+  const save = useMutation({ mutationFn: (del: string[]) => send<{ delete: string[] }>("PUT", `brains/${ops.graph}/curator/distil/${d.id}`, { delete: del }),
+    onSuccess: (r) => setTicked(r.delete) });
+  const out: DistilOut | undefined = d.ingest_report?.distil;
+  const pending = d.status === "pending";
+  return (<Stack gap="xs">
+    <Text size="xs" fw={600}>{t("Episodios que resume ({{n}})", { n: eps.length })}</Text>
+    {pending && <Text size="xs" c="dimmed">{t("Al ingerir la nota se borran los marcados que la nota cubra: los que no digan nada que ella no diga. Los demás se quedan. Borrar no se puede deshacer.")}</Text>}
+    {eps.map((e) => <Panel key={e.uuid} withBorder p="sm"><Stack gap={4}>
+      {pending && ops.isCurator ? <Check checked={ticked.includes(e.uuid)} disabled={save.isPending} label={<>{e.name} <span className="ms-data">({fmtDay(e.valid_at)})</span></>}
+        onChange={(ev) => save.mutate(ev.currentTarget.checked ? [...ticked, e.uuid] : ticked.filter((u) => u !== e.uuid))} />
+        : <Text size="sm">{e.name} <span className="ms-data">({fmtDay(e.valid_at)})</span></Text>}
+      <Text size="xs" c="dimmed">{e.text}</Text>
+    </Stack></Panel>)}
+    <MutationError error={save.error} />
+    {out && <Stack gap={4}>
+      <Text size="xs">{t("Tras ingerirla: {{d}} borrados, {{k}} se quedan.", { d: out.deleted.length, k: out.kept.length })}</Text>
+      {out.kept.map((k) => <Text key={k.uuid} size="xs" c="dimmed">«{k.name}»: {t(DISTIL_KEPT[k.why] ?? DISTIL_KEPT.says_more)}{k.facts?.length ? ` ${k.facts.map((f) => `«${f}»`).join(", ")}` : ""}</Text>)}
+    </Stack>}
+    {d.ingest_report?.distil_error && <Notice tone="warn">{t("La nota entró, pero no se pudieron revisar los originales: {{e}}", { e: d.ingest_report.distil_error })}</Notice>}
+  </Stack>);
+}
+
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
 function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context?: ReactNode;
   /** Shown in the review queue, where every proposal is pending: its state and the usual kind (adding) go without saying. */ inQueue?: boolean }) {
@@ -316,6 +349,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
         : paired ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
     {!!d.claims?.length && <ClaimsDetail claims={d.claims} />}
+    {d.category === "curator.distil" && <DistilDetail d={d} ops={ops} />}
     <SecretsNotice found={d.secrets} />
     {context}
     {inQueue && d.status === "pending" && !d.correction ? <Stack gap={4}>
@@ -357,7 +391,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
 function DeciderView({ d }: { d: Prop }) {
   const { t } = useTranslation();
   if (d.decision?.error) return <Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: d.decision.engine, error: d.decision.error })}</Notice>;
-  if (!d.decision) return null;
+  if (!d.decision?.factual) return null;   // the curator's proposals keep their evidence there too
   return (<Stack gap={2}>
     <Text size="xs" c="dimmed">{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: fmtNum(d.decision.threshold) })}</Text>
     <Text size="xs" c="dimmed">{t("· ¿Es factual? {{answer}} (confianza {{prob}})", { answer: d.decision.factual.letter === "A" ? t("sí") : t("no"), prob: fmtNum(d.decision.factual.prob) })}</Text>
