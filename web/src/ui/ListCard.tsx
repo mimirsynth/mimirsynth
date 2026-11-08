@@ -26,8 +26,8 @@ export function ListCard({ title, aside, notice, note, tags, meta, actions, inva
 
 /** A link, inside a sentence, to the card with this `anchor`. A real link and not a button: a button cannot break across lines, and what it
  *  names (a fact) is often longer than one. */
-export function CardLink({ to, children, className, title }: { to: string; children: ReactNode; className?: string; title?: string }) {
-  return <a className={`ms-cardlink${className ? ` ${className}` : ""}`} href={`#${to}`} title={title} onClick={(e) => { e.preventDefault(); goToCard(to); }}>{children}</a>;
+export function CardLink({ to, children, className, title, id }: { to: string; children: ReactNode; className?: string; title?: string; id?: string }) {
+  return <a id={id} className={`ms-cardlink${className ? ` ${className}` : ""}`} href={`#${to}`} title={title} onClick={(e) => { e.preventDefault(); goToCard(to); }}>{children}</a>;
 }
 
 /** Jump to the card with this `anchor` and give it the focus; instant with reduced motion. */
