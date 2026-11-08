@@ -11,6 +11,8 @@ Dos clases de hallazgo:
 
 Nunca se devuelve el valor detectado fuera de `text[start:end]`: quien llame decide qué guarda (la regla y la posición, no el valor).
 """
+from __future__ import annotations
+
 import math
 import re
 from dataclasses import dataclass

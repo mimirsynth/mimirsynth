@@ -1,0 +1,11 @@
+{
+  "name": "mimirsynth",
+  "owner": { "name": "MimirSynth" },
+  "plugins": [
+    {
+      "name": "mimirsynth",
+      "source": "./integrations/claude-code/plugin",
+      "description": "MimirSynth memory for Claude Code: recall before every prompt, what changed at session start, and an optional, quarantined capture of what each session learned."
+    }
+  ]
+}

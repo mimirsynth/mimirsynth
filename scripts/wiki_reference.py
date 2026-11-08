@@ -49,7 +49,7 @@ SPECIAL = {("POST", BRAIN + "/hooks/{key}"): "hook"}
 SKIP = {("GET", BRAIN + "/mcp"), ("DELETE", BRAIN + "/mcp")}
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; "" is the brain itself)
-    ("Recall", "Recall", ["/recall", "/answer", "/mcp"]), ("Text index", "Índice de texto", ["/index"]),
+    ("Recall", "Recall", ["/recall", "/answer", "/mcp", "/news", "/whoami"]), ("Text index", "Índice de texto", ["/index"]),
     ("Overview", "Resumen", ["/overview"]), ("Episodes", "Episodios", ["/episodes"]), ("Facts", "Hechos", ["/facts", "/timeline", "/entities"]),
     ("Graph and query", "Grafo y consulta", ["/graph", "/query"]), ("Proposals", "Propuestas", ["/proposals"]), ("Documents", "Documentos", ["/docs"]),
     ("Vocabulary", "Vocabulario", ["/vocabulary", "/vocab", "/ontology", "/retype", "/summaries"]), ("Needs your attention", "Necesita tu atención", ["/attention"]),
