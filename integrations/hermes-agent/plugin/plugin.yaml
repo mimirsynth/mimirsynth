@@ -1,0 +1,5 @@
+name: mimirsynth
+version: 0.1.0
+description: "MimirSynth team memory: recall before each turn, what changed in the brain at session start, search and remember tools (proposals wait in quarantine), and an optional session capture, off by default."
+author: MimirSynth
+requires_hermes: ">=0.21.4"

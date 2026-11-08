@@ -89,7 +89,7 @@ The rules every integration follows:
 - **The proposal:** `name` «`<Agent>: <project> — <first line of the task>`», `source` `text`, `source_description` «`<agent-id> session`», `origin` `auto` and `confidence` `capture_confidence`.
 - **Only with a contributor token:** before sending, the integration asks `whoami`; with any other role it refuses and says so, because a curator's proposal would skip quarantine.
 - **Secrets:** everything is redacted before it is written to disk or sent, with the server's own detector (sure and possible findings alike, replaced by `[secret removed]`). It works by patterns and is not infallible.
-- **Where the records live:** one JSON file per session, readable only by its owner, in `~/.config/mimirsynth/state/<agent-id>/sessions/` unless the agent gives the plugin a data folder of its own. Records older than 14 days are deleted. Claude Code keeps them in its plugin data folder (`$CLAUDE_PLUGIN_DATA/sessions`), or in `~/.config/mimirsynth/state/sessions/`.
+- **Where the records live:** one JSON file per session, readable only by its owner, in `~/.config/mimirsynth/state/<agent-id>/sessions/` unless the agent gives the plugin a data folder of its own. Records older than 14 days are deleted. Claude Code keeps them in its plugin data folder (`$CLAUDE_PLUGIN_DATA/sessions`), or in `~/.config/mimirsynth/state/sessions/`; Hermes Agent in each profile's folder (`$HERMES_HOME/mimirsynth/sessions`).
 
 ## What every integration does
 

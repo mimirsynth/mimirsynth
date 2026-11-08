@@ -19,7 +19,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 LIB = ROOT / "integrations" / "shared" / "python" / "mimirsynth_agent"
 DETECTOR = ROOT / "api" / "mimirsynth" / "secretscan.py"
-TARGETS = [ROOT / "integrations" / "claude-code" / "plugin" / "scripts" / "mimirsynth_agent"]   # folders that get a copy of LIB
+TARGETS = [   # folders that get a copy of LIB
+    ROOT / "integrations" / "claude-code" / "plugin" / "scripts" / "mimirsynth_agent",
+    ROOT / "integrations" / "hermes-agent" / "plugin" / "mimirsynth_agent",
+]
 
 
 def pairs() -> list:

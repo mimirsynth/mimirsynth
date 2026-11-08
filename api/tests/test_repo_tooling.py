@@ -153,6 +153,9 @@ def test_a_plugin_that_changes_raises_its_version():
     assert pv.check([f"{folder}-old/x"], {folder: "0.2.0"}, {folder: "0.2.0"}) == []   # another folder whose name starts the same
     assert pv.check(changed, {folder: None}, {folder: "0.1.0"}) == []                   # a new plugin
     assert "not a semantic version" in pv.check(changed, {folder: "0.1.0"}, {folder: "v2"})[0]
+    assert pv.version_of('{"name": "x", "version": "0.3.1"}') == "0.3.1"                # a JSON manifest (Claude Code)
+    assert pv.version_of('name: x\nversion: "0.3.1"  # quoted\nhooks:\n  version: 9\n') == "0.3.1"   # plugin.yaml: the top level line
+    assert pv.version_of("name: x\nversion: 1.2.0\n") == "1.2.0" and pv.version_of("name: x\n") == ""
     for folder, manifest in pv.PLUGINS.items():                                          # every listed plugin is there, with a version
         assert (ROOT / folder).is_dir()
         pv.parse(pv.version_of((ROOT / manifest).read_text(encoding="utf-8")))

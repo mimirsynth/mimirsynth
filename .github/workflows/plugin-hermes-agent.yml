@@ -1,0 +1,27 @@
+name: Hermes Agent plugin
+# The Hermes Agent plugin (integrations/hermes-agent) inside a real Hermes Agent: installed from its official repository at a release tag,
+# it validates the plugin as its catalog does and loads it through its own discovery. The plugin's other tests, against a real MimirSynth,
+# run in the CI's api job (api/tests/test_hermes_plugin.py).
+on:
+  pull_request:
+    paths: ["integrations/hermes-agent/**", "integrations/shared/python/**", ".github/workflows/plugin-hermes-agent.yml"]
+  push:
+    branches: [main]
+    paths: ["integrations/hermes-agent/**", "integrations/shared/python/**", ".github/workflows/plugin-hermes-agent.yml"]
+permissions:
+  contents: read
+jobs:
+  hermes:
+    runs-on: ubuntu-latest
+    env:
+      HERMES_REF: v2026.9.24   # Hermes Agent 0.21.5; the plugin declares requires_hermes >=0.21.4
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - name: Install Hermes Agent
+        run: uv venv --python 3.12 .venv && uv pip install "hermes-agent @ git+https://github.com/NousResearch/hermes-agent@${HERMES_REF}" pytest
+      - name: The plugin passes `hermes plugins validate` (what the plugin catalog runs)
+        env: {HERMES_HOME: "${{ runner.temp }}/hermes-validate"}
+        run: .venv/bin/hermes plugins validate integrations/hermes-agent/plugin
+      - name: Hermes finds, loads and drives the plugin
+        run: .venv/bin/python -m pytest -q integrations/hermes-agent/tests

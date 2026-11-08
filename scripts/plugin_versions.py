@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # the plugin's folder → its manifest, whose "version" an agent compares to decide whether there is an update
 PLUGINS = {
     "integrations/claude-code/plugin": "integrations/claude-code/plugin/.claude-plugin/plugin.json",
+    "integrations/hermes-agent/plugin": "integrations/hermes-agent/plugin/plugin.yaml",
 }
 _SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
 
@@ -33,10 +34,17 @@ def parse(version: str) -> tuple:
     return (int(m[1]), int(m[2]), int(m[3]), (1,) if pre is None else (0, *pre))
 
 
+_YAML_VERSION = re.compile(r"""^version:[ \t]*["']?([^"'#\s]*)""", re.M)
+
+
 def version_of(manifest_text: str | None) -> str | None:
+    """The manifest's "version": a JSON object, or a YAML one (plugin.yaml), whose top level `version:` line is read without a parser."""
     if manifest_text is None:
         return None
-    return str(json.loads(manifest_text).get("version") or "")
+    if manifest_text.lstrip().startswith("{"):
+        return str(json.loads(manifest_text).get("version") or "")
+    m = _YAML_VERSION.search(manifest_text)
+    return m[1] if m else ""
 
 
 def check(changed: list[str], old: dict, new: dict) -> list[str]:
