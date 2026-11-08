@@ -588,14 +588,14 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-section-title { margin: 0; font-family: var(--ms-display); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }  /* DESIGN.md's card label */
 .ms-related a { color: var(--ms-accent); text-underline-offset: 2px; }
 .ms-proposal-text { font-size: 15px; line-height: 1.6; max-width: var(--ms-measure); }  /* the proposal itself, the thing being decided: on the panel, not in a card inside it */
-.ms-pair { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 10px 12px; border-radius: var(--ms-radius);
-  background: color-mix(in srgb, var(--ms-ink) 5%, var(--ms-raised)); }  /* the proposal and the fact it repeats, read one against the other; neutral: gold is the action's */
+/* What the brain knows, under a proposal: a heading for each group of fact cards, and a fact's data at the end of its entities' line. */
+.ms-related-group { margin: 6px 0 0; font-size: 13px; font-weight: 600; color: var(--ms-ink); }
+.ms-fact-data { margin-left: auto; }
 .ms-added { background: color-mix(in srgb, var(--ms-accent) 22%, transparent); color: inherit; border-radius: 2px; padding: 0 1px;
   text-decoration: underline; text-decoration-color: var(--ms-accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }  /* told apart by the line, not by the tint alone */
 .ms-added-legend { color: var(--ms-muted); max-width: var(--ms-measure); }  /* under the text: the key to its mark, then the words it adds */
 .ms-added-legend .ms-added { padding: 0 2px; }  /* the key, the same mark as in the text above it */
 .ms-added-words { color: var(--ms-ink); font-weight: 600; }
-.ms-related .ms-fact-old { color: var(--ms-invalidado); text-decoration: line-through; }  /* no longer true: struck through, as in the entity lists */
 .ms-related a:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: 2px; border-radius: 2px; }
 
 /* A count and what it counts: the counts share one column, so the labels line up whatever the digits, and a long label wraps instead of being cut */

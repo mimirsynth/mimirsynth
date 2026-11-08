@@ -426,7 +426,7 @@ def related_facts(brain, p: Proposal) -> list[dict]:
         return []
     query = f"{p.name}. {p.body}"[:1500]
     out = recall_mod.recall(brain.id, brain.graph_name, query, RELATED_FACTS, 0, 4000, n_docs=0, min_similarity=0)  # the closest, however far
-    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "valid_at", "invalid_at", "status", "score")
+    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "source_type", "target_type", "valid_at", "invalid_at", "status", "score")
     words = _words(query)
     facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score")), "mostly_new": mostly_new(f.get("fact"), words)}
              for f in out.get("facts", [])]
