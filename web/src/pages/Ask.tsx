@@ -286,7 +286,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         {several && <Segments label={t("Alcance")} value={scope} onChange={(v) => setScope(v as Scope)}
           data={[{ value: "brain", label: t("Este brain") }, { value: "all", label: t("Todos mis brains") }]} />}
         {scope === "brain" && <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
-          data={[{ value: "responder", label: t("Responder") }, { value: "contexto", label: t("Contexto") }]} />}
+          data={[{ value: "contexto", label: t("Contexto") }, { value: "responder", label: t("Responder") }]} />}
       </Group>
       {scope === "all" && <Text size="xs" c="dimmed">{t("La misma búsqueda en todos los brains que puedes leer, con tu rol en cada uno y sin federación. La respuesta redactada, las valoraciones y guardar como consulta de referencia solo están en «Este brain»: los resultados mezclan brains distintos.")}</Text>}
       <Group align="flex-end">
@@ -315,11 +315,13 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
           <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />
         </Group>}
       </div>}
+      {view === "contexto" && scope === "brain" && !r && !run.isPending && !run.error && <EmptyState>{t("Escribe una pregunta como la haría tu agente y pulsa Buscar: verás qué hechos, fragmentos y pasajes recibiría, en el orden en que los lee, y el contexto exacto que se le inyecta.")}</EmptyState>}
       {view === "contexto" && scope === "brain" && r && (
         <div className="ms-ask-wrap"><div className="ms-ask-cols">
           <Stack className="ms-ask-main" gap="xs">
             {/* In one column the context comes after every card: on a phone that is thousands of pixels down. */}
             {(r.facts.length + r.chunks.length + (r.documents?.length ?? 0)) > 1 && <Text size="xs" c="dimmed">{t("Numerados en el orden en que el agente los lee en el contexto inyectado.")}</Text>}
+            {r.recall_id && (r.chunks.length > 0 || !!r.documents?.length || r.facts.some((f) => f.origin)) && <Text size="xs" c="dimmed">{t("«Incorrecto» solo está en los hechos de este brain: un fragmento o un pasaje es lo que se escribió, y lo prestado por otro brain se corrige allí.")}</Text>}
             {r.context && <Text size="sm" className="ms-ask-jump"><CardLink to="ask-context">{t("Ir al contexto inyectado")}</CardLink></Text>}
             {!r.facts.length && !r.chunks.length && !!r.min_similarity && (
               <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: fmtNum(r.min_similarity) })}</Text>)}
