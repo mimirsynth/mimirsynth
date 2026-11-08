@@ -402,12 +402,14 @@ def mark_duplicates(ctx: BrainCtx = Depends(admin_of_brain)):
 
 
 @router.post("/{doc_id:int}/reindex")
-def reindex(doc_id: int, ctx: BrainCtx = Depends(contributor_of_brain)):
+def reindex(doc_id: int, unblock: bool = False, ctx: BrainCtx = Depends(contributor_of_brain)):
     d = _doc(ctx, doc_id)
     if not allows(ctx.role, "admin"):
         raise HTTPException(403, "requiere rol admin o superior")
     if d.status == "indexing":
         raise HTTPException(409, "ya se está indexando")
+    if d.status == "blocked" and not unblock:   # a right-to-be-forgotten deletion took it out (#134)
+        raise HTTPException(409, "bloqueado por un derecho al olvido: corrígelo en su origen o vuelve a indexarlo a propósito (unblock=true)")
     start_index(d.id, ctx.user.id)
     audit(ctx.db, ctx.user, "document.reindex", ctx.brain, id=doc_id)
     return {"ok": True}
