@@ -121,6 +121,7 @@ class BrainCtx:
     user: User
     role: str
     db: Session
+    token: ApiToken | None = None  # the API token of the request, if an agent made it; None for a person's session
 
     @property
     def graph(self):
@@ -148,7 +149,7 @@ def brain_access(minimum: str):
         if not allows(role, minimum):
             raise HTTPException(403, f"requiere rol {minimum} o superior")
         request.state.brain_id = brain.id  # a write that succeeds drops the «needs your attention» counters of the brain (attention.py)
-        return BrainCtx(brain, user, role, db)
+        return BrainCtx(brain, user, role, db, tok)
 
     return dep
 

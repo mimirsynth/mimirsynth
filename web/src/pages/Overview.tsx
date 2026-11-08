@@ -7,6 +7,7 @@ import { fmt, fmtDay, fmtNum, get, send, Overview as O } from "../api";
 import { AreaChart, BarList, Btn, Donut, Page, Panel, Pill, StatCard, DataState, PageHeader, FillArea, HIDROMIEL, PIZARRA, StatGrid, ColGrid, EmptyState, Section, Segments } from "../ui";
 import { T, locale } from "../i18n";
 import type { Attention } from "./Quality";
+import GettingStarted from "./GettingStarted";
 
 type Activity = {
   weeks: string[]; episodes: number[]; facts_learned: number[]; facts_invalidated: number[];
@@ -143,6 +144,7 @@ export default function Overview({ graph, role }: { graph: string; role: string 
     <Page>
       <PageHeader title={t("Resumen")} description={<>{t("Estado del brain «{{graph}}»: volumen de conocimiento, actividad por semanas y lo más conectado.", { graph })}{data.last_episode && <> {t("Último episodio: {{name}} · {{date}}.", { name: data.last_episode.name, date: fmt(data.last_episode.created_at) })}</>}</>} />
       <FillArea><Stack gap="md">
+      <GettingStarted role={role} />
       {["curator", "admin", "owner"].includes(role) && <ColGrid min={320}><NeedsAttention graph={graph} /><WhatChanged graph={graph} /></ColGrid>}
       {["curator", "admin", "owner"].includes(role) && <MemoryHealth graph={graph} />}
       <StatGrid>

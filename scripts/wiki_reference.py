@@ -67,7 +67,7 @@ BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; ""
     ("Incoming webhooks", "Webhooks de entrada", ["/webhooks", "/hooks"]), ("Retention", "Retención", ["/retention"]), ("Export", "Exportar", ["/exports"]),
 ]
 INSTANCE_AREAS = [  # path prefixes after /api
-    ("Access", "Acceso", ["/auth"]), ("My account", "Mi cuenta", ["/me", "/users/{uid}/avatar"]), ("Search all brains", "Buscar en todos los brains", ["/search"]),
+    ("Access", "Acceso", ["/auth"]), ("My account", "Mi cuenta", ["/me", "/users/{uid}/avatar", "/onboarding"]), ("Search all brains", "Buscar en todos los brains", ["/search"]),
     ("Notifications", "Notificaciones", ["/notifications"]), ("Brains", "Brains", ["/brains"]), ("AI consumption", "Consumo de IA", ["/ai-usage"]),
     ("Import a brain", "Importar un brain", ["/brain-imports"]),
     ("Administration", "Administración", ["/admin", "/users", "/audit", "/settings", "/oidc-providers", "/llm-engines", "/embedding-engines",

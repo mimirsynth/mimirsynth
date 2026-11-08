@@ -72,7 +72,7 @@ def log(ctx: BrainCtx, query: str, out: dict, bg=None, body=None, via: str = "ht
     from . import replay
     rid = secrets.token_urlsafe(9)
     items = items_of(out)
-    row = dict(brain_id=ctx.brain.id, rid=rid, user_id=ctx.user.id, query_hash=hashlib.sha256(query.encode()).hexdigest(),
+    row = dict(brain_id=ctx.brain.id, rid=rid, user_id=ctx.user.id, token_id=ctx.token.id if ctx.token else None, query_hash=hashlib.sha256(query.encode()).hexdigest(),
                query_len=len(query), query_text=query if ctx.brain.recall_query_text else None, items=items)
     try:
         sample = replay.row(ctx.brain, query, replay.params_of(body), items, via) if body is not None else None

@@ -2,7 +2,21 @@
 
 # Overview
 
-The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Needs your attention** and **What changed** blocks, it is read-only.
+The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Getting started**, **Needs your attention** and **What changed** blocks, it is read-only.
+
+## Getting started
+Until you have tried the main parts of MimirSynth, the home screen starts with a **Getting started** list. Each step ticks itself when it happens in any of your brains (all of them, for an instance administrator), with no need to mark it, and shows the day it did:
+
+| Step | Ticks when | Explained in |
+|---|---|---|
+| An agent makes its first recall | an agent recalls with an API token | [[Connect agents]] |
+| The first proposal from an agent arrives | an agent sends a proposal | [[Proposals]] |
+| The first proposal is approved | a curator, the decider or an auto-approval tier approves one (a curator's own, approved as it is sent, does not count) | [[Proposals]] |
+| You add the first document or folder | a brain has a document, or a folder, wiki or repository as a source | [[Knowledge]] |
+| You ask your first question in Ask | you search or ask for an answer in [[Ask]] yourself | [[Ask]] |
+| You connect a second agent or invite another person | a brain has two live API tokens or two members (for an administrator, the instance has two users) | [[Brains and members]] |
+
+Each pending step links to the screen where it is done and to its page in this wiki. A step stays ticked even if what showed it goes later (a revoked token, a recall log past its retention). The list disappears once every step is done; **Close the list** hides it for good, whatever is left. The list is yours: other people see their own.
 
 ## Needs your attention
 Curators and above see first a short list of what is **waiting for a person's decision** in the brain, each line with its count and a link to the tool where it is decided:
