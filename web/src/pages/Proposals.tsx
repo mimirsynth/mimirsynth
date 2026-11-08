@@ -350,7 +350,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
         : !inQueue && <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {t("no indicada")}</Text>}</Group>}
     {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
-        : paired ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
+        : paired && !paired.mostly_new ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
     {!!d.claims?.length && <ClaimsDetail claims={d.claims} />}
     {d.category === "curator.distil" && <DistilDetail d={d} ops={ops} />}
     <SecretsNotice found={d.secrets} />
@@ -546,20 +546,18 @@ function addedTo(text: string, fact: string) {
   return { words: [...added.values()], node: <>{parts.map((p, i) => i % 2 === 1 && adds(p) ? <mark key={i} className="ms-added">{p}</mark> : p)}</> };
 }
 
-/** The proposal's text read against the fact the brain already says (below, in «Lo que dice el brain»): what it adds marked, with the
- *  legend right above it, and a screen reader told the words. */
+/** The proposal's text read against the fact the brain already says (below, in «Lo que dice el brain»), when it almost repeats it: what
+ *  it adds marked in the text, and under it, in words, the key to the mark and the words it adds. A proposal that is mostly new is not
+ *  marked (nearly every word would be): its text reads clean, and «Lo que el brain ya sabe» says it is mostly new. */
 function AddedText({ d, fact }: { d: Prop; fact: RelatedFact }) {
   const { t } = useTranslation();
   const a = addedTo(d.body, fact.fact);
   return (<Stack gap={6}>
-    <Group gap={8} className="ms-added-legend">
-      {a.words.length === 0 ? <Text size="xs" c="dimmed">{fact.invalid_at ? t("El texto repite lo que dice el brain, abajo, y eso ya no es cierto.")
-        : t("El texto no añade ninguna palabra de contenido a lo que dice el brain, abajo.")}</Text>
-        : <>{fact.mostly_new && <Pill tone="neutral">{t("Mayormente nuevo")}</Pill>}
-          <Text size="xs" c="dimmed"><mark className="ms-added">{t("Subrayado")}</mark>{" "}{t("lo que añade a lo que dice el brain, abajo.")}
-            <span className="ms-sr">{" "}{t("Añade: {{words}}.", { words: a.words.join(", ") })}</span></Text></>}
-    </Group>
     <Text className="ms-prose ms-proposal-text">{a.node}</Text>
+    {a.words.length === 0 ? <Text size="sm" c="dimmed">{fact.invalid_at ? t("El texto repite lo que dice el brain, abajo, y eso ya no es cierto.")
+      : t("El texto no añade ninguna palabra de contenido a lo que dice el brain, abajo.")}</Text>
+      : <Text size="sm" className="ms-added-legend"><mark className="ms-added">{t("Subrayado")}</mark>{" "}
+        {t("lo que añade a lo que dice el brain, abajo:")} <span className="ms-added-words">{a.words.join(" · ")}</span></Text>}
   </Stack>);
 }
 
