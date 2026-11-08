@@ -111,7 +111,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
     <Stack gap="xs">
       {/* The live region is there from the start and only its text changes, so each answer is announced. */}
       <Group gap="xs">
-        {busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Parar")}</Btn>}
+        {busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Dejar de redactar")}</Btn>}
         <Text size="sm" role="status">{asked !== null ? t("Respuesta a «{{q}}»", { q: asked }) : ""}</Text>
         {asked !== null && asked !== query.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}
         {done?.ms !== undefined && <Text size="xs" c="dimmed">{t("{{ms}} ms", { ms: done.ms })}</Text>}
