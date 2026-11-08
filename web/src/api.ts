@@ -55,5 +55,7 @@ export const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(
 /** A day (a fact's validity, a correction's date), in the same short form as `fmt` without the time. Read in UTC: these are calendar
  *  dates, and a time zone behind UTC would otherwise show the day before. */
 export const fmtDay = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString(locale(), { dateStyle: "short", timeZone: "UTC" }) : "—");
-/** A number as the interface language writes it (0,6 in Spanish, 0.6 in English). */
-export const fmtNum = (n?: number | null) => (n === null || n === undefined ? "—" : n.toLocaleString(locale(), { maximumFractionDigits: 2 }));
+/** A number as the interface language writes it (0,6 in Spanish, 0.6 in English). `fixed`: always that many decimals, for numbers read
+ *  in a column or compared with each other (a similarity of 0,30 next to 0,33). */
+export const fmtNum = (n?: number | null, fixed?: number) => (n === null || n === undefined ? "—"
+  : n.toLocaleString(locale(), { minimumFractionDigits: fixed ?? 0, maximumFractionDigits: fixed ?? 2 }));

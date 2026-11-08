@@ -1124,7 +1124,6 @@
  "Para un hook que guarda lo que pasa en una sesión sin que nadie lo decida: lo que proponga cuenta siempre como capturado automáticamente, la confianza más baja, aunque diga otra cosa.": "For a hook that stores what happens in a session without anyone deciding it: what it proposes always counts as captured automatically, the lowest trust, whatever it says.",
  "Para un repositorio privado. Se guarda cifrado, no se vuelve a mostrar y solo se envía por https.": "For a private repository. It is stored encrypted, never shown again and only sent over https.",
  "Para una captura automática": "For an automatic capture",
- "Parar": "Stop",
  "Parece sustituir": "Looks like a replacement",
  "Parecidas a algo que ya no es cierto": "Close to something no longer true",
  "Parámetros": "Parameters",

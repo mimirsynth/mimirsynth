@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, NumberField, Pill, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Brain, fmt, fmtDay, fmtNum, get, send } from "../api";
+import { Brain, fmtDay, fmtNum, get, send } from "../api";
 import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries";
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
+import { EmptyState, EntityChip } from "../ui";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; score?: number; similarity?: number | null; origin?: string; replaces?: string };
 /** Entity page of a fact's end; a lent fact opens it in the brain that lends it. */
@@ -17,10 +18,16 @@ const entityLink = (uuid: string, origin?: string) => `/entidad/${uuid}${origin 
 type Superseded = { uuid: string; fact: string; invalid_at: string | null; replaced_by: { uuid: string; fact: string }[] }[];
 type Chunk = { id: number; origin?: string; name: string; text: string; valid_at: string | null; score: number; similarity?: number | null; rrf: number; superseded?: Superseded };
 type Passage = { document_id: number; chunk_idx: number; title: string; text: string; similarity: number; origin?: string; superseded?: Superseded;
-  source_updated_at?: string | null; last_seen_at?: string | null };
+  source_updated_at?: string | null; last_seen_at?: string | null; heading_path?: string | null; page?: number | null };
+/** A passage's place in its document: the title, the heading it sits under and its page, so two passages of one document are told apart.
+ *  The heading path often starts with the document's own title (its first heading), which is not repeated. */
+const passageTitle = (p: Passage) => {
+  const path = (p.heading_path ?? "").split(" › ").filter((h, i) => h && !(i === 0 && h === p.title)).join(" › ");
+  return `${p.title}${path ? ` › ${path}` : ""}${p.page ? ` (p. ${p.page})` : ""}`;
+};
 type Res = { recall_id?: string; query: string; facts: Fact[]; chunks: Chunk[]; documents?: Passage[]; documents_state?: string; context: string; index: boolean; min_similarity?: number; ms: Record<string, number> };
 /** «0.42», or null for what joins the recall by its link to a fact no longer true rather than by its closeness to the question. */
-const simValue = (x: { similarity?: number | null; score?: number }) => { const v = x.similarity ?? x.score; return typeof v === "number" ? v.toFixed(2) : null; };
+const simValue = (x: { similarity?: number | null; score?: number }) => { const v = x.similarity ?? x.score; return typeof v === "number" ? fmtNum(v, 2) : null; };
 type Mark = "expect" | "avoid";
 const KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘+Enter" : "Ctrl+Enter";
 type Rating = "useful" | "irrelevant" | "incorrect";
@@ -132,8 +139,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const factCard = (f: Fact) => (
     <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)}
       actions={cardActions(f.fact, `f:${f.uuid}`, "fact", f.uuid, { text: f.fact, kind: "fact" }, !f.origin)}
-      tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<Link to={entityLink(f.source_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link>
-        <Text size="xs" className="ms-data">{f.name}</Text><Link to={entityLink(f.target_uuid, f.origin)} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
+      tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<EntityChip name={f.source} to={entityLink(f.source_uuid, f.origin)} />
+        <Text size="xs" className="ms-data">{f.name}</Text><EntityChip name={f.target} to={entityLink(f.target_uuid, f.origin)} /></>}
       meta={`${sim(f) ?? t("sin similitud")} · ${validity(f)}`}>{f.fact}</ListCard>);
   // Marcar un resultado como «debe salir» o «sobra» para guardarla como consulta de referencia. Se guarda el principio del texto.
   const toggle = (key: string, mark: Mark, item: Item) => setMarks((m) => {
@@ -182,8 +189,6 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         <NumberField size="xs" label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={100} />
         <Btn kind="primary" disabled={!q.trim()} loading={view === "contexto" ? run.isPending || searchAll.isPending : answering} onClick={primary}>
           {view === "contexto" ? t("Buscar ({{keys}})", { keys: KEYS }) : t("Responder ({{keys}})", { keys: KEYS })}</Btn>
-        {view === "contexto" && scope === "brain" && r && canSync && <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />}
-        {view === "contexto" && scope === "brain" && r && canSync && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
       </Group>
       {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} trigger={answerTrigger} answered={answered} onBusy={setAnswering} />}
       {scope === "all" && <MutationError error={searchAll.error} />}
@@ -194,6 +199,10 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
         <Group gap="xs"><Text size="sm" role="status">{r ? t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 }) : ""}</Text>
           {r && r.query !== q.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}</Group>
         {r && <Text size="xs" c="dimmed" className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms (embedding {{e}} · hechos {{f}} · fragmentos {{c}})", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</Text>}
+        {r && canSync && <Group gap="md" mt={6} className="ms-ask-marking">
+          <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />
+          {marking && <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{marked.length ? t("Guardar como consulta de referencia ({{n}} marcados)", { n: marked.length }) : t("Guardar como consulta de referencia")}</Btn>}
+        </Group>}
       </div>}
       {view === "contexto" && scope === "brain" && r && (
         <div className="ms-ask-wrap"><div className="ms-ask-cols">
@@ -201,23 +210,24 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             {/* In one column the context comes after every card: on a phone that is thousands of pixels down. */}
             {r.context && <Text size="sm" className="ms-ask-jump"><CardLink to="ask-context">{t("Ir al contexto inyectado")}</CardLink></Text>}
             {!r.facts.length && !r.chunks.length && !!r.min_similarity && (
-              <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: r.min_similarity })}</Text>)}
-            <Title order={2} size="h5">{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>
+              <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: fmtNum(r.min_similarity) })}</Text>)}
+            {!r.facts.length && !r.chunks.length && !r.documents?.length && <EmptyState>{t("El recall no ha traído nada para esta pregunta: ni hechos, ni fragmentos, ni pasajes.")}</EmptyState>}
+            {current.length > 0 && <Title order={2} size="h5">{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>}
             {current.map(factCard)}
             {gone.length > 0 && <>
               <Title order={2} size="h5" mt="xs">{t("Hechos que dejaron de ser ciertos ({{n}})", { n: gone.length })}</Title>
               {gone.map(factCard)}
             </>}
-            <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>
+            {r.chunks.length > 0 && <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>}
             {r.chunks.map((c) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmt(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
+              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} aside={[fmtDay(c.valid_at), sim(c)].filter(Boolean).join(" · ")}
                 actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
                 notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
             {!!r.documents?.length && <>
               <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
               {r.documents.map((p) => (
-                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${p.title} · ${p.origin}` : p.title}
-                  aside={[t("actualizado el {{date}}", { date: fmt(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
+                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
+                  aside={[t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) }), sim(p)].filter(Boolean).join(" · ")}
                   notice={supersededNotice(p.origin, p.superseded)}
                   actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
             </>}
