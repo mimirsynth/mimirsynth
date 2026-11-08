@@ -29,19 +29,31 @@ def _ask(label: str, current: str = "", secret: bool = False) -> str:
     return v or current
 
 
+def _in_a_terminal() -> int:
+    print("Setup asks for the tokens hidden, so it runs in a terminal, never through the conversation. In a terminal, run:\n\n"
+          f'  python3 "{Path(__file__).resolve()}" setup\n')
+    return 2
+
+
 def setup(a) -> int:
     if not sys.stdin.isatty():
-        print("Setup asks for the tokens hidden, so it runs in a terminal, never through the conversation. In a terminal, run:\n\n"
-              f'  python3 "{Path(__file__).resolve()}" setup\n')
-        return 2
+        return _in_a_terminal()
+    try:
+        return _setup(a)
+    except (EOFError, KeyboardInterrupt):   # no one to answer (on Windows, NUL passes for a terminal)
+        print()
+        return _in_a_terminal()
+
+
+def _setup(a) -> int:
     c = {}
     try:
         c = json.loads(mimir.CONFIG.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         pass
-    c["url"] = (a.url or _ask("MimirSynth URL (https://…)", c.get("url", ""))).rstrip("/")
+    c["url"] = (a.url or _ask("MimirSynth URL (https://...)", c.get("url", ""))).rstrip("/")
     c["brain"] = a.brain or _ask("Brain (its slug)", c.get("brain", ""))
-    c["token"] = _ask("Reader token for recall (mst_…)", c.get("token", ""), secret=True)
+    c["token"] = _ask("Reader token for recall (mst_...)", c.get("token", ""), secret=True)
     c["write_token"] = _ask("Contributor token to propose (optional)", c.get("write_token", ""), secret=True)
     mode = a.capture or _ask("Capture what each session learned: off, draft or send", c.get("capture", "off"))
     c["capture"] = mode if mode in mimir.CAPTURE_MODES else "off"

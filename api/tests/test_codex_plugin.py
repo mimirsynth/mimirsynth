@@ -235,6 +235,24 @@ def test_unknown_sessions_and_sessions_before_capture_are_never_read(plugin, mon
     assert not list(plugin.state.glob("*.json")) and not plugin.calls
 
 
+def test_setup_asks_for_the_tokens_hidden_only_in_a_terminal(plugin, monkeypatch, capsys):
+    cli = importlib.import_module("cli")
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))                       # run by the agent, not in a terminal
+    assert cli.main(["setup"]) == 2 and "in a terminal" in capsys.readouterr().out and not plugin.mimir.CONFIG.exists()
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    asked = iter(["https://mimir.test/", "b1", "draft"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(asked))
+    hidden = iter(["mst_reader", "mst_writer"])
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt="": next(hidden))
+    plugin.answers["/brains/b1/whoami"] = {"role": "reader", "brain": "b1", "name": "B1", "version": "0.14.0",
+                                           "token": {"name": "laptop", "scopes": ["recall"]}}
+    assert cli.main(["setup"]) == 0
+    saved = json.loads(plugin.mimir.CONFIG.read_text(encoding="utf-8"))
+    assert saved == {"url": "https://mimir.test", "brain": "b1", "token": "mst_reader", "write_token": "mst_writer", "capture": "draft"}
+    out = capsys.readouterr().out
+    assert "mst_reader" not in out and "role reader" in out and "Capture of what each session learned: draft" in out
+
+
 def test_session_start_brings_what_changed_and_says_what_else_feeds_codex(plugin, monkeypatch, capsys):
     _configure(monkeypatch)
     (plugin.tmp / "codex" / "config.toml").write_text(
