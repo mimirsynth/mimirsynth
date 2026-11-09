@@ -13,8 +13,8 @@ services:
       interval: 10s
       retries: 5
 
-  # Bundled graph engine. Start it with `docker compose --profile bundled up -d` and MIMIRSYNTH_FALKOR_HOST=falkordb.
-  # If you already have a FalkorDB, do not use the profile and point MIMIRSYNTH_FALKOR_HOST at it.
+  # Bundled graph engine. Start it with `docker compose --profile bundled up -d`: unless another graph database is chosen (in .env
+  # or in Administration > Graph database), it is the one MimirSynth uses. If you already have a FalkorDB or a Neo4j, skip the profile.
   falkordb:
     profiles: ["bundled"]
     image: falkordb/falkordb:v4.22.0
@@ -67,10 +67,13 @@ services:
       - "host.docker.internal:host-gateway"  # Docker Desktop resolves this name by itself; on Linux this line is needed to reach services on the host (e.g. Ollama)
     environment:
       MIMIRSYNTH_DATABASE_URL: "postgresql+psycopg://mimirsynth:${POSTGRES_PASSWORD}@postgres:5432/mimirsynth"
-      MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-falkordb}"
-      MIMIRSYNTH_FALKOR_PORT: "${MIMIRSYNTH_FALKOR_PORT:-6379}"
-      # An existing graph database (written by the installer): falkordb or neo4j (5.26+). See docs/CONFIGURATION.md.
-      MIMIRSYNTH_GRAPH_BACKEND: "${MIMIRSYNTH_GRAPH_BACKEND:-falkordb}"
+      # The graph database. Left empty: the one saved in Administration > Graph database or, without one, the bundled FalkorDB.
+      # Set (the installer writes them for an existing database): falkordb or neo4j (5.26+), read-only in the interface.
+      # See docs/CONFIGURATION.md.
+      MIMIRSYNTH_FALKOR_BUNDLED_HOST: "falkordb"
+      MIMIRSYNTH_GRAPH_BACKEND: "${MIMIRSYNTH_GRAPH_BACKEND:-}"
+      MIMIRSYNTH_FALKOR_HOST: "${MIMIRSYNTH_FALKOR_HOST:-}"
+      MIMIRSYNTH_FALKOR_PORT: "${MIMIRSYNTH_FALKOR_PORT:-}"
       MIMIRSYNTH_FALKOR_USERNAME: "${MIMIRSYNTH_FALKOR_USERNAME:-}"
       MIMIRSYNTH_FALKOR_PASSWORD: "${MIMIRSYNTH_FALKOR_PASSWORD:-}"
       MIMIRSYNTH_NEO4J_URI: "${MIMIRSYNTH_NEO4J_URI:-}"

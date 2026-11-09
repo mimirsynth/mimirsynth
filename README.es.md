@@ -64,8 +64,8 @@ El entorno solo lleva lo necesario para arrancar y conectar (tabla de abajo). To
 ### Variables de entorno
 | Variable | Por defecto | Descripción |
 |---|---|---|
-| `MIMIRSYNTH_FALKOR_HOST` | `localhost` | Host de FalkorDB |
-| `MIMIRSYNTH_FALKOR_PORT` | `6379` | Puerto |
+| `MIMIRSYNTH_GRAPH_BACKEND`, `MIMIRSYNTH_FALKOR_HOST`, `MIMIRSYNTH_NEO4J_URI` | _(vacío)_ | Una base de datos de grafos existente. Vacías: la guardada en Administración → Base de datos del grafo o el FalkorDB incluido ([detalles](docs/es/CONFIGURATION.md#base-de-datos-de-grafos)) |
+| `MIMIRSYNTH_FALKOR_PORT` | `6379` | Puerto de un FalkorDB existente |
 | `MIMIRSYNTH_DATABASE_URL` | SQLite local | Plano de control (PostgreSQL en producción) |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | _(vacío)_ | Grafos existentes a adoptar como brains |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, más OIDC si se configura). `off` solo para desarrollo: sin inicio de sesión |

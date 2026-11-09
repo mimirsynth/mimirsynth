@@ -85,7 +85,7 @@ Edit `.env` and set at least `POSTGRES_PASSWORD` and `MIMIRSYNTH_SESSION_SECRET`
 docker compose --profile bundled up -d
 ```
 This pulls the official image (`ghcr.io/mimirsynth/mimirsynth`, for amd64 and arm64). To pin a version, set `MIMIRSYNTH_VERSION=0.14.0` in `.env` (default: `latest`).
-- `--profile bundled` also starts a bundled FalkorDB. If you already have one, omit the profile and put its address in `MIMIRSYNTH_FALKOR_HOST`.
+- `--profile bundled` also starts a bundled FalkorDB, which is the one used unless you choose another. If you already have a FalkorDB or a Neo4j, omit the profile and enter it in **Administration → Graph database** after the first start, or set it in `.env` (see [Graph database](CONFIGURATION.md#graph-database)).
 - The application is available at `http://localhost:8000` (change the port with `MIMIRSYNTH_PORT`).
 
 > Do not put comments at the end of a value line in `.env` (`KEY=value # comment`): Docker Compose would read them as part of the value.

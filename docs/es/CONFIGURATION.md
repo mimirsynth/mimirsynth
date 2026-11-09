@@ -15,8 +15,8 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `POSTGRES_PASSWORD` | – | Contraseña de PostgreSQL (obligatoria) |
 | `MIMIRSYNTH_SESSION_SECRET` | – | Firma las sesiones y cifra los secretos guardados (obligatoria) |
 | `MIMIRSYNTH_PORT` | `8000` | Puerto publicado en el host |
-| `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
-| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | `falkordb` o `neo4j`: ver [Base de datos de grafos](#base-de-datos-de-grafos) |
+| `MIMIRSYNTH_GRAPH_BACKEND` | vacío | `falkordb` o `neo4j`. Vacía, y también `MIMIRSYNTH_FALKOR_HOST` y `MIMIRSYNTH_NEO4J_URI`: la conexión guardada en **Administración → Base de datos del grafo** o, sin ella, el FalkorDB incluido. Ver [Base de datos de grafos](#base-de-datos-de-grafos) |
+| `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | vacío / `6379` | Un FalkorDB existente |
 | `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB existente |
 | `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | vacío | Un Neo4j existente (`bolt://host:7687`; base de datos vacía: la predeterminada del servidor) |
 | `COMPOSE_PROFILES` | vacío | Perfiles que arranca un simple `docker compose up -d`: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. Lo define el instalador |
@@ -28,7 +28,12 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del host montada en solo lectura en `/sources` |
 
 ## Base de datos de grafos
-Cada instancia guarda los grafos de conocimiento de sus brains en una base de datos de grafos, que se elige con `MIMIRSYNTH_GRAPH_BACKEND`:
+Cada instancia guarda los grafos de conocimiento de sus brains en una base de datos de grafos. De dónde sale su conexión, por este orden:
+1. **El entorno**, cuando `MIMIRSYNTH_GRAPH_BACKEND`, `MIMIRSYNTH_FALKOR_HOST` o `MIMIRSYNTH_NEO4J_URI` tienen valor (el instalador las escribe cuando eliges una base de datos existente). Manda sobre la interfaz, que la muestra en solo lectura; se cambia en `.env`, con un reinicio.
+2. **Administración → Base de datos del grafo**: un administrador pone el servidor (FalkorDB o Neo4j, host, puerto, usuario, contraseña, TLS y, con Neo4j, la base de datos) y lo prueba. La prueba comprueba que la dirección responde, las credenciales, la versión y que se puede escribir (un nodo de prueba que se crea y se borra en el acto), y lista los grafos o `group_id` que ya tiene la base de datos, con sus nodos. Una conexión que no pasa la prueba no se puede guardar. Al guardarla, la instancia pasa a usarla sin reiniciar, y la contraseña se guarda cifrada con `MIMIRSYNTH_SESSION_SECRET`.
+3. **El FalkorDB incluido** (perfil `bundled`, `MIMIRSYNTH_FALKOR_BUNDLED_HOST`, que compose pone a `falkordb`), cuando ninguno de los anteriores dice nada.
+
+Para gestionar desde la interfaz una conexión que está en `.env`, quita esas variables de `.env` y reinicia. `/api/health` y `/api/ai-status` dicen qué backend está en uso (`backend`).
 
 | Backend | Versiones soportadas | Un brain es | Conexión |
 |---|---|---|---|
@@ -42,7 +47,7 @@ Qué cambia con Neo4j:
 - La comprobación de memoria libre antes de cambiar el modelo de embeddings solo existe con FalkorDB. Con Neo4j, vigila tú la memoria del servidor.
 - 5.26 es la versión más antigua cuyo Cypher pone etiquetas y tipos de relación a partir de los datos, algo que necesita la copia de un brain (la instantánea antes de fusionar entidades o el cambio de nombre del grafo de un brain).
 
-Hay un backend por instancia, y cambiarlo no mueve los datos. Para llevar brains de uno a otro, expórtalos e impórtalos en una instancia con el otro backend.
+Hay un backend por instancia, y cambiarlo, en `.env` o en Administración → Base de datos del grafo, no mueve los datos: un brain cuyo grafo no esté en la base de datos nueva se ve vacío hasta que vuelves a la anterior. Para llevar brains de uno a otro, expórtalos e impórtalos en una instancia con el otro backend.
 
 ## Proveedores de IA
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.

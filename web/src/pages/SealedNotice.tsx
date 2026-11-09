@@ -16,6 +16,7 @@ const KIND: Record<string, string> = {
   notifications: T("Secretos de los canales de notificación"),
   webhooks: T("Secretos de los webhooks de entrada"),
   doc_sources: T("Credenciales de las fuentes de documentos"),
+  graph: T("Contraseña de la base de datos del grafo"),
 };
 
 type Sealed = { ok: boolean; unreadable: Record<string, number>; total: number };

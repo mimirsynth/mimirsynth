@@ -41,6 +41,9 @@ def _sealed(db: Session) -> Iterator[tuple[str, str]]:
         yield "notifications", v
     for (v,) in db.execute(select(Webhook.secret_enc).where(Webhook.secret_enc != "")):
         yield "webhooks", v
+    from .models import GraphConnection
+    for (v,) in db.execute(select(GraphConnection.password_enc).where(GraphConnection.password_enc != "")):
+        yield "graph", v
     for (cfg,) in db.execute(select(DocSource.config)):
         for v in ((cfg or {}).get("secrets") or {}).values():
             if v:

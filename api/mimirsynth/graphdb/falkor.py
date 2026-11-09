@@ -11,13 +11,13 @@ class FalkorBackend(GraphBackend):
     name = "falkordb"
     label = "FalkorDB"
 
-    def __init__(self, host: str, port: int, username: str | None = None, password: str | None = None):
-        self.host, self.port, self.username, self.password = host, port, username, password
+    def __init__(self, host: str, port: int, username: str | None = None, password: str | None = None, tls: bool = False):
+        self.host, self.port, self.username, self.password, self.tls = host, port, username, password, tls
 
     @cached_property
     def client(self):
         from falkordb import FalkorDB
-        return FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password)
+        return FalkorDB(host=self.host, port=self.port, username=self.username, password=self.password, ssl=self.tls)
 
     def graph(self, name: str):
         return self.client.select_graph(name)
@@ -33,6 +33,10 @@ class FalkorBackend(GraphBackend):
 
     def graphiti_driver(self, name: str):
         from graphiti_core.driver.falkordb_driver import FalkorDriver
+        if self.tls:  # Graphiti's driver has no TLS switch of its own: it takes a client made with one
+            from falkordb.asyncio import FalkorDB as AsyncFalkorDB
+            return FalkorDriver(falkor_db=AsyncFalkorDB(host=self.host, port=self.port, username=self.username, password=self.password, ssl=True),
+                                database=name)
         return FalkorDriver(host=self.host, port=self.port, username=self.username, password=self.password, database=name)
 
     def vector(self, expr: str) -> str:
@@ -79,3 +83,7 @@ class FalkorBackend(GraphBackend):
 
     def restore(self, name: str, payload: bytes) -> None:
         self.client.connection.restore(name, 0, payload)
+
+    def close(self) -> None:
+        if "client" in self.__dict__:
+            self.client.connection.close()

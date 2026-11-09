@@ -15,8 +15,8 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 | `POSTGRES_PASSWORD` | – | PostgreSQL password (required) |
 | `MIMIRSYNTH_SESSION_SECRET` | – | Signs sessions and encrypts the secrets stored in the database (required) |
 | `MIMIRSYNTH_PORT` | `8000` | Port published on the host |
-| `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | `falkordb` / `6379` | FalkorDB |
-| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | `falkordb` or `neo4j`: see [Graph database](#graph-database) |
+| `MIMIRSYNTH_GRAPH_BACKEND` | empty | `falkordb` or `neo4j`. Empty, with `MIMIRSYNTH_FALKOR_HOST` and `MIMIRSYNTH_NEO4J_URI` empty too: the connection saved in **Administration → Graph database**, or the bundled FalkorDB. See [Graph database](#graph-database) |
+| `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | empty / `6379` | An existing FalkorDB |
 | `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | empty | Credentials of an existing FalkorDB |
 | `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | empty | An existing Neo4j (`bolt://host:7687`; empty database: the server's default) |
 | `COMPOSE_PROFILES` | empty | Profiles a plain `docker compose up -d` starts: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. The installer sets it |
@@ -28,7 +28,12 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Host folder mounted read-only at `/sources` |
 
 ## Graph database
-Each instance keeps its brains' knowledge graphs in one graph database, chosen with `MIMIRSYNTH_GRAPH_BACKEND`:
+Each instance keeps its brains' knowledge graphs in one graph database. Where its connection comes from, in this order:
+1. **The environment**, when `MIMIRSYNTH_GRAPH_BACKEND`, `MIMIRSYNTH_FALKOR_HOST` or `MIMIRSYNTH_NEO4J_URI` has a value (the installer writes them when you choose an existing database). It wins over the interface, which shows it read-only; it changes in `.env`, with a restart.
+2. **Administration → Graph database**: an administrator enters the server (FalkorDB or Neo4j, host, port, user, password, TLS and, for Neo4j, the database) and tests it. The test checks that the address answers, the credentials, the version, that it can write (a probe node, created and removed at once) and lists the graphs or `group_id`s the database already holds, with their node counts. A connection that does not pass cannot be saved. Saving switches the instance to it without a restart, and the password is stored encrypted with `MIMIRSYNTH_SESSION_SECRET`.
+3. **The bundled FalkorDB** (`bundled` profile, `MIMIRSYNTH_FALKOR_BUNDLED_HOST`, which compose sets to `falkordb`), when neither of the above says anything.
+
+To manage from the interface a connection that is set in `.env`, remove those variables from `.env` and restart. `/api/health` and `/api/ai-status` say which backend is in use (`backend`).
 
 | Backend | Supported versions | A brain is | Connection |
 |---|---|---|---|
@@ -42,7 +47,7 @@ What changes with Neo4j:
 - The free-memory check before changing the embedding model only exists on FalkorDB. With Neo4j, watch the server's memory yourself.
 - 5.26 is the oldest version whose Cypher sets labels and relationship types from data, which copying a brain needs (the snapshot before merging entities, renaming a brain's graph).
 
-There is one backend per instance, and changing it does not move the data. To take brains from one to the other, export them and import them into an instance on the other backend.
+There is one backend per instance, and changing it, in `.env` or in Administration → Graph database, does not move the data: a brain whose graph is not in the new database looks empty until you switch back. To take brains from one to the other, export them and import them into an instance on the other backend.
 
 ## AI providers
 Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.
