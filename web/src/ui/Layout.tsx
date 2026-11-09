@@ -78,13 +78,13 @@ export function HelpMenu({ label, items, tour }: { label: string; tour?: string;
 }
 
 /** Tarjeta de la persona en la barra lateral: su avatar y su nombre llevan a «Mi cuenta», y a su lado va el botón de cerrar sesión (children). */
-export function UserCard({ to, label, avatar, name, children }: { to: string; label: string; avatar: ReactNode; name: string; children?: ReactNode }) {
+export function UserCard({ to, label, avatar, name, sub, children }: { to: string; label: string; avatar: ReactNode; name: string; sub?: ReactNode; children?: ReactNode }) {
   const { pathname } = useLocation();
   const isActive = pathname === to || pathname.startsWith(`${to}/`);
   return (
     <div className="ms-usercard">
       <MTooltip label={label} position="top">
-        <RouterNavLink to={to} aria-label={label} className={`ms-usercard-link${isActive ? " active" : ""}`}>{avatar}<span className="ms-usercard-name">{name}</span></RouterNavLink>
+        <RouterNavLink to={to} aria-label={label} className={`ms-usercard-link${isActive ? " active" : ""}`}>{avatar}<span className="ms-usercard-text"><span className="ms-usercard-name">{name}</span>{sub && <span className="ms-usercard-sub">{sub}</span>}</span></RouterNavLink>
       </MTooltip>
       {children}
     </div>

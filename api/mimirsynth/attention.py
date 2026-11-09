@@ -35,12 +35,14 @@ READS = ("/recall", "/query", "/attention", "/duplicates/preview")  # POSTs that
 
 
 def _proposals(ctx: BrainCtx) -> dict:
-    rows = ctx.db.execute(select(Proposal.kind, func.count()).where(Proposal.brain_id == ctx.brain.id, Proposal.status == "pending")
-                          .group_by(Proposal.kind)).all()
+    rows = ctx.db.execute(select(Proposal.kind, func.count(), func.min(Proposal.created_at))
+                          .where(Proposal.brain_id == ctx.brain.id, Proposal.status == "pending").group_by(Proposal.kind)).all()
     # an approved proposal whose ingestion failed waits for a curator too: a retry or a rejection (#421)
     failed = ctx.db.scalar(select(func.count()).select_from(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.status == "failed")) or 0
-    return {"proposals": sum(n for k, n in rows if (k or "memory") != "correction"), "corrections": sum(n for k, n in rows if k == "correction"),
-            "failed": failed}
+    # when the oldest pending proposal came in: the Overview says how long the queue has been waiting
+    oldest = min((t for k, _, t in rows if (k or "memory") != "correction" and t), default=None)
+    return {"proposals": sum(n for k, n, _ in rows if (k or "memory") != "correction"), "corrections": sum(n for k, n, _ in rows if k == "correction"),
+            "failed": failed, "proposals_oldest": oldest.isoformat() if oldest else None}
 
 
 def _duplicates(ctx: BrainCtx) -> int:
@@ -115,7 +117,7 @@ def _compute(ctx: BrainCtx) -> dict:
         out.update(_proposals(ctx))
     except Exception:  # noqa: BLE001  (one counter that fails leaves the others)
         log.warning("no se pudieron contar las propuestas del brain %s", ctx.brain.id, exc_info=True)
-        out.update(proposals=None, corrections=None, failed=None)
+        out.update(proposals=None, corrections=None, failed=None, proposals_oldest=None)
     for name, fn in COUNTERS.items():
         try:
             out[name] = fn(ctx)

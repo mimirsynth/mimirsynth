@@ -11,6 +11,7 @@ import { ApiError, Brain, get, Me, send } from "./api";
 import Logo from "./Logo";
 import { AcceptScreen, AuthScreen, ChangePasswordScreen, TwoFactorSetupScreen } from "./pages/AuthPages";
 import type { Summary } from "./pages/Notifications";
+import type { Attention } from "./pages/Quality";
 import GuidedTour from "./pages/GuidedTour";
 // Each screen is its own chunk, loaded the first time it is opened: the first visit downloads the shell and one screen, not all fifty.
 const Overview = lazy(() => import("./pages/Overview"));
@@ -109,6 +110,12 @@ export default function App() {
   // Trabajos activos del brain: contador junto a «Trabajos»; se consulta más a menudo mientras haya alguno en marcha.
   const active = useQuery({ queryKey: ["jobs-summary", brain], enabled: !!me.data && hasBrain, queryFn: () => get<{ active: number }>("jobs/summary", { graph: brain }),
     refetchInterval: (q) => ((q.state.data?.active ?? 0) > 0 ? 3000 : 20000) });
+  // What waits for a decision, beside «Proposals» and «Content quality» (the same counters as the Overview, shared through the cache).
+  const curates = ["curator", "admin", "owner"].includes(brains.data?.find((b) => b.slug === brain)?.role ?? "");
+  const waiting = useQuery({ queryKey: ["attention", brain], enabled: !!me.data && hasBrain && curates, staleTime: 30000, refetchInterval: 60000,
+    queryFn: () => get<Attention>(`brains/${brain}/attention`) });
+  const w = waiting.data;
+  const quality = w ? (w.duplicates ?? 0) + (w.conflicts ?? 0) + (w.stale ?? 0) + (w.retype ?? 0) + (w.summaries ?? 0) : 0;
   const bell = useQuery({ queryKey: ["notifications-summary"], enabled: !!me.data, queryFn: () => get<Summary>("notifications/summary"), refetchInterval: 30000 });
   const name = cfg.data?.name ?? "…";
   // The guided tour (issue 364) starts on its own once, for whoever has not finished or skipped it, as soon as there is a brain to show; the
@@ -142,30 +149,34 @@ export default function App() {
   const cur = brains.data?.find((b) => b.slug === brain);
 
   return (
-    <AppShell header={{ height: { base: 52, sm: 0 } }} navbar={{ width: 240, breakpoint: "sm", collapsed: { mobile: !menu } }} padding="md">
+    <AppShell header={{ height: { base: 52, sm: 0 } }} navbar={{ width: 256, breakpoint: "sm", collapsed: { mobile: !menu } }} padding="md">
       <AppShell.Header hiddenFrom="sm" className="ms-mobilebar">
         <Burger opened={menu} onClick={() => setMenu((o) => !o)} size="sm" aria-label={menu ? t("Cerrar menú") : t("Abrir menú")} />
         <Logo size={26} name={name} />
       </AppShell.Header>
       <AppShell.Navbar p="xs" className="ms-navbar">
-        <div className="ms-nav-top"><Logo size={30} name={name} /></div>
+        <div className="ms-nav-top"><Logo size={30} name={name} />
+          <div className="ms-nav-brain" data-tour="brain">
+            <SelectField size="xs" aria-label={t("Brain activo")} value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
+          </div>
+        </div>
         <div className="ms-nav-scroll" data-tour="nav">
           {NAV.map((g) => (
             <div key={g.section} className="ms-nav-group">
               <div className="ms-nav-section">{t(g.section)}</div>
               {g.items.filter((n) => !("curators" in n) || ["curator", "admin", "owner"].includes(cur?.role ?? "")).map((n) => <NavItem key={n.to} icon={n.icon} component={RouterLink} to={n.to} label={t(n.label)} end={n.to === "/"} data-tour={"tour" in n ? n.tour : undefined}
                 active={n.to === "/hechos" && loc.pathname.startsWith("/entidad/") ? true : undefined}  // an entity page belongs to Facts
-                rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("trabajos en cola o en marcha")}>{active.data!.active}</Pill> : undefined} />)}
+                rightSection={n.to === "/trabajos" && (active.data?.active ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("trabajos en cola o en marcha")}>{active.data!.active}</Pill>
+                  : n.to === "/propuestas" && (w?.proposals ?? 0) > 0 ? <Pill size="xs" tone="warn" title={t("propuestas esperando una decisión")}>{w!.proposals}</Pill>
+                  : n.to === "/calidad" && quality > 0 ? <Pill size="xs" title={t("cosas por revisar en la calidad del contenido")}>{quality}</Pill> : undefined} />)}
             </div>))}
         </div>
         <div className="ms-nav-bottom">
           <NavItem icon="bell" component={RouterLink} to="/notificaciones" label={t("Notificaciones")}
             rightSection={bell.data?.unread ? <Pill size="xs" tone={bell.data.worst === "critical" ? "danger" : "warn"} title={t("avisos sin leer")}>{bell.data.unread}</Pill>
               : bell.data?.open ? <Pill size="xs" title={t("problemas abiertos")}>{bell.data.open}</Pill> : undefined} />
-          <div data-tour="brain">
-            <SelectField size="xs" aria-label={t("Brain activo")} value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
-          </div>
-          <UserCard to="/cuenta" label={`${t("Mi cuenta · {{name}}", { name: me.data.name })}${cur ? t(" · rol {{role}}", { role: cur.role }) : ""}`} avatar={<Avatar src={me.data.avatar} name={me.data.name} size={26} />} name={me.data.name}>
+          <UserCard to="/cuenta" label={`${t("Mi cuenta · {{name}}", { name: me.data.name })}${cur ? t(" · rol {{role}}", { role: cur.role }) : ""}`} avatar={<Avatar src={me.data.avatar} name={me.data.name} size={28} />}
+            name={me.data.name} sub={cur ? t("{{role}} en {{brain}}", { role: cur.role, brain: cur.name }) : undefined}>
             {me.data.auth_mode !== "off" && <RoundButton label={t("Cerrar sesión")} onClick={() => logout.mutate()}><Icon name="logout" /></RoundButton>}
           </UserCard>
           <div className="ms-iconrow">
@@ -177,9 +188,9 @@ export default function App() {
             ]} />
             <ThemeButton />
             <RoundLink to="/admin" label={t("Administración")} tour="admin"><Icon name="admin" /></RoundLink>
+            <span className="ms-version" title={`${name} v${cfg.data?.version ?? ""}`}>v{cfg.data?.version ?? ""}
+              {cfg.data?.stage === "beta" && <span className="ms-version-tag" title={t("Beta pública: hasta la versión 1.0, la API y el esquema pueden cambiar entre versiones menores.")}>{t("Beta")}</span>}</span>
           </div>
-          <div className="ms-version">{name} v{cfg.data?.version ?? ""}
-            {cfg.data?.stage === "beta" && <> <Pill size="xs" tone="warn" title={t("Hasta la versión 1.0, la API y el esquema pueden cambiar entre versiones menores.")}>{t("Beta pública")}</Pill></>}</div>
         </div>
       </AppShell.Navbar>
       <AppShell.Main>

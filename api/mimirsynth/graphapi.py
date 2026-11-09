@@ -92,7 +92,7 @@ def activity(weeks: int = Query(26, ge=4, le=104), ctx: BrainCtx = Depends(reade
         if j is not None:
             invalidated[j] += 1
     top_entities = rows(G.query("MATCH (n:Entity)-[r:RELATES_TO]-() WITH n, count(r) AS degree ORDER BY degree DESC LIMIT 8 "
-                                "RETURN n.name AS name, degree, [l IN labels(n) WHERE l <> 'Entity'] AS labels"))
+                                "RETURN n.uuid AS uuid, n.name AS name, degree, [l IN labels(n) WHERE l <> 'Entity'] AS labels"))
     docs = dict(ctx.db.execute(select(Document.status, func.count()).where(Document.brain_id == ctx.brain.id).group_by(Document.status)).all())
     chunks = ctx.db.scalar(select(func.coalesce(func.sum(Document.chunks), 0)).where(Document.brain_id == ctx.brain.id, Document.status == "active")) or 0
     return {

@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { T, locale } from "../i18n";
 import { Text } from "@mantine/core";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 /** Gráficas SVG sencillas y sin dependencias; los colores salen de los tokens del tema (claro y oscuro). */
 import { SERIES } from "./palette";
@@ -23,7 +24,7 @@ function useBox<T extends HTMLElement>() {
 }
 
 /** Líneas con relleno suave, una por serie, sobre el mismo eje. Ocupa todo el ancho y el alto disponibles de su contenedor: el SVG se dibuja al tamaño real, sin deformar el texto. */
-export function AreaChart({ series, labels, height = 220 }: { series: AreaSeries[]; labels: string[]; height?: number }) {
+export function AreaChart({ series, labels, height = 220, unit = T("Semana del") }: { series: AreaSeries[]; labels: string[]; height?: number; unit?: string }) {
   const { t } = useTranslation();
   const [ref, box] = useBox<HTMLDivElement>();
   const [hover, setHover] = useState<number | null>(null);
@@ -43,7 +44,7 @@ export function AreaChart({ series, labels, height = 220 }: { series: AreaSeries
       <div ref={ref} className="ms-chart-box" style={{ minHeight: height }}>
         {hover !== null && box.w > 0 && (
           <div className="ms-chart-tip" style={{ left: Math.min(Math.max(x(hover) + 12, 4), W - 190), top: 8 }}>
-            <div className="ms-chart-tip-title">{t("Semana del")} {fmtD(labels[hover])}</div>
+            <div className="ms-chart-tip-title">{t(unit)} {fmtD(labels[hover])}</div>
             {series.map((s, k) => <div key={s.name}><i style={{ background: s.color ?? SERIES[k % SERIES.length] }} />{s.name}<b>{s.values[hover] ?? 0}</b></div>)}
           </div>)}
         {box.w > 0 && (
@@ -113,6 +114,37 @@ export function BarList({ items, color = SERIES[0], empty = T("Sin datos") }: { 
           <span className="ms-bar-track"><span className="ms-bar-fill" style={{ width: `${(100 * i.value) / max}%`, background: color }} /></span>
           <span className="ms-bar-value">{i.value}</span>
         </div>))}
+    </div>
+  );
+}
+
+/** A line without axes that shows the shape of a short series (the hours of a day, the days of a month), beside a figure. Decorative:
+ *  the figure and its note say the numbers. */
+export function Sparkline({ values, color = SERIES[0], width = 72, height = 24 }: { values: number[]; color?: string; width?: number; height?: number }) {
+  if (values.length < 2) return null;
+  const max = Math.max(1, ...values);
+  const pts = values.map((v, i) => `${((i * (width - 2)) / (values.length - 1) + 1).toFixed(1)},${(height - 2 - (v / max) * (height - 4)).toFixed(1)}`).join(" ");
+  return <svg className="ms-spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true"><polyline points={pts} fill="none" stroke={color} strokeWidth={1.6} strokeLinejoin="round" /></svg>;
+}
+
+/** A figure of a period, with its sparkline and a note (the comparison with the period before), that opens the page where it is seen. */
+export function TrendStat({ label, value, values, color, note, to }: { label: string; value: ReactNode; values?: number[] | null; color?: string; note?: ReactNode; to: string }) {
+  return (
+    <Link to={to} className="ms-trend">
+      <span className="ms-trend-label">{label}</span>
+      <span className="ms-trend-row"><span className="ms-trend-value">{value}</span>{values && <Sparkline values={values} color={color} />}</span>
+      {note && <span className="ms-trend-note">{note}</span>}
+    </Link>
+  );
+}
+
+/** A bar of how much of a whole is used (a budget), with an optional mark (where a warning goes off). `value` and `mark` go from 0 to 1. */
+export function Meter({ value, mark, label, tone }: { value: number; mark?: number; label: string; tone?: "warn" | "danger" }) {
+  const pct = (v: number) => `${Math.max(0, Math.min(1, v)) * 100}%`;
+  return (
+    <div className="ms-meter" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value * 100)} data-tone={tone}>
+      <span className="ms-meter-fill" style={{ width: pct(value) }} />
+      {mark !== undefined && <span className="ms-meter-mark" style={{ left: pct(mark) }} />}
     </div>
   );
 }
