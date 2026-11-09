@@ -31,7 +31,7 @@ In the browser, enter the first-start code and create the administrator account.
 5. **Decider** (optional).
 6. **Your first brain:** a name (the slug is derived from it), or an existing or adopted brain.
 7. **API token:** Contributor role, valid for 90 days, already filled into the next step.
-8. **Connect your agent** (step 3 below); **Finish** goes to the home screen.
+8. **Connect your agent** (step 3 below): it turns green after the agent's first recall, and **Finish** goes to the home screen with or without it.
 
 **Set up by hand** closes the wizard altogether; the **Setup wizard** button at the top of Administration opens it again.
 

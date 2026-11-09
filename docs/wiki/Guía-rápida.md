@@ -31,7 +31,7 @@ En el navegador, introduce el código de inicio y crea la cuenta de administrado
 5. **Decisor** (opcional).
 6. **Tu primer brain:** un nombre (el slug sale de él), o un brain que ya existe o que adoptaste.
 7. **Token de API:** rol Colaborador, válido 90 días, ya puesto en el paso siguiente.
-8. **Conecta tu agente** (el paso 3 de abajo); **Terminar** lleva al inicio.
+8. **Conecta tu agente** (el paso 3 de abajo): se pone en verde tras el primer recall del agente, y **Terminar** lleva al inicio con o sin él.
 
 **Configurar a mano** cierra el asistente del todo; el botón **Asistente de configuración**, arriba en Administración, lo vuelve a abrir.
 
