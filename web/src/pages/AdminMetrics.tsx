@@ -39,7 +39,7 @@ export default function AdminMetrics() {
             </Group>
             {d.enabled && <>
               <Text size="sm">{t("Configuración de Prometheus (guarda el token, solo, en el fichero de credentials_file):")}</Text>
-              <CodeBlock copy>{`scrape_configs:\n  - job_name: mimirsynth\n    scrape_interval: 60s\n    metrics_path: /metrics\n    scheme: ${d.url.startsWith("https://") ? "https" : "http"}\n    authorization:\n      credentials_file: /etc/prometheus/mimirsynth.token\n    static_configs:\n      - targets: ["${hostOf(d.url)}"]`}</CodeBlock>
+              <CodeBlock copy>{`scrape_configs:\n  - job_name: mimirsynth\n    scrape_interval: 60s\n    metrics_path: /metrics\n    scheme: ${d.url.startsWith("https://") ? "https" : "http"}\n    authorization:\n      credentials_file: /etc/prometheus/mimirsynth.token\n    static_configs:\n      - targets: ["${hostOf(d.url)}"]`}</CodeBlock>  {/* i18n-ok: Prometheus configuration */}
               {!d.url.startsWith("http") && <Notice tone="info">{t("Sin URL pública configurada: pon en targets la dirección por la que Prometheus llega a la aplicación.")}</Notice>}
             </>}
           </Stack></SettingsBody>

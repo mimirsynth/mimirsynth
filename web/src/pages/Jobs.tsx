@@ -87,7 +87,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
                   : x.total ? <Text size="xs" c="dimmed">{x.done}/{x.total}</Text> : <Text size="xs" c="dimmed">{x.status === "queued" ? t("esperando turno") : "—"}</Text>}</DataTable.Td>
                 <DataTable.Td>{fmt(x.started_at ?? x.created_at)}</DataTable.Td>
                 <DataTable.Td>{x.started_at ? took(x.started_at, x.finished_at) : "—"}</DataTable.Td>
-                <DataTable.Td>{x.user || "sistema"}</DataTable.Td>
+                <DataTable.Td>{x.user || t("sistema")}</DataTable.Td>
                 <DataTable.Td><Btn size="row" onClick={() => setOpen(x.id)}>{t("Ver")}</Btn></DataTable.Td>
               </DataTable.Tr>);
             if (!rest.length) return [row(j)];
@@ -114,7 +114,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
           <Stack>
             <Text fw={600}>{d.title}</Text>
             <Group gap={6}><Pill size="xs" tone={TONE[d.status] ?? "neutral"}>{t(LABEL[d.status] ?? d.status)}</Pill>{d.attempts > 1 && <Pill size="xs">{d.attempts} {t("intentos")}</Pill>}{d.retry_of && <Pill size="xs">{t("reintento de #")}{d.retry_of}</Pill>}</Group>
-            <Text size="xs" c="dimmed">{t("Creado")} {fmt(d.created_at)} {t("· inicio")} {fmt(d.started_at)} {t("· fin")} {fmt(d.finished_at)} {t("· duración")} {took(d.started_at, d.finished_at)} · {d.user || "sistema"}</Text>
+            <Text size="xs" c="dimmed">{t("Creado")} {fmt(d.created_at)} {t("· inicio")} {fmt(d.started_at)} {t("· fin")} {fmt(d.finished_at)} {t("· duración")} {took(d.started_at, d.finished_at)} · {d.user || t("sistema")}</Text>
             {d.status === "running" && <ProgressBar done={d.done} total={d.total} text={d.total ? `${d.done}/${d.total} · ${d.message}` : d.message || "…"} />}
             {d.error && <Notice tone={d.status === "cancelled" ? "warn" : "danger"}>{d.error}</Notice>}
             {d.result && <Group gap={6}>{Object.entries(d.result).map(([k, v]) => <Pill key={k} size="xs" tone={k === "errors" && Number(v) > 0 ? "danger" : "neutral"}>{`${v} ${t(RESULT[k] ?? k)}`}</Pill>)}</Group>}

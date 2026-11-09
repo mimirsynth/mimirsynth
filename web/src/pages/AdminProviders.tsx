@@ -26,7 +26,7 @@ function ProviderForm({ initial, isNew, onClose }: { initial: Draft; isNew: bool
   const ok = d.name.trim() && d.issuer.trim() && d.client_id.trim() && (!isNew || (d.slug.trim() && d.client_secret));
   return (
     <Stack gap="xs">
-      {isNew && <TextField label={t("Identificador")} description={t("Va en las URLs de inicio de sesión y de retorno. No se puede cambiar después.")} placeholder={"pocketid"} value={d.slug} onChange={(e) => set("slug", e.currentTarget.value.toLowerCase())} data-autofocus />}
+      {isNew && <TextField label={t("Identificador")} description={t("Va en las URLs de inicio de sesión y de retorno. No se puede cambiar después.")} placeholder={"pocketid"} /* i18n-ok: an example identifier */ value={d.slug} onChange={(e) => set("slug", e.currentTarget.value.toLowerCase())} data-autofocus />}
       <TextField label={t("Nombre del botón")} description={t("Aparece en la pantalla de entrada: «Entrar con …».")} value={d.name} onChange={(e) => set("name", e.currentTarget.value)} />
       <TextField label={t("Emisor OIDC (issuer)")} description={t("URL base del proveedor de identidad; debe publicar /.well-known/openid-configuration.")} placeholder={"https://"} value={d.issuer} onChange={(e) => set("issuer", e.currentTarget.value)} />
       <TextField label={t("Client ID")} value={d.client_id} onChange={(e) => set("client_id", e.currentTarget.value)} />

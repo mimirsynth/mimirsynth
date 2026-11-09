@@ -49,7 +49,7 @@ export function TwoFactor({ onChange }: { onChange?: () => void }) {
 
   return (
     <Stack gap="sm">
-      <Group gap="xs"><Text fw={600} size="sm">{t("Doble factor")}</Text><Pill size="xs" tone={s.enabled ? "success" : undefined}>{s.enabled ? "activado" : "desactivado"}</Pill>{s.required && <Pill size="xs" tone="warn">{t("exigido por el administrador")}</Pill>}</Group>
+      <Group gap="xs"><Text fw={600} size="sm">{t("Doble factor")}</Text><Pill size="xs" tone={s.enabled ? "success" : undefined}>{s.enabled ? t("activado") : t("desactivado")}</Pill>{s.required && <Pill size="xs" tone="warn">{t("exigido por el administrador")}</Pill>}</Group>
       {step === "idle" && !s.enabled && <>
         <Text size="sm" c="dimmed">{t("Además de la contraseña pedirá un código de 6 dígitos de una app de autenticación (Aegis, 2FAS, Google Authenticator, Bitwarden…).")}</Text>
         {!s.has_password

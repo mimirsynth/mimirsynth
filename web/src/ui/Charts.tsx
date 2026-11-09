@@ -75,6 +75,7 @@ export type Slice = { label: string; value: number; color?: string };
 
 /** Anillo con el total en el centro y leyenda con porcentajes. Se escala para llenar el alto y el ancho que le deja su contenedor. */
 export function Donut({ slices, center }: { slices: Slice[]; center?: ReactNode }) {
+  const { t } = useTranslation();
   const total = slices.reduce((a, s) => a + s.value, 0);
   const R = 52, C = 2 * Math.PI * R;
   let acc = 0;
@@ -89,7 +90,7 @@ export function Donut({ slices, center }: { slices: Slice[]; center?: ReactNode 
             acc += len; return el;
           })}
           <text x={70} y={68} textAnchor="middle" className="ms-donut-num">{total}</text>
-          <text x={70} y={86} textAnchor="middle" className="ms-donut-sub">{center ?? "total"}</text>
+          <text x={70} y={86} textAnchor="middle" className="ms-donut-sub">{center ?? t("total")}</text>
         </svg>
       </div>
       <div className="ms-legend ms-legend-col">{slices.map((s, k) => <span key={s.label}><i style={{ background: s.color ?? SERIES[k % SERIES.length] }} />{s.label} <b>{s.value}</b>{total > 0 && <em>{Math.round((100 * s.value) / total)} %</em>}</span>)}</div>

@@ -87,7 +87,7 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
                 <Text className="ms-tl-date" size="xs" fw={600}>{day}</Text>
                 {evs.map((e) => (
                   <div key={e.uuid + e.event} className="ms-tl-item" data-event={e.event}>
-                    <Group gap={6} mb={4}><Pill size="xs" tone={e.event === "invalidated" ? "warn" : "success"}>{e.event === "invalidated" ? t("dejó de ser cierto") : "aprendido"}</Pill><Text size="xs" c="dimmed" className="ms-data">{new Date(e.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</Text></Group>
+                    <Group gap={6} mb={4}><Pill size="xs" tone={e.event === "invalidated" ? "warn" : "success"}>{e.event === "invalidated" ? t("dejó de ser cierto") : t("aprendido")}</Pill><Text size="xs" c="dimmed" className="ms-data">{new Date(e.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</Text></Group>
                     {card(e)}
                   </div>))}
               </div>))}

@@ -175,7 +175,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
       </Modal>
 
       <ConfirmDialog opened={dlg?.kind === "rel-del"} onClose={() => setDlg(null)} title={t("Quitar {{v}}", { v: dlg?.kind === "rel-del" ? dlg.item.name : "" })} action={t("Quitar relación")}
-        warning={`${dlg?.kind === "rel-del" && usedBy(dlg.item.name) > 0 ? t("Se quita también de {{name}} regla(s) del mapa; las que se queden sin relaciones desaparecen. ", { name: usedBy(dlg.item.name) }) : ""}Los hechos que ya están en el grafo con esta relación no se tocan. Se puede deshacer justo después.`}
+        warning={`${dlg?.kind === "rel-del" && usedBy(dlg.item.name) > 0 ? t("Se quita también de {{name}} regla(s) del mapa; las que se queden sin relaciones desaparecen. ", { name: usedBy(dlg.item.name) }) : ""}${t("Los hechos que ya están en el grafo con esta relación no se tocan. Se puede deshacer justo después.")}`}
         onConfirm={() => delRel.mutateAsync()} />
 
       <Modal opened={dlg?.kind === "rule"} onClose={() => setDlg(null)} title={dlg?.kind === "rule" && dlg.item ? t("Editar regla del mapa") : t("Añadir regla del mapa")}>
@@ -192,7 +192,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
       </Modal>
 
       <ConfirmDialog opened={dlg?.kind === "rule-del"} onClose={() => setDlg(null)} title={t("Quitar regla del mapa")} action={t("Quitar regla")}
-        warning={`${dlg?.kind === "rule-del" ? t("Se quita la regla {{source}} → {{target}}. ", { source: dlg.item.source, target: dlg.item.target }) : ""}Sin regla, el ingestor no tiene restricción para ese par de tipos. Se puede deshacer justo después.`}
+        warning={`${dlg?.kind === "rule-del" ? t("Se quita la regla {{source}} → {{target}}. ", { source: dlg.item.source, target: dlg.item.target }) : ""}${t("Sin regla, el ingestor no tiene restricción para ese par de tipos. Se puede deshacer justo después.")}`}
         onConfirm={() => delRule.mutateAsync()} />
 
       <Modal opened={dlg?.kind === "instr"} onClose={() => setDlg(null)} title={t("Instrucciones de extracción")} size="lg">

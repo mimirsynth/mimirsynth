@@ -32,7 +32,7 @@ export default function AdminFolders() {
           <DataTable.Tr key={r.id}>
             <DataTable.Td><Text size="sm" fw={600}>{r.name}</Text>{r.description && <Text size="xs" c="dimmed">{r.description}</Text>}</DataTable.Td>
             <DataTable.Td><Text size="xs" className="ms-data">{r.path}</Text></DataTable.Td>
-            <DataTable.Td><Pill size="xs" tone={r.available ? "success" : "danger"}>{r.available ? "disponible" : t("no disponible")}</Pill></DataTable.Td>
+            <DataTable.Td><Pill size="xs" tone={r.available ? "success" : "danger"}>{r.available ? t("disponible") : t("no disponible")}</Pill></DataTable.Td>
             <DataTable.Td>{r.sources}</DataTable.Td>
             <DataTable.Td><Btn kind="danger" size="row" icon="trash" disabled={r.sources > 0} title={r.sources ? t("Hay fuentes usando esta raíz") : undefined} onClick={() => setDelRoot(r)}>{t("Quitar")}</Btn></DataTable.Td>
           </DataTable.Tr>))}</DataTable.Tbody>
@@ -46,7 +46,7 @@ export default function AdminFolders() {
       {d && d.suggestions.length === 0 && d.base_available && <EmptyState>{t("No hay carpetas nuevas bajo {{base}}. Móntalas en el host dentro de la carpeta del bind y aparecerán aquí.", { base: d.base })}</EmptyState>}
       <Group align="flex-end" gap="xs">
         <TextField size="xs" label={t("Nombre")} placeholder={t("notas")} w={160} value={f.name} onChange={(e) => setF({ ...f, name: e.currentTarget.value })} />
-        <TextField size="xs" label={t("Ruta")} placeholder={`${d?.base ?? "/sources"}/notas`} w={300} value={f.path} onChange={(e) => setF({ ...f, path: e.currentTarget.value })} />
+        <TextField size="xs" label={t("Ruta")} placeholder={`${d?.base ?? "/sources"}/${t("notas")}`} w={300} value={f.path} onChange={(e) => setF({ ...f, path: e.currentTarget.value })} />
         <TextField size="xs" label={t("Descripción (opcional)")} w={240} value={f.description} onChange={(e) => setF({ ...f, description: e.currentTarget.value })} />
         <Btn kind="primary" icon="plus" disabled={!f.name || !f.path} loading={add.isPending} onClick={() => add.mutate()}>{t("Autorizar")}</Btn>
       </Group>

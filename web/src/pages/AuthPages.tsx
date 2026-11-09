@@ -85,7 +85,7 @@ export function AuthScreen({ name }: { name: string }) {
     return (
       <Card name={name} subtitle={t("Primer arranque: crea la cuenta de administrador")}>
         <Form onSubmit={() => setup.mutate()}>
-          <Notice tone="info">{t("Escribe el código de instalación que el servicio ha impreso en su log (docker logs del contenedor).")}</Notice>
+          <Notice tone="info">{t("Escribe el código de instalación: el instalador lo mostró al terminar («Código de inicio: …»). Si no usaste el instalador, está en el log del contenedor:")} <code>{"docker compose logs mimirsynth"}</code></Notice>  {/* i18n-ok: a command */}
           <TextField label={t("Código de instalación")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off" />
           <TextField label={t("Tu nombre")} value={uname} onChange={(e) => setUname(e.currentTarget.value)} autoComplete="name" />
           <TextField label={t("Email")} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} autoComplete="username" />

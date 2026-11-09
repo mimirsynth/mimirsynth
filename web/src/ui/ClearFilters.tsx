@@ -6,5 +6,5 @@ import { Btn } from "./Btn";
 export function ClearFilters({ active, onClear, shown, total }: { active: boolean; onClear: () => void; shown?: number; total?: number }) {
   const { t } = useTranslation();
   if (!active) return null;
-  return <Group><Btn kind="ghost" size="row" onClick={onClear}>{t("Quitar todos los filtros")}{shown !== undefined && total !== undefined ? ` (${shown} de ${total})` : ""}</Btn></Group>;
+  return <Group><Btn kind="ghost" size="row" onClick={onClear}>{t("Quitar todos los filtros")}{shown !== undefined && total !== undefined ? t(" ({{shown}} de {{total}})", { shown, total }) : ""}</Btn></Group>;
 }

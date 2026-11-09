@@ -197,7 +197,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                     {hits.data && hits.data.results.length === 0 && <EmptyState>{t("Sin resultados para «{{query}}».", { query })}</EmptyState>}
                     {(hits.data?.results ?? []).map((h) => (
                       <ListCard key={`${h.document_id}-${h.chunk}`} title={h.citation}
-                        aside={<><Pill size="xs" title={t("similitud del embedding (0 si solo coincide por texto)")}>{h.similarity ? `${Math.round(h.similarity * 100)} %` : "texto"}</Pill>{fmt(h.updated_at)}</>}
+                        aside={<><Pill size="xs" title={t("similitud del embedding (0 si solo coincide por texto)")}>{h.similarity ? `${Math.round(h.similarity * 100)} %` : t("texto")}</Pill>{fmt(h.updated_at)}</>}
                         actions={<>
                           <Btn size="row" icon="info" onClick={() => setCtxOf(h)}>{t("Ver contexto")}</Btn>
                           <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${h.document_id}/file`}>{t("Original")}</Btn>
@@ -299,7 +299,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                 </DataTable.Tr></DataTable.Thead>
                 <DataTable.Tbody>{sv.rows.map((s) => (
                   <DataTable.Tr key={s.id}>
-                    <DataTable.Td><Text size="sm" fw={600}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "git" ? `${s.config.web ?? s.config.url} · ${s.config.branch || t("rama principal")}${s.config.commit ? ` · ${s.config.commit.slice(0, 7)}` : ""}` : s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? "colecciones").toLowerCase()}` : "todo"}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
+                    <DataTable.Td><Text size="sm" fw={600}>{s.name}</Text>{s.kind !== "upload" && <Text size="xs" c="dimmed" className="ms-data">{s.kind === "git" ? `${s.config.web ?? s.config.url} · ${s.config.branch || t("rama principal")}${s.config.commit ? ` · ${s.config.commit.slice(0, 7)}` : ""}` : s.kind === "wiki" ? `${adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.label ?? s.config.adapter} · ${s.config.settings?.base_url ?? s.config.settings?.site ?? ""} · ${s.config.collection_ids?.length ? `${s.config.collection_ids.length} ${(adapters.data?.adapters.find((a) => a.id === s.config.adapter)?.collection_label ?? t("colecciones")).toLowerCase()}` : t("todo")}` : `${s.config.root}/${s.config.subpath}`}{s.sync_interval ? t(" · cada {{sync_interval}} min", { sync_interval: s.sync_interval }) : t(" · solo manual")}</Text>}</DataTable.Td>
                     <DataTable.Td><Pill size="xs">{t(KIND[s.kind] ?? s.kind)}</Pill></DataTable.Td>
                     <DataTable.Td>{s.documents}</DataTable.Td>
                     <DataTable.Td>
@@ -355,7 +355,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             {entities.isLoading ? <EmptyState>{t("Buscando en el grafo…")}</EmptyState>
               : (entities.data?.entities.length ?? 0) === 0 ? <EmptyState>{t("No menciona ninguna entidad conocida del grafo.")}</EmptyState>
               : <Group gap={6}>{entities.data!.entities.map((e) => (
-                  <Link key={e.uuid} to={`/grafo?nodo=${e.uuid}`} className="ms-nolink"><Pill size="xs" title={`${e.type || "entidad"} · ${e.count} ${e.count === 1 ? t("mención") : "menciones"}`}>{e.name}{e.count > 1 ? ` ×${e.count}` : ""}</Pill></Link>))}</Group>}
+                  <Link key={e.uuid} to={`/grafo?nodo=${e.uuid}`} className="ms-nolink"><Pill size="xs" title={`${e.type || t("entidad")} · ${e.count} ${e.count === 1 ? t("mención") : t("menciones")}`}>{e.name}{e.count > 1 ? ` ×${e.count}` : ""}</Pill></Link>))}</Group>}
             {((entities.data?.relations.length ?? 0) > 0 || (entities.data?.expired_count ?? 0) > 0) && <>
               <Title order={5}>{t("Relaciones")}</Title>
               <Text size="xs" c="dimmed">{t("Hechos del grafo que unen a las entidades de este documento.")}</Text>

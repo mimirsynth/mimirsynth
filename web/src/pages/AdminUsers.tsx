@@ -153,7 +153,7 @@ export default function AdminUsers({ me }: { me?: number }) {
                 <DataTable.Td>{u.is_admin ? <Pill size="xs" tone="alt">{t("administrador")}</Pill> : t("Usuario")}</DataTable.Td>
                 <DataTable.Td><Group gap={4}>{u.has_password && <Pill size="xs">{t("contraseña")}</Pill>}{u.identities.map((i) => <Pill key={i} size="xs">{i.toUpperCase()}</Pill>)}{!u.has_password && u.identities.length === 0 && "—"}</Group></DataTable.Td>
                 <DataTable.Td><Pill size="xs" tone={TONE[u.status]}>{t(STATUS[u.status])}</Pill>{u.locked && <Pill size="xs" tone="danger"> {t("bloqueado")}</Pill>}</DataTable.Td>
-                <DataTable.Td>{u.is_admin ? "todos" : u.brains}</DataTable.Td>
+                <DataTable.Td>{u.is_admin ? t("todos") : u.brains}</DataTable.Td>
                 <DataTable.Td>{fmt(u.last_login)}</DataTable.Td>
                 <DataTable.Td><Btn size="row" onClick={() => setOpen(u.id)}>{t("Gestionar")}</Btn></DataTable.Td>
               </DataTable.Tr>))}</DataTable.Tbody>

@@ -69,6 +69,6 @@ It is normal at the start. Define an [[Ontology]], unify with [[Relations and al
 
 **How many resources does it need?** About 2 GB of RAM for the application, PostgreSQL and FalkorDB with moderate use. The LLM and embeddings are separate.
 
-**Where is the installation code?** In the container log, while there is no administrator: `docker compose logs mimirsynth | grep -A3 "FIRST START"`.
+**Where is the installation code?** The installer prints it when it finishes («First-start code: …»). Without the installer, it is in the container log while there is no administrator: `docker compose logs mimirsynth | grep -A3 "FIRST START"`.
 
 **Is there an API?** Yes: the [[REST API]], and an MCP server with the `recall` and `remember` tools for agents ([[Connect agents]]).
