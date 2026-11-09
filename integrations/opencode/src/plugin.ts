@@ -14,10 +14,10 @@
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 
-import { tool } from "@opencode-ai/plugin";
 import type { Hooks, PluginInput, PluginOptions } from "@opencode-ai/plugin";
 
 import { type Injection, Mimir, type Options, otherMemory, patchedFiles } from "./core.ts";
+import { tool } from "./tool.ts";
 
 export const ID = "mimirsynth";
 const EDIT_TOOLS = new Set(["edit", "write", "multiedit", "patch", "apply_patch"]);
