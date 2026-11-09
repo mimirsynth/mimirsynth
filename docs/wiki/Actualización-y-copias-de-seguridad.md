@@ -12,10 +12,14 @@ Si instalaste con el instalador, `update.sh` ya está en la carpeta de la instal
 
 | Orden | Qué hace |
 |---|---|
-| `./update.sh` | Actualiza a la última versión estable |
-| `./update.sh --check` | Solo informa de qué está en marcha, qué está configurado y cuál es la última versión. No cambia nada |
-| `./update.sh --version 0.8.0` | Actualiza (o va) a una versión concreta; también sirven las candidatas, como `0.8.0-rc.1` |
+| `./update.sh` | Actualiza a la última versión estable. Nunca baja a ella: en una versión más reciente, como una candidata, lo dice y no cambia nada |
+| `./update.sh --check` | Solo informa de qué está en marcha, qué está configurado, cuál es la última versión y qué haría `./update.sh`. No cambia nada |
+| `./update.sh --version 0.8.0` | Actualiza (o va) a una versión concreta; también sirven las candidatas, como `0.8.0-rc.1`. Una versión anterior se rechaza si su aplicación no conoce la revisión de la base de datos |
 | `./update.sh --rollback` | Vuelve a la versión de la última copia. Añade `--with-db` para restaurar también la base de datos |
+
+**Versiones candidatas.** Las versiones se comparan según [SemVer](https://semver.org/lang/es/): `0.15.0` es más reciente que `0.15.0-rc.2`, que es más reciente que `0.15.0-rc.1`, que es más reciente que `0.14.0`. En una candidata, `./update.sh` pasa a la versión final cuando sale, y hasta entonces no cambia nada; si sale una candidata más reciente de la misma versión, la nombra (`./update.sh --version 0.15.0-rc.2`). El instalador (`install.sh --upgrade`) sigue la misma regla.
+
+**Bajar de versión.** Una aplicación anterior no arranca sobre una base de datos que ha migrado una más reciente. Por eso `./update.sh --version` con una versión anterior comprueba primero, con la imagen que acaba de descargar, que esa aplicación conoce la revisión de la base de datos; si no, se para antes de cambiar nada. Para volver a una versión anterior, restaura también la base de datos de esa versión: `./update.sh --rollback --with-db`, si la copia es de la versión que quieres. `--force` baja sin la comprobación.
 
 Una actualización sigue este orden:
 1. **Descarga.** Baja primero la imagen nueva, así que una versión equivocada o la falta de red paran todo **antes de tocar nada**, y la copia que ya había sigue intacta.
@@ -23,7 +27,7 @@ Una actualización sigue este orden:
 3. **Actualización.** Fija `MIMIRSYNTH_VERSION` en `.env` y recrea solo la aplicación, y el servicio de OCR cuando su contenedor existe en esa carpeta; las **migraciones** de la base de datos se aplican al arrancar. Adopta el `docker-compose.yml` de la versión **solo si el tuyo es el original, sin modificar**, de la versión que tenías; si no, conserva el tuyo y te avisa.
 4. **Comprobación.** Espera a que la aplicación responda con la versión nueva y esté sana, muestra la revisión de la base de datos y avisa si el log tiene errores en los últimos minutos. Si no se verifica, te dice cómo volver atrás.
 
-Otras opciones: `--update-compose` adopta siempre el fichero de Compose de la versión, `--keep-compose` no lo toca nunca, `--no-files` se salta el volumen de documentos, `--backup-dir DIR` guarda la copia en otro sitio, `--yes` se salta la confirmación de una vuelta atrás y `--force` reinstala la misma versión. El script habla en español cuando tu `LANG` es español.
+Otras opciones: `--update-compose` adopta siempre el fichero de Compose de la versión, `--keep-compose` no lo toca nunca, `--no-files` se salta el volumen de documentos, `--backup-dir DIR` guarda la copia en otro sitio, `--yes` se salta la confirmación de una vuelta atrás y `--force` reinstala la misma versión o baja sin comprobar la base de datos. El script habla en español cuando tu `LANG` es español.
 
 **El Ollama incluido** (el perfil `ollama`) no se actualiza: su imagen está fijada en `docker-compose.yml`, y `update.sh` nunca la descarga ni la recrea. Cuando una versión sube esa imagen (lo dicen las notas de la versión) y se adopta su fichero de Compose, ejecuta después `docker compose up -d ollama`.
 

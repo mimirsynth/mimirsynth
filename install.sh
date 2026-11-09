@@ -33,7 +33,8 @@ Options:
   --ollama | --no-ollama   start a bundled Ollama for embeddings and download nomic-embed-text (default without
                            questions: no)
   --install-docker         on Linux, install Docker with its official script if it is missing
-  --upgrade                if MimirSynth is already installed in DIR, run its update.sh without asking
+  --upgrade                if MimirSynth is already installed in DIR, run its update.sh without asking (with --version, to
+                           that release); it never goes down to the latest stable release from a newer one or a candidate
   --no-start               only write docker-compose.yml and .env
   --no-browser             do not open the browser
   --lang en|es             language of the messages and default language of the instance
@@ -220,7 +221,8 @@ existing_install() {
   elif [ "$TTY" = 1 ] && yesno "Upgrade it now with update.sh (backup, update and check)?" "¿Actualizarlo ahora con update.sh (copia de seguridad, actualización y comprobación)?" y; then run=1; fi
   if [ "$run" = 1 ]; then
     local lang_env="${LANG:-}"; [ "$L" = es ] && lang_env="es_ES.UTF-8"
-    if [ "$DOCKER" = docker ]; then LANG="$lang_env" ./update.sh --yes; else sudo env LANG="$lang_env" ./update.sh --yes; fi
+    local args=(--yes); [ -z "$VERSION" ] || args+=(--version "$VERSION")   # update.sh decides; it never goes down on its own (#403)
+    if [ "$DOCKER" = docker ]; then LANG="$lang_env" ./update.sh "${args[@]}"; else sudo env LANG="$lang_env" ./update.sh "${args[@]}"; fi
   else
     say "Nothing was changed. To upgrade later: cd $DIR && ./update.sh   (./update.sh --check only reports)" \
         "No se ha cambiado nada. Para actualizar más tarde: cd $DIR && ./update.sh   (./update.sh --check solo informa)"

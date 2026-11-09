@@ -129,6 +129,8 @@ The release includes an update script that makes the backup, updates and checks 
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
 ./update.sh              # latest stable release; ./update.sh --check only reports; --version 0.7.1 picks one
 ```
+It never goes down on its own: on a version newer than the latest stable release, such as a release candidate, it says so and changes nothing. With `--version` and an older version, it stops before changing anything if that version's application does not know the database's revision (`--force` goes anyway); going back needs the database of that version too, with `./update.sh --rollback --with-db`.
+
 It does, in this order:
 1. **Downloads** the new image first, so a wrong version or no network stops everything before touching anything.
 2. **Backs up** PostgreSQL, the `docstore` volume, the bundled FalkorDB (if you use `--profile bundled`) and your `docker-compose.yml` and `.env` into `./backup`. **Only one backup is kept**: the previous one is replaced once the new one has been written and checked, so backups never pile up.
