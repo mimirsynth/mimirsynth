@@ -8,6 +8,8 @@ Every release attaches an update script that **backs up, updates and checks** in
 cd mimirsynth
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
 ```
+If you installed with the installer, `update.sh` is already in the installation folder. Running the installer again finds the installation, changes nothing and offers to run `update.sh` (on Linux); `install.sh --upgrade` runs it without asking.
+
 | Command | What it does |
 |---|---|
 | `./update.sh` | Updates to the latest stable release |
@@ -17,13 +19,18 @@ curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/up
 
 An update runs in this order:
 1. **Download.** It pulls the new image first, so a wrong version or no network stops everything **before touching anything**, and the existing backup stays intact.
-2. **Backup** into `./backup`: PostgreSQL, the documents volume, the bundled FalkorDB (if you use `--profile bundled`), your `docker-compose.yml` and your `.env`. **Only one backup is kept**: the previous one is replaced only once the new one has been written and checked, so backups never pile up.
-3. **Update.** It pins `MIMIRSYNTH_VERSION` in `.env` and recreates only the application; database **migrations** run on start. It adopts the release's `docker-compose.yml` **only if yours is the unmodified one** of the version you were running; otherwise it keeps yours and tells you.
+2. **Backup** into `./backup`: PostgreSQL, the documents volume, the bundled FalkorDB (when its container exists in that folder), your `docker-compose.yml` and your `.env`. **Only one backup is kept**: the previous one is replaced only once the new one has been written and checked, so backups never pile up.
+3. **Update.** It pins `MIMIRSYNTH_VERSION` in `.env` and recreates only the application, and the OCR service when its container exists in that folder; database **migrations** run on start. It adopts the release's `docker-compose.yml` **only if yours is the unmodified one** of the version you were running; otherwise it keeps yours and tells you.
 4. **Check.** It waits until the application answers with the new version and is healthy, shows the database revision and warns if the log has errors in the last minutes. If it does not verify, it tells you how to go back.
 
 Other options: `--update-compose` always adopts the release's compose file, `--keep-compose` never touches it, `--no-files` skips the documents volume, `--backup-dir DIR` saves the backup elsewhere, `--yes` skips the confirmation of a rollback and `--force` reinstalls the same version. The script speaks Spanish when your `LANG` is Spanish.
 
+**The bundled Ollama** (the `ollama` profile) is not updated: its image is pinned in `docker-compose.yml`, and `update.sh` never pulls or recreates it. When a release raises that version (the release notes say so) and its compose file is adopted, run `docker compose up -d ollama` afterwards.
+
 > **If your `.env` says `MIMIRSYNTH_VERSION=latest`**, the script cannot tell which compose file you started from, so it keeps yours: compare it with the release's and use `--update-compose` if you have not changed it. If you keep your own compose file, check the release notes for lines to add by hand (for example, since 0.8.0 the `mimirsynth` service needs `extra_hosts: ["host.docker.internal:host-gateway"]` to reach Ollama on a Linux host).
+
+### On macOS and Windows
+`update.sh` runs on Linux: it needs GNU tools (`flock`, GNU `sed` and `stat`). On Windows, run it from WSL in the installation folder. On macOS, back up and upgrade [without the script](#without-the-script); the installer says so when it finds an existing installation.
 
 ### Going back
 `./update.sh --rollback` puts back the `docker-compose.yml` and `.env` of the backup (so the previous image version) and checks that it answers. The files of the failed version are kept as `*.rolledback`. With `--with-db` it also **restores the database** from the backup: anything written since the backup is lost. The documents volume and FalkorDB are not restored automatically: their copies are in `./backup` if you need them (see [Restoring](#restoring)).
@@ -34,6 +41,8 @@ Take a backup (below) and then:
 docker compose pull
 docker compose --profile bundled up -d
 ```
+**Profiles.** An installation made by the installer lists its profiles in `COMPOSE_PROFILES` in `.env`, so a plain `docker compose up -d` starts the same services and the `--profile` flags on this page are not needed. Without it, name each profile you use: `--profile bundled` for the bundled FalkorDB, `--profile ocr`, `--profile ollama` ([Compose profiles](Environment-variables#compose-profiles)).
+
 Check it is still healthy: `docker compose ps` and `curl -s http://localhost:8000/api/health`. Read the [releases](https://github.com/MimirSynth/mimirsynth/releases) first in case one needs a manual step.
 
 ## What to save

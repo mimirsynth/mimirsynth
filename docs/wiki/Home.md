@@ -30,11 +30,11 @@ The content: [[Content quality]] · [[Memory health]] · [[Curator]] · [[Verifi
 [[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Export a brain]] · [[Import a brain]] · [[Notifications]] · [[Metrics]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[AI consumption]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]
 
 ## For agents and developers
-[[Connect agents]] · [[REST API]] · [[Claude Code integration]] · [[Writing good memory]] · [[Document memory]] · [[Environment variables]]
+[[Connect agents]] · [[Agent plugin configuration]] · [[Claude Code integration]] · [[Codex integration]] · [[OpenCode integration]] · [[Hermes Agent integration]] · [[OpenClaw integration]] · [[REST API]] · [[Writing good memory]] · [[Document memory]] · [[Environment variables]]
 
 ## Help
 [[FAQ]] · [[Troubleshooting]] · [[Glossary]]
 
 <!-- index:end -->
 ---
-*MimirSynth is under active development (0.x): the interface and the API may change between versions. Apache-2.0 license.*
+*MimirSynth is in public beta (0.x): until 1.0 the interface, the API and the schema may change between minor versions. Problems and feedback: [open an issue](https://github.com/MimirSynth/mimirsynth/issues/new/choose); questions: [Discussions](https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a). Apache-2.0 license.*

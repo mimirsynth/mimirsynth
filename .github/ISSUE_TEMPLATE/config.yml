@@ -1,8 +1,11 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Questions and discussion
-    url: https://github.com/MimirSynth/mimirsynth/discussions
-    about: For usage questions or ideas that are not fully formed yet
+  - name: Questions
+    url: https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a
+    about: How to install, configure or use MimirSynth; an answer can be marked as the solution
+  - name: Ideas and discussion
+    url: https://github.com/MimirSynth/mimirsynth/discussions/categories/ideas
+    about: Ideas that are not fully formed yet, before a feature request
   - name: Vulnerabilities
     url: https://github.com/MimirSynth/mimirsynth/security/advisories/new
     about: Report privately, not with a public issue

@@ -15,6 +15,7 @@ What a backend gives:
 - The Cypher that differs between databases: a vector literal and the cosine similarity of two vectors.
 - What is informative and optional (version, memory) and the binary dump, which only some backends have.
 - `value()`: a node, relationship or path of the driver as the neutral `Node` / `Edge` / `Path` below, for the Cypher console.
+- `check_console()`: what the read-only Cypher console refuses to run (`Unscopable`). Only a shared database refuses anything.
 """
 from __future__ import annotations
 
@@ -87,6 +88,15 @@ class Path:
     edges: list[Edge] = field(default_factory=list)
 
 
+class Unscopable(ValueError):
+    """A query a backend cannot keep inside one brain, refused rather than run (#389). `code` says why: «pattern», «varlength»,
+    «comment», «param», «char», «function», «call» or «write»; `detail` is the part of the query concerned."""
+
+    def __init__(self, code: str, detail: str = ""):
+        super().__init__(f"{code}: {detail}" if detail else code)
+        self.code, self.detail = code, detail
+
+
 class GraphBackend(ABC):
     name: str   # stable key: notifications, export manifests
     label: str  # what people read: «FalkorDB»
@@ -120,6 +130,10 @@ class GraphBackend(ABC):
     def cosine(self, a: str, b: str) -> str:
         """Cypher for the cosine similarity of two vectors, scaled to [0, 1] ((1 + cos) / 2)."""
 
+    def check_console(self, q: str) -> None:
+        """Raises `Unscopable` when the read-only Cypher console must not run `q`. A backend with a graph per brain has nothing to
+        refuse: a query cannot leave its graph."""
+
     def value(self, v: Any) -> Any:
         """A driver value as `Node` / `Edge` / `Path`; anything else unchanged."""
         return v
@@ -143,6 +157,43 @@ class GraphBackend(ABC):
 
     def close(self) -> None:
         """Lets go of the driver's connections; the backend is not used after this."""
+
+    def refuses_write(self, e: Exception) -> bool:
+        """Whether `e` is the database refusing a write in a read-only query (`ro_query`)."""
+        return False
+
+
+class ReadOnlyError(PermissionError):
+    """A write reached the graph of a read-only brain (#359). The database itself refused it: `ReadOnlyGraph` runs every query as
+    read-only."""
+
+    def __init__(self, graph: str):
+        super().__init__(f"the graph {graph!r} belongs to a read-only brain")
+        self.graph = graph
+
+
+class ReadOnlyGraph:
+    """The handle of a read-only brain's graph: `query` runs as `ro_query`, so the database refuses any write in it, and that refusal
+    becomes `ReadOnlyError`. Whatever a module writes, through whichever path, cannot change an adopted read-only graph."""
+
+    def __init__(self, inner: Graph, name: str, owner: GraphBackend):
+        self._inner, self._name, self._owner = inner, name, owner
+
+    def query(self, q: str, params: dict | None = None, timeout: int | None = None) -> Result:
+        try:
+            return self._inner.ro_query(q, params, timeout)
+        except Exception as e:
+            if self._owner.refuses_write(e):
+                raise ReadOnlyError(self._name) from None
+            raise
+
+    def ro_query(self, q: str, params: dict | None = None, timeout: int | None = None) -> Result:
+        return self._inner.ro_query(q, params, timeout)
+
+    def __getattr__(self, name: str):
+        if name in ("delete", "copy"):  # FalkorDB's graph-level writes
+            raise ReadOnlyError(self._name)
+        return getattr(self._inner, name)
 
 
 def make(conn: Connection) -> GraphBackend:

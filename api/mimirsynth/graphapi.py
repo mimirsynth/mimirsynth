@@ -493,10 +493,9 @@ import re  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from .graphdb import Edge, Node, Path, backend  # noqa: E402
+from .graphdb import Edge, Node, Path, Unscopable, backend  # noqa: E402
 
 _WRITE = re.compile(r"\b(CREATE|MERGE|DELETE|DETACH|SET|REMOVE|DROP|LOAD\s+CSV|FOREACH)\b", re.I)
-_UNSCOPED = re.compile(r"\b(CALL|SHOW|USE)\b", re.I)
 _HIDE = {"name_embedding", "fact_embedding", "summary_embedding", "embedding"}
 MAX_ROWS = 500
 
@@ -537,6 +536,25 @@ def _val(v, nodes: dict, edges: dict):
     return v
 
 
+def _refused(e: Unscopable) -> HTTPException:
+    """Why the console does not run a query on a shared database: the brains are only kept apart by scoping its Cypher."""
+    if e.code == "write":
+        return HTTPException(400, "solo se permiten consultas de lectura")
+    if e.code == "call":
+        return HTTPException(400, "con Neo4j la consola no admite CALL, SHOW, USE, LOAD ni TERMINATE: los brains comparten la base de datos")
+    if e.code == "comment":
+        return HTTPException(400, "con Neo4j la consola no admite comentarios: quítalos de la consulta")
+    if e.code == "param":
+        return HTTPException(400, "con Neo4j la consola no admite parámetros ($): escribe los valores en la consulta")
+    if e.code == "char":
+        return HTTPException(400, "con Neo4j la consola solo admite caracteres ASCII fuera de las cadenas, sin barras invertidas, y ningún escape \\u")
+    if e.code == "function":
+        return HTTPException(400, f"con Neo4j la consola solo admite las funciones propias de Neo4j, no {e.detail}: ninguna de un plugin como APOC")
+    if e.code == "varlength":
+        return HTTPException(400, "con Neo4j la consola no admite relaciones de longitud variable ni caminos cuantificados: sus nodos intermedios no se pueden limitar al brain")
+    return HTTPException(400, f"con Neo4j la consola no sabe limitar este patrón al brain, así que no lo ejecuta: {e.detail}")
+
+
 @router.post("/query")
 def cypher(req: CypherReq, ctx: BrainCtx = Depends(reader)):
     """Ejecuta Cypher SOLO LECTURA (GRAPH.RO_QUERY; además se rechazan palabras de escritura)."""
@@ -545,8 +563,10 @@ def cypher(req: CypherReq, ctx: BrainCtx = Depends(reader)):
         raise HTTPException(400, "consulta vacía")
     if _WRITE.search(q):
         raise HTTPException(400, "solo se permiten consultas de lectura")
-    if backend().shared_database and _UNSCOPED.search(q):  # a procedure or another database would see the other brains
-        raise HTTPException(400, "con Neo4j la consola no admite CALL, SHOW ni USE: los brains comparten la base de datos")
+    try:
+        backend().check_console(q)  # on a shared database (Neo4j), what the console cannot keep inside this brain (#389)
+    except Unscopable as e:
+        raise _refused(e) from None
     import time
 
     t = time.time()

@@ -18,6 +18,16 @@ Yes, point `MIMIRSYNTH_FALKOR_HOST` at your FalkorDB. See [[Installation]].
 **What is a brain and how many do I need?**
 An isolated domain. One is enough to start; create more to separate teams, projects or people. See [[Concepts]].
 
+## Agents
+**Which agent integration should I use?**
+If your agent has a native plugin (Claude Code, Codex, OpenCode, Hermes Agent or OpenClaw), install it: it brings the memory to every prompt without the model having to ask, and one `setup` serves every agent on the machine. Any other agent that speaks MCP connects to the brain's MCP server; a script, a bot or a service uses the HTTP API. They can be combined: a plugin and the MCP server work side by side. The table is in [2. Pick your agent](Connect-agents#2-pick-your-agent).
+
+**Which token do I give a plugin?**
+A **reader** token for recall and a **contributor** token to propose, both of the same brain; never a curator token, whose proposals would skip quarantine. See [[Agent plugin configuration]].
+
+**Should I turn the capture on?**
+Start with it off, and try `draft` first: each session is kept on your machine, redacted, until you review it. `send` turns each worthwhile session into one quarantined proposal, so a curator still decides what stays.
+
 ## Writing
 **My agent writes but I see nothing new.**
 If it uses a contributor token, the proposal is **pending**: review it in [[Proposals]]. A proposal in which the secret detector flagged something also waits for a curator, whoever sent it. If it is already approved, check [[Jobs]] in case ingestion failed or no LLM is configured.

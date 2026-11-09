@@ -23,18 +23,37 @@ from datetime import datetime, timezone
 from functools import cached_property
 from typing import Any
 
-from . import Edge, GraphBackend, Node, Path
+from . import Edge, GraphBackend, Node, Path, Unscopable
 
 PARTITION = "mimirsynth_partition"  # the parameter the scoped Cypher reads the partition from
 BATCH = 1000
 
 # --- scoping the Cypher written for one graph per brain ---------------------------------------------------------------------
+#
+# `scope()` reads the Cypher as Neo4j does (strings, backtick names, comments, the clause each part is in) and adds the partition to
+# every node pattern. A node pattern is a parenthesis in a pattern position: anywhere at the top of a MATCH, MERGE or CREATE clause
+# (after the clause, a comma, a path name's `=`, a path selector such as `ANY` or `SHORTEST 2`, a quantifier), next to a relationship
+# (`-`, `->`, `<-`) or at the start of an `EXISTS` / `COUNT` / `COLLECT` subquery. A parenthesis in a pattern position whose inside it
+# cannot read as a node (a label expression with `%`, `IS` or parentheses, a dynamic label, a comment) is refused: it is never let
+# through unscoped. The maps and inline `WHERE` of a node are scoped too, since a value can hold a subquery of its own.
+#
+# The read-only console runs Cypher that people write, so it asks for more (`strict`, and `check_console()`): it also refuses
+# variable-length relationships and quantified paths, whose intermediate nodes no node pattern names, and everything the lexer
+# cannot be sure Neo4j reads the same way (comments, parameters, characters outside ASCII, `\u` escapes, which Neo4j decodes before
+# it reads the query), and any function outside an allow-list of Neo4j's own (no plugin function runs: APOC's run Cypher from a string).
 
-_IDENT = r"(?:`[^`]*`|[A-Za-z_][A-Za-z0-9_]*)"
-_NODE = re.compile(rf"^\s*(?P<var>[A-Za-z_][A-Za-z0-9_]*)?\s*(?P<labels>(?::\s*!?\s*{_IDENT}\s*(?:[|&]\s*!?\s*{_IDENT}\s*)*)*)(?P<rest>.*)$", re.S)
+_IDENT = r"(?:`(?:[^`]|``)*`|[^\W\d]\w*)"
+_NODE = re.compile(rf"^\s*(?P<var>{_IDENT})?\s*(?P<labels>(?::\s*!?\s*{_IDENT}\s*(?:[|&]\s*!?\s*{_IDENT}\s*)*)*)(?P<rest>.*)$", re.S)
+_WORD = re.compile(r"[^\W\d]\w*")
+_PARAM = re.compile(r"\$\w*")
 _CLAUSES = {"MATCH", "MERGE", "CREATE", "WHERE", "RETURN", "WITH", "SET", "DELETE", "DETACH", "REMOVE", "UNWIND", "ORDER", "LIMIT",
-            "SKIP", "CALL", "UNION", "FOREACH", "YIELD", "ON"}
+            "SKIP", "CALL", "UNION", "FOREACH", "YIELD", "ON", "USING"}
+_PATTERNS = {"MATCH", "MERGE", "CREATE"}  # the clauses whose top level is patterns
 _WRITES = {"CREATE", "MERGE"}
+_SELECTORS = {"MATCH", "MERGE", "CREATE", "ANY", "ALL", "SHORTEST", "PATH", "PATHS", "GROUPS"}  # words a pattern can follow there
+_SUBQUERIES = {"EXISTS", "COUNT", "COLLECT"}
+_PATH_CALLS = {"SHORTESTPATH", "ALLSHORTESTPATHS"}
+_LINE_END = "\n\r\x0b\x0c\x1c\x1d\x1e\x85  "  # Neo4j ends a `//` comment at \v and \f as well: ending it early is safe
 _ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})?$")  # a datetime; without a zone, UTC
 
 
@@ -54,6 +73,17 @@ def _skip_quoted(q: str, i: int) -> int:
     return j
 
 
+def _comment_end(q: str, i: int) -> int:
+    """The index after the comment that starts at `i` (`//` or `/*`)."""
+    if q.startswith("//", i):
+        j = i + 2
+        while j < len(q) and q[j] not in _LINE_END:
+            j += 1
+        return j
+    j = q.find("*/", i + 2)
+    return len(q) if j < 0 else j + 2
+
+
 def _matching(q: str, i: int, open_: str, close: str) -> int:
     """The index of the bracket that closes the one at `i`, or -1."""
     depth, j = 0, i
@@ -61,6 +91,9 @@ def _matching(q: str, i: int, open_: str, close: str) -> int:
         c = q[j]
         if c in "'\"`":
             j = _skip_quoted(q, j)
+            continue
+        if q.startswith("//", j) or q.startswith("/*", j):
+            j = _comment_end(q, j)
             continue
         if c == open_:
             depth += 1
@@ -72,39 +105,84 @@ def _matching(q: str, i: int, open_: str, close: str) -> int:
     return -1
 
 
-def _node(inner: str) -> tuple[str, str, str] | None:
-    """(variable, labels, map) when `inner` reads as the inside of a node pattern."""
+def _node(inner: str) -> tuple[str, str, str, str] | None:
+    """(head, labels, map, where) when `inner` reads as the inside of a node pattern: `n:Label {k: v} WHERE n.x > 1`."""
     m = _NODE.match(inner)
     if not m:
         return None
-    var, labels, rest = m["var"] or "", m["labels"] or "", m["rest"].strip()
-    if rest and not (rest[0] == "{" and _matching(rest, 0, "{", "}") == len(rest) - 1):
-        return None
-    if not (var or labels or rest) and inner.strip():
-        return None
-    return var, labels, rest
+    head, labels, rest = inner[:m.end("labels")], m["labels"] or "", m["rest"].strip()
+    props = where = ""
+    if rest.startswith("{"):
+        end = _matching(rest, 0, "{", "}")
+        if end < 0:
+            return None
+        props, rest = rest[:end + 1], rest[end + 1:].strip()
+    if rest:
+        if not re.match(r"WHERE\b", rest, re.I):
+            return None
+        where = rest[5:]
+    return head, labels, props, where
 
 
-def _with_partition(inner: str, labels: str, props: str) -> str:
+def _scoped_node(node: tuple[str, str, str, str], strict: bool) -> str:
+    head, _, props, where = node
     key = f"group_id: ${PARTITION}"
-    if props:  # last: a key repeated in a map keeps its last value, so a `group_id` of the query's own cannot leave the partition
-        start = inner.rindex(props)
-        body = props[1:-1].strip()
-        return inner[:start] + ("{" + key + "}" if not body else props[:-1].rstrip() + ", " + key + "}") + inner[start + len(props):]
-    return inner.rstrip() + (" " if inner.strip() else "") + "{" + key + "}"
+    # The key goes last: a key repeated in a map keeps its last value, so a `group_id` of the query's own cannot leave the partition.
+    body = scope(props[1:-1], strict).strip() if props else ""
+    out = head.rstrip() + (" " if head.strip() else "") + "{" + (body + ", " if body else "") + key + "}"
+    return out + (" WHERE" + scope(where, strict, "WHERE") if where else "")
 
 
 def _next_sig(q: str, i: int) -> str:
-    while i < len(q) and q[i].isspace():
-        i += 1
+    while i < len(q):
+        if q[i].isspace():
+            i += 1
+        elif q.startswith("//", i) or q.startswith("/*", i):
+            i = _comment_end(q, i)
+        else:
+            break
     return q[i:i + 2]
 
 
-def scope(q: str) -> str:
-    """The Cypher `q`, with its node patterns scoped to the partition in `$mimirsynth_partition` (see the module's docstring)."""
-    out, sig, ctx, i, n = [], [], [None], 0, len(q)
+def _arrow_end(sig: list) -> bool:
+    """The last thing read ends a relationship (`-`, `->`): a `+`, `*` or `{` after it quantifies it."""
+    prev, prev2 = (sig[-1] if sig else None), (sig[-2] if len(sig) > 1 else None)
+    return prev == "-" and prev2 in (")", "]", "-", "<") or prev == ">" and prev2 == "-"
+
+
+@dataclass
+class _Frame:
+    kind: str            # «top», «brace», «bracket» or «paren»
+    clause: str | None   # the clause being read in it
+    rel: bool = False    # the brackets of a relationship: `-[...]-`
+
+
+def _position(sig: list, f: _Frame, after: str, strict: bool) -> str:
+    """What a parenthesis is: «pattern», «call» (a function's arguments) or «expr»."""
+    prev = sig[-1] if sig else None
+    prev2 = sig[-2] if len(sig) > 1 else None
+    word = prev[1] if isinstance(prev, tuple) else None
+    if f.clause in _PATTERNS and f.kind != "bracket":
+        if word is None or word in _SELECTORS:
+            return "pattern"
+        if word in _PATH_CALLS:
+            return "call"
+        if strict:
+            raise Unscopable("pattern", word)
+        return "call"  # a hint's `:Label(prop)`
+    if prev == "{" or prev == "-" and prev2 in ("]", "-", ")", "<") or prev == ">" and prev2 == "-":
+        return "pattern"
+    if after[:1] == "-" and after[1:2] in ("[", "-", ">") or after == "<-":
+        return "pattern"
+    return "call" if word else "expr"
+
+
+def scope(q: str, strict: bool = False, clause: str | None = None) -> str:
+    """The Cypher `q`, with its node patterns scoped to the partition in `$mimirsynth_partition` (see above). Raises `Unscopable`
+    when a pattern cannot be scoped, and with `strict` (the console) when a query has what the console refuses."""
+    out, sig, frames, i, n = [], [], [_Frame("top", clause)], 0, len(q)
     while i < n:
-        c = q[i]
+        c, f = q[i], frames[-1]
         if c in "'\"`":
             j = _skip_quoted(q, i)
             lit = q[i:j]
@@ -112,49 +190,65 @@ def scope(q: str) -> str:
             sig.append("lit")
             i = j
             continue
-        if q.startswith("//", i):
-            j = q.find("\n", i)
-            j = n if j < 0 else j
-            out.append(q[i:j])
-            i = j
-            continue
-        if q.startswith("/*", i):
-            j = q.find("*/", i + 2)
-            j = n if j < 0 else j + 2
+        if q.startswith("//", i) or q.startswith("/*", i):
+            j = _comment_end(q, i)
             out.append(q[i:j])
             i = j
             continue
         if c.isalpha() or c == "_":
-            m = re.compile(r"[A-Za-z_][A-Za-z0-9_]*").match(q, i)
-            word = m.group(0)
-            if word.upper() in _CLAUSES:
-                ctx[-1] = word.upper()
+            word = _WORD.match(q, i).group(0)
+            if word.upper() in _CLAUSES and sig[-1:] != ["."]:  # not a property: `n.order`
+                f.clause = word.upper()
             out.append(word)
             sig.append(("w", word.upper()))
-            i = m.end()
+            i += len(word)
             continue
         if c == "$":
-            m = re.compile(r"\$[A-Za-z0-9_]*").match(q, i)
+            m = _PARAM.match(q, i)
             out.append(m.group(0))
             sig.append("lit")
             i = m.end()
             continue
-        if c == "{":
-            ctx.append(None)
-        elif c == "}" and len(ctx) > 1:
-            ctx.pop()
         if c == "(":
             close = _matching(q, i, "(", ")")
-            node = _node(q[i + 1:close]) if close > 0 else None
-            if node and _is_pattern(sig, ctx[-1], _next_sig(q, close + 1)):
-                inner = q[i + 1:close]
-                var, labels, props = node
-                if ctx[-1] not in _WRITES or labels or props:
-                    inner = _with_partition(inner, labels, props)
-                out.append("(" + inner + ")")
+            if _position(sig, f, _next_sig(q, close + 1) if close > 0 else "", strict) == "pattern":
+                inner = q[i + 1:close] if close > 0 else q[i + 1:]
+                if inner.lstrip().startswith("("):  # a parenthesized path: a quantified group, `((a)-->(b)){1,3}`
+                    if strict:
+                        raise Unscopable("varlength", inner.strip()[:80])
+                    frames.append(_Frame("paren", f.clause if f.clause in _PATTERNS else "MATCH"))
+                    out.append(c)
+                    sig.append(c)
+                    i += 1
+                    continue
+                node = _node(inner) if close > 0 else None
+                if node is None:
+                    raise Unscopable("pattern", inner.strip()[:80])
+                bound = f.clause in _WRITES and not node[1] and not node[2] and not node[3]  # a node the query already holds
+                out.append("(" + (inner if bound else _scoped_node(node, strict)) + ")")
                 sig.append(")")
                 i = close + 1
                 continue
+            word = sig[-1][1] if sig and isinstance(sig[-1], tuple) else None
+            frames.append(_Frame("paren", f.clause if word is None or word in _PATH_CALLS else None))
+        elif c == ")":
+            if f.kind == "paren" and len(frames) > 1:
+                frames.pop()
+        elif c == "{":
+            if strict and _arrow_end(sig):
+                raise Unscopable("varlength", q[i:i + 20])
+            sub = sig[-1:] and isinstance(sig[-1], tuple) and sig[-1][1] in _SUBQUERIES
+            frames.append(_Frame("brace", "MATCH" if sub else None))
+        elif c == "}":
+            if f.kind == "brace" and len(frames) > 1:
+                frames.pop()
+        elif c == "[":
+            frames.append(_Frame("bracket", None, rel=sig[-1:] == ["-"]))
+        elif c == "]":
+            if f.kind == "bracket" and len(frames) > 1:
+                frames.pop()
+        elif c in "+*" and strict and (_arrow_end(sig) or c == "*" and f.rel):
+            raise Unscopable("varlength", q[max(0, i - 10):i + 10])
         out.append(c)
         if not c.isspace():
             sig.append(c)
@@ -162,18 +256,98 @@ def scope(q: str) -> str:
     return "".join(out)
 
 
-def _is_pattern(sig: list, clause: str | None, after: str) -> bool:
-    prev = sig[-1] if sig else None
-    prev2 = sig[-2] if len(sig) > 1 else None
-    if prev in (("w", "MATCH"), ("w", "MERGE"), ("w", "CREATE"), "{"):  # «{»: `EXISTS { (n) }`, `COUNT { (n) }`
-        return True
-    if prev == "," and clause in ("MATCH", "MERGE", "CREATE"):
-        return True
-    if prev == "-" and prev2 in ("]", "-", ")", "<"):
-        return True
-    if prev == ">" and prev2 == "-":
-        return True
-    return after[:1] == "-" and after[1:2] in ("[", "-", ">") or after == "<-"
+# --- what the console accepts on Neo4j -------------------------------------------------------------------------------------
+
+# Neo4j's own functions (SHOW FUNCTIONS on 5.26) but `graph.*` (another database's graph) and LOAD CSV's `file()` / `linenumber()`.
+CONSOLE_FUNCTIONS = frozenset("""
+avg collect count max min percentilecont percentiledisc stdev stdevp sum
+keys labels nodes range reduce relationships tail tobooleanlist tofloatlist tointegerlist tostringlist
+e exp log log10 sqrt abs ceil floor isnan rand round sign
+all any exists isempty none single
+char_length character_length coalesce elementid endnode head id last length nullif properties randomuuid size startnode timestamp
+toboolean tobooleanornull tofloat tofloatornull tointeger tointegerornull type valuetype
+point point.distance point.withinbbox
+btrim left lower ltrim normalize replace reverse right rtrim split substring tolower tostring tostringornull toupper trim upper
+date datetime localdatetime localtime time duration
+date.realtime date.statement date.transaction date.truncate datetime.fromepoch datetime.fromepochmillis datetime.realtime
+datetime.statement datetime.transaction datetime.truncate duration.between duration.indays duration.inmonths duration.inseconds
+localdatetime.realtime localdatetime.statement localdatetime.transaction localdatetime.truncate localtime.realtime
+localtime.statement localtime.transaction localtime.truncate time.realtime time.statement time.transaction time.truncate
+acos asin atan atan2 cos cot degrees haversin pi radians sin tan
+vector.similarity.cosine vector.similarity.euclidean
+""".split())
+# The words a parenthesis can follow without being a function: clauses, operators, subqueries, path selectors and functions.
+_CONSOLE_KEYWORDS = frozenset("""
+MATCH OPTIONAL WHERE AND OR XOR NOT IN IS RETURN WITH DISTINCT UNWIND BY SKIP LIMIT OFFSET CASE WHEN THEN ELSE UNION ALL ANY NONE
+SINGLE EXISTS COUNT COLLECT CONTAINS STARTS ENDS SHORTEST PATH PATHS GROUPS SHORTESTPATH ALLSHORTESTPATHS REDUCE
+""".split())
+_CONSOLE_CALLS = frozenset({"CALL", "SHOW", "USE", "LOAD", "TERMINATE"})   # what runs outside the query: procedures, other databases
+_CONSOLE_WRITES = frozenset("""
+CREATE MERGE DELETE DETACH NODETACH SET REMOVE DROP INSERT FOREACH ALTER GRANT DENY REVOKE RENAME START STOP ENABLE DEALLOCATE
+REALLOCATE DRYRUN
+""".split())
+
+
+def _console_tokens(q: str) -> list[tuple[str, str]]:
+    """The console's query as («w» word, «n» backtick name, «s» string, «p» punctuation) tokens, refusing what Neo4j could read
+    otherwise than this lexer: comments, parameters, characters outside printable ASCII, backslashes and `\\u` escapes."""
+    toks, i, n = [], 0, len(q)
+    while i < n:
+        c = q[i]
+        if c in "'\"`":
+            j = _skip_quoted(q, i)
+            if j > n or q[j - 1] != c or j - i < 2:
+                raise Unscopable("char", q[i:i + 20])  # an unterminated string or name
+            body = q[i + 1:j - 1]
+            if c == "`":
+                if "`" in body or "\\" in body or not all(" " <= x <= "~" for x in body):
+                    raise Unscopable("char", q[i:j])
+                toks.append(("n", body))
+            else:
+                if re.search(r"\\u", body, re.I):  # Neo4j decodes \uXXXX before it reads the query: ' would end the string
+                    raise Unscopable("char", "\\u")
+                toks.append(("s", body))
+            i = j
+            continue
+        if q.startswith("//", i) or q.startswith("/*", i):
+            raise Unscopable("comment", q[i:i + 20])
+        if c in " \t\r\n":
+            i += 1
+            continue
+        if c == "$":
+            raise Unscopable("param", q[i:i + 20])
+        if not " " <= c <= "~" or c == "\\":
+            raise Unscopable("char", repr(c))
+        if c.isalpha() or c == "_":
+            word = _WORD.match(q, i).group(0)
+            toks.append(("w", word))
+            i += len(word)
+            continue
+        toks.append(("p", c))
+        i += 1
+    return toks
+
+
+def check_console(q: str) -> None:
+    """Raises `Unscopable` when the console must not run `q` on Neo4j (see above); what it lets through, `scope()` scopes."""
+    toks = _console_tokens(q)
+    for k, (kind, text) in enumerate(toks):
+        if kind not in ("w", "n") or k and toks[k - 1] == ("p", "."):
+            continue
+        if kind == "w" and text.upper() in _CONSOLE_CALLS:
+            raise Unscopable("call", text)
+        if kind == "w" and text.upper() in _CONSOLE_WRITES:
+            raise Unscopable("write", text)
+        parts, j = [toks[k]], k + 1
+        while j + 1 < len(toks) and toks[j] == ("p", ".") and toks[j + 1][0] in ("w", "n"):
+            parts.append(toks[j + 1])
+            j += 2
+        if j < len(toks) and toks[j] == ("p", "("):  # a call: `name(`, `ns.name(`, `` `ns`.name( ``
+            name = ".".join(t for _, t in parts)
+            plain = len(parts) == 1 and kind == "w"
+            if any(p[0] == "n" for p in parts) or not (name.lower() in CONSOLE_FUNCTIONS or plain and name.upper() in _CONSOLE_KEYWORDS):
+                raise Unscopable("function", name)
+    scope(q, strict=True)
 
 
 # --- values ------------------------------------------------------------------------------------------------------------------
@@ -334,6 +508,9 @@ class Neo4jBackend(GraphBackend):
         from graphiti_core.driver.neo4j_driver import Neo4jDriver
         return Neo4jDriver(self.uri, self.user, self.password, database=self.database)
 
+    def check_console(self, q: str) -> None:
+        check_console(q)
+
     def vector(self, expr: str) -> str:
         return expr  # a list of floats, as Graphiti stores the embeddings here
 
@@ -346,6 +523,9 @@ class Neo4jBackend(GraphBackend):
     def close(self) -> None:
         if "driver" in self.__dict__:
             self.driver.close()
+
+    def refuses_write(self, e: Exception) -> bool:
+        return getattr(e, "code", "") == "Neo.ClientError.Statement.AccessMode"
 
     def version(self) -> dict:
         try:

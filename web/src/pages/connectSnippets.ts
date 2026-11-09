@@ -62,7 +62,7 @@ export function snippets(agent: AgentId, c: Conn): Block[] {
       return [config, { kind: "install", code: "hermes plugins install mimirsynth/mimirsynth/integrations/hermes-agent/plugin && hermes memory setup mimirsynth" }];
     case "openclaw":
       // the setup also grants the conversation access OpenClaw asks for before it runs a plugin's recall hook
-      return [config, { kind: "install", code: "openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup" }];
+      return [config, { kind: "install", code: "openclaw plugins install npm:@mimirsynth/openclaw && openclaw mimirsynth setup" }];
     case "mcp":
       return [
         { kind: "mcp-json", code: JSON.stringify({ mcpServers: { mimirsynth: { type: "http", url, headers: { Authorization: `Bearer ${token(c)}` } } } }, null, 2) },

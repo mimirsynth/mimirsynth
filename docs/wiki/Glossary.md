@@ -10,7 +10,8 @@
 | **Alert** | A notification of a problem in the instance (AI model or graph not responding, failed ingestion or job…). Shown in the bell and optionally sent through channels (email, Telegram, ntfy, Gotify, webhook). It never includes memory content |
 | **Brain** | An isolated knowledge domain: its graph, ontology, documents, members. See [[Concepts]] |
 | **Bi-temporal** | Storing two dates per piece of data: when it happened and when it was recorded |
-| **Contributor** | A role that can propose memory and upload documents, but whose contributions go through review |
+| **Capture** | What a native agent plugin does with what a session learned, when you turn it on: `off` (the default), `draft` (kept on your machine for you to review) or `send` (one quarantined proposal per session, at the next start). Never the transcript. See [[Agent plugin configuration]] |
+| **Contributor** | A role that can propose memory and upload documents, but whose contributions go through review. A **contributor token** is an API token with this role: what an agent sends with it waits in quarantine, which is why agents and their plugins should propose with one |
 | **CoALA** | A cognitive framework for agents (episodic, semantic, procedural memory…) that inspires the design |
 | **Reference query** | A question saved in a brain with what its recall must bring and what it must not; running them measures whether recall gets better or worse. Under Ask → Reference queries |
 | **Injected context** | The block of text recall returns, ready to put in an agent's prompt |
@@ -43,6 +44,8 @@
 | **Origin** | Where an entity or a fact comes from: the type of source, the document, the person who proposed it or the agent's token. The [[Graph]] can group by any of them |
 | **Proposal** | A memory contribution awaiting approval |
 | **pgvector** | A PostgreSQL extension to store and search vectors |
+| **Plugin (agent)** | A MimirSynth add-on installed into an agent (Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw) that recalls before every prompt, brings what changed at session start and adds commands, without the model having to ask. All of them share one configuration file. See [[Connect agents]] |
+| **Profile (Compose)** | An optional service of `docker-compose.yml` that only starts when named: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. `COMPOSE_PROFILES` in `.env` lists the ones to start. See [[Environment variables]] |
 | **Promote to memory** | Turn a passage of a document into a proposal |
 | **Recall** | The search combining facts, episode texts and documents to give an agent context |
 | **Single-valued relation** | A relation type marked in the ontology ("A single value at a time") that can only have one current value per subject; it is what makes contradictions detectable |

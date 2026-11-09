@@ -463,9 +463,11 @@ def logout(request: Request):
 
 
 @router.get("/me")
-def me(request: Request, user: User = Depends(current_user)):
+def me(request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
     from .account import avatar_url
-    return {"id": user.id, "name": user.display_name or user.name, "email": user.email, "is_admin": user.is_admin, "auth_mode": settings.auth_mode,
+    from .setupwizard import finished
+    setup = user.is_admin and getattr(request.state, "token", None) is None and not finished(db)  # the setup wizard is pending (#361)
+    return {"setup_pending": setup, "id": user.id, "name": user.display_name or user.name, "email": user.email, "is_admin": user.is_admin, "auth_mode": settings.auth_mode,
             "avatar": avatar_url(user), "account_url": appsettings.get("account_url"), "has_password": bool(user.password_hash), "locale": user.locale, "must_change_password": user.must_change_password,
             "totp_enabled": user.totp_enabled, "must_setup_2fa": settings.auth_mode != "off" and needs_2fa_setup(request, user),
             "tour_seen": user.tour_seen_at is not None}

@@ -175,7 +175,7 @@ MIMIRSYNTH_NEO4J_PASSWORD=…
 MIMIRSYNTH_NEO4J_DATABASE=
 docker compose up -d
 ```
-Todos los brains comparten esa base de datos: un brain son los nodos cuyo `group_id` es su nombre, tal como los escribe Graphiti, y `MIMIRSYNTH_BOOTSTRAP_GRAPHS` adopta los `group_id` existentes del mismo modo. Una exportación lleva entonces solo la copia JSON del grafo, y la consola Cypher rechaza `CALL`, `SHOW` y `USE`. Detalles y versiones soportadas en [la referencia de configuración](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/CONFIGURATION.md#base-de-datos-de-grafos). Neo4j no entra en las copias que hace `update.sh`: guárdalo tú.
+Todos los brains comparten esa base de datos: un brain son los nodos cuyo `group_id` es su nombre, tal como los escribe Graphiti, y `MIMIRSYNTH_BOOTSTRAP_GRAPHS` adopta los `group_id` existentes del mismo modo. Una exportación lleva entonces solo la copia JSON del grafo, y la consola Cypher solo ejecuta lo que sabe mantener dentro del brain. Detalles y versiones soportadas en [la referencia de configuración](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/CONFIGURATION.md#base-de-datos-de-grafos), y qué separa los brains, con sus límites, en [Aislamiento entre brains con Neo4j](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/CONFIGURATION.md#aislamiento-entre-brains-con-neo4j). Neo4j no entra en las copias que hace `update.sh`: guárdalo tú.
 
 ## Modo desarrollo (sin inicio de sesión)
 `MIMIRSYNTH_AUTH_MODE=off` desactiva el inicio de sesión y convierte a todo el mundo en administrador local. **Solo para desarrollo en tu máquina**; nunca lo uses en un servidor accesible.

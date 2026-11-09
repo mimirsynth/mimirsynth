@@ -1,5 +1,6 @@
 """Administración de brains, miembros, usuarios y auditoría."""
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,12 +15,14 @@ from .roles import ROLES, rank
 from .store import get_db
 
 router = APIRouter(prefix="/api")
-SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
+_CHECK = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain-graph-check")
+SLUG =re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
 GRAPH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$")
 
 
 def _brain_out(b: Brain, role: str) -> dict:
-    out = {"slug": b.slug, "name": b.name, "description": b.description, "graph_name": b.graph_name, "role": role}
+    out = {"slug": b.slug, "name": b.name, "description": b.description, "graph_name": b.graph_name, "role": role,
+           "read_only": bool(b.read_only)}
     if rank(role) >= rank("admin"):  # la política de secretos solo la ve y la cambia quien administra el brain
         out.update(secret_mode=b.secret_mode, secret_allow=b.secret_allow, ocr_vision=bool(b.ocr_vision))
     return out
@@ -46,6 +49,14 @@ def create_brain(body: BrainIn, user: User = Depends(require_admin), db: Session
         raise HTTPException(400, "slug inválido (minúsculas, números y guiones, 2-41 caracteres)")
     if db.scalar(select(Brain).where(Brain.slug == body.slug)):
         raise HTTPException(409, "ya existe un brain con ese slug")
+    if not body.graph_name:  # a new brain never lands on a graph that is already there and is nobody's (#359)
+        try:  # with a short wait: a graph database that does not answer must not hold the creation for its client's retries
+            taken = _CHECK.submit(lambda: backend().exists(body.slug)).result(timeout=1.5)
+        except Exception:  # noqa: BLE001  (the graph down: as before, the brain is created and its graph appears with its first write)
+            taken = False
+        if taken and not db.scalar(select(Brain).where(Brain.graph_name == body.slug)):
+            raise HTTPException(409, f"la base de datos ya tiene un grafo «{body.slug}» que no es de ningún brain: adóptalo en "
+                                     "Administración → Base de datos del grafo o elige otro slug")
     b = Brain(slug=body.slug, name=body.name, description=body.description, graph_name=body.graph_name or body.slug, created_by=user.id)
     db.add(b); db.commit()
     audit(db, user, "brain.create", b, slug=b.slug, graph=b.graph_name)

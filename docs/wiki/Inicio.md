@@ -30,11 +30,11 @@ El contenido: [[Calidad del contenido]] · [[Salud de la memoria]] · [[Curador]
 [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Métricas]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Actualización y copias de seguridad]]
 
 ## Para agentes y desarrolladores
-[[Conectar agentes]] · [[API REST]] · [[Integración con Claude Code]] · [[Escribir buena memoria]] · [[Memoria documental]] · [[Variables de entorno]]
+[[Conectar agentes]] · [[Configuración de los plugins de agente]] · [[Integración con Claude Code]] · [[Integración con Codex]] · [[Integración con OpenCode]] · [[Integración con Hermes Agent]] · [[Integración con OpenClaw]] · [[API REST]] · [[Escribir buena memoria]] · [[Memoria documental]] · [[Variables de entorno]]
 
 ## Ayuda
 [[Preguntas frecuentes]] · [[Solución de problemas]] · [[Glosario]]
 
 <!-- index:end -->
 ---
-*MimirSynth está en desarrollo activo (0.x): la interfaz y la API pueden cambiar entre versiones. Licencia Apache-2.0.*
+*MimirSynth está en beta pública (0.x): hasta la 1.0 la interfaz, la API y el esquema pueden cambiar entre versiones menores. Problemas y comentarios: [abre una issue](https://github.com/MimirSynth/mimirsynth/issues/new/choose); preguntas: [Discussions](https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a). Licencia Apache-2.0.*

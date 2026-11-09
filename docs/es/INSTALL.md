@@ -19,7 +19,7 @@ irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps
 ```
 Qué hace, en este orden:
 1. **Comprueba Docker y Compose v2.** En Linux, si falta Docker, ofrece instalarlo con el script oficial de Docker (`get.docker.com`, necesita `sudo`). En macOS y Windows te remite a Docker Desktop, y lo arranca si está instalado pero parado; en Windows, Docker Desktop necesita WSL2 (`wsl --install` en un PowerShell abierto como administrador).
-2. **Pregunta dónde vive tu grafo de conocimiento.** *Local* (la opción por defecto) arranca un FalkorDB incluido junto a MimirSynth. *Existente* pide el tipo (FalkorDB o Neo4j), el host, el puerto, el usuario y la contraseña de un servidor que ya tienes, y comprueba que responde antes de seguir. A un servidor en el mismo ordenador (`localhost`) el contenedor llega como `host.docker.internal`; en Linux debe escuchar en una dirección que alcancen los contenedores, no solo en `127.0.0.1`. La prueba completa de conexión (credenciales, versión, permisos) se hace en el asistente.
+2. **Pregunta dónde vive tu grafo de conocimiento.** *Local* (la opción por defecto) arranca un FalkorDB incluido junto a MimirSynth. *Existente* pide el tipo (FalkorDB o Neo4j), el host, el puerto, el usuario y la contraseña de un servidor que ya tienes, y comprueba que responde. Después, antes de arrancar nada, hace la prueba completa de conexión, la misma que Administración → Base de datos de grafos (dirección, TLS, credenciales, versión, permiso de escritura y los grafos que ya tiene), desde un contenedor de MimirSynth, para llegar al servidor igual que llegará MimirSynth. Si la prueba falla, dice en qué paso y por qué y vuelve a preguntar; sin preguntas, se para y no deja nada instalado. Un Neo4j que pide TLS, como Neo4j Aura, necesita `--graph-tls`. A un servidor en el mismo ordenador (`localhost`) el contenedor llega como `host.docker.internal`; en Linux debe escuchar en una dirección que alcancen los contenedores, no solo en `127.0.0.1`. La conexión se escribe en `.env`, que manda sobre la interfaz: Administración → Base de datos de grafos la muestra en solo lectura, y se cambia en `.env` con un reinicio.
 3. **Ofrece un Ollama incluido** para los embeddings (el perfil `ollama`) y descarga `nomic-embed-text`. La imagen es una descarga de unos 3,5 GB y funciona con la CPU; si Ollama ya está en marcha en el ordenador, el instalador usa ese. En un Mac con Apple silicon la aplicación nativa de Ollama es más rápida: usa la GPU.
 4. **Escribe `docker-compose.yml` y `.env`** en `~/mimirsynth` (`%USERPROFILE%\mimirsynth` en Windows), con un `POSTGRES_PASSWORD` y un `MIMIRSYNTH_SESSION_SECRET` aleatorios, la versión de la release fijada en `MIMIRSYNTH_VERSION`, un puerto libre (el 8000 o el siguiente) y los perfiles elegidos en `COMPOSE_PROFILES`, para que un simple `docker compose up -d` en esa carpeta arranque después los mismos servicios.
 5. **Arranca los servicios**, espera a que responda `/api/health`, muestra la dirección y el **código de primer arranque**, y abre el navegador.
@@ -32,13 +32,13 @@ Cada respuesta tiene su opción, para scripts y automatización (`--help` las en
 curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash -s -- --yes --ollama
 MIMIRSYNTH_GRAPH_PASSWORD='…' ./install.sh --yes --graph existing --graph-type neo4j --graph-host grafo.example.com
 ```
-En PowerShell los parámetros se llaman igual (`-Yes`, `-Ollama`, `-Graph existing`, `-GraphType`, `-GraphHost`, `-GraphPort`, `-GraphUser`, `-Dir`, `-Port`, `-Version`, `-Lang`, `-NoBrowser`, `-NoStart`):
+En PowerShell los parámetros se llaman igual (`-Yes`, `-Ollama`, `-Graph existing`, `-GraphType`, `-GraphHost`, `-GraphPort`, `-GraphUser`, `-GraphDatabase`, `-GraphTls`, `-SkipGraphCheck`, `-Dir`, `-Port`, `-Version`, `-Lang`, `-NoBrowser`, `-NoStart`):
 ```powershell
 & ([scriptblock]::Create((irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps1))) -Yes -Ollama
 ```
 La contraseña de una base de datos de grafos existente se lee de `MIMIRSYNTH_GRAPH_PASSWORD`, nunca de la línea de comandos, para que no quede en el historial. Los mensajes salen en inglés o en castellano según el idioma del sistema (`--lang es`), y el idioma por defecto de la instancia sigue al de los mensajes.
 
-Neo4j necesita una versión de MimirSynth con soporte de Neo4j. Hasta entonces, el instalador escribe la conexión en `.env`, pero la instancia solo habla con FalkorDB.
+Neo4j necesita una release posterior a la 0.14.0. Con una anterior, el instalador no puede hacer la prueba completa antes del arranque (lo dice y solo comprueba que el servidor responde), escribe la conexión en `.env` y la instancia solo habla con FalkorDB.
 
 ### Comprobar la descarga
 Cada release enumera el SHA-256 de sus ficheros en sus notas y en `SHA256SUMS`. Para comprobar el instalador antes de ejecutarlo:
@@ -97,11 +97,16 @@ docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
 Abre la aplicación, introduce el código y crea la cuenta de administrador. Guarda `MIMIRSYNTH_SESSION_SECRET`: cifra los secretos guardados (claves de los proveedores, contraseña SMTP, secreto OIDC, semillas del doble factor…), así que restaurar una copia en otro servidor o copiar la base de datos a una instalación de pruebas exige el **mismo** valor. Con otro la aplicación arranca igual, pero lo dice: una línea en su log, un aviso arriba en Administración y `"secrets": "unreadable"` en `/api/health`; lo que necesita esos secretos responde con un error claro. Vuelve a poner el valor correcto y reinicia. Si se ha perdido, introduce de nuevo esos secretos y quita el doble factor de las cuentas afectadas (Administración → Usuarios); el aviso desaparece cuando ya no queda nada sin leer.
 
-## Primeros pasos
-1. En **Administración → Modelo LLM** y **Embeddings**, añade un motor (endpoint, clave y modelo) y márcalo como predeterminado. «Probar» comprueba que responde.
-2. Crea un **brain** (Administración → Brain → Brain activo → Crear brain) y, si quieres, aplica un paquete de ontología en Vocabulario → Ontología.
-3. Crea un token de API para tus agentes y conecta el primero: ver [AGENTS.md](AGENTS.md).
-4. Opcional: correo SMTP (invitaciones y recuperación de contraseña), OIDC, doble factor obligatorio y carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md).
+## Primeros pasos: el asistente de configuración
+En cuanto existe el administrador, se abre solo el **asistente de configuración**, que te lleva paso a paso hasta el primer recall de tu agente:
+1. **Base de datos del grafo:** la que está en uso (el FalkorDB incluido, o la que puso el instalador), con su prueba, la opción de cambiarla y la de adoptar grafos que ya existan.
+2. **Embeddings:** busca un Ollama local (el incluido, el de tu equipo), puede descargar `nomic-embed-text`, o usa un servicio compatible con OpenAI.
+3. **LLM** (saca los hechos de lo que proponen los agentes) y **decisor** (aprueba solo las propuestas claramente factuales): los dos se pueden saltar. Sin LLM, las propuestas aprobadas esperan y el inicio lo avisa hasta que añadas uno.
+4. **Tu primer brain**, un **token de API** para tu agente (rol Colaborador, se muestra una vez) y **conectar tu agente**, que se pone en verde cuando hace su primera llamada.
+
+Los pasos del grafo y de los embeddings no se pueden saltar: «Siguiente» pide al servidor que los compruebe. Cada paso se guarda al pasarlo, así que puedes dejarlo en cualquier momento y el asistente sigue donde lo dejaste, en cualquier dispositivo; «Configurar a mano» lo cierra del todo. Un administrador puede volver a abrirlo desde **Administración → Asistente de configuración**. Una instancia que ya tenía brains antes de esta versión no lo abre sola.
+
+Después, si quieres: aplica un paquete de ontología en Vocabulario → Ontología, y configura el correo SMTP (invitaciones y recuperación de contraseña), OIDC, el doble factor obligatorio y las carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md) y [AGENTS.md](AGENTS.md).
 
 ## OCR para PDF escaneados e imágenes (opcional)
 
@@ -166,7 +171,7 @@ Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTR
 ## Problemas frecuentes
 - **«define POSTGRES_PASSWORD» o «define MIMIRSYNTH_SESSION_SECRET» al arrancar:** faltan en `.env`.
 - **El instalador dice que Docker necesita `sudo`:** tu usuario se acaba de añadir al grupo `docker`, y eso surte efecto en el siguiente inicio de sesión. Mientras tanto el instalador usa `sudo`; cierra la sesión y vuelve a entrar para usar `docker` sin él.
-- **El instalador se para en «nada responde» con una base de datos de grafos existente:** comprueba desde ese ordenador el host, el puerto y el cortafuegos. Para escribir la configuración de todos modos, responde que quieres continuar o añade `--skip-graph-check`.
+- **El instalador se para en «nada responde» o en «la prueba de conexión ha fallado» con una base de datos de grafos existente:** el mensaje dice qué paso ha fallado (dirección, TLS, credenciales, versión o permiso de escritura). Comprueba desde ese ordenador el host, el puerto y el cortafuegos, y el usuario y la contraseña. Para instalar de todos modos, responde que quieres continuar o añade `--skip-graph-check`: la instancia arranca con esa conexión, y el paso del grafo del asistente espera a que pase, cuando la corrijas en `.env` y ejecutes `docker compose up -d`.
 - **Las propuestas aprobadas se quedan en «aprobada»:** no hay LLM configurado. Añade un motor en Administración → Modelo LLM.
 - **Los embeddings fallan con un error de conexión, con Ollama en el mismo host Linux:** Ollama solo escucha en `127.0.0.1`; ver [Preparar Ollama](#preparar-ollama). Si usas un `docker-compose.yml` propio, comprueba que el servicio `mimirsynth` tiene `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **El recall no devuelve nada:** comprueba los embeddings (Administración → Embeddings → Probar) y que el índice de texto esté sincronizado (pestaña Preguntar muestra su estado).

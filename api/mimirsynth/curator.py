@@ -390,7 +390,7 @@ def due(today: date | None = None) -> list[int]:
     """The brains with the curator on and no run today. Called every few minutes."""
     today = today or _today()
     with _factory()() as db:
-        on = [b.id for b in db.scalars(select(Brain).where(Brain.curator.is_not(None))) if config(b)["enabled"]]
+        on = [b.id for b in db.scalars(select(Brain).where(Brain.curator.is_not(None), Brain.read_only.is_(False))) if config(b)["enabled"]]
         runs = {r.brain_id: r for r in db.scalars(select(CuratorRun).where(CuratorRun.day == today))}
         todo = [b for b in on if b not in runs or (runs[b].status in ("queued", "running") and not _alive(db, runs[b].job_id))]
     return [rid for b in todo if (rid := start(b, today)) is not None]

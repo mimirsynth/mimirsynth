@@ -1,0 +1,57 @@
+name: Beta feedback
+description: Something confusing, missing or rough in the public beta, that is not clearly a bug
+labels: [beta-feedback]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying the public beta. Write in English if you can; Spanish is welcome too and a maintainer will add an English title. · Si lo prefieres, escribe en castellano.
+
+        **Never paste tokens, passwords, API keys or the contents of your `.env`.** Issues are public. If something you need to show contains one, replace it with `***`. · **No pegues nunca tokens, contraseñas, claves de API ni tu `.env`.**
+
+        For a usage question, [Discussions](https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a) is the better place.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Installation or first start
+        - Setup wizard or graph connection
+        - Connecting an agent
+        - Recall or answers
+        - Proposals and curation
+        - Documents
+        - Web interface
+        - Documentation or wiki
+        - Something else
+    validations: {required: true}
+  - type: textarea
+    id: feedback
+    attributes: {label: What happened, description: "What you were trying to do, what you expected and what you found"}
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: MimirSynth version, description: "Shown at the bottom of the side menu, or `MIMIRSYNTH_VERSION` in your `.env`", placeholder: "0.15.0"}
+    validations: {required: true}
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Graph database
+      options: ["FalkorDB, bundled", "FalkorDB, my own", "Neo4j", "I don't know"]
+    validations: {required: true}
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      description: The agent you connected, if this is about one
+      multiple: true
+      options: [None, Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw, Another MCP client, The REST API directly]
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows (Docker Desktop), Windows (WSL), Other]
+    validations: {required: true}
+  - type: textarea
+    id: more
+    attributes: {label: Screenshots or anything else, description: "Check that they show no tokens, passwords or private data"}

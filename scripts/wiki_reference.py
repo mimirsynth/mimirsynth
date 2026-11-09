@@ -69,7 +69,7 @@ BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; ""
 INSTANCE_AREAS = [  # path prefixes after /api
     ("Access", "Acceso", ["/auth"]), ("My account", "Mi cuenta", ["/me", "/users/{uid}/avatar", "/onboarding"]), ("Search all brains", "Buscar en todos los brains", ["/search"]),
     ("Notifications", "Notificaciones", ["/notifications"]), ("Brains", "Brains", ["/brains"]), ("AI consumption", "Consumo de IA", ["/ai-usage"]),
-    ("Import a brain", "Importar un brain", ["/brain-imports"]),
+    ("Import a brain", "Importar un brain", ["/brain-imports"]), ("Setup wizard", "Asistente de configuración", ["/setup"]),
     ("Administration", "Administración", ["/admin", "/users", "/audit", "/settings", "/oidc-providers", "/llm-engines", "/embedding-engines",
                                           "/decision-engines", "/doc-roots", "/ai-status"]),
     ("Embedding model change", "Cambio de modelo de embeddings", ["/embedding-engines/reindex", "/embedding-engines/{eid}/reindex"]),

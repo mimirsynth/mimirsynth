@@ -1,0 +1,9 @@
+{
+ "con Neo4j la consola no admite CALL, SHOW, USE, LOAD ni TERMINATE: los brains comparten la base de datos": "with Neo4j the console does not accept CALL, SHOW, USE, LOAD or TERMINATE: the brains share the database",
+ "con Neo4j la consola no admite comentarios: quítalos de la consulta": "with Neo4j the console does not accept comments: remove them from the query",
+ "con Neo4j la consola no admite parámetros ($): escribe los valores en la consulta": "with Neo4j the console does not accept parameters ($): write the values in the query",
+ "con Neo4j la consola no admite relaciones de longitud variable ni caminos cuantificados: sus nodos intermedios no se pueden limitar al brain": "with Neo4j the console does not accept variable-length relationships or quantified paths: their intermediate nodes cannot be kept inside the brain",
+ "con Neo4j la consola no sabe limitar este patrón al brain, así que no lo ejecuta: {{detail}}": "with Neo4j the console cannot keep this pattern inside the brain, so it does not run it: {{detail}}",
+ "con Neo4j la consola solo admite caracteres ASCII fuera de las cadenas, sin barras invertidas, y ningún escape \\u": "with Neo4j the console only accepts ASCII characters outside strings, no backslashes, and no \\u escape",
+ "con Neo4j la consola solo admite las funciones propias de Neo4j, no {{detail}}: ninguna de un plugin como APOC": "with Neo4j the console only accepts Neo4j's own functions, not {{detail}}: none from a plugin such as APOC"
+}

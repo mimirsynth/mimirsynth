@@ -84,6 +84,9 @@ class FalkorBackend(GraphBackend):
     def restore(self, name: str, payload: bytes) -> None:
         self.client.connection.restore(name, 0, payload)
 
+    def refuses_write(self, e: Exception) -> bool:
+        return "read-only queries" in str(e)  # «graph.RO_QUERY is to be executed only on read-only queries»
+
     def close(self) -> None:
         if "client" in self.__dict__:
             self.client.connection.close()

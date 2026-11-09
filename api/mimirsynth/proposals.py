@@ -107,6 +107,9 @@ def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list
           token_id: int | None = None, how: str = "direct", claims: list[dict] | None = None, origin: str = "") -> Proposal:
     """Saves a proposal whose name and text already went through the secret detector (`in_name`, `in_body`: its findings). `direct`
     approves it, unless the detector flagged something; otherwise the decider triages it, through `later` (a background task)."""
+    if brain.read_only:  # REST, MCP and webhooks all save here (#359)
+        from .deps import read_only_error
+        raise read_only_error()
     found = [{**f, "field": "name"} for f in in_name] + [{**f, "field": "body"} for f in in_body]
     direct = direct and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
     p = Proposal(brain_id=brain.id, author_id=user.id, token_id=token_id, name=name[:255], body=text, source=body.source,

@@ -1,6 +1,6 @@
 name: Release
-# Publishes the container images (the application and the optional OCR service) to GHCR and creates the GitHub release when a version tag (vX.Y.Z or vX.Y.Z-rc.N) is pushed.
-# It can also be started by hand to check that the image builds for both architectures (nothing is published).
+# Publishes the container images (the application and the optional OCR service) to GHCR, the OpenCode and OpenClaw plugins to npm, and creates the GitHub release when a version tag (vX.Y.Z or vX.Y.Z-rc.N) is pushed.
+# It can also be started by hand to check that the image builds for both architectures and the npm packages are complete (nothing is published).
 on:
   push:
     tags: ["v*.*.*"]
@@ -10,7 +10,7 @@ permissions:
   contents: write     # create the release
   packages: write     # push the image to ghcr.io
   attestations: write
-  id-token: write
+  id-token: write     # the build provenance of the images and of the npm packages
 
 jobs:
   image:
@@ -114,6 +114,57 @@ jobs:
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
+  npm:
+    # The OpenCode and OpenClaw plugins (#371, #373) on npm, as @mimirsynth/opencode and @mimirsynth/openclaw. Each keeps its own version
+    # (raised by any change, scripts/plugin_versions.py), so a release publishes the ones whose version npm does not have yet and leaves
+    # the rest as they are. A pre-release tag (vX.Y.Z-rc.N), or a plugin version that is a pre-release, publishes under the dist-tag
+    # `next`; the final release then moves `latest` to it. Started by hand it checks the package and publishes nothing.
+    # Needs the secret NPM_TOKEN: an npm token that can publish to the @mimirsynth scope. It does not hold back the GitHub release.
+    needs: image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [opencode, openclaw]
+    defaults:
+      run: {working-directory: "integrations/${{ matrix.package }}"}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: integrations/${{ matrix.package }}/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - name: The package is what npm would publish (scripts/npm_package.mjs)
+        run: node ../../scripts/npm_package.mjs "integrations/${{ matrix.package }}"
+      - name: Publish the version npm does not have yet, with provenance
+        if: github.ref_type == 'tag'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::error::the secret NPM_TOKEN is not set: the plugin cannot be published"; exit 1; fi
+          name=$(node -p 'require("./package.json").name')
+          version=$(node -p 'require("./package.json").version')
+          dist=latest
+          case "$GITHUB_REF_NAME $version" in *-*) dist=next;; esac
+          if ! have=$(npm view "$name@$version" version 2>"$RUNNER_TEMP/view.err"); then
+            grep -q E404 "$RUNNER_TEMP/view.err" || { cat "$RUNNER_TEMP/view.err"; exit 1; }   # E404: not on npm (the package or this version)
+            have=""
+          fi
+          if [ "$have" = "$version" ]; then
+            echo "::notice::$name@$version is already on npm: nothing to publish"
+            # published by a pre-release tag: the final release moves `latest` to it (never back to an older version)
+            if [ "$dist" = latest ] && [ "$(npm view "$name" dist-tags.next)" = "$version" ] && [ "$(npm view "$name" dist-tags.latest)" != "$version" ]; then
+              npm dist-tag add "$name@$version" latest
+            fi
+          else
+            npm publish --provenance --access public --tag "$dist"
+            echo "::notice::published $name@$version (dist-tag $dist)"
+          fi
+
   release:
     needs: [image, ocr-image]
     if: github.ref_type == 'tag'
@@ -129,6 +180,15 @@ jobs:
           v="${GITHUB_REF_NAME#v}"
           awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then echo "See the [changelog](CHANGELOG.md)." > notes.md; fi
+          repo="https://github.com/${GITHUB_REPOSITORY}"
+          if grep -q '^STAGE = "beta"' api/mimirsynth/brand.py; then   # the release stage the interface also shows (#366)
+            {
+              echo "> **Public beta.** Until 1.0 the API, the MCP tools and the database schema may change between minor versions; the migrations run on start and \`update.sh\` makes a backup first."
+              echo "> Problems and feedback: [open an issue](${repo}/issues/new/choose) (never paste tokens or passwords). Questions: [Discussions](${repo}/discussions/categories/q-a)."
+              echo
+              cat notes.md
+            } > notes.tmp && mv notes.tmp notes.md
+          fi
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
           {
             echo

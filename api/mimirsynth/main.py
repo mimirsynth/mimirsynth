@@ -13,10 +13,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, metrics
-from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn, setupwizard
 from .config import settings
 from .db import list_graphs
-from .graphdb import backend
+from .graphdb import ReadOnlyError, backend
 from .models import Brain, User
 from .secretbox import SealedSecretError
 from .store import _factory, engine, init_db
@@ -123,6 +123,14 @@ async def sealed_secret_error(request, exc: SealedSecretError):
                         status_code=503)
 
 
+@app.exception_handler(ReadOnlyError)
+async def read_only_brain(request, exc: ReadOnlyError):
+    """A write that reached a read-only brain's graph by a path that did not check it first: the database refused it (#359)."""
+    from .deps import READ_ONLY
+    logging.getLogger("mimirsynth").warning("%s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse({"detail": i18n.translate(READ_ONLY, i18n.language(request))}, status_code=409)
+
+
 app.add_middleware(
     CORSMiddleware, allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip() != "*"] or ["http://localhost:5173"],
     allow_credentials=True, allow_methods=["GET", "POST", "PUT", "DELETE"], allow_headers=["*"],
@@ -186,13 +194,14 @@ app.include_router(verify.router)
 app.include_router(categories.router)
 app.include_router(onboarding.router)
 app.include_router(graphconn.router)
+app.include_router(setupwizard.router)
 verify.load_dir()  # MIMIRSYNTH_VERIFIERS_DIR: the administrator's opt-in for external verifiers (#293)
 app.middleware("http")(attention.invalidate_after_writes)
 
 
 @app.get("/api/config")
 def get_config():
-    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links(), "default_language": appsettings.get("default_language"),
+    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "stage": brand.STAGE, "links": brand.links(), "default_language": appsettings.get("default_language"),
             "token_max_days": int(appsettings.get("token_max_days"))}
 
 

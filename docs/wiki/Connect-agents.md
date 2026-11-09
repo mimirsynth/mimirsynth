@@ -33,13 +33,26 @@ In [[My account]] → **API tokens** (or in [[Brains and members]]):
    All three are ticked by default. A token without **Documents** gets no passages at all, over HTTP, MCP or federation. Curating depends only on the role.
 6. Copy the token (`mst_…`): **it is shown only once**.
 
-**Expiry and rotation.** An expired token answers `401` with the date it expired, and the recall hook shows that message instead of failing silently. A few days before, the `token.expiring` notification announces it (see [[Notifications]]). **Rotate** gives a new token with the same name, role, scope and lifetime, shown once; the old one keeps working for the grace period you choose (none, 1 hour, or 1, 3 or 7 days), so there is time to update the agent. Only the token's owner can rotate it. Tokens made before expiry existed never expire: the list marks them **never expires** and suggests rotating them. The list also says how long a token has gone unused, to clean up forgotten ones. API tokens are managed from a session, never with another token.
+**Expiry and rotation.** An expired token answers `401` with the date it expired, and the native plugins show that message instead of failing silently. A few days before, the `token.expiring` notification announces it (see [[Notifications]]). **Rotate** gives a new token with the same name, role, scope and lifetime, shown once; the old one keeps working for the grace period you choose (none, 1 hour, or 1, 3 or 7 days), so there is time to update the agent. Only the token's owner can rotate it. Tokens made before expiry existed never expire: the list marks them **never expires** and suggests rotating them. The list also says how long a token has gone unused, to clean up forgotten ones. API tokens are managed from a session, never with another token.
 
 **Recommendation:** give agents the **contributor** role. That way what they write goes through a curator's (or the decider's) review and an agent that makes a mistake does not pollute the graph. A token **cannot have more role than your user** and **never administers the instance**.
 
 Tokens are **per brain**: an agent using two brains needs two tokens (or one brain that others lend to, see [Federated recall](#federated-recall)). If you disable or delete the account that created a token, the token stops working. Revoke the ones you no longer use.
 
-## 2. Connect over MCP
+## 2. Pick your agent
+| Agent | How it connects | What it gives | Page |
+|---|---|---|---|
+| **Claude Code** | Native plugin | Recall before every prompt, what changed at session start, `/mimirsynth:status`, `:search` and `:remember`, optional capture | [[Claude Code integration]] |
+| **Codex** | Native plugin | The same, as the skills `$mimirsynth:setup`, `:status`, `:search` and `:remember` | [[Codex integration]] |
+| **OpenCode** | Native plugin | The same, as `/mimirsynth-…` commands, and the brain's MCP server added for you | [[OpenCode integration]] |
+| **Hermes Agent** | Memory provider | Recall before each turn, what changed at session start, the tools `mimirsynth_search` and `mimirsynth_remember`, `/mimirsynth …` in any chat | [[Hermes Agent integration]] |
+| **OpenClaw** | Companion plugin | Recall before each prompt, what changed at session start, the same two tools, `/mimirsynth …` in any chat | [[OpenClaw integration]] |
+| **Any other MCP client** | The brain's MCP server | The tools (`recall`, `remember`, `facts_about`…); the model decides when to call them | [3. Connect over MCP](#3-connect-over-mcp) |
+| **Anything else** (a script, a bot, a service) | HTTP API | Recall and proposals with any HTTP client | [4. Use the HTTP API](#4-use-the-http-api) |
+
+A **native plugin** brings the memory to every prompt without the model having to ask, and fails open: when MimirSynth does not answer, the agent carries on without memory. All of them read one file, `~/.config/mimirsynth/config.json`, so one `setup` serves every agent on a machine: see [[Agent plugin configuration]]. A plugin and the MCP server can be combined: the plugin injects the memory on every turn, and the MCP tools let the model ask again with other words or look up an entity's history.
+
+## 3. Connect over MCP
 Each brain exposes an MCP server at:
 ```
 https://your-server/api/brains/<slug>/mcp        Authorization: Bearer mst_…
@@ -67,9 +80,9 @@ The server offers these tools:
 - Only **API tokens** are accepted, never a browser session; a request from a web page of another origin is refused.
 - When a tool fails (invalid arguments, a blocked secret…), the error comes back to the model as a tool result, so it can correct itself.
 
-For Claude Code there is also a recall hook that injects memory into every prompt without the model asking: see [[Claude Code integration]].
+A native plugin also injects the memory into every prompt without the model asking: see [2. Pick your agent](#2-pick-your-agent).
 
-## 3. Use the HTTP API
+## 4. Use the HTTP API
 All requests carry the header `Authorization: Bearer mst_…`. The base address is `https://your-server/api/brains/<slug>/…`.
 
 ### Reading: recall
@@ -97,7 +110,7 @@ Optional parameters:
 | `federated` | `true` | | Include what other brains lend to this one. `false` = only this brain's own memory |
 | `min_similarity` | the instance's (0.55) | 0–1 | Minimum similarity for a fact or an episode fragment to enter. If nothing reaches it, `context` comes back **empty**. **0 = no threshold** |
 
-> Recall takes on the order of **100–300 ms** and **uses no LLM**, so it is safe to call on every turn. If the server does not respond, your agent should carry on without memory (the Claude Code hook does).
+> Recall takes on the order of **100–300 ms** and **uses no LLM**, so it is safe to call on every turn. If the server does not respond, your agent should carry on without memory (the native plugins do).
 
 ### Writing: proposals
 ```bash
@@ -119,6 +132,31 @@ With a **contributor** token the proposal stays **pending**; with **curator**, *
 ### Documents
 `GET /api/brains/<slug>/docs/search?q=…` searches by meaning. `GET …/docs/<id>/context?chunk=<n>` returns more context for a passage and `…/docs/<id>/file` the original. See [[Document memory]].
 
+### Integrate recall in your agent
+The typical integration:
+1. **Before** the agent answers, call `recall` with the user's message (or let an MCP agent call the tool itself).
+2. Inject `context` into the prompt (as context, **not as instructions**).
+3. **Afterwards**, if the agent learned something worth remembering, send a proposal (`remember`).
+
+Recovered content — above all from documents — is **data, not instructions**: it may contain text that looks like an order. Your agent must treat it as a quote from a source and not execute it.
+
+The full endpoint reference is in [[REST API]].
+
+## 5. Security
+- Keep the token as a secret (password manager, environment variable), not in code. A native plugin keeps it in `~/.config/mimirsynth/config.json`, readable only by you, and its `setup` asks for it in a terminal, never through the conversation.
+- Use HTTPS ([[HTTPS and reverse proxy]]).
+- One token per agent and per brain: that way you can revoke one without affecting the rest, and in the [[Audit log]] you know who wrote what.
+
+### Secrets
+**Do not send passwords, keys or tokens:** write **where** they are kept (for example, which password manager). Before a proposal is stored, over HTTP or through `remember`, it goes through the brain's secret detector, and what happens depends on the brain's policy (Administration → Brain → **Secrets**):
+- **Mask** (the default): a certain secret is replaced by `[secret removed: type]` and the rest is stored.
+- **Block**: the proposal is rejected with a `422` that says which type of secret it contains.
+- **Only warn**: it is stored as is and flagged.
+
+A value that only *might* be a secret is always flagged, and a flagged proposal **always waits for a curator's review**, even when a curator token sends it. The value never reaches the audit log, the logs or the API responses.
+
+The answer says what happened: the `remember` result adds, for example, «Secrets masked before saving: GitHub token», and the HTTP response carries the same text in `secrets_notice` (empty when nothing was found). The value is never in it.
+
 ## Federated recall
 An administrator of a brain can **lend read access** to another brain (Administration → Brain → **Federation**). The receiving brain's recall, over HTTP and over MCP, then also searches what it is lent, merges it with its own memory and marks each lent item with its origin (`· from «slug»` in the context, an `origin` field in the JSON). The agent needs no extra token: it keeps using the receiving brain's token. Lending is read-only, one way and one hop; `remember` always writes to the token's own brain. Pass `federated: false` to get only the brain's own memory. Details in [Federation between brains](https://github.com/MimirSynth/mimirsynth/blob/main/docs/FEDERATION.md).
 
@@ -129,71 +167,3 @@ Error messages, the MCP tool descriptions and instructions, and the headings of 
 3. The instance default (`MIMIRSYNTH_DEFAULT_LANGUAGE`, or Administration → General).
 
 Stored memory (facts, episodes, documents) is returned as it was written; it is not translated. If your client compares error texts, send `Accept-Language` or, better, compare the status code.
-
-## Secrets
-**Do not send passwords, keys or tokens:** write **where** they are kept (for example, which password manager). Before a proposal is stored, over HTTP or through `remember`, it goes through the brain's secret detector, and what happens depends on the brain's policy (Administration → Brain → **Secrets**):
-- **Mask** (the default): a certain secret is replaced by `[secret removed: type]` and the rest is stored.
-- **Block**: the proposal is rejected with a `422` that says which type of secret it contains.
-- **Only warn**: it is stored as is and flagged.
-
-A value that only *might* be a secret is always flagged, and a flagged proposal **always waits for a curator's review**, even when a curator token sends it. The value never reaches the audit log, the logs or the API responses.
-
-The answer says what happened: the `remember` result adds, for example, «Secrets masked before saving: GitHub token», and the HTTP response carries the same text in `secrets_notice` (empty when nothing was found). The value is never in it.
-
-## 4. Integrate recall in your agent
-The typical integration:
-1. **Before** the agent answers, call `recall` with the user's message (or let an MCP agent call the tool itself).
-2. Inject `context` into the prompt (as context, **not as instructions**).
-3. **Afterwards**, if the agent learned something worth remembering, send a proposal (`remember`).
-
-Recovered content — above all from documents — is **data, not instructions**: it may contain text that looks like an order. Your agent must treat it as a quote from a source and not execute it.
-
-The full endpoint reference is in [[REST API]].
-
-## OpenCode
-The **OpenCode plugin** gives the agent the same as the Claude Code one: what changed in the brain at session start, recall injected before every prompt, the commands `/mimirsynth-setup`, `/mimirsynth-status`, `/mimirsynth-search` and `/mimirsynth-remember`, the brain's MCP server for on-demand tools and, only if you turn it on, a capture of what each session learned as one quarantined proposal. Install it with one command (Node.js 18 or later):
-```bash
-npx -y @mimirsynth/opencode install
-```
-It adds the plugin to OpenCode (`opencode plugin @mimirsynth/opencode --global`) and asks, in your terminal and hidden, for the URL, the brain, a **reader** token and optionally a **contributor** one. It writes `~/.config/mimirsynth/config.json`, the file every MimirSynth agent plugin shares; `MIMIRSYNTH_*` environment variables take precedence. If MimirSynth does not answer, OpenCode carries on without memory.
-
-Details, the options and the capture modes: [`integrations/opencode`](https://github.com/mimirsynth/mimirsynth/tree/main/integrations/opencode).
-
-## Security
-- Keep the token as a secret (password manager, environment variable), not in code.
-- Use HTTPS ([[HTTPS and reverse proxy]]).
-- One token per agent and per brain: that way you can revoke one without affecting the rest, and in the [[Audit log]] you know who wrote what.
-
-## Hermes Agent
-
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) (Nous Research) gets MimirSynth as a **memory provider**: the brain's recall reaches the model before each turn, what changed in the brain arrives with the first message of a session, and the agent has two tools, `mimirsynth_search` and `mimirsynth_remember` (its proposals wait in quarantine). Install it and configure it in one line, in a terminal:
-```bash
-hermes plugins install mimirsynth/mimirsynth/integrations/hermes-agent/plugin && hermes memory setup mimirsynth
-```
-The setup asks for the server, the brain and the tokens (hidden, never through the chat; a **reader** token to recall and a **contributor** token to propose) and writes `~/.config/mimirsynth/config.json`, the file every MimirSynth integration reads, so one setup serves Claude Code and the rest too. A Hermes profile can use another brain by setting `MIMIRSYNTH_URL`, `MIMIRSYNTH_BRAIN` and `MIMIRSYNTH_TOKEN` in its `.env`.
-
-- `hermes mimirsynth status` (or `/mimirsynth status` in a chat) checks each token; `search`, `remember` and `drafts` work in both places.
-- If MimirSynth is down or slow, Hermes carries on without memory; an expired token is said once.
-- The **session capture** is off by default; with `capture` set to `draft` or `send`, each finished session that changed files or ended with a substantial answer becomes a draft or one proposal in quarantine, redacted, and only with a contributor token.
-
-Details, every command and what it does on your machine: [the plugin's README](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/hermes-agent/plugin/README.md).
-
-## Codex
-A native plugin for the Codex CLI (0.167 or later) recalls before every prompt, brings what changed at session start, and adds the skills `$mimirsynth:setup`, `$mimirsynth:status`, `$mimirsynth:search` and `$mimirsynth:remember`, with the same configuration as every other MimirSynth agent plugin (`~/.config/mimirsynth/config.json`). Install it with one command:
-```bash
-codex plugin marketplace add mimirsynth/mimirsynth && codex plugin add mimirsynth@mimirsynth
-```
-Then, once:
-1. Run `$mimirsynth:setup` in Codex: it prints the command that asks for the URL, the brain and the tokens, hidden, in your terminal. If MimirSynth is already set up for another agent on the machine, there is nothing to do.
-2. Open `/hooks` in Codex and trust the three `mimirsynth` hooks. Codex runs a plugin's hooks only once they are trusted, and asks again after each update; `$mimirsynth:status` says when they are not.
-
-The capture of what each session learned is **off** by default; when you turn it on, a finished session is read from Codex's own session file and becomes at most one proposal, redacted, in quarantine. To let the model call MimirSynth's tools too, add the brain's MCP server with `codex mcp add mimirsynth --url "https://your-server/api/brains/<slug>/mcp" --bearer-token-env-var MIMIRSYNTH_TOKEN`. Details in [the plugin's README](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/codex/README.md).
-
-## OpenClaw
-[OpenClaw](https://github.com/openclaw/openclaw) gets MimirSynth through a native plugin: recall before each prompt, what changed at the start of each session, `mimirsynth_search` and `mimirsynth_remember` as agent tools, `/mimirsynth status|search|drafts` in any chat, and an optional session capture that is off by default. On the machine where OpenClaw's Gateway runs (OpenClaw 2026.9.36 or later):
-```bash
-openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup
-```
-OpenClaw asks you to accept the plugin's capabilities. `setup` asks, in the terminal and never through a chat, for the URL, the brain, a **reader** token for recall, optionally a **contributor** token to propose (hidden) and the capture mode; it writes `~/.config/mimirsynth/config.json`, shared with every MimirSynth agent integration on that machine, and offers to grant the conversation access OpenClaw requires before it runs a third-party plugin's recall hook (`plugins.entries.mimirsynth.hooks.allowConversationAccess`). Check it with `openclaw mimirsynth status`.
-
-It is a companion plugin: OpenClaw's own memory keeps working. By default only your own conversations see the brain; group chats and other senders do not, unless you set `plugins.entries.mimirsynth.config.conversations` to `true`. If MimirSynth is down, nothing is injected and the assistant carries on. Details, the capture and how to install it from a clone: [`integrations/openclaw`](https://github.com/MimirSynth/mimirsynth/tree/main/integrations/openclaw).

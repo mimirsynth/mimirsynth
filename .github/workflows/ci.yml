@@ -108,6 +108,21 @@ jobs:
       - uses: actions/setup-node@v7
         with: {node-version: 22, cache: npm, cache-dependency-path: integrations/shared/typescript/package-lock.json}
       - run: cd integrations/shared/typescript && npm ci && npm run check && npm test
+  npm-packages:
+    # The plugins the release publishes to npm (OpenCode, OpenClaw) pack into a complete package on every pull request, not only on those
+    # that touch them (their own workflows check the rest): what npm would publish (npm pack --dry-run), with every file package.json
+    # points at and the metadata npm publish --provenance needs (scripts/npm_package.mjs). Nothing is published.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [opencode, openclaw]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22, cache: npm, cache-dependency-path: "integrations/${{ matrix.package }}/package-lock.json"}
+      - run: cd "integrations/${{ matrix.package }}" && npm ci
+      - run: node scripts/npm_package.mjs "integrations/${{ matrix.package }}"
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -139,22 +154,154 @@ jobs:
           for i in $(seq 1 30); do (exec 3<>/dev/tcp/127.0.0.1/6379) 2>/dev/null && break; sleep 1; done
           ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/existing" --no-browser \
             --graph existing --graph-type falkordb --graph-host localhost --graph-port 6379 | tee "$RUNNER_TEMP/existing.log"
-          grep -q "The container reaches host.docker.internal:6379" "$RUNNER_TEMP/existing.log"
+          grep -q "Connection test passed: FalkorDB" "$RUNNER_TEMP/existing.log"   # before the start, from a container (host.docker.internal)
           cd "$RUNNER_TEMP/existing"
           grep -q '^MIMIRSYNTH_FALKOR_HOST=host.docker.internal$' .env
           grep -q '^COMPOSE_PROFILES=$' .env
           [ -z "$(docker compose ps -q falkordb)" ]
           curl -sf "localhost:$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)/api/health" | grep -q '"graph":true'   # the next free port: 8001 is the OCR step's
+      - name: Before the start the installer runs the API's full connection test; a wrong password stops it with nothing left behind (#360)
+        run: |
+          set -o pipefail
+          docker run -d --name locked-falkor -p 6380:6379 -e REDIS_ARGS="--requirepass ci-s3cret" falkordb/falkordb:v4.22.0
+          for i in $(seq 1 30); do (exec 3<>/dev/tcp/127.0.0.1/6380) 2>/dev/null && break; sleep 1; done
+          flags="--yes --from . --version ci --no-browser --dir $RUNNER_TEMP/locked --graph existing --graph-type falkordb --graph-host localhost --graph-port 6380"
+          if MIMIRSYNTH_GRAPH_PASSWORD=wrong ./install.sh $flags 2>&1 | tee "$RUNNER_TEMP/locked-wrong.log"; then exit 1; fi
+          grep -q "the connection test failed: The server rejects the user or the password" "$RUNNER_TEMP/locked-wrong.log"
+          [ ! -e "$RUNNER_TEMP/locked/.env" ] && [ ! -e "$RUNNER_TEMP/locked/docker-compose.yml" ]
+          [ -z "$(docker volume ls -q --filter name=locked_)" ]   # the test container leaves no volume behind
+          MIMIRSYNTH_GRAPH_PASSWORD=ci-s3cret ./install.sh $flags | tee "$RUNNER_TEMP/locked.log"
+          grep -q "Connection test passed: FalkorDB 4.22" "$RUNNER_TEMP/locked.log"
+          cd "$RUNNER_TEMP/locked"
+          grep -q '^MIMIRSYNTH_FALKOR_PASSWORD=ci-s3cret$' .env
+          curl -sf "localhost:$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)/api/health" | grep -q '"graph":true'
+      - name: The installer runs the same test against an existing Neo4j and starts on it (#360)
+        run: |
+          set -o pipefail
+          docker run -d --name existing-neo4j -p 7687:7687 -e NEO4J_AUTH=neo4j/mimirsynth-ci neo4j:5.26-community
+          for i in $(seq 1 60); do docker exec existing-neo4j cypher-shell -u neo4j -p mimirsynth-ci 'RETURN 1' >/dev/null 2>&1 && break; sleep 2; done
+          MIMIRSYNTH_GRAPH_PASSWORD=mimirsynth-ci ./install.sh --yes --from . --version ci --no-browser --dir "$RUNNER_TEMP/neo4j" \
+            --graph existing --graph-type neo4j --graph-host localhost --graph-port 7687 | tee "$RUNNER_TEMP/neo4j.log"
+          grep -q "Connection test passed: Neo4j 5.26" "$RUNNER_TEMP/neo4j.log"
+          cd "$RUNNER_TEMP/neo4j"
+          grep -q '^MIMIRSYNTH_NEO4J_URI=bolt://host.docker.internal:7687$' .env
+          curl -sf "localhost:$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)/api/health" | grep -q '"backend":"neo4j"'
       - name: The installer stops when an existing graph database does not answer (#360)
         run: |
           if ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/nothing" --no-start --graph existing --graph-host 127.0.0.1 --graph-port 6391; then exit 1; fi
           [ ! -f "$RUNNER_TEMP/nothing/.env" ]
+  installer-clean:
+    # #360 on a clean Ubuntu and a clean Debian, with no Docker: the installer arrives through a pipe as with `curl | bash`, installs
+    # Docker with get.docker.com, starts the stack and opens the browser on the first-start screen, where the setup wizard begins.
+    # The distribution runs in a container on the host's network; the Docker CLI installed inside drives the runner's daemon through
+    # its socket, and the install folder has the same path on both sides, so the compose file's bind mount means the same folder.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {image: "ubuntu:24.04", lang: en_US.UTF-8, code: "First-start code"}
+          - {image: "debian:12", lang: es_ES.UTF-8, code: "Código de inicio"}
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t ghcr.io/mimirsynth/mimirsynth:ci .   # the compose file's image at version "ci": nothing is pulled
+      - name: Install on a clean ${{ matrix.image }}
+        env: {IMAGE: "${{ matrix.image }}", LOCALE: "${{ matrix.lang }}"}
+        run: |
+          set -o pipefail
+          dir="$RUNNER_TEMP/clean"; mkdir -p "$dir"
+          docker run --rm --network host -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/src:ro" -v "$dir:$dir" \
+            -e LANG="$LOCALE" -e DIR="$dir" "$IMAGE" bash -ec '
+              apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates >/dev/null
+              if command -v docker; then echo "this image already has Docker"; exit 1; fi
+              mkdir -p /tmp/bin && printf "#!/bin/sh\necho \"\$1\" > /tmp/opened\n" > /tmp/bin/xdg-open && chmod +x /tmp/bin/xdg-open
+              cat /src/install.sh | PATH="/tmp/bin:$PATH" DISPLAY=:0 bash -s -- --yes --install-docker --from /src --version ci --dir "$DIR"
+              sleep 2; cp /tmp/opened "$DIR/opened"
+            ' 2>&1 | tee "$RUNNER_TEMP/clean.log"
+          grep -q "${{ matrix.code }}: [A-Za-z0-9_-]\{16\}" "$RUNNER_TEMP/clean.log"
+          cd "$dir"
+          # .env belongs to the container's root, readable only by it (mode 600): sudo
+          url="$(cat opened)"; port="$(sudo grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)"; base="http://localhost:$port"
+          # The browser opened on the setup wizard (/configuracion) when the instance has it (#361; its API answers 401), else on the root
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/setup")" = 401 ]; then [ "$url" = "$base/configuracion" ]; else [ "$url" = "$base" ]; fi
+          curl -sf "$base/api/health" | grep -q '"graph":true'
+          curl -sf "$base/api/auth/options" | grep -q '"setup":true'   # the first-start screen: the administrator, then the wizard
+          curl -sf "$url" | grep -q '<div id="root">'
+          [ "$(sudo stat -c %a .env)" = 600 ] && sudo grep -q '^COMPOSE_PROFILES=bundled$' .env
+  installer-desktop:
+    # #360 where the hosted runners have no Docker Desktop: the scripts under the shells people run them with (macOS's own bash 3.2
+    # with BSD tools, PowerShell 7 on macOS, Windows PowerShell 5.1 in the documented `& ([scriptblock]::Create(...))` form) against a
+    # stand-in `docker` that says yes, up to the configuration they write. Starting the stack on Docker Desktop is a manual test.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: A stand-in docker (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "$RUNNER_TEMP/shim"
+          cat > "$RUNNER_TEMP/shim/docker" <<'EOF'
+          #!/bin/sh
+          # Docker Desktop's stand-in: everything works; `docker run` (the connection test) answers «not available in this release».
+          case "$*" in
+            --version) echo "Docker version 0.0.0 (stand-in)" ;;
+            "compose version --short") echo "2.99.0" ;;
+            run*) cat >/dev/null; exit 3 ;;
+          esac
+          exit 0
+          EOF
+          chmod +x "$RUNNER_TEMP/shim/docker"
+          echo "$RUNNER_TEMP/shim" >> "$GITHUB_PATH"
+      - name: install.sh under macOS's bash 3.2
+        if: runner.os == 'macOS'
+        shell: /bin/bash -e {0}
+        run: |
+          /bin/bash --version | head -n 1
+          /bin/bash install.sh --yes --from . --version ci --no-start --dir "$RUNNER_TEMP/sh-local"
+          cd "$RUNNER_TEMP/sh-local"
+          [ "$(stat -f %Lp .env)" = 600 ]
+          grep -q '^COMPOSE_PROFILES=bundled$' .env
+          [ "$(grep -c '^MIMIRSYNTH_SESSION_SECRET=[0-9a-f]\{64\}$' .env)" = 1 ]
+          [ ! -e update.sh ]   # update.sh is for Linux
+          cd "$GITHUB_WORKSPACE"
+          /bin/bash install.sh --yes --from . --version ci --no-start --dir "$RUNNER_TEMP/sh-neo4j" --lang es \
+            --graph existing --graph-type neo4j --graph-host localhost --graph-port 1 --graph-tls --skip-graph-check
+          grep -q '^MIMIRSYNTH_NEO4J_URI=bolt+s://host.docker.internal:1$' "$RUNNER_TEMP/sh-neo4j/.env"
+          grep -q '^MIMIRSYNTH_DEFAULT_LANGUAGE=es$' "$RUNNER_TEMP/sh-neo4j/.env"
+          grep -q '^COMPOSE_PROFILES=$' "$RUNNER_TEMP/sh-neo4j/.env"
+      - name: A stand-in docker (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $shim = Join-Path $env:RUNNER_TEMP "shim"; New-Item -ItemType Directory -Force $shim | Out-Null
+          Set-Content -Encoding ASCII (Join-Path $shim "docker.cmd") @(
+            '@echo off',
+            'if "%~1"=="--version" echo Docker version 0.0.0 (stand-in)',
+            'if "%~1 %~2 %~3"=="compose version --short" echo 2.99.0',
+            'if "%~1"=="run" (findstr "^" >nul & exit /b 3)',
+            'exit /b 0')
+          Add-Content -Encoding ASCII $env:GITHUB_PATH $shim
+      - name: install.ps1 under Windows PowerShell 5.1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./.github/installer-config-test.ps1
+      - name: install.ps1 under PowerShell 7 on macOS
+        if: runner.os == 'macOS'
+        shell: pwsh
+        run: ./.github/installer-config-test.ps1
   scripts:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - name: shellcheck (install.sh, update.sh)
         run: shellcheck install.sh && shellcheck -S warning update.sh
+      - name: install.sh and install.ps1 run the same connection test (#360)
+        run: |
+          a="$(sed -n 's/^PROBE_PY="\(.*\)"$/\1/p' install.sh)"; b="$(sed -n 's/^\$ProbePy = "\(.*\)"$/\1/p' install.ps1)"
+          [ -n "$a" ] && [ "$a" = "$b" ]
       - name: install.ps1 parses, is plain ASCII (Windows PowerShell 5.1 reads it in the ANSI code page) and passes PSScriptAnalyzer
         shell: pwsh
         run: |

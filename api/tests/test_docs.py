@@ -255,5 +255,8 @@ def test_public_config_official_links(client, monkeypatch):
     from mimirsynth import brand
     c = client.get("/api/config").json()
     assert c["name"] == "MimirSynth" and c["links"]["repo"] == brand.REPO_URL == "https://github.com/MimirSynth/mimirsynth"
+    assert c["links"]["feedback"].endswith("/issues/new/choose")  # the issue templates, not the bare list
+    # La beta pública (#366) se anuncia junto a la versión mientras la versión siga en 0.x.
+    assert c["stage"] == brand.STAGE and (brand.STAGE == "beta") == c["version"].startswith("0.")
     monkeypatch.setattr(brand, "PUBLISHED", False)  # un fork sin repositorio público puede ocultar los enlaces
     assert client.get("/api/config").json()["links"] == {"docs": "", "repo": "", "feedback": "", "wiki": ""}

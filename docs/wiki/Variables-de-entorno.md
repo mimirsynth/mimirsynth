@@ -21,18 +21,41 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 |---|---|---|
 | `MIMIRSYNTH_VERSION` | `latest` | Versión de la imagen que se ejecuta (una etiqueta de release como `0.8.0`). Solo Compose; `update.sh` la fija por ti ([[Actualización y copias de seguridad]]) |
 | `MIMIRSYNTH_PORT` | `8000` | Puerto del host en el que se publica la aplicación. Solo Compose |
-| `MIMIRSYNTH_FALKOR_HOST` | `falkordb` (compose) / `localhost` | Host de FalkorDB |
-| `MIMIRSYNTH_FALKOR_PORT` | `6379` | Puerto de FalkorDB |
-| `MIMIRSYNTH_GRAPH_BACKEND` | `falkordb` | La base de datos de grafos: `falkordb` o `neo4j` (Neo4j 5.26 o posterior). Ver [[Instalación]] |
-| `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB con usuarios ACL |
-| `MIMIRSYNTH_NEO4J_URI` | vacío | Dirección de Neo4j (`bolt://host:7687` o `neo4j://host:7687`) |
-| `MIMIRSYNTH_NEO4J_USER` / `_PASSWORD` | `neo4j` / vacío | Credenciales de Neo4j |
-| `MIMIRSYNTH_NEO4J_DATABASE` | vacío | Base de datos de Neo4j para todos los brains; vacío: la predeterminada del servidor |
+| `COMPOSE_PROFILES` | vacío (lo pone el instalador) | Los [perfiles](#perfiles-de-compose) que arranca un simple `docker compose up -d`, separados por comas, p. ej. `bundled,ollama`. Lo lee Docker Compose, no la aplicación |
 | `MIMIRSYNTH_DATABASE_URL` | SQLite local | Base de datos del plano de control. En producción, PostgreSQL con pgvector (`postgresql+psycopg://…`). El compose oficial la construye a partir de `POSTGRES_PASSWORD`: no la pongas en `.env` |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | vacío | Grafos existentes a adoptar como brains **solo en el primer arranque**: `slug:Nombre,otro:Otro`. Las entradas con formato inválido se ignoran con un aviso |
 | `MIMIRSYNTH_DEFAULT_GRAPH` | `default` | Grafo por defecto |
 | `MIMIRSYNTH_STATIC_DIR` | — | Carpeta de la web compilada (la fija la imagen Docker) |
 | `MIMIRSYNTH_CORS_ORIGINS` | `*` | Orígenes CORS permitidos. Con `*` solo se admite `http://localhost:5173` (desarrollo). Solo hace falta tocarlo si sirves la web desde otro dominio. El compose oficial no la pasa |
+
+## Base de datos de grafos
+De dónde sale la conexión del grafo, por este orden:
+1. **Estas variables**, cuando `MIMIRSYNTH_GRAPH_BACKEND`, `MIMIRSYNTH_FALKOR_HOST` o `MIMIRSYNTH_NEO4J_URI` tiene valor (el instalador las escribe cuando eliges una base de datos existente). Ganan a la interfaz, que las muestra de solo lectura, y se cambian en `.env`, con un reinicio.
+2. **Administración → Base de datos del grafo**, donde un administrador introduce la conexión, la prueba y la guarda sin reiniciar.
+3. **El FalkorDB incluido** (el perfil `bundled`), cuando ninguna de las anteriores dice nada.
+
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `MIMIRSYNTH_GRAPH_BACKEND` | vacío | `falkordb` o `neo4j` (Neo4j 5.26 o posterior). Vacío: `neo4j` si `MIMIRSYNTH_NEO4J_URI` tiene valor; si no, `falkordb` |
+| `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | vacío / `6379` | Un FalkorDB existente. Solo con el backend `falkordb` |
+| `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB con usuarios ACL. Solo con el backend `falkordb` |
+| `MIMIRSYNTH_NEO4J_URI` | vacío | Dirección de Neo4j (`bolt://host:7687` o `neo4j://host:7687`). Solo con el backend `neo4j` |
+| `MIMIRSYNTH_NEO4J_USER` / `_PASSWORD` | `neo4j` / vacío | Credenciales de Neo4j. Solo con el backend `neo4j` |
+| `MIMIRSYNTH_NEO4J_DATABASE` | vacío | La base de datos de Neo4j donde viven todos los brains, cada uno con su propio `group_id`; vacío: la predeterminada del servidor. Solo con el backend `neo4j` |
+| `MIMIRSYNTH_FALKOR_BUNDLED_HOST` | `falkordb` (compose) / `localhost` | Dónde responde el FalkorDB incluido. Fijada por el compose oficial |
+
+Cambiar de backend no mueve los datos: un brain cuyo grafo no está en la base de datos nueva parece vacío hasta que vuelves a la anterior. Los detalles, y qué cambia con Neo4j, en [Base de datos de grafos](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/CONFIGURATION.md#base-de-datos-de-grafos).
+
+## Perfiles de Compose
+El `docker-compose.yml` oficial tiene tres servicios opcionales, cada uno tras un perfil. Arráncalos con `--profile <nombre>` en cada comando, o ponlos una vez en `COMPOSE_PROFILES` en `.env` (lo hace el instalador), para que un simple `docker compose up -d` los arranque.
+
+| Perfil | Arranca | Notas |
+|---|---|---|
+| `bundled` | FalkorDB | La base de datos de grafos, salvo que se elija otra (arriba) |
+| `ollama` | Ollama, para los embeddings | Corre en la CPU; los modelos viven en el volumen `ollamadata`. Dirección desde la aplicación: `http://ollama:11434/v1`. Descarga el modelo una vez con `docker compose exec ollama ollama pull nomic-embed-text` |
+| `ocr` | El servicio de OCR (Tesseract, español e inglés) | Necesita `MIMIRSYNTH_OCR_URL=http://ocr:8001`. Ver [[Memoria documental]] |
+
+Ni Ollama ni el servicio de OCR tienen autenticación: no publiques nunca sus puertos.
 
 ## Acceso, direcciones e idioma
 | Variable | Por defecto | Descripción |
@@ -49,7 +72,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 Se usan **solo si no hay ningún motor configurado en la interfaz** ([[Proveedores de IA]]).
 | Variable | Por defecto | Descripción |
 |---|---|---|
-| `MIMIRSYNTH_EMBEDDING_BASE_URL` | `http://host.docker.internal:11434/v1` (compose) | Endpoint de embeddings: por defecto, Ollama en el mismo host (el compose asocia ese nombre al host, también en Linux). Debe ser el mismo que use Graphiti sobre ese FalkorDB |
+| `MIMIRSYNTH_EMBEDDING_BASE_URL` | `http://host.docker.internal:11434/v1` (compose) | Endpoint de embeddings: por defecto, Ollama en el mismo host (el compose asocia ese nombre al host, también en Linux); con el perfil `ollama`, `http://ollama:11434/v1`. Debe ser el mismo que use Graphiti sobre ese grafo |
 | `MIMIRSYNTH_EMBEDDING_MODEL` | `nomic-embed-text` | Modelo |
 | `MIMIRSYNTH_EMBEDDING_API_KEY` | vacío | Clave |
 | `MIMIRSYNTH_EMBEDDING_DIM` | `768` | Dimensión del modelo |
@@ -67,6 +90,8 @@ Se usan **solo si no hay ningún motor configurado en la interfaz** ([[Proveedor
 | `MIMIRSYNTH_SOURCES_DIR` | `./sources` | Carpeta del **host** montada en solo lectura en `/sources`. Solo Compose |
 | `MIMIRSYNTH_DOC_STORE` | `/data/documents` | Volumen con los originales subidos. **Entra en las copias de seguridad**. Fija en el compose oficial |
 | `MIMIRSYNTH_DOC_ROOTS_BASE` | `/sources` | Las raíces de carpetas solo pueden estar bajo esta ruta. Fija en el compose oficial |
+| `MIMIRSYNTH_OCR_URL` | vacío | El servicio de OCR: `http://ocr:8001` con el perfil `ocr`. Vacío: los PDF escaneados y las imágenes no se leen. Ver [[Memoria documental]] |
+| `OCR_WORKERS` | `2` | Documentos que el servicio de OCR lee a la vez; Tesseract usa una CPU por página. Lo lee el servicio `ocr`, no la aplicación |
 | `MIMIRSYNTH_VERIFIERS_DIR` | (vacía) | Carpeta con tus propios verificadores de hechos (`*.py`), que se cargan al arrancar. Vacía: solo el de ejemplo. Es código externo que corre con las credenciales de los verificadores: ponla solo para código de confianza. Ver [[Hechos verificables]] |
 | `MIMIRSYNTH_EXPORT_TTL_HOURS` | `24` | Horas que un paquete de exportación de un brain espera a descargarse antes de borrarse. Ver [[Exportar un brain]] |
 | `MIMIRSYNTH_IMPORT_MAX_MB` | `20480` | Paquete más grande de un brain que se puede subir para importarlo. Ver [[Importar un brain]] |

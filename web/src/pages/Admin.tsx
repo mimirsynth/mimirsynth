@@ -4,7 +4,7 @@ import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Brain, fmt, get, Me, send } from "../api";
 import AdminFolders from "./AdminFolders";
 import AdminSettings from "./AdminSettings";
@@ -205,6 +205,8 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const { t } = useTranslation();
   const qc = useQueryClient();
   const brains = useQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains") });
+  const navigate = useNavigate();
+  const wizard = useMutation({ mutationFn: () => send("POST", "setup/reopen"), onSuccess: () => { qc.invalidateQueries({ queryKey: ["me"] }); qc.invalidateQueries({ queryKey: ["setup"] }); navigate("/configuracion"); } });
   // «Crea tu primer brain» (Primeros pasos) llega con ?crear=brain: abre el diálogo y quita el parámetro para que una recarga no lo reabra.
   const [sp, setSp] = useSearchParams();
   const [open, setOpen] = useState(() => me.is_admin && sp.get("crear") === "brain"); const [editing, setEditing] = useState(false);
@@ -245,7 +247,8 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
   const section = nav.some((i) => "value" in i && i.value === sectionParam) ? sectionParam : "brains";
   return (
     <Page>
-      <PageHeader title={t("Administración")} description={t("Acceso a cada brain y, para el administrador de la instancia, usuarios, seguridad, modelos de IA, documentos y el resto de ajustes.")} />
+      <PageHeader title={t("Administración")} description={t("Acceso a cada brain y, para el administrador de la instancia, usuarios, seguridad, modelos de IA, documentos y el resto de ajustes.")}
+        actions={me.is_admin && <Btn icon="play" loading={wizard.isPending} onClick={() => wizard.mutate()}>{t("Asistente de configuración")}</Btn>} />
       {me.is_admin && <SealedNotice />}
       {me.auth_mode === "off" && <Pill tone="warn" size="md">{t("Modo prototipo: sin autenticación (todos son administradores)")}</Pill>}
       <Modal opened={open} onClose={() => setOpen(false)} title={t("Crear brain")} centered>
@@ -287,7 +290,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
                 {cur ? (
                   <Group justify="space-between" wrap="nowrap">
                     <Stack gap={2}>
-                      <Group gap="xs"><Title order={3}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill></Group>
+                      <Group gap="xs"><Title order={3}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill>{cur.read_only && <Pill size="xs" tone="warn">{t("solo lectura")}</Pill>}</Group>
                       <Text size="xs" c="dimmed" className="ms-data">{cur.slug} {t("· grafo")} {cur.graph_name}</Text>
                     </Stack>
                     <Group gap={6}>
