@@ -97,11 +97,16 @@ docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
 Open the application, enter the code and create the administrator account. Keep `MIMIRSYNTH_SESSION_SECRET` safe: it encrypts the stored secrets (provider keys, SMTP password, OIDC secret, two-factor seeds…), so a restore on another host or a copy of the database for a test stack needs the **same** value. With another one the application still starts, but says so: one line in its log, a notice at the top of Administration and `"secrets": "unreadable"` in `/api/health`; whatever needs those secrets answers with a clear error. Put the right value back and restart. If it is lost, enter those secrets again and remove two-factor from the affected accounts (Administration → Users); the notice goes once nothing is left unread.
 
-## First steps
-1. Under **Administration → LLM model** and **Embeddings**, add an engine (endpoint, key and model) and mark it as default. "Test" checks that it responds.
-2. Create a **brain** (Administration → Brain → Active brain → Create brain) and, if you like, apply an ontology package under Vocabulary → Ontology.
-3. Create an API token for your agents and connect the first one: see [AGENTS.md](AGENTS.md).
-4. Optional: SMTP email (invitations and password recovery), OIDC, mandatory two-factor and document folders. See [CONFIGURATION.md](CONFIGURATION.md).
+## First steps: the setup wizard
+Once the administrator exists, the **setup wizard** opens by itself and takes you, step by step, to your agent's first recall:
+1. **Graph database:** the one in use (the bundled FalkorDB, or the one the installer set), with its test, changing it, and adopting graphs that are already there.
+2. **Embeddings:** it looks for a local Ollama (the bundled one, your computer's), can download `nomic-embed-text`, or takes an OpenAI-compatible service.
+3. **LLM** (extracts facts from what agents propose) and **decider** (approves clearly factual proposals by itself): both can be skipped. Without an LLM, approved proposals wait and the home screen says so until you add one.
+4. **Your first brain**, an **API token** for your agent (Contributor role, shown once), and **connecting your agent**, which turns green when it makes its first call.
+
+The graph and embedding steps cannot be skipped: «Next» asks the server to check them. Every step is kept as you pass it, so you can leave at any point and the wizard picks up where you left off, on any device; «Set up by hand» leaves it for good. An administrator can open it again from **Administration → Setup wizard**. An instance that already had brains before this version does not open it by itself.
+
+Then, if you like: apply an ontology package under Vocabulary → Ontology, and set up SMTP email (invitations and password recovery), OIDC, mandatory two-factor and document folders. See [CONFIGURATION.md](CONFIGURATION.md) and [AGENTS.md](AGENTS.md).
 
 ## OCR for scanned PDFs and images (optional)
 

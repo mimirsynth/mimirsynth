@@ -97,11 +97,16 @@ docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
 Abre la aplicación, introduce el código y crea la cuenta de administrador. Guarda `MIMIRSYNTH_SESSION_SECRET`: cifra los secretos guardados (claves de los proveedores, contraseña SMTP, secreto OIDC, semillas del doble factor…), así que restaurar una copia en otro servidor o copiar la base de datos a una instalación de pruebas exige el **mismo** valor. Con otro la aplicación arranca igual, pero lo dice: una línea en su log, un aviso arriba en Administración y `"secrets": "unreadable"` en `/api/health`; lo que necesita esos secretos responde con un error claro. Vuelve a poner el valor correcto y reinicia. Si se ha perdido, introduce de nuevo esos secretos y quita el doble factor de las cuentas afectadas (Administración → Usuarios); el aviso desaparece cuando ya no queda nada sin leer.
 
-## Primeros pasos
-1. En **Administración → Modelo LLM** y **Embeddings**, añade un motor (endpoint, clave y modelo) y márcalo como predeterminado. «Probar» comprueba que responde.
-2. Crea un **brain** (Administración → Brain → Brain activo → Crear brain) y, si quieres, aplica un paquete de ontología en Vocabulario → Ontología.
-3. Crea un token de API para tus agentes y conecta el primero: ver [AGENTS.md](AGENTS.md).
-4. Opcional: correo SMTP (invitaciones y recuperación de contraseña), OIDC, doble factor obligatorio y carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md).
+## Primeros pasos: el asistente de configuración
+En cuanto existe el administrador, se abre solo el **asistente de configuración**, que te lleva paso a paso hasta el primer recall de tu agente:
+1. **Base de datos del grafo:** la que está en uso (el FalkorDB incluido, o la que puso el instalador), con su prueba, la opción de cambiarla y la de adoptar grafos que ya existan.
+2. **Embeddings:** busca un Ollama local (el incluido, el de tu equipo), puede descargar `nomic-embed-text`, o usa un servicio compatible con OpenAI.
+3. **LLM** (saca los hechos de lo que proponen los agentes) y **decisor** (aprueba solo las propuestas claramente factuales): los dos se pueden saltar. Sin LLM, las propuestas aprobadas esperan y el inicio lo avisa hasta que añadas uno.
+4. **Tu primer brain**, un **token de API** para tu agente (rol Colaborador, se muestra una vez) y **conectar tu agente**, que se pone en verde cuando hace su primera llamada.
+
+Los pasos del grafo y de los embeddings no se pueden saltar: «Siguiente» pide al servidor que los compruebe. Cada paso se guarda al pasarlo, así que puedes dejarlo en cualquier momento y el asistente sigue donde lo dejaste, en cualquier dispositivo; «Configurar a mano» lo cierra del todo. Un administrador puede volver a abrirlo desde **Administración → Asistente de configuración**. Una instancia que ya tenía brains antes de esta versión no lo abre sola.
+
+Después, si quieres: aplica un paquete de ontología en Vocabulario → Ontología, y configura el correo SMTP (invitaciones y recuperación de contraseña), OIDC, el doble factor obligatorio y las carpetas de documentos. Ver [CONFIGURATION.md](CONFIGURATION.md) y [AGENTS.md](AGENTS.md).
 
 ## OCR para PDF escaneados e imágenes (opcional)
 

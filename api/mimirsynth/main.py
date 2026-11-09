@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, metrics
-from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn, setupwizard
 from .config import settings
 from .db import list_graphs
 from .graphdb import ReadOnlyError, backend
@@ -194,6 +194,7 @@ app.include_router(verify.router)
 app.include_router(categories.router)
 app.include_router(onboarding.router)
 app.include_router(graphconn.router)
+app.include_router(setupwizard.router)
 verify.load_dir()  # MIMIRSYNTH_VERIFIERS_DIR: the administrator's opt-in for external verifiers (#293)
 app.middleware("http")(attention.invalidate_after_writes)
 
