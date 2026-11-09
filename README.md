@@ -4,9 +4,11 @@
 
 **English** · [Español](README.es.md)
 
+[![Public beta](https://img.shields.io/badge/status-public_beta-d97706)](#status) [![Latest release](https://img.shields.io/github/v/release/MimirSynth/mimirsynth?label=release)](https://github.com/MimirSynth/mimirsynth/releases/latest)
+
 Memory for AI agents, based on the CoALA cognitive framework and built on a temporal knowledge graph ([Graphiti](https://github.com/getzep/graphiti)), with its own web UI. Facts are never overwritten: they are invalidated and their history is kept.
 
-Status: **under active development** (0.x). It works end to end, but the API and the schema may change between versions.
+<a id="status"></a>Status: **public beta** (0.x). It works end to end, but until 1.0 the API, the MCP tools and the database schema may change between minor versions (0.14 → 0.15); the migrations run on start, `update.sh` makes a backup first, and a change that needs a step on your side is in the [changelog](CHANGELOG.md). Found a problem or something confusing? [Open an issue](https://github.com/MimirSynth/mimirsynth/issues/new/choose) (never paste tokens or passwords); questions go to [Discussions](https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a).
 
 ## What it offers
 **Memory that keeps its history**

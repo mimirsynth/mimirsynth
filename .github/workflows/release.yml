@@ -129,6 +129,15 @@ jobs:
           v="${GITHUB_REF_NAME#v}"
           awk -v v="$v" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then echo "See the [changelog](CHANGELOG.md)." > notes.md; fi
+          repo="https://github.com/${GITHUB_REPOSITORY}"
+          if grep -q '^STAGE = "beta"' api/mimirsynth/brand.py; then   # the release stage the interface also shows (#366)
+            {
+              echo "> **Public beta.** Until 1.0 the API, the MCP tools and the database schema may change between minor versions; the migrations run on start and \`update.sh\` makes a backup first."
+              echo "> Problems and feedback: [open an issue](${repo}/issues/new/choose) (never paste tokens or passwords). Questions: [Discussions](${repo}/discussions/categories/q-a)."
+              echo
+              cat notes.md
+            } > notes.tmp && mv notes.tmp notes.md
+          fi
           base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
           {
             echo

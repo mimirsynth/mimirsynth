@@ -1,0 +1,47 @@
+name: Installer problem
+description: install.sh, install.ps1, update.sh or the first start fail or do something unexpected
+labels: [bug, "area: infra"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in English if you can; Spanish is welcome too and a maintainer will add an English title. · Si lo prefieres, escribe en castellano.
+
+        **Never paste tokens, passwords, API keys, the first-start code or the contents of your `.env`.** Issues are public. The installer's output contains the first-start code and `.env` contains `POSTGRES_PASSWORD` and `MIMIRSYNTH_SESSION_SECRET`: replace them with `***` before pasting. · **No pegues nunca tokens, contraseñas, claves de API, el código de primer arranque ni tu `.env`.**
+  - type: dropdown
+    id: script
+    attributes:
+      label: Script
+      options: ["install.sh (Linux or macOS)", "install.ps1 (Windows)", update.sh, "By hand with docker-compose.yml"]
+    validations: {required: true}
+  - type: input
+    id: command
+    attributes: {label: Command you ran, description: "Including its options, for example `--yes --ollama`", placeholder: "curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash"}
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes: {label: What happens, description: "The step where it stops, what you expected and what actually happened"}
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: MimirSynth version, description: "The release you installed or updated to, or `MIMIRSYNTH_VERSION` in your `.env`", placeholder: "0.15.0"}
+    validations: {required: true}
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Graph database
+      options: ["FalkorDB, bundled", "FalkorDB, my own", "Neo4j", "I don't know"]
+    validations: {required: true}
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, macOS, Windows (Docker Desktop), Windows (WSL), Other]
+    validations: {required: true}
+  - type: input
+    id: platform
+    attributes: {label: OS version, architecture and Docker version, placeholder: "Ubuntu 24.04, arm64, Docker 28.1 (`docker version`)"}
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes: {label: Output, description: "The installer's output and, if it started, `docker compose logs --tail 100 mimirsynth`. Remove the first-start code and any password first", render: shell}
