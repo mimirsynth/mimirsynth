@@ -2,7 +2,7 @@ import { T, locale, tr, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
-import { Btn, ClearFilters, ConfirmDialog, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
+import { Btn, ClearFilters, ConfirmDialog, Form, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
   Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Sheet, SheetRow, Steps, EntityChip, ListCard, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
@@ -746,7 +746,7 @@ function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind, 
   const counts = cnt.data ?? {};
   const emptyAll = mine ? t("Aún no has enviado ninguna propuesta. Lo que envíes aparecerá aquí, con su estado.") : t("Aún no se ha decidido ninguna propuesta.");
   if (all.data && all.data.all === 0 && !view.active)  // nothing yet: no filters over an empty table, just say so
-    return <EmptyState>{emptyAll}</EmptyState>;
+    return <>{lead && <div className="ms-filter-row">{lead}</div>}<EmptyState>{emptyAll}</EmptyState></>;
   return (<>
     <MutationError error={list.error} />
     <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} kindsFrom={all.data} onOpen={ops.openDetail} emptyAll={emptyAll} label={mine ? t("Mis propuestas") : t("Propuestas decididas")} lead={lead}
@@ -970,35 +970,36 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   </>);
 }
 
-/** «My proposals»: the form to propose (folds away) and what one has sent, in every state. */
+/** «My proposals»: what one has sent, in every state, and a button that opens the form to propose in a dialog. */
 function MineTab({ ops, isCurator }: { ops: Ops; isCurator: boolean }) {
   const { t } = useTranslation();
-  const [formOpen, setFormOpen] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState(""); const [body, setBody] = useState(""); const [conf, setConf] = useState<number | string>("");
   const [sentProp, setSentProp] = useState<Prop | null>(null);  // the last one sent, so its author sees what happened to it
   const submit = useMutation({ mutationFn: () => send<Prop>("POST", ops.base, { name, body, confidence: conf === "" ? undefined : Number(conf) }),
     onMutate: () => setSentProp(null),
-    onSuccess: (p) => { setName(""); setBody(""); setConf(""); setSentProp(p); ops.refresh(); } });
+    onSuccess: (p) => { setName(""); setBody(""); setConf(""); setSentProp(p); setFormOpen(false); ops.refresh(); } });
+  const close = () => { setFormOpen(false); submit.reset(); };  // what was typed stays, in case it was closed by mistake
+  const add = <Btn kind="primary" icon="plus" onClick={() => setFormOpen(true)}>{t("Nueva propuesta")}</Btn>;
   return (<>
-    <Group justify="space-between">
-      <Text component="h2" fw={600} size="md" m={0}>{t("Nueva propuesta")}</Text>
-      <Btn size="row" kind="ghost" onClick={() => setFormOpen((o) => !o)}>{formOpen ? t("Ocultar el formulario") : t("Mostrar el formulario")}</Btn>
-    </Group>
-    {formOpen && <Panel withBorder p="sm"><Stack gap="xs">
-      <TextField size="xs" label={t("Título")} placeholder={t("De qué trata, en pocas palabras")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
-      <TextArea size="xs" autosize minRows={3} label={t("Contenido")} placeholder={t("Qué ha pasado o qué hay que recordar, con fecha y nombres exactos.")} value={body} onChange={(e) => setBody(e.currentTarget.value)} />
-      {isCurator && <Text size="xs" c="dimmed" className="ms-measure">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
-      <Group align="flex-end">
-        <NumberField size="xs" label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={170} hideControls />
-        <Btn kind="primary" disabled={!name || !body} loading={submit.isPending} onClick={() => submit.mutate()} icon="plus">{isCurator ? t("Crear y aprobar") : t("Proponer")}</Btn>
-      </Group>
-      <MutationError error={submit.error} />
-      {sentProp && <Notice tone="success">{sentProp.status === "pending"
-        ? t("Propuesta #{{id}} enviada: queda pendiente de un curador.", { id: sentProp.id })
-        : t("Propuesta #{{id}} creada y aprobada.", { id: sentProp.id })}</Notice>}
-      {sentProp && <SecretsNotice found={sentProp.secrets} />}
-    </Stack></Panel>}
-    <HistoryTable ops={ops} mine={true} statuses={["pending", "approved", "ingested", "rejected", "failed"]} first={{ value: "all", label: t("Todas"), countKey: "all" }} />
+    {sentProp && <Notice tone="success">{sentProp.status === "pending"
+      ? t("Propuesta #{{id}} enviada: queda pendiente de un curador.", { id: sentProp.id })
+      : t("Propuesta #{{id}} creada y aprobada.", { id: sentProp.id })}</Notice>}
+    {sentProp && <SecretsNotice found={sentProp.secrets} />}
+    <HistoryTable ops={ops} mine={true} statuses={["pending", "approved", "ingested", "rejected", "failed"]} first={{ value: "all", label: t("Todas"), countKey: "all" }} lead={add} />
+    <Modal opened={formOpen} onClose={close} title={t("Nueva propuesta")} size="lg">
+      <Form onSubmit={() => { if (name && body) submit.mutate(); }}><Stack gap="sm">
+        <TextField label={t("Título")} placeholder={t("De qué trata, en pocas palabras")} value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
+        <TextArea autosize minRows={5} maxRows={14} label={t("Contenido")} placeholder={t("Qué ha pasado o qué hay que recordar, con fecha y nombres exactos.")} value={body} onChange={(e) => setBody(e.currentTarget.value)} />
+        <NumberField label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={200} hideControls />
+        {isCurator && <Text size="xs" c="dimmed" className="ms-measure">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
+        <MutationError error={submit.error} />
+        <Group justify="flex-end" gap="xs">
+          <Btn kind="ghost" onClick={close}>{t("Cancelar")}</Btn>
+          <Btn kind="primary" type="submit" disabled={!name || !body} loading={submit.isPending} icon="plus">{isCurator ? t("Crear y aprobar") : t("Proponer")}</Btn>
+        </Group>
+      </Stack></Form>
+    </Modal>
   </>);
 }
 
