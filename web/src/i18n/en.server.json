@@ -104,7 +104,6 @@
  "El hecho ya se reactivó.": "The fact was already reactivated.",
  "El hecho {{uuid}} ya no está vigente: una afirmación no puede sustituirlo.": "The fact {{uuid}} is no longer current: a claim cannot replace it.",
  "El hecho, con su texto tal como salió en el recall.": "The fact, with its text as it came out in the recall.",
- "El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica": "The default LLM, embedding or decider engine does not answer the periodic check",
  "El motor de IA dejó de responder a mitad de la respuesta.": "The AI engine stopped answering halfway through.",
  "El motor de IA no pudo redactar la respuesta ({{status}}).": "The AI engine could not write the answer ({{status}}).",
  "El motor no ha podido escribir el resumen: {{error}}": "The engine could not write the summary: {{error}}",

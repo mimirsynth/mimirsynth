@@ -144,35 +144,36 @@ def _check_embedding(lang: str) -> None:
 
 
 def _check_llm() -> None:
-    from .aistatus import _llm_ping
-    from .llm import resolve
+    """The full check (#420) on the engine in use, kept on it like Test's (#424); with only the MIMIRSYNTH_LLM_* variables, on those."""
+    from . import fitness, llmcheck
+    from .llm import default_engine
     from .store import _factory
     with _factory()() as s:
-        e = resolve(s)
-    if not e and settings.llm_base_url and settings.llm_model:
-        e = {"base_url": settings.llm_base_url, "model": settings.llm_model, "api_key": settings.llm_api_key}
-    if not e:
-        raise HTTPException(409, "no hay ningún motor LLM: añade uno, o sáltate este paso")
-    from .llmcheck import StructuredOutputError
-    try:
-        _llm_ping(e["base_url"], e["model"], e["api_key"])
-    except StructuredOutputError as ex:   # it answers, but not with what ingestion reads (#420): the engine stays, the step is not done
-        raise HTTPException(409, f"el motor LLM {ex}. Prueba con otro modelo, o sáltate este paso") from None
-    except RuntimeError as ex:
-        raise HTTPException(409, f"el motor LLM no responde: {ex}") from None
+        e = default_engine(s)
+        if e:
+            r = fitness.check(s, "llm", e)
+        elif settings.llm_base_url and settings.llm_model:
+            r = llmcheck.structured(settings.llm_base_url, settings.llm_model, settings.llm_api_key)
+        else:
+            raise HTTPException(409, "no hay ningún motor LLM: añade uno, o sáltate este paso")
+    if r["ok"]:
+        return
+    ex = r["error"]
+    if r.get("structured") is False:   # it answers, but not with what ingestion reads (#420): the engine stays, the step is not done
+        raise HTTPException(409, f"el motor LLM {ex}. Prueba con otro modelo, o sáltate este paso")
+    raise HTTPException(409, f"el motor LLM no responde: {ex}")
 
 
 def _check_decider(db: Session) -> None:
+    from . import fitness
     from .deciders_admin import default_decider
-    from .llmcheck import require_decider
-    from .secretbox import unseal
     d = default_decider(db)
     if not d:
         raise HTTPException(409, "no hay ningún decisor: añade uno, o sáltate este paso")
-    try:
-        require_decider(d.base_url, d.model, unseal(d.api_key_enc))
-    except RuntimeError as ex:
-        raise HTTPException(409, f"el decisor no pasa la prueba: {ex}") from None
+    r = fitness.check(db, "decider", d)
+    if not r["ok"]:
+        ex = r["error"]
+        raise HTTPException(409, f"el decisor no pasa la prueba: {ex}")
 
 
 @router.post("/steps/{step}")

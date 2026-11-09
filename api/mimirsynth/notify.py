@@ -42,7 +42,7 @@ EVENTS = {
 # title). `scripts/wiki_reference.py` writes the table of the Notifications page from this; the texts are translated in en.server.json
 # like any server text. A third element replaces the severity in that table when it is not fixed.
 EVENT_DOCS = {
-    "model.unavailable": ("El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica", ""),
+    "model.unavailable": ("El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica, o responde pero no pasa la comprobación completa (la salida estructurada que necesita la ingesta, o la letra con logprobs del decisor), que se hace cuando cambia el motor en uso y una vez al día", ""),
     "graph.down": ("La base de datos del grafo (FalkorDB o Neo4j) no responde", ""),
     "ingest.failed": ("Una propuesta aprobada no se pudo ingerir tras sus reintentos", ""),
     "job.failed": ("Cualquier otro trabajo en segundo plano ha fallado", ""),
@@ -217,7 +217,9 @@ def _ok(event: str, key: str) -> None:
 
 
 def check_health() -> None:
-    """Grafo y modelos de IA: emite el problema si no responden `notify_health_failures` veces seguidas y lo resuelve cuando vuelven. Los fallos de PostgreSQL no se pueden avisar desde dentro (no habría dónde guardarlos): vigílalo con un monitor externo."""
+    """Grafo y modelos de IA: emite el problema si no responden `notify_health_failures` veces seguidas y lo resuelve cuando vuelven. Los fallos de PostgreSQL no se pueden avisar desde dentro (no habría dónde guardarlos): vigílalo con un monitor externo.
+    The LLM and the decider only get a cheap ping here (#424): whether they are fit for ingestion is `fitness.due`'s check, at most once
+    a day and when the engine in use changes, with its own notice."""
     from .db import list_graphs
     from .graphdb import backend
     b = backend()
@@ -228,8 +230,6 @@ def check_health() -> None:
         _fail("graph.down", "La base de datos del grafo no responde", f"{b.label}: {e}"[:300], b.name)
     try:
         from . import llmcheck
-        from .i18n import T
-        from .aistatus import _llm_ping
         from .deciders_admin import default_decider
         from .embeddings_admin import _probe, default_embedding
         from .llm import default_engine
@@ -237,11 +237,11 @@ def check_health() -> None:
         with _factory()() as db:
             probes = []
             if (e := default_engine(db)):
-                probes.append(("llm", e.name, lambda e=e: _llm_ping(e.base_url, e.model, unseal(e.api_key_enc))))
+                probes.append(("llm", e.name, lambda e=e: llmcheck.ping(e.base_url, e.model, unseal(e.api_key_enc))))
             if (e := default_embedding(db)):
                 probes.append(("embedding", e.name, lambda e=e: _probe(e.base_url, e.model, unseal(e.api_key_enc))))
             if (e := default_decider(db)):
-                probes.append(("decider", e.name, lambda e=e: llmcheck.require_decider(e.base_url, e.model, unseal(e.api_key_enc), timeout=30)))
+                probes.append(("decider", e.name, lambda e=e: llmcheck.ping(e.base_url, e.model, unseal(e.api_key_enc))))
     except Exception:  # noqa: BLE001
         log.exception("no se pudieron preparar las comprobaciones de los modelos")
         return
@@ -250,8 +250,6 @@ def check_health() -> None:
         try:
             fn()
             _ok("model.unavailable", kind)
-        except llmcheck.StructuredOutputError as e:   # it answers, but ingestion cannot read what it returns (#420)
-            _fail("model.unavailable", T("El modelo LLM no devuelve la salida estructurada que necesita la ingesta"), f"Motor «{name}»: {str(e)[:400]}", kind)
         except Exception as e:  # noqa: BLE001
             _fail("model.unavailable", f"El modelo de {names[kind]} no responde", f"Motor «{name}»: {str(e)[:400]}", kind)
 
@@ -304,6 +302,8 @@ async def worker(version: str = "0.0.0") -> None:
                 last_hooks = t
                 from . import webhooks
                 await asyncio.to_thread(webhooks.flush_due)  # alerts still firing past the grouping window (#122)
+                from . import fitness
+                await asyncio.to_thread(fitness.due, mins > 0)  # the full check of the models in use: on a change, and once a day (#424)
             if t - last_reindex >= 600:
                 last_reindex = t
                 from . import reembed, usage

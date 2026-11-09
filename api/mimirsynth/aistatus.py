@@ -21,9 +21,9 @@ router = APIRouter(prefix="/api")
 
 
 def _llm_ping(base_url: str, model: str, key: str) -> None:
-    """Not just «does it answer»: does it return the structured output ingestion needs (#420)? Raises RuntimeError when the endpoint
-    does not answer and `llmcheck.StructuredOutputError` when it answers with something ingestion cannot read."""
-    llmcheck.require(base_url, model, key, timeout=90)
+    """Does it answer? A cheap ping (#424): Administration's «Check» runs on every visit, like the periodic check. Whether the model returns
+    what ingestion needs is the full check, kept on the engine and shown beside this one (`fitness`)."""
+    llmcheck.ping(base_url, model, key)
 
 
 @router.get("/ai-status")
@@ -55,7 +55,7 @@ def ai_status(check: bool = False, user: User = Depends(current_user), db: Sessi
         else:
             probes.append(("embedding", settings.embedding_model, partial(_probe, settings.embedding_base_url, settings.embedding_model, settings.embedding_api_key)))
         if dec:
-            probes.append(("decider", dec.model, partial(llmcheck.require_decider, dec.base_url, dec.model, unseal(dec.api_key_enc), timeout=30)))
+            probes.append(("decider", dec.model, partial(llmcheck.ping, dec.base_url, dec.model, unseal(dec.api_key_enc))))
         if out["graph"]["configured"]:
             probes.append(("graph", out["graph"]["name"], lambda: backend().list_graphs()))
 
