@@ -52,8 +52,13 @@
 
 **Agents**
 - [[Connect agents]]
-- [[REST API]]
+- [[Agent plugin configuration]]
 - [[Claude Code integration]]
+- [[Codex integration]]
+- [[OpenCode integration]]
+- [[Hermes Agent integration]]
+- [[OpenClaw integration]]
+- [[REST API]]
 - [[Writing good memory]]
 - [[Document memory]]
 
@@ -73,7 +78,7 @@
 
 **Administrar:** [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Webhooks de entrada]] · [[Notificaciones]] · [[Métricas]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Roles y permisos]]
 
-**Agentes:** [[Conectar agentes]] · [[API REST]] · [[Integración con Claude Code]] · [[Escribir buena memoria]] · [[Memoria documental]]
+**Agentes:** [[Conectar agentes]] · [[Configuración de los plugins de agente]] · [[Integración con Claude Code]] · [[Integración con Codex]] · [[Integración con OpenCode]] · [[Integración con Hermes Agent]] · [[Integración con OpenClaw]] · [[API REST]] · [[Escribir buena memoria]] · [[Memoria documental]]
 
 **Referencia:** [[Variables de entorno]] · [[Glosario]] · [[Preguntas frecuentes]] · [[Solución de problemas]]
 </details>

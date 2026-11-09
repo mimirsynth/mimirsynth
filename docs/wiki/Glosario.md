@@ -8,7 +8,8 @@
 | **Aviso** | Notificación de un problema de la instancia (modelo de IA o grafo que no responde, ingesta o trabajo fallido…). Se ve en la campana y puede enviarse por canales (correo, Telegram, ntfy, Gotify, webhook). Nunca incluye contenido de la memoria |
 | **Brain** | Dominio de conocimiento aislado: su grafo, su ontología, sus documentos, sus miembros. Ver [[Conceptos]] |
 | **Bi-temporal** | Que guarda dos fechas por dato: cuándo ocurrió y cuándo se registró |
-| **Colaborador** | Rol que puede proponer memoria y subir documentos, pero cuyos aportes pasan por revisión |
+| **Captura** | Lo que hace un plugin nativo de agente con lo que aprendió una sesión, si la activas: `off` (por defecto), `draft` (se guarda en tu máquina para que lo revises) o `send` (una propuesta en cuarentena por sesión, al siguiente arranque). Nunca la transcripción. Ver [[Configuración de los plugins de agente]] |
+| **Colaborador** | Rol que puede proponer memoria y subir documentos, pero cuyos aportes pasan por revisión. Un **token de colaborador** es un token de API con este rol: lo que un agente envía con él espera en cuarentena, y por eso los agentes y sus plugins deben proponer con uno |
 | **CoALA** | Marco cognitivo para agentes (memoria episódica, semántica, procedimental…) en el que se inspira el diseño |
 | **Consulta de referencia** | Pregunta guardada en un brain con lo que su recall debe traer y lo que no; al ejecutarlas se mide si el recall mejora o empeora. Están en Preguntar → Consultas de referencia |
 | **Contexto inyectado** | El bloque de texto que devuelve el recall, listo para ponerlo en el prompt de un agente |
@@ -37,6 +38,8 @@
 | **Origen** | De dónde viene una entidad o un hecho: el tipo de fuente, el documento, la persona que lo propuso o el token del agente. Se puede agrupar por cualquiera de ellos en el [[Grafo]] |
 | **Propuesta** | Aportación de memoria pendiente de aprobar |
 | **pgvector** | Extensión de PostgreSQL para guardar y buscar vectores |
+| **Plugin (de agente)** | Complemento de MimirSynth que se instala en un agente (Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw) y hace recall antes de cada prompt, trae lo que cambió al empezar la sesión y añade comandos, sin que el modelo tenga que pedirlo. Todos comparten un mismo fichero de configuración. Ver [[Conectar agentes]] |
+| **Perfil (Compose)** | Servicio opcional de `docker-compose.yml` que solo arranca si se nombra: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. `COMPOSE_PROFILES` en `.env` dice cuáles arrancar. Ver [[Variables de entorno]] |
 | **Promover a memoria** | Convertir un pasaje de un documento en una propuesta |
 | **Recall** | Búsqueda que combina hechos, textos de episodios y documentos para dar contexto a un agente |
 | **Relación de un solo valor** | Tipo de relación marcado en la ontología («Un solo valor a la vez») que solo puede tener un valor vigente por sujeto; es lo que permite detectar contradicciones |

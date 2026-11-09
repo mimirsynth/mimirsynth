@@ -2,7 +2,7 @@
 
 # Integraciones de agentes: el contrato de configuración y la biblioteca cliente compartida
 
-Todos los plugins nativos de agentes (hoy Claude Code; Codex, OpenCode, Hermes Agent y OpenClaw en camino) leen **una sola configuración** y se construyen sobre **una sola biblioteca cliente**, para que un único `setup` sirva a todos los agentes de una máquina y todos se comporten igual: recall antes de cada prompt, lo que ha cambiado al empezar la sesión, `setup` / `status` / `search` / `remember`, y una captura de sesiones desactivada por defecto.
+Todos los plugins nativos de agentes (Claude Code, Codex, OpenCode, Hermes Agent y OpenClaw) leen **una sola configuración** y se construyen sobre **una sola biblioteca cliente**, para que un único `setup` sirva a todos los agentes de una máquina y todos se comporten igual: recall antes de cada prompt, lo que ha cambiado al empezar la sesión, `setup` / `status` / `search` / `remember`, y una captura de sesiones desactivada por defecto.
 
 Esta página congela ese contrato (**versión 1**) y documenta la biblioteca. Para los tokens, los roles y la propia API, consulta [AGENTS.md](AGENTS.md).
 
