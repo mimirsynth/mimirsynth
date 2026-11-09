@@ -40,7 +40,9 @@ Falla la prueba de la base de datos del grafo, el instalador avisa de que el ser
 | «No se encuentra el servidor «…»: revisa el nombre» | El nombre no se resuelve desde el contenedor. Usa una dirección IP o `host.docker.internal` |
 | «El servidor rechaza el usuario o la contraseña» | Credenciales incorrectas. En Neo4j el usuario suele ser `neo4j` |
 | «El usuario no puede escribir: MimirSynth necesita permiso de lectura y escritura» | Da permiso de escritura a ese usuario, o usa otro |
-| «El servidor no tiene la base de datos «…»» | Neo4j: deja la base de datos vacía para usar la predeterminada del servidor, o créala |
+| «El servidor no tiene la base de datos «…»» | Neo4j: deja la base de datos vacía para usar la predeterminada del usuario, o créala. En Neo4j Aura la base de datos se llama como el id de la instancia, no `neo4j`. Con `bolt://` o `bolt+s://` un clúster como Aura responde esto con cualquier base de datos: usa `neo4j+s://` |
+| «El servidor no encuentra la base de datos predeterminada de este usuario» | La dirección usa `bolt://` o `bolt+s://` y el servidor es un clúster, como Neo4j Aura: usa `neo4j+s://` (`neo4j://` sin TLS). Una instancia instalada con la 0.15.0-rc.1 tiene `bolt+s://` en `.env`: cámbialo y ejecuta `docker compose up -d` |
+| «… responde, pero no se llega a los servidores que anuncia para enrutar» | Un clúster de Neo4j da direcciones (su dirección anunciada, `server.default_advertised_address`) a las que el contenedor no llega. Corrígelas en el servidor o, con un solo servidor, conecta con `bolt://` |
 | «… no está soportado: hace falta la … o posterior» | MimirSynth necesita FalkorDB 4.0 o posterior, o Neo4j 5.26 o posterior |
 | «… es un servidor Redis sin el módulo de grafos: hace falta FalkorDB» | El puerto es de un Redis normal. Apunta a un FalkorDB |
 | «… acepta la conexión pero no responde como …» | Es el puerto de otro servicio, o el servidor espera TLS: marca **Conexión cifrada (TLS)** |

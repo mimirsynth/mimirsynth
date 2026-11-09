@@ -22,9 +22,13 @@ Assert-Line $t "MIMIRSYNTH_VERSION=ci"
 & $script -Yes -From . -Version ci -NoStart -Dir (Join-Path $env:RUNNER_TEMP "ps-neo4j") -Lang es `
     -Graph existing -GraphType neo4j -GraphHost localhost -GraphPort 1 -GraphTls -SkipGraphCheck
 $t = Read-Env "ps-neo4j"
-Assert-Line $t "MIMIRSYNTH_NEO4J_URI=bolt\+s://host\.docker\.internal:1"
+Assert-Line $t "MIMIRSYNTH_NEO4J_URI=neo4j\+s://host\.docker\.internal:1"   # the routing scheme, as Neo4j Aura needs (#408)
 Assert-Line $t "MIMIRSYNTH_DEFAULT_LANGUAGE=es"
 Assert-Line $t "COMPOSE_PROFILES="
+
+& $script -Yes -From . -Version ci -NoStart -Dir (Join-Path $env:RUNNER_TEMP "ps-bolt") `
+    -Graph existing -GraphType neo4j -GraphHost db.example.com -GraphPort 7687 -GraphScheme bolt -SkipGraphCheck
+Assert-Line (Read-Env "ps-bolt") "MIMIRSYNTH_NEO4J_URI=bolt://db\.example\.com:7687"   # bolt only when asked for
 
 # #403: SemVer as update.sh compares it (the same cases), and what an existing installation is told about upgrading
 $ast = [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path install.ps1).Path, [ref]$null, [ref]$null)

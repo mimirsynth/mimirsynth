@@ -64,7 +64,7 @@ def env_connection() -> Connection | None:
         raise ValueError(f"MIMIRSYNTH_GRAPH_BACKEND={settings.graph_backend!r}: it must be «falkordb» or «neo4j»")
     if kind == "neo4j":
         if not settings.neo4j_uri.strip():
-            raise ValueError("MIMIRSYNTH_GRAPH_BACKEND=neo4j needs MIMIRSYNTH_NEO4J_URI (bolt://host:7687)")
+            raise ValueError("MIMIRSYNTH_GRAPH_BACKEND=neo4j needs MIMIRSYNTH_NEO4J_URI (neo4j://host:7687, or neo4j+s:// with TLS)")
         host, port, tls = _split_uri(settings.neo4j_uri)
         return Connection("neo4j", host, port, settings.neo4j_user or "neo4j", settings.neo4j_password, tls, settings.neo4j_database,
                           uri=settings.neo4j_uri.strip())
@@ -170,7 +170,21 @@ def _classify(e: Exception, conn: Connection, lang: str) -> tuple[str, str]:
     if code == "permission":
         return code, i18n.tr("El usuario no puede escribir: MimirSynth necesita permiso de lectura y escritura.", lang)
     if code == "database":
-        return code, i18n.tr("El servidor no tiene la base de datos «{{database}}».", lang, database=conn.database)
+        if conn.database:
+            message = i18n.tr("El servidor no tiene la base de datos «{{database}}».", lang, database=conn.database)
+        else:
+            message = i18n.tr("El servidor no encuentra la base de datos predeterminada de este usuario.", lang)
+        if conn.neo4j_scheme.startswith("bolt"):  # a cluster member that does not host it: Neo4j Aura over bolt+s:// (#408)
+            message += " " + i18n.tr("Con {{scheme}}:// se habla con un solo servidor: si es un clúster, como Neo4j Aura, conecta con "
+                                     "neo4j+s:// (o neo4j://).", lang, scheme=conn.neo4j_scheme)
+        elif conn.database:
+            message += " " + i18n.tr("Deja la base de datos vacía para usar la predeterminada del usuario (en Neo4j Aura se llama como "
+                                     "el id de la instancia).", lang)
+        return code, message
+    if code == "routing":
+        return code, i18n.tr("{{address}} responde, pero no se llega a los servidores que anuncia para enrutar: revisa su dirección "
+                             "anunciada (server.default_advertised_address) o, con un solo servidor, conecta con bolt://.", lang,
+                             address=conn.address())
     if code == "timeout" or isinstance(e, TimeoutError):
         return "timeout", i18n.tr("{{address}} no responde a tiempo: revisa la dirección, el puerto y el cortafuegos.", lang,
                                   address=conn.address())

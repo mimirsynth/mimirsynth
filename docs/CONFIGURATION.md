@@ -18,7 +18,7 @@ Commented template: `env.example` in the [latest release](https://github.com/Mim
 | `MIMIRSYNTH_GRAPH_BACKEND` | empty | `falkordb` or `neo4j`. Empty, with `MIMIRSYNTH_FALKOR_HOST` and `MIMIRSYNTH_NEO4J_URI` empty too: the connection saved in **Administration → Graph database**, or the bundled FalkorDB. See [Graph database](#graph-database) |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | empty / `6379` | An existing FalkorDB |
 | `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | empty | Credentials of an existing FalkorDB |
-| `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | empty | An existing Neo4j (`bolt://host:7687`; empty database: the server's default) |
+| `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | empty | An existing Neo4j (`neo4j://host:7687`, `neo4j+s://` with TLS as Neo4j Aura needs; empty database: the user's default) |
 | `COMPOSE_PROFILES` | empty | Profiles a plain `docker compose up -d` starts: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. The installer sets it |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | empty | Existing graphs to adopt as brains on first start (`slug:Name,other:Other`) |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (own accounts, optional OIDC) or `off` (development only, no sign-in) |
@@ -38,9 +38,11 @@ To manage from the interface a connection that is set in `.env`, remove those va
 | Backend | Supported versions | A brain is | Connection |
 |---|---|---|---|
 | `falkordb` (default) | FalkorDB 4.x (CI runs v4.22.0) | a graph of its own | The bundled one (`bundled` profile) or an existing one: `MIMIRSYNTH_FALKOR_HOST` / `_PORT`, and `_USERNAME` / `_PASSWORD` if it has ACL users |
-| `neo4j` | Neo4j 5.26 LTS or later, Community or Enterprise (CI runs 5.26 Community) | the nodes whose `group_id` is its name, in one database | `MIMIRSYNTH_NEO4J_URI` (`bolt://` or `neo4j://`), `_USER`, `_PASSWORD` and `_DATABASE` (empty: the server's default) |
+| `neo4j` | Neo4j 5.26 LTS or later, Community or Enterprise (CI runs 5.26 Community) | the nodes whose `group_id` is its name, in one database | `MIMIRSYNTH_NEO4J_URI` (`neo4j://` or `neo4j+s://`; `bolt://` for a direct connection to one server), `_USER`, `_PASSWORD` and `_DATABASE` (empty: the user's default) |
 
 What changes with Neo4j:
+- The routing scheme, `neo4j://` or `neo4j+s://` with TLS, is the one to use: a cluster such as Neo4j Aura needs it, and a single server accepts it too. With `bolt://` or `bolt+s://` the driver talks to one server only, and a member of a cluster that does not hold the database answers `Database … not found`. The installer and Administration → Graph database build `neo4j://` or `neo4j+s://` from the host, the port and TLS; `bolt://` only when `MIMIRSYNTH_NEO4J_URI` (or the installer's `--graph-scheme bolt`) asks for it.
+- An empty database is the user's default (home) database. On Neo4j Aura it is named after the instance id, not `neo4j`: leave it empty and the connection test names the one it found, as the instance will use it.
 - The brains share the database. MimirSynth scopes every query to the brain's `group_id`, as Graphiti does with its own queries, and the read-only Cypher console only runs what it can scope (see [Brain isolation on Neo4j](#brain-isolation-on-neo4j)).
 - Enterprise is used the same way, with one database. MimirSynth does not create a database per brain.
 - An export carries only the graph's JSON copy, because Neo4j has no exact copy (dump) like FalkorDB's. A package exported from FalkorDB goes into Neo4j through its JSON copy, and the other way round.

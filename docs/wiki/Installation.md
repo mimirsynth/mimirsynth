@@ -167,13 +167,14 @@ If your graphs live in Neo4j (5.26 LTS or later, Community or Enterprise), do no
 ```bash
 # in .env
 MIMIRSYNTH_GRAPH_BACKEND=neo4j
-MIMIRSYNTH_NEO4J_URI=bolt://my-neo4j:7687
+MIMIRSYNTH_NEO4J_URI=neo4j://my-neo4j:7687
 MIMIRSYNTH_NEO4J_USER=neo4j
 MIMIRSYNTH_NEO4J_PASSWORD=…
-# optional: a database other than the server's default
+# optional: a database other than the user's default
 MIMIRSYNTH_NEO4J_DATABASE=
 docker compose up -d
 ```
+Use `neo4j://`, or `neo4j+s://` with TLS: a cluster needs this routing scheme and a single server accepts it too. **Neo4j Aura** is such a cluster: `MIMIRSYNTH_NEO4J_URI=neo4j+s://<instance id>.databases.neo4j.io:7687` (not `bolt+s://`), and leave `MIMIRSYNTH_NEO4J_DATABASE` empty, since Aura names its database after the instance id and MimirSynth uses the user's default one. The installer does all this by itself with `--graph-tls` and no `--graph-database`.
 All brains share that database: a brain is the nodes whose `group_id` is its name, as Graphiti writes them, and `MIMIRSYNTH_BOOTSTRAP_GRAPHS` adopts existing `group_id`s the same way. An export then carries only the graph's JSON copy, and the Cypher console only runs what it can keep inside the brain. Details and supported versions in [the configuration reference](https://github.com/MimirSynth/mimirsynth/blob/main/docs/CONFIGURATION.md#graph-database), and what keeps the brains apart, and its limits, in [Brain isolation on Neo4j](https://github.com/MimirSynth/mimirsynth/blob/main/docs/CONFIGURATION.md#brain-isolation-on-neo4j). Neo4j is not part of the backups made by `update.sh`: save it yourself.
 
 ## Development mode (no sign-in)

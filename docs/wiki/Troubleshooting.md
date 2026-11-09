@@ -40,7 +40,9 @@ The graph database test fails, the installer warns that the server does not answ
 | «The server «…» cannot be found: check the name» | The name does not resolve from the container. Use an IP address or `host.docker.internal` |
 | «The server rejects the user or the password» | Wrong credentials. Neo4j's user is usually `neo4j` |
 | «The user cannot write: MimirSynth needs read and write permission» | Give that user write access, or use another one |
-| «The server has no database «…»» | Neo4j: leave the database empty to use the server's default, or create it |
+| «The server has no database «…»» | Neo4j: leave the database empty to use the user's default, or create it. On Neo4j Aura the database is named after the instance id, not `neo4j`. With `bolt://` or `bolt+s://` a cluster such as Aura answers this for every database: use `neo4j+s://` |
+| «The server cannot find this user's default database» | The address uses `bolt://` or `bolt+s://` and the server is a cluster, such as Neo4j Aura: use `neo4j+s://` (`neo4j://` without TLS). An instance installed by 0.15.0-rc.1 has `bolt+s://` in `.env`: change it and run `docker compose up -d` |
+| «… answers, but the servers it gives for routing cannot be reached» | A Neo4j cluster gives addresses (its advertised address, `server.default_advertised_address`) that the container does not reach. Fix them on the server or, with a single server, connect with `bolt://` |
 | «… is not supported: … or later is needed» | MimirSynth needs FalkorDB 4.0 or later, or Neo4j 5.26 or later |
 | «… is a Redis server without the graph module: FalkorDB is needed» | The port belongs to a plain Redis. Point at a FalkorDB |
 | «… accepts the connection but does not answer as …» | It is another service's port, or the server expects TLS: tick **Encrypted connection (TLS)** |

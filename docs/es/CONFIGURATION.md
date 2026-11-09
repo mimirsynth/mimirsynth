@@ -18,7 +18,7 @@ Plantilla comentada: `env.example` en la [última release](https://github.com/Mi
 | `MIMIRSYNTH_GRAPH_BACKEND` | vacío | `falkordb` o `neo4j`. Vacía, y también `MIMIRSYNTH_FALKOR_HOST` y `MIMIRSYNTH_NEO4J_URI`: la conexión guardada en **Administración → Base de datos del grafo** o, sin ella, el FalkorDB incluido. Ver [Base de datos de grafos](#base-de-datos-de-grafos) |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | vacío / `6379` | Un FalkorDB existente |
 | `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | vacío | Credenciales de un FalkorDB existente |
-| `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | vacío | Un Neo4j existente (`bolt://host:7687`; base de datos vacía: la predeterminada del servidor) |
+| `MIMIRSYNTH_NEO4J_URI` / `_USER` / `_PASSWORD` / `_DATABASE` | vacío | Un Neo4j existente (`neo4j://host:7687`, `neo4j+s://` con TLS como necesita Neo4j Aura; base de datos vacía: la predeterminada del usuario) |
 | `COMPOSE_PROFILES` | vacío | Perfiles que arranca un simple `docker compose up -d`: `bundled` (FalkorDB), `ollama` (embeddings), `ocr`. Lo define el instalador |
 | `MIMIRSYNTH_BOOTSTRAP_GRAPHS` | vacío | Grafos existentes a adoptar como brains en el primer arranque (`slug:Nombre,otro:Otro`) |
 | `MIMIRSYNTH_AUTH_MODE` | `local` | `local` (cuentas propias, OIDC opcional) o `off` (solo desarrollo, sin inicio de sesión) |
@@ -38,9 +38,11 @@ Para gestionar desde la interfaz una conexión que está en `.env`, quita esas v
 | Backend | Versiones soportadas | Un brain es | Conexión |
 |---|---|---|---|
 | `falkordb` (por defecto) | FalkorDB 4.x (la CI usa v4.22.0) | un grafo propio | El incluido (perfil `bundled`) o uno existente: `MIMIRSYNTH_FALKOR_HOST` / `_PORT`, y `_USERNAME` / `_PASSWORD` si tiene usuarios ACL |
-| `neo4j` | Neo4j 5.26 LTS o posterior, Community o Enterprise (la CI usa 5.26 Community) | los nodos cuyo `group_id` es su nombre, en una sola base de datos | `MIMIRSYNTH_NEO4J_URI` (`bolt://` o `neo4j://`), `_USER`, `_PASSWORD` y `_DATABASE` (vacío: la predeterminada del servidor) |
+| `neo4j` | Neo4j 5.26 LTS o posterior, Community o Enterprise (la CI usa 5.26 Community) | los nodos cuyo `group_id` es su nombre, en una sola base de datos | `MIMIRSYNTH_NEO4J_URI` (`neo4j://` o `neo4j+s://`; `bolt://` para una conexión directa a un servidor), `_USER`, `_PASSWORD` y `_DATABASE` (vacío: la predeterminada del usuario) |
 
 Qué cambia con Neo4j:
+- El esquema que hay que usar es el de enrutamiento, `neo4j://` o `neo4j+s://` con TLS: lo necesita un clúster como Neo4j Aura, y un servidor suelto también lo acepta. Con `bolt://` o `bolt+s://` el driver habla con un solo servidor, y un miembro del clúster que no tiene la base de datos responde `Database … not found`. El instalador y Administración → Base de datos de grafos montan `neo4j://` o `neo4j+s://` a partir del host, el puerto y el TLS; `bolt://` solo cuando lo pide `MIMIRSYNTH_NEO4J_URI` (o `--graph-scheme bolt` en el instalador).
+- Una base de datos vacía es la predeterminada (home) del usuario. En Neo4j Aura se llama como el id de la instancia, no `neo4j`: déjala vacía y la prueba de conexión dice cuál ha encontrado, la misma que usará la instancia.
 - Los brains comparten la base de datos. MimirSynth limita cada consulta al `group_id` del brain, igual que hace Graphiti con las suyas, y la consola Cypher de solo lectura solo ejecuta lo que sabe limitar (ver [Aislamiento entre brains con Neo4j](#aislamiento-entre-brains-con-neo4j)).
 - Enterprise se usa igual, con una sola base de datos. MimirSynth no crea una base de datos por brain.
 - Una exportación lleva solo la copia JSON del grafo, porque Neo4j no tiene una copia exacta (volcado) como la de FalkorDB. Un paquete exportado desde FalkorDB entra en Neo4j por su copia JSON, y al revés.

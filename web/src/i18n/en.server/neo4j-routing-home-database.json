@@ -1,0 +1,6 @@
+{
+ "Con {{scheme}}:// se habla con un solo servidor: si es un clúster, como Neo4j Aura, conecta con neo4j+s:// (o neo4j://).": "With {{scheme}}:// the driver talks to one server only: for a cluster, such as Neo4j Aura, connect with neo4j+s:// (or neo4j://).",
+ "Deja la base de datos vacía para usar la predeterminada del usuario (en Neo4j Aura se llama como el id de la instancia).": "Leave the database empty to use the user's default database (on Neo4j Aura it is named after the instance id).",
+ "El servidor no encuentra la base de datos predeterminada de este usuario.": "The server cannot find this user's default database.",
+ "{{address}} responde, pero no se llega a los servidores que anuncia para enrutar: revisa su dirección anunciada (server.default_advertised_address) o, con un solo servidor, conecta con bolt://.": "{{address}} answers, but the servers it gives for routing cannot be reached: check their advertised address (server.default_advertised_address) or, with a single server, connect with bolt://."
+}
