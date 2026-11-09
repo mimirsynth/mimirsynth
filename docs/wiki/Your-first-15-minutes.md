@@ -35,35 +35,34 @@ The installer checks Docker and asks two questions. If you are starting, take th
 2. **Embeddings.** If Ollama already runs on your computer, the installer uses it and does not ask. Otherwise it offers to start one in a container and download `nomic-embed-text`: answer **yes** unless you will use a provider's embeddings. It is a download of about 3.5 GB that runs on the processor.
 
 It then generates the passwords, starts everything (the first time it downloads the images, a few minutes) and waits until MimirSynth answers. At the end it prints three things and opens your browser:
-- **Open:** the address of MimirSynth, usually `http://localhost:8000`.
+- **Open:** the address of the setup wizard, usually `http://localhost:8000/configuracion`. MimirSynth itself is at `http://localhost:8000`.
 - **First-start code:** a one-time code that proves you are the person who installed it. Keep the terminal open: you need it in the next step.
 - **Folder:** where it was installed (`~/mimirsynth`, or `%USERPROFILE%\mimirsynth` on Windows). The `docker compose` commands of this wiki run there.
 
-<!-- screenshot: the end of the installer in a terminal, with Open, First-start code and Folder -->
+![The end of the installer in PowerShell: Open, First-start code and Folder](images/first-15-minutes/en/installer.png)
 
 If the installer stops, it says why and removes nothing: fix the cause and run the same line again. See [If something goes wrong](#if-something-goes-wrong). More about the installer, its options and how to check the download: [[Installation]].
 
 ## 2. Follow the setup wizard (about 5 minutes)
-<!-- TODO(#361): matches the «For the wiki guide (#365)» section of the #361 pull request (#395). Add the screenshots, and remove this comment, when it is merged. -->
 The browser first asks for the **first-start code** from the terminal, then your name, email and a password (at least 12 characters; the form ticks each rule as you type). This account administers the whole installation.
 
 Then **First-run setup** opens: one step per screen, with the list of steps beside it. You can leave at any step: when you come back, on any device, it picks up where you left off. The graph and embedding steps cannot be skipped: when you press **Next**, the server checks them, so you never end up with a memory that cannot work.
 
 1. **Your account.** Already done: the step only says what comes next.
 2. **Graph database.** Where the memory lives: entities (people, servers, projects) joined by facts. It is the same page as **Administration → Graph database**. It shows the connection in use (the bundled FalkorDB if you chose *local* in the installer), and **Test the connection** checks it. **Change** points it at another FalkorDB or Neo4j. If that database already holds graphs (from Graphiti, for example), they are listed under **Graphs in the database**, and **Adopt** turns one into a brain.
-   <!-- screenshot: wizard, graph database with a passed test -->
-3. **Embeddings.** Choose one of the two:
+   ![The graph database step, with the bundled FalkorDB and a passed connection test](images/first-15-minutes/en/wizard-graph.png)
+3. **Embeddings.** **In use now** shows the engine the instance already has. If you said yes to the bundled Ollama in the installer, it is `nomic-embed-text` at `http://ollama:11434/v1`: press **Next**, and the server checks that it answers. Otherwise, choose one of the two:
    - **Local Ollama**: free and private, because the texts never leave your computer; recommended to start with. **Find Ollama** looks for it at the usual addresses (the one the installer started, then your computer) and lists its models. If `nomic-embed-text` is missing, **Download nomic-embed-text** fetches it. Then press **Use nomic-embed-text**.
    - **An OpenAI-compatible service**: OpenAI, OpenRouter or another provider. Fill in the base URL (usually ending in `/v1`), your API key and the model, then press **Test and use**.
 
    The model must give vectors of the size of the instance's index: 768 dimensions unless the installation said otherwise, which is what `nomic-embed-text` gives. With a model of another size, the step tells you to switch to it with **Reindex** under Administration → Embeddings; while the memory is still empty, that takes seconds. Choose with care: later, changing the model recomputes the whole memory.
-   <!-- screenshot: wizard, embeddings with local Ollama -->
-4. **LLM model.** The model that reads what your agent proposes and extracts entities and facts from it. **Use local Ollama** fills in the address of your Ollama; for a provider, fill in its base URL, key and model. For a memory you mean to keep, use an *instruct* model of about 14B or more (on Ollama, `qwen2.5:14b-instruct`) or a small, cheap one from a provider. You can **Skip** this step, but until you add one, approved proposals do not enter the memory, and the home screen reminds you.
-   <!-- screenshot: wizard, LLM model -->
+   ![The embeddings step: nomic-embed-text in use, and the bundled Ollama found](images/first-15-minutes/en/wizard-embeddings.png)
+4. **LLM model.** The model that reads what your agent proposes and extracts entities and facts from it. **Use local Ollama** fills in the address of your Ollama and lists its models; for a provider, fill in its base URL and key, and the list shows its models. Choose the model and press **Add**. For a memory you mean to keep, use an *instruct* model of about 14B or more (on Ollama, `qwen2.5:14b-instruct`) or a small, cheap one from a provider. You can **Skip** this step, but until you add one, approved proposals do not enter the memory, and the home screen reminds you.
+   ![The LLM model step, before choosing an endpoint](images/first-15-minutes/en/wizard-llm.png)
 5. **Decider** (optional). A model that approves clearly factual proposals on its own, above a confidence threshold, and leaves anything doubtful for a person. Without one, every proposal waits for a curator. **Skip** it the first time: you will approve by hand in step 5 of this guide.
 6. **Your first brain.** A separate memory, with its own graph, members and tokens: for example, one per team or per project. Type a name («My notes») and press **Create**; the wizard shows the identifier it will use in addresses, the **slug** («Its identifier will be «my-notes»»). If you adopted a graph in step 2, choose it under **Use an existing brain**. If it was adopted read-only, your agent can query it but not propose anything in it.
 7. **API token.** Your agent identifies itself with a **token**: a long secret that starts with `mst_` and gives one agent access to one brain. Press **Create token**, with a name to recognise it later (the agent or the computer that uses it; «My agent» by default). The token has the **Contributor** role, so the agent reads the memory and proposes new facts, which wait for someone to approve them, and it is valid for 90 days. It is shown only once, but you do not need to copy it: the next step already puts it in what you copy.
-   <!-- screenshot: wizard, API token created -->
+   ![The API token step, with the token just created (hidden here)](images/first-15-minutes/en/wizard-token.png)
 8. **Connect your agent.** The **Connect an agent** panel, described in the next section of this guide. A notice turns green, «Your agent has made its first recall», once your agent has recalled for the first time: with a native plugin that happens with your first message; with plain MCP, ask it something it should look up in MimirSynth. **Finish** takes you to the home screen, with or without it; if you would rather connect the agent later, press **Finish** anyway and find the panel under **Administration → Brain → Connect an agent**.
 
 **Set up by hand**, at the top of the wizard, closes it altogether: from then on you set everything up yourself under Administration. The **Setup wizard** button at the top of **Administration** opens it again.

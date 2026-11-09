@@ -22,7 +22,6 @@ It checks Docker, asks whether to start a bundled FalkorDB or use your own Falko
 **If the models run on your own Ollama**, download them first (`ollama pull nomic-embed-text` and an extraction model, see step 2). With Ollama on the **same Linux host**, make it listen on all interfaces so the container can reach it: see [Preparing Ollama](Installation#preparing-ollama).
 
 ## 2. Follow the setup wizard
-<!-- TODO(#361): checked against the wizard's code; compare with the «For the wiki guide (#365)» section of the #361 pull request when it is merged. -->
 In the browser, enter the first-start code and create the administrator account. **First-run setup** (`/configuracion`) then goes through the rest and resumes where you left it, on any device:
 1. **Your account** (already done).
 2. **Graph database:** the Administration → Graph database page, with its connection test, the change of connection and the adoption of existing graphs. It cannot be skipped: **Next** passes only with a passing test.

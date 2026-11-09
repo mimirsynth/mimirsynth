@@ -22,7 +22,6 @@ Comprueba Docker, pregunta si arrancar un FalkorDB incluido o usar tu propio Fal
 **Si los modelos van en tu propio Ollama**, descárgalos antes (`ollama pull nomic-embed-text` y un modelo de extracción, ver el paso 2). Con Ollama en el **mismo host Linux**, haz que escuche en todas las interfaces para que el contenedor llegue a él: ver [Preparar Ollama](Instalaci%C3%B3n#preparar-ollama).
 
 ## 2. Sigue el asistente de configuración
-<!-- TODO(#361): contrastado con el código del asistente; comparar con el apartado «For the wiki guide (#365)» del PR de #361 cuando se fusione. -->
 En el navegador, introduce el código de inicio y crea la cuenta de administrador. La **Configuración inicial** (`/configuracion`) recorre después el resto y retoma donde lo dejaste, desde cualquier dispositivo:
 1. **Tu cuenta** (ya hecha).
 2. **Base de datos del grafo:** la página de Administración → Base de datos del grafo, con su prueba de conexión, el cambio de conexión y la adopción de grafos existentes. No se puede saltar: **Siguiente** solo pasa con la prueba superada.

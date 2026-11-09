@@ -115,7 +115,6 @@ docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
 The code only exists while there is no administrator (if you lose it, restart the container to generate another).
 
-<!-- TODO(#361): checked against the wizard's code; compare with the #361 pull request when it is merged. -->
 Paste it and create the administrator account (the form ticks each password rule as you type). Then **First-run setup** opens at `/configuracion` and goes on to the first recall, one step per screen, resuming where you left it: **your account** → **graph database** (the connection test must pass) → **embeddings** (the engine must answer with the index dimension) → **LLM model** (it can be skipped, with a reminder on the home screen) → **decider** (optional) → **your first brain** → **API token** (Contributor, 90 days) → **connect your agent**. Each step is explained in [[Your first 15 minutes]]. **Set up by hand** closes it; the **Setup wizard** button at the top of Administration opens it again. While there is no brain and the wizard is closed, an administrator lands on **First steps**, with a **Create your first brain** button and links to each screen.
 
 Anyone else without a brain sees «You do not have access to any brain yet. Ask an administrator to add you.»
