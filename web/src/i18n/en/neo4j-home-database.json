@@ -1,6 +1,0 @@
-{
- "Usa neo4j+s://, con el certificado comprobado, como pide Neo4j Aura.": "Uses neo4j+s://, with the certificate checked, as Neo4j Aura needs.",
- "Vacío = la base de datos predeterminada del usuario (en Neo4j Aura, la de la instancia); la prueba dice cuál es. Todos los brains viven en ella, cada uno con su group_id.": "Empty = the user's default database (on Neo4j Aura, the instance's own); the test says which one it is. Every brain lives in it, each with its group_id.",
- "base de datos «{{database}}», la predeterminada del usuario": "database «{{database}}», the user's default",
- "la predeterminada del usuario": "the user's default"
-}
