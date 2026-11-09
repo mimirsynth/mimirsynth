@@ -1,5 +1,5 @@
 name: Release
-# Publishes the container images (the application and the optional OCR service) to GHCR, the OpenCode and OpenClaw plugins to npm, and creates the GitHub release when a version tag (vX.Y.Z or vX.Y.Z-rc.N) is pushed.
+# Publishes the container images (the application and the optional OCR service) to GHCR, the OpenCode and OpenClaw plugins to npm (final releases only), and creates the GitHub release when a version tag (vX.Y.Z or vX.Y.Z-rc.N) is pushed.
 # It can also be started by hand to check that the image builds for both architectures and the npm packages are complete (nothing is published).
 on:
   push:
@@ -116,11 +116,12 @@ jobs:
 
   npm:
     # The OpenCode and OpenClaw plugins (#371, #373) on npm, as @mimirsynth/opencode and @mimirsynth/openclaw. Each keeps its own version
-    # (raised by any change, scripts/plugin_versions.py), so a release publishes the ones whose version npm does not have yet and leaves
-    # the rest as they are. A pre-release tag (vX.Y.Z-rc.N), or a plugin version that is a pre-release, publishes under the dist-tag
-    # `next`; the final release then moves `latest` to it. Started by hand it checks the package and publishes nothing.
-    # Publishes with npm trusted publishing (OIDC, id-token: write above): each package trusts this workflow on npmjs.com for
-    # npm publish and npm dist-tag, so there is no npm token in the repository. It does not hold back the GitHub release.
+    # (raised by any change, scripts/plugin_versions.py), so a final release publishes the ones whose version npm does not have yet,
+    # under `latest`, and leaves the rest as they are. A pre-release tag (vX.Y.Z-rc.N), or the workflow started by hand, packs each
+    # plugin and keeps the tarball as an artifact of the run, to try the release candidate from it, and publishes nothing (#432).
+    # Publishes with npm trusted publishing (OIDC, id-token: write above): each package trusts this workflow on npmjs.com, so there is no
+    # npm token in the repository. Trusted publishing only authenticates `npm publish`, so the job runs no other command that writes to
+    # npm (`npm dist-tag` fails with E401). All of it is in .github/npm-release.sh. It does not hold back the GitHub release.
     needs: image
     runs-on: ubuntu-latest
     strategy:
@@ -141,27 +142,17 @@ jobs:
       - run: npm test
       - name: The package is what npm would publish (scripts/npm_package.mjs)
         run: node ../../scripts/npm_package.mjs "integrations/${{ matrix.package }}"
-      - name: Publish the version npm does not have yet, with provenance
-        if: github.ref_type == 'tag'
+      - name: A final release publishes the version npm does not have yet; a pre-release only packs it (.github/npm-release.sh)
         run: |
-          name=$(node -p 'require("./package.json").name')
-          version=$(node -p 'require("./package.json").version')
-          dist=latest
-          case "$GITHUB_REF_NAME $version" in *-*) dist=next;; esac
-          if ! have=$(npm view "$name@$version" version 2>"$RUNNER_TEMP/view.err"); then
-            grep -q E404 "$RUNNER_TEMP/view.err" || { cat "$RUNNER_TEMP/view.err"; exit 1; }   # E404: not on npm (the package or this version)
-            have=""
-          fi
-          if [ "$have" = "$version" ]; then
-            echo "::notice::$name@$version is already on npm: nothing to publish"
-            # published by a pre-release tag: the final release moves `latest` to it (never back to an older version)
-            if [ "$dist" = latest ] && [ "$(npm view "$name" dist-tags.next)" = "$version" ] && [ "$(npm view "$name" dist-tags.latest)" != "$version" ]; then
-              npm dist-tag add "$name@$version" latest
-            fi
-          else
-            npm publish --provenance --access public --tag "$dist"
-            echo "::notice::published $name@$version (dist-tag $dist)"
-          fi
+          tag=""; if [ "$GITHUB_REF_TYPE" = tag ]; then tag="$GITHUB_REF_NAME"; fi
+          bash ../../.github/npm-release.sh "$tag" "$RUNNER_TEMP/npm"
+      - name: The packed plugin, to try the release candidate from it
+        if: github.ref_type != 'tag' || contains(github.ref_name, '-')
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-${{ matrix.package }}
+          path: ${{ runner.temp }}/npm/*.tgz
+          if-no-files-found: error
 
   release:
     needs: [image, ocr-image]
