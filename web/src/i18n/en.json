@@ -1173,8 +1173,6 @@
  "Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.": "Engines that extract facts when proposals are ingested. Any OpenAI-compatible endpoint; the default engine is used and keys are stored encrypted.",
  "Muchas entidades tienen como resumen la lista de sus propios hechos, porque así lo escribía la ingesta. El revisor propone uno mejor, de una a tres frases escritas a partir de los hechos vigentes de la entidad; un curador lo corrige si hace falta y lo aprueba, y ese texto sustituye al resumen. Cada aprobación se puede deshacer.": "Many entities have the list of their own facts as their summary, because that is how ingestion used to write it. The reviewer proposes a better one, one to three sentences written from the entity's current facts; a curator corrects it if needed and approves it, and that text replaces the summary. Every approval can be undone.",
  "Muestra de consultas reales": "Sample of real queries",
- "Muestra de la categoría": "Category sample",
- "Muestra de {{n}} de {{total}}.": "Showing {{n}} of {{total}}.",
  "Muy parecido": "Very similar",
  "Muy parecido a algo que el brain ya sabe: comprueba qué añade la propuesta.": "Very close to something the brain already knows: check what the proposal adds.",
  "Muy parecido a algo que el brain ya sabe: revisa qué añade": "Very close to something the brain already knows: check what it adds",
