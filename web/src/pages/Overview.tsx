@@ -21,6 +21,7 @@ type Activity = {
 const ATTENTION: { key: keyof Attention; label: string; to: string }[] = [
   { key: "proposals", label: T("Propuestas esperando una decisión"), to: "/propuestas?estado=pending&tipo=memory" },
   { key: "corrections", label: T("Correcciones pendientes, de agentes o de valoraciones «incorrecto»"), to: "/propuestas?estado=pending&tipo=correction" },
+  { key: "failed", label: T("Propuestas cuya ingesta falló"), to: "/propuestas?tab=decididas&estado=failed" },
   { key: "duplicates", label: T("Grupos de posibles duplicados"), to: "/calidad?tab=dup" },
   { key: "conflicts", label: T("Posibles contradicciones"), to: "/calidad?tab=conflicts" },
   { key: "stale", label: T("Hechos a revisar, pasados de su vida útil"), to: "/calidad?tab=stale" },
@@ -160,11 +161,11 @@ export default function Overview({ graph, role }: { graph: string; role: string 
       <ColGrid min={340}>
         <div className="ms-span2">
           <Section title={t("Actividad semanal · últimas 26 semanas")}>
-            {a ? <AreaChart labels={a.weeks} series={[{ name: t("Hechos aprendidos"), values: a.facts_learned }, { name: "Episodios", values: a.episodes, color: HIDROMIEL }, { name: t("Hechos invalidados"), values: a.facts_invalidated, color: "var(--ms-invalidado)" }]} /> : <EmptyState>{t("Cargando…")}</EmptyState>}
+            {a ? <AreaChart labels={a.weeks} series={[{ name: t("Hechos aprendidos"), values: a.facts_learned }, { name: t("Episodios"), values: a.episodes, color: HIDROMIEL }, { name: t("Hechos invalidados"), values: a.facts_invalidated, color: "var(--ms-invalidado)" }]} /> : <EmptyState>{t("Cargando…")}</EmptyState>}
           </Section>
         </div>
         <Section title={t("Estado de los hechos")}>
-          {status ? <Donut center="hechos" slices={[{ label: t("Vigentes"), value: status.current }, { label: t("Invalidados"), value: status.invalidated, color: "var(--ms-invalidado)" }, ...(status.future ? [{ label: t("Futuros"), value: status.future, color: PIZARRA }] : [])]} /> : <EmptyState>{t("Cargando…")}</EmptyState>}
+          {status ? <Donut center={t("hechos")} slices={[{ label: t("Vigentes"), value: status.current }, { label: t("Invalidados"), value: status.invalidated, color: "var(--ms-invalidado)" }, ...(status.future ? [{ label: t("Futuros"), value: status.future, color: PIZARRA }] : [])]} /> : <EmptyState>{t("Cargando…")}</EmptyState>}
         </Section>
       </ColGrid>
 
@@ -179,7 +180,7 @@ export default function Overview({ graph, role }: { graph: string; role: string 
           <Group gap="xl" align="center">
             <StatCard inline label={t("documentos")} value={a.documents.total} />
             <StatCard inline label={t("trozos indexados")} value={a.documents.chunks} />
-            <Group gap={6}>{Object.entries(a.documents.by_status).map(([k, v]) => <Pill key={k} size="xs" tone={k === "active" ? "success" : k === "error" ? "danger" : "warn"}>{v} {({ active: "indexados", indexing: "indexando", pending: t("en cola"), error: t("con error") } as Record<string, string>)[k] ?? k}</Pill>)}</Group>
+            <Group gap={6}>{Object.entries(a.documents.by_status).map(([k, v]) => <Pill key={k} size="xs" tone={k === "active" ? "success" : k === "error" ? "danger" : "warn"}>{v} {({ active: t("indexados"), indexing: t("indexando"), pending: t("en cola"), error: t("con error") } as Record<string, string>)[k] ?? k}</Pill>)}</Group>
           </Group>
         </Section>)}
       </Stack></FillArea>

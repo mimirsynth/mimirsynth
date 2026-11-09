@@ -71,7 +71,7 @@ Each embedding model gives vectors of a fixed size, its **dimension**, and the i
 | `bind: address already in use` | Port 8000 is taken: change `MIMIRSYNTH_PORT` |
 | A service "unhealthy" | `docker compose logs <service>`. PostgreSQL/FalkorDB take a few seconds; if it persists, check memory and disk space. The application is also marked unhealthy while it cannot reach PostgreSQL or FalkorDB |
 | Embeddings or the LLM fail with a connection error, with Ollama | See [Ollama is not reachable from the container](#ollama-is-not-reachable-from-the-container) |
-| I cannot find the installation code | It only appears while there are no administrators; restart the container to generate a new one |
+| I cannot find the first-start code | It only appears while there are no administrators; restart the container to generate a new one |
 | The only administrator lost access | In the database, set `is_admin = false` for that user and restart: the first-start wizard returns |
 | An update did not verify | `update.sh` tells you how to go back: `./update.sh --rollback` (add `--with-db` to restore the database too). See [[Upgrade and backups]] |
 

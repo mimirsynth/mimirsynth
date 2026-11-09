@@ -1,7 +1,7 @@
 """What in a brain is waiting for a person's decision (#164): the counters behind the «Needs your attention» block of the home screen
 and the summary of Content quality.
 
-Each counter is the one its own page already computes (proposals, corrections, duplicate groups, possible contradictions, facts to
+Each counter is the one its own page already computes (proposals, corrections, proposals whose ingestion failed, duplicate groups, possible contradictions, facts to
 review, type corrections, proposed entity summaries and the last run of the reference queries). They are kept CACHE_SECONDS per brain, so opening the home
 screen does not scan the graph each time; a counter that fails comes back as `null` instead of breaking the rest. Only curators and
 above can ask, and the type corrections are only given to administrators, the only ones who can apply them.
@@ -37,7 +37,10 @@ READS = ("/recall", "/query", "/attention", "/duplicates/preview")  # POSTs that
 def _proposals(ctx: BrainCtx) -> dict:
     rows = ctx.db.execute(select(Proposal.kind, func.count()).where(Proposal.brain_id == ctx.brain.id, Proposal.status == "pending")
                           .group_by(Proposal.kind)).all()
-    return {"proposals": sum(n for k, n in rows if (k or "memory") != "correction"), "corrections": sum(n for k, n in rows if k == "correction")}
+    # an approved proposal whose ingestion failed waits for a curator too: a retry or a rejection (#421)
+    failed = ctx.db.scalar(select(func.count()).select_from(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.status == "failed")) or 0
+    return {"proposals": sum(n for k, n in rows if (k or "memory") != "correction"), "corrections": sum(n for k, n in rows if k == "correction"),
+            "failed": failed}
 
 
 def _duplicates(ctx: BrainCtx) -> int:
@@ -112,7 +115,7 @@ def _compute(ctx: BrainCtx) -> dict:
         out.update(_proposals(ctx))
     except Exception:  # noqa: BLE001  (one counter that fails leaves the others)
         log.warning("no se pudieron contar las propuestas del brain %s", ctx.brain.id, exc_info=True)
-        out.update(proposals=None, corrections=None)
+        out.update(proposals=None, corrections=None, failed=None)
     for name, fn in COUNTERS.items():
         try:
             out[name] = fn(ctx)

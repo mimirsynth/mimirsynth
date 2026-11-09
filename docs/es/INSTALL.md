@@ -93,7 +93,7 @@ Descarga la imagen oficial (`ghcr.io/mimirsynth/mimirsynth`, para amd64 y arm64)
 > No pongas comentarios al final de una línea con valor en `.env` (`CLAVE=valor # comentario`): Docker Compose los leería como parte del valor.
 
 ## Asistente de primer arranque
-Una instancia sin administradores imprime un **código de instalación** en su registro (el instalador te lo muestra):
+Una instancia sin administradores imprime un **código de inicio** en su registro (el instalador te lo muestra):
 ```bash
 docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
@@ -104,7 +104,7 @@ En cuanto existe el administrador, se abre solo el **asistente de configuración
 1. **Base de datos del grafo:** la que está en uso (el FalkorDB incluido, o la que puso el instalador), con su prueba, la opción de cambiarla y la de adoptar grafos que ya existan.
 2. **Embeddings:** busca un Ollama local (el incluido, el de tu equipo), puede descargar `nomic-embed-text`, o usa un servicio compatible con OpenAI.
 3. **LLM** (saca los hechos de lo que proponen los agentes) y **decisor** (aprueba solo las propuestas claramente factuales): los dos se pueden saltar. Sin LLM, las propuestas aprobadas esperan y el inicio lo avisa hasta que añadas uno.
-4. **Tu primer brain**, un **token de API** para tu agente (rol Colaborador, se muestra una vez) y **conectar tu agente**, que se pone en verde cuando hace su primera llamada.
+4. **Tu primer brain**, un **token de API** para tu agente (rol Colaborador, se muestra una vez) y **conectar tu agente**, que se pone en verde cuando hace su primer recall.
 
 Los pasos del grafo y de los embeddings no se pueden saltar: «Siguiente» pide al servidor que los compruebe. Cada paso se guarda al pasarlo, así que puedes dejarlo en cualquier momento y el asistente sigue donde lo dejaste, en cualquier dispositivo; «Configurar a mano» lo cierra del todo. Un administrador puede volver a abrirlo desde **Administración → Asistente de configuración**. Una instancia que ya tenía brains antes de esta versión no lo abre sola.
 
@@ -183,5 +183,5 @@ Construir desde el código es cosa de colaboradores: ver [CONTRIBUTING.md](CONTR
 - **Los embeddings fallan con un error de conexión, con Ollama en el mismo host Linux:** Ollama solo escucha en `127.0.0.1`; ver [Preparar Ollama](#preparar-ollama). Si usas un `docker-compose.yml` propio, comprueba que el servicio `mimirsynth` tiene `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **El recall no devuelve nada:** comprueba los embeddings (Administración → Embeddings → Probar) y que el índice de texto esté sincronizado (pestaña Preguntar muestra su estado).
 - **No llegó ningún aviso cuando se cayó PostgreSQL:** no puede avisar de sí mismo. Vigílalo con un monitor externo: ver [Vigilar la instancia](#vigilar-la-instancia).
-- **No encuentro el código de instalación:** solo aparece mientras no haya ningún administrador. Reinicia el contenedor para que genere uno nuevo.
+- **No encuentro el código de inicio:** solo aparece mientras no haya ningún administrador. Reinicia el contenedor para que genere uno nuevo.
 - **Se perdió el acceso del único administrador:** con acceso al servidor, pon `is_admin = false` a ese usuario en la tabla `users` y reinicia el contenedor: el asistente de primer arranque volverá a aparecer con un código nuevo.

@@ -12,7 +12,7 @@ import { AGENTS, AGENT_NAME, CONFIG_PATH, connectedSince, snippets, type AgentId
 export type GivenToken = { id: number; secret?: string; name?: string };
 type BrainRef = { slug: string; name: string; role: string; description?: string };
 type Tok = { id: number; name: string; prefix: string; mine: boolean; expired: boolean; replaced_by: number | null; scopes: string[] };
-type Activity = { id: number; connected: boolean; last_used_at: string | null; recalls: number; last_recall_at: string | null };
+type Activity = { id: number; name: string; connected: boolean; last_used_at: string | null; recalls: number; last_recall_at: string | null };
 type Probe = { context?: string; facts?: unknown[]; chunks?: unknown[]; documents?: unknown[] };
 
 const OTHER = T("Otro cliente MCP");
@@ -35,7 +35,9 @@ const AFTER: Partial<Record<AgentId, string>> = {
  *  brain and a token, and see it turn green when the agent makes its first call; then a test recall shows what the agent receives.
  *  It lives on the brain's page (Administration → Brain → Connect an agent); the setup wizard (issue 361) embeds it with the token its previous
  *  step created, through `token`. */
-export default function ConnectAgent({ brain, token: given, onConnected }: { brain: BrainRef; token?: GivenToken; onConnected?: (tokenId: number) => void }) {
+export default function ConnectAgent({ brain, token: given, onConnected, untilRecall }: { brain: BrainRef; token?: GivenToken; onConnected?: (tokenId: number) => void;
+  /** Turn green with the agent's first recall, not its first call: the setup wizard's step, which that same recall ticks (issue 421). */
+  untilRecall?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [agent, setAgent] = useState<AgentId>("claude-code");
@@ -91,8 +93,9 @@ export default function ConnectAgent({ brain, token: given, onConnected }: { bra
         {snippets(agent, conn).map((b) => <SnippetStep key={b.kind} block={b} />)}
         <Step title={t("Arranca el agente")}>
           {AFTER[agent] && <Text size="sm" className="ms-measure">{t(AFTER[agent]!)}</Text>}
-          {tok ? <LiveCheck key={tok.id} brain={brain} token={tok} fresh={!!tok.secret || !!given} onConnected={onConnected} />
-            : <Text size="sm" c="dimmed">{t("Crea o elige un token y aquí verás cuándo llega la primera llamada del agente.")}</Text>}
+          {tok ? <LiveCheck key={tok.id} brain={brain} token={tok} fresh={!!tok.secret || !!given} onConnected={onConnected} untilRecall={untilRecall} />
+            : <Text size="sm" c="dimmed">{untilRecall ? t("Crea o elige un token y aquí verás cuándo hace el agente su primer recall.")
+              : t("Crea o elige un token y aquí verás cuándo llega la primera llamada del agente.")}</Text>}
         </Step>
       </Steps>
     </Stack>
@@ -113,18 +116,21 @@ function SnippetStep({ block }: { block: Block }) {
   );
 }
 
-/** Waits for the agent's first authenticated call with the token, asking the server every two seconds, then runs a test recall with what
- *  that token may see. `fresh`: a token just created, so any call counts; for an older one, a call after the one first seen. */
-function LiveCheck({ brain, token, fresh, onConnected }: { brain: BrainRef; token: GivenToken; fresh: boolean; onConnected?: (id: number) => void }) {
+/** Waits for the agent's first authenticated call with the token (with `untilRecall`, its first recall), asking the server every two
+ *  seconds, then runs a test recall with what that token may see. `fresh`: a token just created, so any call counts; for an older one, a
+ *  call (or a recall) after the ones first seen. */
+function LiveCheck({ brain, token, fresh, onConnected, untilRecall }: { brain: BrainRef; token: GivenToken; fresh: boolean; onConnected?: (id: number) => void;
+  untilRecall?: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   // the last call before watching: none for a fresh token; for an older one, what the server says the first time it is asked
-  const [base, setBase] = useState<{ at: string | null } | null>(fresh ? { at: null } : null);
+  const [base, setBase] = useState<{ at: string | null; recalls: number } | null>(fresh ? { at: null, recalls: 0 } : null);
   const [seen, setSeen] = useState(false);
   const act = useQuery({ queryKey: ["token-activity", brain.slug, token.id], queryFn: () => get<Activity>(`brains/${brain.slug}/tokens/${token.id}/activity`),
     refetchInterval: () => (seen ? false : 2000), refetchIntervalInBackground: true, gcTime: 0 });
-  useEffect(() => { if (act.data && !base) setBase({ at: act.data.last_used_at }); }, [act.data, base]);
-  const connected = !!base && !!act.data && connectedSince(base.at, act.data.last_used_at);
+  useEffect(() => { if (act.data && !base) setBase({ at: act.data.last_used_at, recalls: act.data.recalls }); }, [act.data, base]);
+  const connected = !!base && !!act.data && (untilRecall ? act.data.recalls > base.recalls : connectedSince(base.at, act.data.last_used_at));
+  const name = act.data?.name ?? token.name ?? "";
   const [query, setQuery] = useState((brain.description?.trim() || brain.name).slice(0, 300));
   const probe = useMutation({ mutationFn: (q: string) => send<Probe>("POST", `brains/${brain.slug}/tokens/${token.id}/test-recall`, { query: q }) });
   useEffect(() => {
@@ -137,18 +143,24 @@ function LiveCheck({ brain, token, fresh, onConnected }: { brain: BrainRef; toke
   if (act.error) return <MutationError error={act.error} />;
   if (!connected) {
     return (
-      <Notice tone="info" title={t("Esperando la primera llamada del agente…")} role="status">
-        <Text size="sm">{t("Ábrelo (o ejecuta su comando de estado) en cuanto esté instalado. Esto se pone en verde unos segundos después de que use el token.")}</Text>
-      </Notice>);
+      untilRecall
+        ? <Notice tone="info" title={t("Esperando el primer recall del agente…")} role="status">
+          <Text size="sm">{t("Ábrelo en cuanto esté instalado y escríbele un primer mensaje; con un cliente MCP sin plugin, pregúntale algo que deba buscar en MimirSynth. Esto se pone en verde unos segundos después de su primer recall.")}</Text>
+        </Notice>
+        : <Notice tone="info" title={t("Esperando la primera llamada del agente…")} role="status">
+          <Text size="sm">{t("Ábrelo (o ejecuta su comando de estado) en cuanto esté instalado. Esto se pone en verde unos segundos después de que use el token.")}</Text>
+        </Notice>);
   }
   const p = probe.data;
   const n = (x?: unknown[]) => x?.length ?? 0;
   return (
     <Stack gap="xs">
-      <Notice tone="success" title={t("Tu agente está conectado")} role="status">
-        <Text size="sm">{act.data?.recalls
-          ? t("Primera llamada con «{{name}}» el {{at}}. Recalls hechos con él hasta ahora: {{n}}.", { name: token.name ?? "", at: fmt(act.data?.last_used_at), n: act.data.recalls })
-          : t("Primera llamada con «{{name}}» el {{at}}.", { name: token.name ?? "", at: fmt(act.data?.last_used_at) })}</Text>
+      <Notice tone="success" title={untilRecall ? t("Tu agente ya ha hecho su primer recall") : t("Tu agente está conectado")} role="status">
+        <Text size="sm">{untilRecall
+          ? t("Recalls hechos con «{{name}}» hasta ahora: {{n}}; el último, el {{at}}.", { name, n: act.data?.recalls ?? 0, at: fmt(act.data?.last_recall_at) })
+          : act.data?.recalls
+            ? t("Primera llamada con «{{name}}» el {{at}}. Recalls hechos con él hasta ahora: {{n}}.", { name, at: fmt(act.data?.last_used_at), n: act.data.recalls })
+            : t("Primera llamada con «{{name}}» el {{at}}.", { name, at: fmt(act.data?.last_used_at) })}</Text>
       </Notice>
       <Text size="sm" fw={600}>{t("Un recall de prueba: lo que recibe el agente")}</Text>
       <Group align="flex-end" gap="xs">

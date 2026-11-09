@@ -35,7 +35,7 @@ def ensure_setup_token(db: Session) -> None:
     global _SETUP_TOKEN
     if setup_required(db):
         _SETUP_TOKEN = secrets.token_urlsafe(12)
-        log.warning("=" * 70 + "\nFIRST START / PRIMER ARRANQUE: there are no administrators. Installation wizard code / código del asistente:\n\n    %s\n" + "=" * 70, _SETUP_TOKEN)
+        log.warning("=" * 70 + "\nFIRST START / PRIMER ARRANQUE: there are no administrators. First-start code / código de inicio:\n\n    %s\n" + "=" * 70, _SETUP_TOKEN)
     else:
         _SETUP_TOKEN = ""
 
@@ -68,7 +68,7 @@ def setup(body: SetupIn, request: Request, db: Session = Depends(get_db)):
     if not ratelimit.allow(f"setup:{_ip(request)}", 10, 600):
         raise HTTPException(429, "demasiados intentos")
     if not _SETUP_TOKEN or not hmac.compare_digest(body.code.strip(), _SETUP_TOKEN):
-        raise HTTPException(403, "código de instalación incorrecto (míralo en el log del servicio)")
+        raise HTTPException(403, "código de inicio incorrecto (míralo en el registro del servicio)")
     email = body.email.strip().lower()
     if "@" not in email:
         raise HTTPException(422, "email no válido")

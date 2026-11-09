@@ -270,7 +270,7 @@ def admin_or_setup(request: Request, db: Session = Depends(get_db)) -> User | No
         if not ratelimit.allow(f"setup:{auth._ip(request)}", 10, 600):
             raise HTTPException(429, "demasiados intentos")
         if not auth._SETUP_TOKEN or not hmac.compare_digest(code.strip(), auth._SETUP_TOKEN):
-            raise HTTPException(403, "código de instalación incorrecto (míralo en el log del servicio)")
+            raise HTTPException(403, "código de inicio incorrecto (míralo en el registro del servicio)")
         return None
     return require_admin(request, current_user(request, db))
 

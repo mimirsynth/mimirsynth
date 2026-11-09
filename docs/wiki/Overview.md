@@ -25,13 +25,14 @@ Curators and above see first a short list of what is **waiting for a person's de
 |---|---|
 | Proposals waiting for a decision | [[Proposals]], filtered to pending |
 | Pending corrections, from agents or from «incorrect» ratings | [[Proposals]], filtered to pending corrections |
+| Proposals whose ingestion failed (retry or reject) | [[Proposals]] → Decided, filtered to failed |
 | Groups of possible duplicates | [[Content quality]] → Duplicates |
 | Possible contradictions | [[Content quality]] → Contradictions |
 | Facts to review, past their shelf life | [[Content quality]] → To review |
 | Doubtful types with a proposed change (administrators only) | [[Content quality]] → Doubtful types |
 | Reference queries that got worse in the last run | [[Ask]] → Reference queries |
 
-Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast. Any change made in the brain (deciding a proposal, merging, resolving a contradiction, confirming a fact…) recalculates them, so it shows at once; what changes on its own (a fact going past its shelf life, an agent proposing over MCP) shows within the minute. On a large brain, the first read after a change is slower, because the scans run then.
+Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast. Any change made in the brain (deciding a proposal, merging, resolving a contradiction, confirming a fact…) recalculates them, so it shows at once; what changes on its own (a fact going past its shelf life, an agent proposing over MCP, an ingestion that fails) shows within the minute. On a large brain, the first read after a change is slower, because the scans run then.
 
 ## What changed
 Next to it, for the same people, **What changed** says what moved in the brain over the **last 24 hours** or the **last 7 days** (you choose): new facts, invalidated facts, documents added, and proposals received and decided. Each line opens its page. They are the same counts as the [[My account]] email summary, which sends them to whoever wants them without opening the application. Lines at zero are hidden.

@@ -85,14 +85,14 @@ export function AuthScreen({ name }: { name: string }) {
     return (
       <Card name={name} subtitle={t("Primer arranque: crea la cuenta de administrador")}>
         <Form onSubmit={() => setup.mutate()}>
-          <Notice tone="info">{t("Escribe el código de instalación: el instalador lo mostró al terminar («Código de inicio: …»). Si no usaste el instalador, está en el log del contenedor:")} <code>{"docker compose logs mimirsynth"}</code></Notice>  {/* i18n-ok: a command */}
-          <TextField label={t("Código de instalación")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off" />
+          <Notice tone="info">{t("Escribe el código de inicio: el instalador lo mostró al terminar («Código de inicio: …»). Si no usaste el instalador, está en el registro del contenedor:")} <code>{"docker compose logs mimirsynth"}</code></Notice>  {/* i18n-ok: a command */}
+          <TextField label={t("Código de inicio")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off" />
           <TextField label={t("Tu nombre")} value={uname} onChange={(e) => setUname(e.currentTarget.value)} autoComplete="name" />
           <TextField label={t("Email")} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} autoComplete="username" />
           {pair.fields()}
           <MutationError error={setup.error} />
           <Btn kind="primary" type="submit" fullWidth loading={setup.isPending} disabled={!code || !uname || !email || !pair.ok}>{t("Crear administrador")}</Btn>
-          <Missing items={[!code && t("el código de instalación"), !uname && t("tu nombre"), !email && t("el email"), pair.missing]} />
+          <Missing items={[!code && t("el código de inicio"), !uname && t("tu nombre"), !email && t("el email"), pair.missing]} />
         </Form>
       </Card>
     );

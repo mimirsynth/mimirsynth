@@ -76,11 +76,11 @@ Your agent talks to MimirSynth through **MCP** (Model Context Protocol), the sta
 1. **Which agent do you use?** Choose yours: Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw, or **Other MCP client**.
 2. **API token.** Use the one from the wizard, or press **Create one for this agent**. Keep **Contributor: recalls and proposes (recommended)**. A token's secret is shown only when it is created: with an older one, the snippets carry `mst_…` where yours goes.
 3. **Copy what it needs.** The snippets already carry this server, this brain and the token. For an agent with a native MimirSynth plugin, there are two: **Save the configuration** (a small file, `~/.config/mimirsynth/config.json`, that every MimirSynth plugin reads; keep it readable only by you, it holds the token) and **Install the plugin** (one line in a terminal; if it asks for the URL, the brain or the token, press Enter to keep what it found in the file). For any other client, **Add the server to your client** gives the brain's MCP server in the `mcpServers` form most clients read.
-4. **Start the agent.** Open it, or run its status command. A few seconds after its first call, the panel turns green: **Your agent is connected**. It then runs a **test recall**, so you see what the agent receives. In a new brain it finds nothing yet, and that is normal.
+4. **Start the agent.** Open it and send it a first message; with plain MCP, ask it something it should look up in MimirSynth. In the wizard the panel waits for that **first recall**, and a few seconds after it turns green: **Your agent has made its first recall**. Later, under **Administration**, the same panel turns green with the agent's first call of any kind (running its status command is enough): **Your agent is connected**. Either way it then runs a **test recall**, so you see what the agent receives. In a new brain it finds nothing yet, and that is normal.
 
-![The Connect an agent panel waiting for the agent's first call](images/first-15-minutes/en/connect-waiting.png)
+![The Connect an agent panel, under Administration, waiting for the agent's first call](images/first-15-minutes/en/connect-waiting.png)
 
-![The panel once the agent has called: «Your agent is connected»](images/first-15-minutes/en/connect-connected.png)
+![The same panel once the agent has called: «Your agent is connected»](images/first-15-minutes/en/connect-connected.png)
 
 Each agent has its own details (Codex, for example, asks you to trust its hooks once): see [[Connect agents]].
 

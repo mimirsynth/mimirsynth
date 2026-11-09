@@ -33,6 +33,26 @@ test("translated text, calls, paths, URLs and marked lines are let through", () 
   assert.deepEqual(found(`const a = <Pill className={on ? "is-on" : "is-off"}>{n}</Pill>;`), []);
 });
 
+test("a chart's legend, a lookup written in JSX and a table translated with t() are flagged (#421)", () => {
+  assert.equal(found(`const a = <AreaChart series={[{ name: t("Hechos"), values }, { name: "Episodios", values: e, color: X }]} />;`).length, 1);
+  assert.equal(found(`const a = <Donut center="hechos" />;`).length, 1);
+  assert.equal(found(`const a = <Pill>{({ active: "indexados", pending: t("en cola") } as Record<string, string>)[k] ?? k}</Pill>;`).length, 1);
+  const table = found(`const LABEL: Record<string, string> = { pending: T("pendiente"), failed: "fallida" };
+const a = <Pill>{t(LABEL[s] ?? s)}</Pill>;`);
+  assert.deepEqual(table, [`LABEL, traducida con t(), tiene un texto sin T(): "fallida"`]);
+  assert.equal(found(`const ROLES = [{ value: "reader", label: "lector" }];
+const a = <Td>{t(ROLES.find((r) => r.value === x)?.label ?? x)}</Td>;`).length, 1);
+});
+
+test("keys, colours and routes in those objects, and tables never translated, are let through", () => {
+  assert.deepEqual(found(`const a = <AreaChart series={[{ name: t("Hechos"), values, color: "var(--ms-x)" }]} to={{ pathname: "/hechos" }} />;`), []);
+  assert.deepEqual(found(`const TONE: Record<string, Tone> = { failed: "danger" };
+const a = <Pill tone={TONE[s]}>{t(LABEL[s])}</Pill>;`), []);
+  assert.deepEqual(found(`const ROLES = [{ value: "reader", label: T("lector") }];
+const a = <Td>{t(ROLES.find((r) => r.value === x)?.label ?? x)}</Td>;`), []);
+  assert.deepEqual(found(`const v = useView({ firstDir: { name: "asc" } });`), []);
+});
+
 test("the keys of t(), tr() and T() are collected", () => {
   assert.deepEqual(scan("x.ts", `t("Uno"); tr("Dos"); T(\`Tres\`); other("Cuatro");`).keys, ["Uno", "Dos", "Tres"]);
 });
