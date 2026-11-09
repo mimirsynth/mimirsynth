@@ -150,10 +150,88 @@ P = "{group_id: $mimirsynth_partition}"
     # what is not a node pattern stays: calls, expressions, strings, comments
     ("MATCH (n:Entity) RETURN count(n), (2 - n.x) AS y, toLower('(a)-->(b)') // (c)-->(d)",
      f"MATCH (n:Entity {P}) RETURN count(n), (2 - n.x) AS y, toLower('(a)-->(b)') // (c)-->(d)"),
+    # what passed unscoped before the review of #389
+    ("MATCH p=(n) RETURN n", f"MATCH p=(n {P}) RETURN n"),                                   # a path of one node
+    ("MATCH ANY (n) RETURN n", f"MATCH ANY (n {P}) RETURN n"),                               # path selectors
+    ("MATCH SHORTEST 2 (n) RETURN n", f"MATCH SHORTEST 2 (n {P}) RETURN n"),
+    ("RETURN COUNT { (a), (b) } AS c", f"RETURN COUNT {{ (a {P}), (b {P}) }} AS c"),          # a list of patterns in a subquery
+    ("MATCH (n WHERE n.x > 1) RETURN n", f"MATCH (n {P} WHERE n.x > 1) RETURN n"),           # a node's inline WHERE, and inside it
+    ("MATCH (n:E {k: 1} WHERE EXISTS { (n)-->(m) }) RETURN n",
+     f"MATCH (n:E {{k: 1, group_id: $mimirsynth_partition}} WHERE EXISTS {{ (n {P})-->(m {P}) }}) RETURN n"),
+    ("MATCH (n {k: CASE WHEN EXISTS { (x) } THEN 1 END}) RETURN n",                           # a node's map
+     f"MATCH (n {{k: CASE WHEN EXISTS {{ (x {P}) }} THEN 1 END, group_id: $mimirsynth_partition}}) RETURN n"),
+    ("MATCH (n) RETURN n // c\rUNION MATCH (m) RETURN m", f"MATCH (n {P}) RETURN n // c\rUNION MATCH (m {P}) RETURN m"),
+    ("MATCH (`n x`:`A``B`) RETURN 1", f"MATCH (`n x`:`A``B` {P}) RETURN 1"),
+    # what the modules may write: a quantified path, a hint, a call inside MATCH
+    ("MATCH (a) ((x)-->(y)){1,2} (z) RETURN z", f"MATCH (a {P}) ((x {P})-->(y {P})){{1,2}} (z {P}) RETURN z"),
+    ("MATCH (a)-->+(z) RETURN z", f"MATCH (a {P})-->+(z {P}) RETURN z"),
+    ("MATCH (n:E) USING INDEX n:E(uuid) WHERE n.uuid = 1 RETURN n", f"MATCH (n:E {P}) USING INDEX n:E(uuid) WHERE n.uuid = 1 RETURN n"),
+    ("MATCH p = shortestPath((a)-[*..3]-(b)) RETURN p", f"MATCH p = shortestPath((a {P})-[*..3]-(b {P})) RETURN p"),
 ])
 def test_neo4j_scopes_the_cypher_to_the_brain(q, want):
     from mimirsynth.graphdb.neo4j import scope
     assert scope(q) == want
+
+
+@pytest.mark.parametrize("q", ["MATCH (n:%) RETURN n", "MATCH (n IS E) RETURN n", "MATCH (n:(A|B)) RETURN n", "MATCH (n:$($l)) RETURN n",
+                               "MATCH (n /* x */ :E) RETURN n", "MATCH (a)-->(n:%) RETURN n", "RETURN EXISTS { (n:%) }"])
+def test_neo4j_refuses_a_pattern_it_cannot_scope(q):
+    """A node pattern `scope()` cannot read is never let through unscoped, in the modules' Cypher as in the console's."""
+    from mimirsynth.graphdb import Unscopable
+    from mimirsynth.graphdb.neo4j import scope
+    with pytest.raises(Unscopable) as e:
+        scope(q)
+    assert e.value.code == "pattern"
+
+
+@pytest.mark.parametrize("q, code", [
+    ("MATCH (a)-[*]-(b) RETURN b", "varlength"), ("MATCH (a)-[r:R*1..3]->(b) RETURN b", "varlength"),
+    ("MATCH (a)-->+(b) RETURN b", "varlength"), ("MATCH (a)-[r]->*(b) RETURN b", "varlength"), ("MATCH (a)-->{1,3}(b) RETURN b", "varlength"),
+    ("MATCH ((a)-->(b)){2} RETURN b", "varlength"), ("MATCH (s) ((a)-->(b))+ (t) RETURN t", "varlength"),
+    ("MATCH FOO (n) RETURN n", "function"),
+    ("MATCH (n) // x\nRETURN n", "comment"), ("MATCH (n) /* x */ RETURN n", "comment"), ("RETURN $x", "param"),
+    ("RETURN 'a\\u0027'", "char"), ("RETURN `a\\u0060`", "char"), ("RETURN 1 \\ 2", "char"), ("MATCH (n) RETURN n.é", "char"),
+    ("MATCH (n) RETURN n", "char"), ("MATCH (n) RETURN 'x", "char"), ("RETURN `a``b`", "char"),
+    ("RETURN apoc.text.join(['a'], ',')", "function"), ("RETURN `apoc`.version()", "function"), ("RETURN `count`(1)", "function"),
+    ("RETURN apoc .version()", "function"), ("RETURN graph.names()", "function"), ("RETURN myplugin(1)", "function"),
+    ("RETURN file()", "function"),
+    ("CALL db.labels()", "call"), ("SHOW FUNCTIONS", "call"), ("USE system MATCH (n) RETURN n", "call"),
+    ("LOAD CSV FROM 'x' AS l RETURN l", "call"), ("TERMINATE TRANSACTIONS 'x'", "call"), ("INSERT (n)", "write"),
+])
+def test_the_console_on_neo4j_refuses_what_it_cannot_scope(q, code):
+    from mimirsynth.graphdb import Unscopable
+    from mimirsynth.graphdb.neo4j import check_console
+    with pytest.raises(Unscopable) as e:
+        check_console(q)
+    assert e.value.code == code
+
+
+@pytest.mark.parametrize("q", [
+    "MATCH (n:Entity) RETURN n.name, toLower(n.name), size(n.name) * 2, count(*) ORDER BY n.name DESC LIMIT 10",
+    "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL RETURN a.name, r.fact, b.name, type(r)",
+    "MATCH (n:Entity) WHERE n.name STARTS WITH 'a' AND NOT (n)-->() RETURN n {.name, .summary}",
+    "MATCH (n) RETURN labels(n), properties(n), elementId(n), keys(n), coalesce(n.x, 'é')",
+    "MATCH (n:Entity) RETURN CASE WHEN n.x > 1 THEN 'a' ELSE 'b' END, [x IN range(1, 3) WHERE x > 1 | x * 2]",
+    "MATCH (a:Entity) RETURN [(a)-->(b) | b.name], COUNT { (a)-->() }, EXISTS { MATCH (a)<--() }",
+    "MATCH (e:Episodic) RETURN e.created_at, datetime(e.created_at) > datetime() - duration('P7D'), date.truncate('month', date())",
+    "MATCH (n:Entity) RETURN vector.similarity.cosine(n.name_embedding, n.name_embedding), any(x IN [1] WHERE x = 1)",
+    "MATCH (n:`Entity`) RETURN n.`name`, 'it\\'s', \"(a)-->(b)\"",
+    "MATCH (n WHERE n.x IS NOT NULL) RETURN n",
+    "MATCH ANY SHORTEST (a)-->(b) RETURN b",
+    "MATCH (n:Entity) RETURN n.name AS x UNION MATCH (m:Episodic) RETURN m.name AS x",
+])
+def test_the_console_on_neo4j_runs_ordinary_reads(q):
+    from mimirsynth.graphdb.neo4j import check_console
+    check_console(q)
+
+
+def test_only_a_shared_database_refuses_console_queries():
+    from mimirsynth.graphdb import Unscopable
+    from mimirsynth.graphdb.falkor import FalkorBackend
+    from mimirsynth.graphdb.neo4j import Neo4jBackend
+    FalkorBackend("localhost", 6379).check_console("CALL db.labels() // a graph per brain: nothing to refuse")
+    with pytest.raises(Unscopable):
+        Neo4jBackend("bolt://localhost:7687", "neo4j", "x").check_console("CALL db.labels()")
 
 
 @pytest.mark.skipif(not FALKOR, reason="necesita un grafo desechable (MIMIRSYNTH_TEST_FALKOR o MIMIRSYNTH_TEST_NEO4J)")

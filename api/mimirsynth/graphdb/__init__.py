@@ -15,6 +15,7 @@ What a backend gives:
 - The Cypher that differs between databases: a vector literal and the cosine similarity of two vectors.
 - What is informative and optional (version, memory) and the binary dump, which only some backends have.
 - `value()`: a node, relationship or path of the driver as the neutral `Node` / `Edge` / `Path` below, for the Cypher console.
+- `check_console()`: what the read-only Cypher console refuses to run (`Unscopable`). Only a shared database refuses anything.
 """
 from __future__ import annotations
 
@@ -87,6 +88,15 @@ class Path:
     edges: list[Edge] = field(default_factory=list)
 
 
+class Unscopable(ValueError):
+    """A query a backend cannot keep inside one brain, refused rather than run (#389). `code` says why: «pattern», «varlength»,
+    «comment», «param», «char», «function», «call» or «write»; `detail` is the part of the query concerned."""
+
+    def __init__(self, code: str, detail: str = ""):
+        super().__init__(f"{code}: {detail}" if detail else code)
+        self.code, self.detail = code, detail
+
+
 class GraphBackend(ABC):
     name: str   # stable key: notifications, export manifests
     label: str  # what people read: «FalkorDB»
@@ -119,6 +129,10 @@ class GraphBackend(ABC):
     @abstractmethod
     def cosine(self, a: str, b: str) -> str:
         """Cypher for the cosine similarity of two vectors, scaled to [0, 1] ((1 + cos) / 2)."""
+
+    def check_console(self, q: str) -> None:
+        """Raises `Unscopable` when the read-only Cypher console must not run `q`. A backend with a graph per brain has nothing to
+        refuse: a query cannot leave its graph."""
 
     def value(self, v: Any) -> Any:
         """A driver value as `Node` / `Edge` / `Path`; anything else unchanged."""
