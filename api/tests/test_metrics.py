@@ -246,7 +246,7 @@ def test_graph_sizes(client, token, monkeypatch):  # noqa: F811
     g = c.graph(graph)
     g.query("CREATE (a:Entity {uuid:'a'}), (b:Entity {uuid:'b'}), (:Episodic {uuid:'e'}),"
             " (a)-[:RELATES_TO {uuid:'r1'}]->(b), (a)-[:RELATES_TO {uuid:'r2', invalid_at:'2020-01-01'}]->(b)")
-    client.post("/api/brains", json={"slug": graph, "name": graph})
+    client.post("/api/brains", json={"slug": graph, "name": graph, "graph_name": graph})  # seeded above: its graph by name (#359)
     monkeypatch.setattr(metrics, "_GRAPH", (0.0, {}))
     try:
         m = _scrape(client, token)

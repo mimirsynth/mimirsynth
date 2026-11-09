@@ -121,6 +121,11 @@ def ingest_proposal(pid: int, job=None) -> str:
             return ""
         brain = db.get(Brain, p.brain_id)
         from . import usage
+        if brain.read_only:  # an adopted read-only brain is never written (#359); the proposal waits, approved, until it is made full
+            from .deps import READ_ONLY
+            p.ingest_error = READ_ONLY
+            db.commit()
+            return ""
         if usage.paused(brain.id):  # the brain spent its AI budget: the proposal waits, approved, until it is raised or the month changes
             p.ingest_error = usage.PAUSED
             db.commit()

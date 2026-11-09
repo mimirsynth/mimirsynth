@@ -178,7 +178,8 @@ def check_orphan() -> None:
 
 def _graphs() -> list[str]:
     with _factory()() as db:
-        names = list(dict.fromkeys(db.scalars(select(Brain.graph_name).order_by(Brain.id))))
+        # a read-only brain keeps its vectors as they are (#359): its recall works while they match the default engine
+        names = list(dict.fromkeys(db.scalars(select(Brain.graph_name).where(Brain.read_only.is_(False)).order_by(Brain.id))))
     have = set(list_graphs())
     return [g for g in names if g in have]
 

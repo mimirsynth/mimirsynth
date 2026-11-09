@@ -147,6 +147,7 @@ class Brain(Base):
     replay: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # sample of real recalls to replay (#291): {enabled, max, days}; empty: off
     curator: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # scheduled curator (#300): {enabled, passes, batch, by}; empty: off
     auto_approve: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # auto-approval tiers per category (#299): {category: {enabled, bar, min}}
+    read_only: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # an adopted graph only read, never written (#359)
     members: Mapped[list["Membership"]] = relationship(back_populates="brain", cascade="all, delete-orphan")
 
 
