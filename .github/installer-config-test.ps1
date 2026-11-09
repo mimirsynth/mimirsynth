@@ -26,3 +26,4 @@ Assert-Line $t "MIMIRSYNTH_NEO4J_URI=bolt\+s://host\.docker\.internal:1"
 Assert-Line $t "MIMIRSYNTH_DEFAULT_LANGUAGE=es"
 Assert-Line $t "COMPOSE_PROFILES="
 Write-Host "ok"
+exit 0   # the stand-in docker's last answer (3, «not available») is still in $LASTEXITCODE, which the step would return

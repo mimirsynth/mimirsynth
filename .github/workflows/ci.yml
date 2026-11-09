@@ -205,11 +205,12 @@ jobs:
             ' 2>&1 | tee "$RUNNER_TEMP/clean.log"
           grep -q "${{ matrix.code }}: [A-Za-z0-9_-]\{16\}" "$RUNNER_TEMP/clean.log"
           cd "$dir"
-          url="$(cat opened)"; port="$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)"
-          [ "$url" = "http://localhost:$port" ]   # the browser opened on the instance
-          curl -sf "$url/api/health" | grep -q '"graph":true'
-          curl -sf "$url/api/auth/options" | grep -q '"setup":true'   # and there the first-start screen: the administrator, then the wizard
-          curl -sf "$url/" | grep -q '<div id="root">'
+          url="$(cat opened)"; port="$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)"; base="http://localhost:$port"
+          # The browser opened on the setup wizard (/configuracion) when the instance has it (#361; its API answers 401), else on the root
+          if [ "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/setup")" = 401 ]; then [ "$url" = "$base/configuracion" ]; else [ "$url" = "$base" ]; fi
+          curl -sf "$base/api/health" | grep -q '"graph":true'
+          curl -sf "$base/api/auth/options" | grep -q '"setup":true'   # the first-start screen: the administrator, then the wizard
+          curl -sf "$url" | grep -q '<div id="root">'
           [ "$(stat -c %a .env)" = 600 ] && grep -q '^COMPOSE_PROFILES=bundled$' .env
   installer-desktop:
     # #360 where the hosted runners have no Docker Desktop: the scripts under the shells people run them with (macOS's own bash 3.2

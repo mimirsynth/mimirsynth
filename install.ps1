@@ -579,6 +579,9 @@ try {
     if ($St.Graph -eq "existing" -and -not $St.Probed) { Test-GraphFromContainer }
 
     $Url = "http://localhost:$($St.Port)"
+    # The setup wizard (#361) is at /configuracion. Its API answers 401 without a session; a release without it serves the web app on
+    # any path (200), and there /configuracion would be a page that does not exist once the administrator signs in.
+    if ((Get-Http "http://127.0.0.1:$($St.Port)/api/setup").Code -in @(401, 403)) { $Url = "$Url/configuracion" }
     Step "Ready" "Listo"
     Say "  Open:             {0}" "  Abre:             {0}" @($Url)
     if ($St.SetupCode) {

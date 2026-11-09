@@ -571,6 +571,11 @@ fi
 if [ "$GRAPH" = existing ] && [ "$PROBED" = 0 ]; then check_graph_from_container; fi
 
 URL="http://localhost:$PORT"
+# The setup wizard (#361) is at /configuracion. Its API answers 401 without a session; a release without it serves the web app on any
+# path (200), and there /configuracion would be a page that does not exist once the administrator signs in.
+case "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://127.0.0.1:$PORT/api/setup" 2>/dev/null || true)" in
+  401|403) URL="$URL/configuracion" ;;
+esac
 step "Ready" "Listo"
 say "  Open:             $URL" "  Abre:             $URL"
 if [ -n "$SETUP_CODE" ]; then
