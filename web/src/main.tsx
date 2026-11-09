@@ -13,6 +13,11 @@ import "@fontsource/instrument-sans/600.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "./theme.css";
 import App from "./App";
+import { reloadForUpdate } from "./ui/chunkReload";
+
+// Vite could not load a chunk of the build or its CSS: after an update the page still asks for the previous version's files (#429).
+// Reload once to get the new version; if that already happened, the error reaches the ErrorBoundary, which says so and offers Reload.
+window.addEventListener("vite:preloadError", () => { reloadForUpdate(); });
 
 const mimir = ["#e6f3f3", "#cfe4e1", "#a6d2d3", "#7cc0c4", "#5fb8bf", "#3f9aa3", "#2d8189", "#1e6b73", "#18565d", "#12424a"] as const;
 const hidromiel = ["#fbf3e1", "#f5e4bd", "#efd592", "#e8c56a", "#d4a03a", "#d4a03a", "#d4a03a", "#d4a03a", "#b9862a", "#946a20"] as const;
