@@ -171,6 +171,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Assets and their checksums
         run: |
+          # the scripts carry their release (#413): update.sh never takes an older update.sh, the installers give this one
+          bash .github/stamp-release.sh "$GITHUB_REF_NAME"
           cp .env.example env.example
           sha256sum docker-compose.yml env.example update.sh install.sh install.ps1 > SHA256SUMS
       - name: Release notes from CHANGELOG.md

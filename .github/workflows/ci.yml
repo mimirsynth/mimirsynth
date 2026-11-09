@@ -39,7 +39,7 @@ jobs:
           # docker, installer-clean: the images and the installer that starts them
           out image '^(Dockerfile|\.dockerignore|docker-compose[^/]*\.yml|install\.sh|api/|web/|ocr/)'
           out installer-desktop '^(install\.(sh|ps1)|docker-compose\.yml|\.github/installer-config-test\.ps1)$'
-          out scripts '^(install\.(sh|ps1)|update\.sh|\.github/update-version-test\.sh)$'
+          out scripts '^(install\.(sh|ps1)|update\.sh|\.github/(update-version-test|update-self-test|stamp-release)\.sh|\.github/workflows/release\.yml)$'
           cat "$GITHUB_OUTPUT"
   api:
     needs: changes
@@ -372,9 +372,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: shellcheck (install.sh, update.sh)
-        run: shellcheck install.sh && shellcheck -S warning update.sh .github/update-version-test.sh
+        run: shellcheck install.sh && shellcheck -S warning update.sh .github/update-version-test.sh .github/update-self-test.sh .github/stamp-release.sh
       - name: update.sh never goes down on its own, and an explicit older version must know the database (#403)
         run: bash .github/update-version-test.sh
+      - name: update.sh brings itself up to date, install.sh --upgrade gives the current one, and a failed update keeps the good backup (#413)
+        run: bash .github/update-self-test.sh
+      - name: install.sh and update.sh compare versions with the same code (#413)
+        run: |
+          a="$(sed -n '/^# Versions compare as SemVer 2.0/,/^}/p' update.sh)"; b="$(sed -n '/^# Versions compare as SemVer 2.0/,/^}/p' install.sh)"
+          [ -n "$a" ] && [ "$a" = "$b" ]
       - name: install.sh and install.ps1 run the same connection test (#360)
         run: |
           a="$(sed -n 's/^PROBE_PY="\(.*\)"$/\1/p' install.sh)"; b="$(sed -n 's/^\$ProbePy = "\(.*\)"$/\1/p' install.ps1)"
