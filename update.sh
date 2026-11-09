@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # MimirSynth updater: backup -> update -> verify. Run it from the folder with your docker-compose.yml and .env (or set MIMIRSYNTH_DIR).
-#   ./update.sh                  update to the latest stable release
-#   ./update.sh --version 0.7.1  update (or go) to a specific version; release candidates such as 0.7.1-rc.1 work too
-#   ./update.sh --check          only say what is running and what is the latest release
+#   ./update.sh                  update to the latest stable release; never down to it, from a newer version or release candidate
+#   ./update.sh --version 0.7.1  update (or go) to a specific version; release candidates such as 0.7.1-rc.1 work too. An older one is
+#                                refused when its application does not know the database's revision (--force goes anyway)
+#   ./update.sh --check          only say what is running, what is the latest release and what ./update.sh would do
 #   ./update.sh --rollback       go back to the previous version using the backup (add --with-db to restore the database too)
 # Every run keeps ONE backup (./backup): the previous one is replaced only after the new one has been written and checked.
 # Options: --no-files (skip the documents volume), --update-compose / --keep-compose, --force, --yes, --backup-dir DIR.
@@ -32,7 +33,7 @@ while [ $# -gt 0 ]; do
     --update-compose) COMPOSE_MODE=update ;;
     --keep-compose) COMPOSE_MODE=keep ;;
     --backup-dir) BACKUP_DIR="${2:-}"; shift ;;
-    -h|--help) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" "opción desconocida: $1" ;;
   esac
   shift
@@ -54,13 +55,54 @@ if [ -n "$(docker compose --profile ocr ps -aq ocr 2>/dev/null)" ]; then DC="$DC
 envget() { local v; v=$(grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true); v="${v%\"}"; v="${v#\"}"; printf '%s' "${v:-$2}"; }
 norm()   { printf '%s' "${1#v}"; }
 base()   { local v; v="$(norm "$1")"; printf '%s' "${v%%-*}"; }
+# Versions compare as SemVer 2.0 (#403): 0.15.0 > 0.15.0-rc.2 > 0.15.0-rc.1 > 0.14.0, a pre-release below its final release.
+# Names such as "latest" or "ci" are not versions: nothing is compared with them.
+SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z.-]+)?$'
+semver() { [[ "$(norm "$1")" =~ $SEMVER_RE ]]; }
+vercmp() {  # prints -1, 0 or 1 when $1 is older than, the same as or newer than $2 (both semver); what follows "+" does not count
+  local a b x y i n; local -a A B
+  a="$(norm "$1")"; b="$(norm "$2")"; a="${a%%+*}"; b="${b%%+*}"
+  IFS=. read -r -a A <<<"${a%%-*}"; IFS=. read -r -a B <<<"${b%%-*}"
+  for i in 0 1 2; do
+    if [ "${A[i]}" -gt "${B[i]}" ]; then echo 1; return; elif [ "${A[i]}" -lt "${B[i]}" ]; then echo -1; return; fi
+  done
+  if [[ $a != *-* ]]; then if [[ $b != *-* ]]; then echo 0; else echo 1; fi; return; fi
+  if [[ $b != *-* ]]; then echo -1; return; fi
+  IFS=. read -r -a A <<<"${a#*-}"; IFS=. read -r -a B <<<"${b#*-}"
+  n=${#A[@]}; [ "${#B[@]}" -ge "$n" ] || n=${#B[@]}
+  for ((i = 0; i < n; i++)); do   # identifier by identifier: numbers as numbers and below words, words in ASCII order
+    x="${A[i]}"; y="${B[i]}"; [ "$x" != "$y" ] || continue
+    if [[ $x =~ ^[0-9]+$ && $y =~ ^[0-9]+$ ]]; then if [ "$x" -gt "$y" ]; then echo 1; else echo -1; fi
+    elif [[ $x =~ ^[0-9]+$ ]]; then echo -1
+    elif [[ $y =~ ^[0-9]+$ ]]; then echo 1
+    elif [ "$(printf '%s\n%s\n' "$x" "$y" | LC_ALL=C sort | head -n 1)" = "$x" ]; then echo -1
+    else echo 1; fi
+    return
+  done
+  if [ "${#A[@]}" -gt "${#B[@]}" ]; then echo 1; elif [ "${#A[@]}" -lt "${#B[@]}" ]; then echo -1; else echo 0; fi
+}
 hsize() { numfmt --to=iec "$(stat -c %s "$1")" 2>/dev/null || stat -c %s "$1"; }
 PORT="$(envget MIMIRSYNTH_PORT 8000)"
 api()    { curl -fsS --max-time 5 "http://127.0.0.1:$PORT$1"; }
 running_version() { api /api/config 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' || true; }
 latest_tag() { curl -fsS --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1; }
+release_tags() { curl -fsS --max-time 15 "https://api.github.com/repos/$REPO/releases?per_page=50" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p'; }
+newer_in_line() {  # $1 a pre-release: the newest release of its line (the same X.Y.Z) above it, or nothing
+  local best="" t
+  for t in $(release_tags 2>/dev/null || true); do
+    t="$(norm "$t")"; semver "$t" && [ "$(base "$t")" = "$(base "$1")" ] && [ "$(vercmp "$t" "$1")" = 1 ] || continue
+    if [ -z "$best" ] || [ "$(vercmp "$t" "$best")" = 1 ]; then best="$t"; fi
+  done
+  printf '%s' "$best"
+}
 asset()  { curl -fsSL --max-time 30 "https://github.com/$REPO/releases/download/v$(norm "$1")/docker-compose.yml"; }
 db_version() { $DC exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select version_num from alembic_version"' 2>/dev/null | tr -d '[:space:]' || true; }
+# The database revisions an image knows, one per line, read from its migrations in a throwaway container (#403)
+REVS_PY='import importlib.util as u,pathlib,re
+for f in (pathlib.Path(u.find_spec("mimirsynth").submodule_search_locations[0])/"migrations"/"versions").glob("*.py"):
+  m=re.search(r"^revision\s*(?::[^=]*)?=\s*[\x27\"]([^\x27\"]+)",f.read_text(),re.M)
+  m and print(m.group(1))'
+image_revisions() { MIMIRSYNTH_VERSION="$1" $DC run --rm --no-deps -T --entrypoint python mimirsynth -c "$REVS_PY" 2>/dev/null || true; }
 set_env_version() { if grep -qE '^MIMIRSYNTH_VERSION=' .env; then sed -i "s|^MIMIRSYNTH_VERSION=.*|MIMIRSYNTH_VERSION=$1|" .env; else printf '\nMIMIRSYNTH_VERSION=%s\n' "$1" >> .env; fi; }
 
 backup() {
@@ -131,11 +173,34 @@ fi
 
 # ---- update / check ----
 cur_cfg="$(envget MIMIRSYNTH_VERSION latest)"; cur_run="$(running_version)"
-[ -n "$TARGET" ] || TARGET="$(latest_tag)" || true
-[ -n "$TARGET" ] || die "could not find the latest release (no network?): use --version" "no se pudo saber la última versión (¿sin red?): usa --version"
-TARGET="$(norm "$TARGET")"
+# What is installed, as precisely as it is known: /api/config says 0.15.0 for 0.15.0-rc.1, the configured version names the candidate
+inst=""
+if semver "$cur_cfg" && { [ -z "$cur_run" ] || [ "$cur_run" = "$(base "$cur_cfg")" ]; }; then inst="$(norm "$cur_cfg")"
+elif semver "$cur_run"; then inst="$(norm "$cur_run")"; fi
 step "Version" "Versión"
+if [ -z "$TARGET" ]; then
+  TARGET="$(latest_tag || true)"
+  [ -n "$TARGET" ] || die "could not find the latest release (no network?): use --version" "no se pudo saber la última versión (¿sin red?): usa --version"
+  TARGET="$(norm "$TARGET")"
+  # Without --version it never goes down (#403): from a version newer than the latest stable release there is nothing to do
+  if [ -n "$inst" ] && semver "$TARGET" && [ "$(vercmp "$inst" "$TARGET")" = 1 ]; then
+    say "Running: ${cur_run:-not responding} · configured: $cur_cfg · latest stable release: $TARGET" "En marcha: ${cur_run:-no responde} · configurada: $cur_cfg · última versión estable: $TARGET"
+    say "$inst is newer than the latest stable release ($TARGET): nothing to do. Use --version to choose another one." \
+        "$inst es más reciente que la última versión estable ($TARGET): no hay nada que hacer. Usa --version para elegir otra."
+    if [[ $inst == *-* ]]; then
+      nxt="$(newer_in_line "$inst")"
+      [ -z "$nxt" ] || say "A newer release of the $(base "$inst") line is out: ./update.sh --version $nxt" "Hay una versión más reciente de la línea $(base "$inst"): ./update.sh --version $nxt"
+    fi
+    exit 0
+  fi
+fi
+TARGET="$(norm "$TARGET")"
 say "Running: ${cur_run:-not responding} · configured: $cur_cfg · target: $TARGET" "En marcha: ${cur_run:-no responde} · configurada: $cur_cfg · objetivo: $TARGET"
+dirn=""; [ -z "$inst" ] || ! semver "$TARGET" || dirn="$(vercmp "$TARGET" "$inst")"
+if [ "$dirn" = -1 ]; then
+  say "$TARGET is older than $inst: going down only if its application knows the database's revision (or with --force)." \
+      "$TARGET es anterior a $inst: solo se baja si su aplicación conoce la revisión de la base de datos (o con --force)."
+fi
 if [ "$MODE" = check ]; then exit 0; fi
 if [ "$FORCE" != 1 ] && [ -n "$cur_run" ] && [ "$cur_run" = "$(base "$TARGET")" ] && [ "$cur_cfg" = "$TARGET" ]; then say "Already up to date." "Ya está actualizado."; exit 0; fi
 [ -n "$cur_run" ] || warn "the application is not answering now: the backup only covers what the database holds" "la aplicación no responde ahora: la copia solo cubre lo que haya en la base de datos"
@@ -146,6 +211,34 @@ have_new=0; [ "$COMPOSE_MODE" != keep ] && asset "$TARGET" > "$newc" 2>/dev/null
 say "Pulling the image..." "Descargando la imagen..."
 # first, so that a wrong version or no network aborts BEFORE touching the backup that is already there
 MIMIRSYNTH_VERSION="$TARGET" $DC pull mimirsynth $OCR || die "could not pull $TARGET: nothing was changed, the existing backup is intact" "no se pudo descargar $TARGET: no se ha cambiado nada, la copia que había sigue intacta"
+
+# Going down (#403): an application older than the database's revision does not start, so it is checked with the image just pulled
+if [ "$dirn" = -1 ]; then
+  if [ "$FORCE" = 1 ]; then warn "going down to $TARGET with --force: the database's revision is not checked" "se baja a $TARGET con --force: no se comprueba la revisión de la base de datos"
+  else
+    rev="$(db_version)"; revs="$(image_revisions "$TARGET")"
+    if [ -n "$rev" ] && printf '%s\n' "$revs" | grep -qxF "$rev"; then
+      say "$TARGET knows this database (revision $rev)." "$TARGET conoce esta base de datos (revisión $rev)."
+    else
+      if [ -n "$rev" ] && [ -n "$revs" ]; then
+        say "$TARGET does not know this database's revision ($rev): its application would not start. Nothing was changed." \
+            "$TARGET no conoce la revisión de esta base de datos ($rev): su aplicación no arrancaría. No se ha cambiado nada."
+      else
+        say "Could not check whether $TARGET knows this database's revision (${rev:-unknown}). Nothing was changed." \
+            "No se pudo comprobar si $TARGET conoce la revisión de esta base de datos (${rev:-desconocida}). No se ha cambiado nada."
+      fi
+      bk="$(sed -n 's/^configured=//p' "$BACKUP_DIR/INFO" 2>/dev/null || true)"
+      if [ -n "$bk" ] && [ "$(norm "$bk")" = "$TARGET" ]; then
+        say "The backup in $BACKUP_DIR is of $TARGET: ./update.sh --rollback --with-db goes back to it with its database (whatever was written since is lost)." \
+            "La copia de $BACKUP_DIR es de $TARGET: ./update.sh --rollback --with-db vuelve a ella con su base de datos (lo escrito desde entonces se pierde)."
+      else
+        say "An older version needs the database of its time: ./update.sh --rollback --with-db restores the one in $BACKUP_DIR, when that backup is of the version you want." \
+            "Una versión anterior necesita la base de datos de su momento: ./update.sh --rollback --with-db restaura la de $BACKUP_DIR, si esa copia es de la versión que quieres."
+      fi
+      die "not going down to $TARGET (--force goes anyway)" "no se baja a $TARGET (--force lo hace igualmente)"
+    fi
+  fi
+fi
 
 backup
 

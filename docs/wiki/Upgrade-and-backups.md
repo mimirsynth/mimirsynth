@@ -12,10 +12,14 @@ If you installed with the installer, `update.sh` is already in the installation 
 
 | Command | What it does |
 |---|---|
-| `./update.sh` | Updates to the latest stable release |
-| `./update.sh --check` | Only reports what is running, what is configured and what the latest release is. Changes nothing |
-| `./update.sh --version 0.8.0` | Updates (or goes) to a specific version; release candidates such as `0.8.0-rc.1` work too |
+| `./update.sh` | Updates to the latest stable release. It never goes down to it: on a newer version, such as a release candidate, it says so and changes nothing |
+| `./update.sh --check` | Only reports what is running, what is configured, what the latest release is and what `./update.sh` would do. Changes nothing |
+| `./update.sh --version 0.8.0` | Updates (or goes) to a specific version; release candidates such as `0.8.0-rc.1` work too. An older version is refused when its application does not know the database's revision |
 | `./update.sh --rollback` | Goes back to the version of the last backup. Add `--with-db` to restore the database too |
+
+**Release candidates.** Versions compare as [SemVer](https://semver.org/): `0.15.0` is newer than `0.15.0-rc.2`, which is newer than `0.15.0-rc.1`, which is newer than `0.14.0`. On a candidate, `./update.sh` moves to the final release once it is out, and until then it changes nothing; when a newer candidate of the same version is out, it names it (`./update.sh --version 0.15.0-rc.2`). The installer (`install.sh --upgrade`) follows the same rule.
+
+**Going down.** An older application does not start on a database migrated by a newer one. So `./update.sh --version` with an older version first checks, with the image it has just pulled, that the older application knows the database's revision; if it does not, it stops before changing anything. To go back to an older version, restore the database of that version too: `./update.sh --rollback --with-db`, when the backup is of the version you want. `--force` goes down without the check.
 
 An update runs in this order:
 1. **Download.** It pulls the new image first, so a wrong version or no network stops everything **before touching anything**, and the existing backup stays intact.
@@ -23,7 +27,7 @@ An update runs in this order:
 3. **Update.** It pins `MIMIRSYNTH_VERSION` in `.env` and recreates only the application, and the OCR service when its container exists in that folder; database **migrations** run on start. It adopts the release's `docker-compose.yml` **only if yours is the unmodified one** of the version you were running; otherwise it keeps yours and tells you.
 4. **Check.** It waits until the application answers with the new version and is healthy, shows the database revision and warns if the log has errors in the last minutes. If it does not verify, it tells you how to go back.
 
-Other options: `--update-compose` always adopts the release's compose file, `--keep-compose` never touches it, `--no-files` skips the documents volume, `--backup-dir DIR` saves the backup elsewhere, `--yes` skips the confirmation of a rollback and `--force` reinstalls the same version. The script speaks Spanish when your `LANG` is Spanish.
+Other options: `--update-compose` always adopts the release's compose file, `--keep-compose` never touches it, `--no-files` skips the documents volume, `--backup-dir DIR` saves the backup elsewhere, `--yes` skips the confirmation of a rollback and `--force` reinstalls the same version or goes down without checking the database. The script speaks Spanish when your `LANG` is Spanish.
 
 **The bundled Ollama** (the `ollama` profile) is not updated: its image is pinned in `docker-compose.yml`, and `update.sh` never pulls or recreates it. When a release raises that version (the release notes say so) and its compose file is adopted, run `docker compose up -d ollama` afterwards.
 

@@ -155,6 +155,61 @@ function Get-ReleaseFile([string]$Name, [string]$Dest) {
     Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $Dest -TimeoutSec 120
 }
 
+# Versions compare as SemVer 2.0, as in update.sh (#403): 0.15.0 > 0.15.0-rc.2 > 0.15.0-rc.1 > 0.14.0, a pre-release below its final
+# release. Names such as "latest" or "ci" are not versions: nothing is compared with them.
+function Test-SemVer([string]$V) {
+    return $V -cmatch '^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z.-]+)?$'
+}
+function Compare-SemVer([string]$Left, [string]$Right) {
+    # -1, 0 or 1 when $Left is older than, the same as or newer than $Right (both versions); what follows "+" does not count
+    $l = ($Left -replace '^v', '') -replace '\+.*$', ''; $r = ($Right -replace '^v', '') -replace '\+.*$', ''
+    $il = $l.IndexOf('-'); $ir = $r.IndexOf('-')
+    $cl = $(if ($il -ge 0) { $l.Substring(0, $il) } else { $l }).Split('.'); $cr = $(if ($ir -ge 0) { $r.Substring(0, $ir) } else { $r }).Split('.')
+    for ($i = 0; $i -lt 3; $i++) {
+        $x = [decimal]$cl[$i]; $y = [decimal]$cr[$i]
+        if ($x -gt $y) { return 1 } elseif ($x -lt $y) { return -1 }
+    }
+    if ($il -lt 0) { if ($ir -lt 0) { return 0 } else { return 1 } }
+    if ($ir -lt 0) { return -1 }
+    $pl = $l.Substring($il + 1).Split('.'); $pr = $r.Substring($ir + 1).Split('.')
+    for ($i = 0; $i -lt [Math]::Min($pl.Count, $pr.Count); $i++) {
+        # identifier by identifier: numbers as numbers and below words, words in ASCII order
+        $x = $pl[$i]; $y = $pr[$i]
+        if ($x -ceq $y) { continue }
+        $nx = $x -match '^[0-9]+$'; $ny = $y -match '^[0-9]+$'
+        if ($nx -and $ny) { if ([decimal]$x -gt [decimal]$y) { return 1 } else { return -1 } }
+        if ($nx) { return -1 }
+        if ($ny) { return 1 }
+        if ([string]::CompareOrdinal($x, $y) -gt 0) { return 1 } else { return -1 }
+    }
+    if ($pl.Count -gt $pr.Count) { return 1 } elseif ($pl.Count -lt $pr.Count) { return -1 } else { return 0 }
+}
+function Show-UpgradeVerdict {
+    # An existing installation against the release an upgrade would go to (-Version, or the latest stable one): $true when there is
+    # one to go to or it is not known. Like update.sh, it never offers to go down to the latest stable release (#403).
+    $cur = Get-EnvValue "MIMIRSYNTH_VERSION"
+    if (-not (Test-SemVer $cur)) { return $true }
+    $to = $St.Version
+    if (-not $to) { try { $to = [string](Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 15).tag_name } catch { $to = "" } }
+    if (-not (Test-SemVer $to)) { return $true }
+    $cur = $cur -replace '^v', ''; $to = $to -replace '^v', ''
+    $c = Compare-SemVer $to $cur
+    if ($c -gt 0) {
+        Say "Version {1} is available (it is at {0})." "Est\u00e1 disponible la versi\u00f3n {1} (ahora est\u00e1 en la {0})." @($cur, $to)
+        return $true
+    }
+    if ($c -eq 0) { Say "It is at {0} already: up to date." "Ya est\u00e1 en la {0}: est\u00e1 al d\u00eda." @($cur) }
+    elseif ($St.Version) {
+        Say "{1} is older than {0}, the version it is at: ./update.sh --version {1} goes down only if that version knows the database (see Upgrading in docs/INSTALL.md)." `
+            "{1} es anterior a {0}, la versi\u00f3n en la que est\u00e1: ./update.sh --version {1} solo baja si esa versi\u00f3n conoce la base de datos (ver Actualizar en docs/es/INSTALL.md)." @($cur, $to)
+    }
+    else {
+        Say "It is at {0}, newer than the latest stable release ({1}): there is nothing to upgrade to." `
+            "Est\u00e1 en la {0}, m\u00e1s reciente que la \u00faltima versi\u00f3n estable ({1}): no hay nada a lo que actualizar." @($cur, $to)
+    }
+    return $false
+}
+
 # ---- Docker Desktop and Compose v2 ----
 function Test-Docker {
     Step "Docker" "Docker"
@@ -513,8 +568,10 @@ try {
         if ((Get-NativeOutput "docker" @("compose", "ps", "-aq", "mimirsynth")) -join "") {
             Step "Existing installation" "Instalaci\u00f3n existente"
             Say "MimirSynth is already installed in {0}. Nothing was changed." "MimirSynth ya est\u00e1 instalado en {0}. No se ha cambiado nada." @($Dir)
-            Say "To upgrade it: run ./update.sh from WSL in that folder, or back up and run 'docker compose pull' and 'docker compose up -d' there (see Upgrading in docs/INSTALL.md)." `
-                "Para actualizarlo: ejecuta ./update.sh desde WSL en esa carpeta, o haz una copia de seguridad y ejecuta all\u00ed 'docker compose pull' y 'docker compose up -d' (ver Actualizar en docs/es/INSTALL.md)."
+            if (Show-UpgradeVerdict) {
+                Say "To upgrade it: run ./update.sh from WSL in that folder, or back up and run 'docker compose pull' and 'docker compose up -d' there (see Upgrading in docs/INSTALL.md)." `
+                    "Para actualizarlo: ejecuta ./update.sh desde WSL en esa carpeta, o haz una copia de seguridad y ejecuta all\u00ed 'docker compose pull' y 'docker compose up -d' (ver Actualizar en docs/es/INSTALL.md)."
+            }
             return
         }
         Step "Configuration" "Configuraci\u00f3n"

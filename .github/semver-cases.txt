@@ -1,0 +1,21 @@
+# CI (#403): SemVer 2.0 precedence that update.sh (bash) and install.ps1 (PowerShell) must agree on. «A B R»: R is -1, 0 or 1 when A
+# is older than, the same as or newer than B.
+0.15.0 0.15.0-rc.1 1
+0.15.0-rc.1 0.14.0 1
+0.14.0 0.15.0-rc.1 -1
+0.15.0-rc.2 0.15.0-rc.1 1
+0.15.0-rc.10 0.15.0-rc.9 1
+0.15.0-rc.1 0.15.0-rc.1 0
+v0.15.0 0.15.0 0
+0.15.0+build.7 0.15.0 0
+0.14.1 0.14.0 1
+0.9.0 0.10.0 -1
+1.0.0 0.99.99 1
+1.0.0-alpha 1.0.0-alpha.1 -1
+1.0.0-alpha.1 1.0.0-alpha.beta -1
+1.0.0-alpha.beta 1.0.0-beta -1
+1.0.0-beta 1.0.0-beta.2 -1
+1.0.0-beta.2 1.0.0-beta.11 -1
+1.0.0-beta.11 1.0.0-rc.1 -1
+1.0.0-rc.1 1.0.0 -1
+1.0.0-RC.1 1.0.0-rc.1 -1

@@ -129,6 +129,8 @@ La release incluye un script que hace la copia de seguridad, actualiza y comprue
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
 ./update.sh              # última versión estable; ./update.sh --check solo informa; --version 0.7.1 elige una
 ```
+Nunca baja de versión por su cuenta: en una versión más reciente que la última estable, como una candidata, lo dice y no cambia nada. Con `--version` y una versión anterior, se para antes de cambiar nada si la aplicación de esa versión no conoce la revisión de la base de datos (`--force` lo hace igualmente); volver atrás necesita también la base de datos de esa versión, con `./update.sh --rollback --with-db`.
+
 Hace, por este orden:
 1. **Descarga** primero la imagen nueva: una versión equivocada o la falta de red paran todo antes de tocar nada.
 2. **Copia de seguridad** de PostgreSQL, del volumen `docstore`, del FalkorDB incluido (si usas `--profile bundled`) y de tu `docker-compose.yml` y `.env` en `./backup`. **Solo se conserva una copia**: la anterior se sustituye cuando la nueva ya está escrita y comprobada, así que las copias nunca se acumulan.
