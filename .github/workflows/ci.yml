@@ -108,6 +108,21 @@ jobs:
       - uses: actions/setup-node@v7
         with: {node-version: 22, cache: npm, cache-dependency-path: integrations/shared/typescript/package-lock.json}
       - run: cd integrations/shared/typescript && npm ci && npm run check && npm test
+  npm-packages:
+    # The plugins the release publishes to npm (OpenCode, OpenClaw) pack into a complete package on every pull request, not only on those
+    # that touch them (their own workflows check the rest): what npm would publish (npm pack --dry-run), with every file package.json
+    # points at and the metadata npm publish --provenance needs (scripts/npm_package.mjs). Nothing is published.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [opencode, openclaw]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22, cache: npm, cache-dependency-path: "integrations/${{ matrix.package }}/package-lock.json"}
+      - run: cd "integrations/${{ matrix.package }}" && npm ci
+      - run: node scripts/npm_package.mjs "integrations/${{ matrix.package }}"
   docker:
     runs-on: ubuntu-latest
     steps:

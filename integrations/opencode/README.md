@@ -81,4 +81,4 @@ npm run build   # dist/index.js (the plugin) and dist/cli.js (the command-line t
 ```
 `api/tests/test_opencode_plugin.py` runs the hooks against a test instance of MimirSynth and, with `MIMIRSYNTH_TEST_OPENCODE=<opencode>`, OpenCode itself with the plugin and a local stand-in model (`test/mock-llm.mjs`); the `plugin-opencode` workflow runs both. To try a local copy in OpenCode, put its folder in `"plugin"`: `"file:///path/to/integrations/opencode"` (after `npm run build`).
 
-**Releasing:** any change under this folder raises `version` in `package.json` (the `plugin-version` check fails otherwise, and npm refuses to publish a version twice). Publishing to npm is `npm publish` from this folder by someone with rights on the `@mimirsynth` scope; `prepack` builds it first.
+**Releasing:** any change under this folder raises `version` in `package.json` (the `plugin-version` check fails otherwise, and npm refuses to publish a version twice). Each MimirSynth release publishes to npm the version npm does not have yet, with provenance (the `npm` job of `.github/workflows/release.yml`); nobody runs `npm publish` by hand. `prepack` builds it first.
