@@ -274,7 +274,7 @@ class Neo4jBackend(GraphBackend):
 
     def __init__(self, uri: str, user: str, password: str, database: str | None = None):
         if not uri:
-            raise ValueError("MIMIRSYNTH_GRAPH_BACKEND=neo4j needs MIMIRSYNTH_NEO4J_URI (bolt://host:7687)")
+            raise ValueError("the Neo4j backend needs a URI (MIMIRSYNTH_NEO4J_URI=bolt://host:7687, or Administration → Graph)")
         self.uri, self.user, self.password, self._database = uri, user, password, database
 
     @cached_property
@@ -342,6 +342,10 @@ class Neo4jBackend(GraphBackend):
 
     def value(self, v: Any) -> Any:
         return _out(v)
+
+    def close(self) -> None:
+        if "driver" in self.__dict__:
+            self.driver.close()
 
     def version(self) -> dict:
         try:

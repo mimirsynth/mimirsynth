@@ -179,7 +179,7 @@ def api_routes(app) -> list[tuple[str, str, str]]:
                 name = getattr(d.call, "__qualname__", "")
                 if name == "brain_access.<locals>.dep":
                     found.append(d.call.__closure__[0].cell_contents)  # brain_access(minimum)
-                elif name == "require_admin":
+                elif name in ("require_admin", "admin_or_setup"):  # admin_or_setup: or the first-start code, while there is no admin (#358)
                     found.append("instance")
                 elif name == "current_user":
                     found.append("session")

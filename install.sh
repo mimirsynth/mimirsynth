@@ -371,17 +371,23 @@ setup_code() {  # the first-start code from the log (the last one, if the contai
   dc logs --no-log-prefix mimirsynth 2>/dev/null | awk '/FIRST START/ { f = 1; next } f && /^[[:space:]]+[A-Za-z0-9_-]+[[:space:]]*$/ { c = $1; f = 0 } END { if (c) print c }'
 }
 
-# HOOK(#358): full test of an existing graph database through the API. POST /api/admin/graph/test does not exist yet (#358): until
-# it does, this answers 404 and only the TCP checks run (from this computer before writing .env, and from the container after the
-# start). When #358 lands: decide how the endpoint is reachable during the first start (there is no administrator yet; this sends
-# the first-start code as X-Setup-Code) and adjust the body to its schema. Returns 0 ok, 1 failed (REPLY has the answer), 3 not available.
+# Full test of an existing graph database through the API (#358): address, credentials, version and write permission. While there
+# is no administrator the endpoint takes the first-start code as X-Setup-Code. It answers 200 with "ok" true or false and, when false,
+# the cause in "message"; a release without it answers 404. Returns 0 ok, 1 failed (REPLY has the cause), 3 not available.
 graph_api_test() {
   local body code
   body="{\"backend\":$(json_str "$GTYPE"),\"host\":$(json_str "$CHOST"),\"port\":${GPORT:-0},\"user\":$(json_str "$GUSER"),\"password\":$(json_str "$GPASS"),\"database\":$(json_str "$GDB")}"
   code="$(printf '%s' "$body" | curl -s -o "$TMPF" -w '%{http_code}' --max-time 30 -X POST -H 'Content-Type: application/json' \
           -H "X-Setup-Code: ${SETUP_CODE:-}" --data-binary @- "http://127.0.0.1:$PORT/api/admin/graph/test" 2>/dev/null || true)"
-  REPLY="$(head -c 300 "$TMPF" 2>/dev/null || true)"
-  case "$code" in 2??) return 0 ;; 401|403|404|405|"") return 3 ;; *) return 1 ;; esac
+  REPLY="$(head -c 4000 "$TMPF" 2>/dev/null || true)"
+  case "$code" in
+    2??)
+      case "$REPLY" in *'"ok":true'*) return 0 ;; esac
+      REPLY="$(printf '%s' "$REPLY" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p')"; REPLY="${REPLY:-?}"
+      return 1 ;;
+    401|403|404|405|"") return 3 ;;
+    *) REPLY="$(printf '%s' "$REPLY" | head -c 300)"; return 1 ;;
+  esac
 }
 
 check_graph_from_container() {
@@ -431,7 +437,8 @@ if [ -f docker-compose.yml ] && [ -f .env ]; then
   say "$DIR already has a configuration that has not been started: using it as it is." "$DIR ya tiene una configuración que no se ha arrancado: se usa tal cual."
   PORT="$(envget MIMIRSYNTH_PORT .env)"; PORT="${PORT:-8000}"
   case ",$(envget COMPOSE_PROFILES .env)," in *,ollama,*) OLLAMA=1 ;; *) OLLAMA=0 ;; esac
-  if [ -n "$(envget MIMIRSYNTH_NEO4J_URI .env)" ] || [ "$(envget MIMIRSYNTH_FALKOR_HOST .env)" != falkordb ]; then GRAPH=existing; else GRAPH=local; fi
+  CHOST="$(envget MIMIRSYNTH_FALKOR_HOST .env)"  # a local install does not write it
+  if [ -n "$(envget MIMIRSYNTH_NEO4J_URI .env)" ] || { [ -n "$CHOST" ] && [ "$CHOST" != falkordb ]; }; then GRAPH=existing; else GRAPH=local; fi
   GTYPE="$(envget MIMIRSYNTH_GRAPH_BACKEND .env)"; GTYPE="${GTYPE:-falkordb}"
   if [ "$GTYPE" = neo4j ]; then
     CHOST="$(envget MIMIRSYNTH_NEO4J_URI .env)"; CHOST="${CHOST#*://}"; GPORT="${CHOST##*:}"; CHOST="${CHOST%:*}"

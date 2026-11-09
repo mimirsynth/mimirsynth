@@ -357,17 +357,20 @@ function Get-SetupCode {
     return $code
 }
 
-# HOOK(#358): full test of an existing graph database through the API. POST /api/admin/graph/test does not exist yet (#358): until
-# it does, this answers 404 and only the TCP checks run (from this computer before writing .env, and from the container after the
-# start). When #358 lands: decide how the endpoint is reachable during the first start (there is no administrator yet; this sends
-# the first-start code as X-Setup-Code) and adjust the body to its schema. Returns 0 ok, 1 failed, 3 not available.
+# Full test of an existing graph database through the API (#358): address, credentials, version and write permission. While there
+# is no administrator the endpoint takes the first-start code as X-Setup-Code. It answers 200 with "ok" true or false and, when false,
+# the cause in "error.message"; a release without it answers 404. Returns 0 ok, 1 failed (GraphTestAnswer has the cause), 3 not available.
 function Test-GraphViaApi {
     $body = @{ backend = $St.GraphType; host = $St.ContainerHost; port = $St.GraphPort; user = $St.GraphUser;
                password = $St.GraphPassword; database = $St.GraphDatabase } | ConvertTo-Json -Compress
     $r = Get-Http "http://127.0.0.1:$($St.Port)/api/admin/graph/test" -Method POST -Body $body -Headers @{ "X-Setup-Code" = $St.SetupCode } -Timeout 30
     $St.GraphTestAnswer = if ($r.Body.Length -gt 300) { $r.Body.Substring(0, 300) } else { $r.Body }
-    if ($r.Code -ge 200 -and $r.Code -lt 300) { return 0 }
     if ($r.Code -in @(0, 401, 403, 404, 405)) { return 3 }
+    if ($r.Code -ge 200 -and $r.Code -lt 300) {
+        try { $j = $r.Body | ConvertFrom-Json } catch { return 1 }
+        if ($j.ok) { return 0 }
+        if ($j.error -and $j.error.message) { $St.GraphTestAnswer = [string]$j.error.message }
+    }
     return 1
 }
 
@@ -426,7 +429,7 @@ try {
         }
         else {
             $St.ContainerHost = Get-EnvValue "MIMIRSYNTH_FALKOR_HOST"; $St.GraphPort = [int](Get-EnvValue "MIMIRSYNTH_FALKOR_PORT")
-            $St.Graph = if ($St.ContainerHost -ne "falkordb") { "existing" } else { "local" }
+            $St.Graph = if ($St.ContainerHost -and $St.ContainerHost -ne "falkordb") { "existing" } else { "local" }
         }
     }
     elseif ($hasCompose -or $hasEnv) {

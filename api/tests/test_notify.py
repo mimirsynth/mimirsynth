@@ -353,20 +353,21 @@ def test_health_endpoint_tells_db_down_from_app_down(client, monkeypatch):  # no
 
     import mimirsynth.main as m
     monkeypatch.setattr(m, "list_graphs", lambda: ["a", "b"])
+    kind = m.backend().name                                                                            # which graph database (#358)
     r = client.get("/api/health")
-    assert r.status_code == 200 and r.json() == {"ok": True, "db": True, "graph": True, "graphs": 2}
+    assert r.status_code == 200 and r.json() == {"ok": True, "db": True, "graph": True, "graphs": 2, "backend": kind}
 
     def db_down():
         raise ConnectionError("host=pg.interno port=5432 rechazada")
     monkeypatch.setattr(m, "_db_ping", db_down)
     r = client.get("/api/health")
-    assert r.status_code == 503 and r.json() == {"ok": False, "db": False, "graph": True, "graphs": 2}   # la app responde: está viva
+    assert r.status_code == 503 and r.json() == {"ok": False, "db": False, "graph": True, "graphs": 2, "backend": kind}   # la app responde: está viva
     assert "pg.interno" not in r.text                                                                   # es pública: sin el error
 
     monkeypatch.setattr(m, "_db_ping", lambda: None)
     monkeypatch.setattr(m, "list_graphs", lambda: (_ for _ in ()).throw(ConnectionError("caído")))
     r = client.get("/api/health")
-    assert r.status_code == 503 and r.json() == {"ok": False, "db": True, "graph": False, "graphs": None}
+    assert r.status_code == 503 and r.json() == {"ok": False, "db": True, "graph": False, "graphs": None, "backend": kind}
 
     monkeypatch.setattr(m, "list_graphs", lambda: [])
     monkeypatch.setattr(m, "HEALTH_TIMEOUT", 0.1)

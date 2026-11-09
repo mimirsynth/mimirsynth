@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, metrics
-from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding
+from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn
 from .config import settings
 from .db import list_graphs
 from .graphdb import backend
@@ -185,6 +185,7 @@ app.include_router(curator.router)
 app.include_router(verify.router)
 app.include_router(categories.router)
 app.include_router(onboarding.router)
+app.include_router(graphconn.router)
 verify.load_dir()  # MIMIRSYNTH_VERIFIERS_DIR: the administrator's opt-in for external verifiers (#293)
 app.middleware("http")(attention.invalidate_after_writes)
 
@@ -216,9 +217,17 @@ async def _probe(what: str, fn):
 async def health():
     """Responder ya dice que la app está viva; `db` (PostgreSQL) y `graph` (FalkorDB o Neo4j) dicen si llega a cada uno. Con alguno caído
     responde 503 con el mismo cuerpo, para que un monitor externo distinga «app caída» (sin respuesta) de «app viva, BD caída»:
-    las notificaciones no pueden avisar de la caída de PostgreSQL porque se guardan en él. Es pública: sin detalles del error."""
-    (db_ok, _), (graph_ok, graphs) = await asyncio.gather(_probe("PostgreSQL", _db_ping), _probe(backend().label, list_graphs))
-    body = {"ok": db_ok and graph_ok, "db": db_ok, "graph": graph_ok, "graphs": len(graphs) if graph_ok else None}
+    las notificaciones no pueden avisar de la caída de PostgreSQL porque se guardan en él. Es pública: sin detalles del error.
+    `backend` dice qué base de datos de grafos usa la instancia (falkordb o neo4j), null si no se ha podido saber (#358)."""
+    try:
+        # building it reads the saved connection: with PostgreSQL down it fails, and the graph counts as down too
+        b = await asyncio.wait_for(asyncio.to_thread(backend), HEALTH_TIMEOUT)
+    except Exception as e:  # noqa: BLE001
+        logging.getLogger("mimirsynth").warning("health: no se sabe qué base de datos de grafos usar: %s", str(e)[:300] or type(e).__name__)
+        b = None
+    (db_ok, _), (graph_ok, graphs) = await asyncio.gather(_probe("PostgreSQL", _db_ping),
+                                                          _probe(b.label, list_graphs) if b else asyncio.sleep(0, (False, None)))
+    body = {"ok": db_ok and graph_ok, "db": db_ok, "graph": graph_ok, "graphs": len(graphs) if graph_ok else None, "backend": b.name if b else None}
     if sealcheck.unreadable():  # only when it happens, and without failing: a restart loop would not bring the secret back (#193)
         body["secrets"] = "unreadable"
     return JSONResponse(body, status_code=200 if body["ok"] else 503)

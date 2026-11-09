@@ -1,7 +1,8 @@
 """The graph database behind the brains, behind one interface (#357).
 
 Every module reaches the graph through `db.graph()` / `db.list_graphs()` or through `backend()`, never through a driver of its own.
-One backend per instance, chosen with `MIMIRSYNTH_GRAPH_BACKEND`, and each brain is a «partition» of it:
+One backend per instance, and each brain is a «partition» of it. The connection comes from the environment, from Administration → Graph
+or, without either, it is the bundled FalkorDB (`graphconn.py`, #358); `reload()` switches to a new one without a restart.
 - FalkorDB (`falkor.py`): a graph of its own per brain.
 - Neo4j 5.26+ (`neo4j.py`): one database, where a brain is the nodes whose `group_id` is its name, as Graphiti already writes them.
   The Cypher the modules write is scoped to the partition by the backend, so it reads the same on both.
@@ -17,10 +18,40 @@ What a backend gives:
 """
 from __future__ import annotations
 
+import logging
+import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Protocol
+
+BACKENDS = {"falkordb": "FalkorDB", "neo4j": "Neo4j"}
+DEFAULT_PORTS = {"falkordb": 6379, "neo4j": 7687}
+
+
+@dataclass(frozen=True)
+class Connection:
+    """Where the graph database is and how to sign in to it. `uri` is Neo4j's as the environment gives it; without it, it is built from
+    host, port and TLS."""
+    backend: str
+    host: str = ""
+    port: int = 0
+    user: str = ""
+    password: str = field(default="", repr=False)
+    tls: bool = False
+    database: str = ""
+    uri: str = ""
+
+    @property
+    def label(self) -> str:
+        return BACKENDS.get(self.backend, self.backend)
+
+    def neo4j_uri(self) -> str:
+        return self.uri or f"{'bolt+s' if self.tls else 'bolt'}://{self.host}:{self.port or DEFAULT_PORTS['neo4j']}"
+
+    def address(self) -> str:
+        """What people read: host:port, or Neo4j's URI."""
+        return self.neo4j_uri() if self.backend == "neo4j" else f"{self.host}:{self.port or DEFAULT_PORTS['falkordb']}"
 
 
 class Result(Protocol):
@@ -110,15 +141,43 @@ class GraphBackend(ABC):
     def restore(self, name: str, payload: bytes) -> None:
         raise NotImplementedError(f"{self.label} has no binary dump")
 
+    def close(self) -> None:
+        """Lets go of the driver's connections; the backend is not used after this."""
+
+
+def make(conn: Connection) -> GraphBackend:
+    """The backend for a connection, without connecting yet."""
+    if conn.backend == "neo4j":
+        from .neo4j import Neo4jBackend
+        return Neo4jBackend(conn.neo4j_uri(), conn.user or "neo4j", conn.password, conn.database or None)  # compose passes an empty user
+    if conn.backend != "falkordb":
+        raise ValueError(f"graph backend {conn.backend!r}: it must be «falkordb» or «neo4j»")
+    from .falkor import FalkorBackend
+    return FalkorBackend(conn.host, conn.port or DEFAULT_PORTS["falkordb"], conn.user or None, conn.password or None, tls=conn.tls)
+
 
 @lru_cache
 def backend() -> GraphBackend:
-    from ..config import settings
-    kind = (settings.graph_backend or "falkordb").strip().lower()
-    if kind == "neo4j":
-        from .neo4j import Neo4jBackend
-        return Neo4jBackend(settings.neo4j_uri, settings.neo4j_user or "neo4j", settings.neo4j_password, settings.neo4j_database or None)  # compose passes an empty user
-    if kind != "falkordb":
-        raise ValueError(f"MIMIRSYNTH_GRAPH_BACKEND={settings.graph_backend!r}: it must be «falkordb» or «neo4j»")
-    from .falkor import FalkorBackend
-    return FalkorBackend(settings.falkor_host, settings.falkor_port, settings.falkor_username or None, settings.falkor_password or None)
+    """The instance's backend, built once from the connection in force (`graphconn.current`). A failure to read that connection (the
+    control database down) is raised and not kept: the next call tries again."""
+    from ..graphconn import current
+    return make(current()[0])
+
+
+CLOSE_AFTER = 60.0  # seconds the old backend stays open after a reload, for the queries that were already running on it
+
+
+def reload() -> None:
+    """Uses the connection in force from the next call on. The old backend is closed a minute later, once what was running on it ended.
+    One process per instance (the container runs one uvicorn worker), so clearing the cache here reaches every request."""
+    old = backend() if backend.cache_info().currsize else None
+    backend.cache_clear()
+    if old is not None:
+        def _close():
+            try:
+                old.close()
+            except Exception:  # noqa: BLE001  (closing is best effort)
+                logging.getLogger("mimirsynth").debug("closing the previous graph backend failed", exc_info=True)
+        t = threading.Timer(CLOSE_AFTER, _close)
+        t.daemon = True
+        t.start()

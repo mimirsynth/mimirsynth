@@ -365,7 +365,7 @@ def test_additive_migration_adds_new_columns(tmp_path, monkeypatch):
 def test_ai_status(client, monkeypatch):
     from mimirsynth import aistatus
     s = client.get("/api/ai-status").json()
-    assert set(s) == {"llm", "embedding", "decider"} and "healthy" not in s["llm"]  # sin check no se sondea nada
+    assert set(s) == {"llm", "embedding", "decider", "graph"} and "healthy" not in s["llm"] and "healthy" not in s["graph"]  # sin check no se sondea nada
     client.post("/api/llm-engines", json={"name": "estado", "base_url": "http://g/v1", "model": "m"})  # la BD de tests se comparte: ya puede haber un motor por defecto
     monkeypatch.setattr(aistatus, "_llm_ping", lambda *a: (_ for _ in ()).throw(RuntimeError("401")))
     monkeypatch.setattr(aistatus, "_probe", lambda *a: 768)
@@ -401,7 +401,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert {"users", "brains", "proposals", "decision_engines", "alembic_version"} <= set(inspect(e1).get_table_names())
     with e1.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0056"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0057"
     store.init_db()  # idempotente
     # BD heredada (create_all sin alembic_version y sin columnas nuevas): se completa y se marca
     e2 = create_engine(f"sqlite:///{tmp_path}/legacy.db")
@@ -412,7 +412,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert "ingest_error" in {c["name"] for c in inspect(e2).get_columns("proposals")}
     with e2.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0056"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0057"
 
 
 def test_ontology_api_and_graphiti_conversion(client):

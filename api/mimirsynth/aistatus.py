@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from . import decider as _decider
+from . import graphconn
 from .config import settings
+from .graphdb import backend
 from .deps import current_user
 from .embeddings_admin import _probe, default_embedding
 from .llm import default_engine
@@ -39,6 +41,13 @@ def ai_status(check: bool = False, user: User = Depends(current_user), db: Sessi
         "embedding": {"configured": True, "source": "db" if emb else "env", "name": emb.name if emb else None},
         "decider": {"configured": bool(dec), "source": "db" if dec else None, "name": dec.name if dec else None},
     }
+    try:  # the graph database (#358): where its connection comes from (env, db or default: the bundled FalkorDB) and which one it is
+        g = graphconn.describe(db)
+        out["graph"] = {"configured": True, "source": g["source"], "backend": g["backend"], "name": g["label"]}
+        if user.is_admin:
+            out["graph"]["address"] = g["address"]
+    except Exception as e:  # noqa: BLE001  (an unknown MIMIRSYNTH_GRAPH_BACKEND)
+        out["graph"] = {"configured": False, "source": "env", "backend": None, "name": None, "error": str(e)[:160]}
     if check and user.is_admin:
         # Se sondea lo que de verdad se usa: el motor por defecto o, sin él, las variables MIMIRSYNTH_LLM_* y MIMIRSYNTH_EMBEDDING_*.
         probes = []
@@ -52,6 +61,8 @@ def ai_status(check: bool = False, user: User = Depends(current_user), db: Sessi
             probes.append(("embedding", settings.embedding_model, partial(_probe, settings.embedding_base_url, settings.embedding_model, settings.embedding_api_key)))
         if dec:
             probes.append(("decider", dec.model, partial(_decider.decide, dec.base_url, dec.model, unseal(dec.api_key_enc), "x", "¿ok?", ["Sí", "No"], timeout=30)))
+        if out["graph"]["configured"]:
+            probes.append(("graph", out["graph"]["name"], lambda: backend().list_graphs()))
 
         def run(kind, model, fn):
             t0 = time.monotonic()
@@ -60,6 +71,6 @@ def ai_status(check: bool = False, user: User = Depends(current_user), db: Sessi
             except Exception as e:  # noqa: BLE001
                 out[kind]["healthy"] = False; out[kind]["error"] = str(getattr(e, "detail", None) or e)[:160]
             out[kind].update(model=model, ms=round((time.monotonic() - t0) * 1000))
-        with ThreadPoolExecutor(max_workers=3) as pool:  # en paralelo: la espera es la del más lento, no la suma
+        with ThreadPoolExecutor(max_workers=4) as pool:  # en paralelo: la espera es la del más lento, no la suma
             list(pool.map(lambda p: run(*p), probes))
     return out

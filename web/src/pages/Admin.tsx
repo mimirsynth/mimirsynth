@@ -21,6 +21,7 @@ import { BrainAiUsage, InstanceAiUsage } from "./AiUsage";
 import { ReindexPanel, StartReindex } from "./AdminReindex";
 import AdminNotifications from "./AdminNotifications";
 import AdminMetrics from "./AdminMetrics";
+import AdminGraph from "./AdminGraph";
 import SealedNotice from "./SealedNotice";
 
 type AuditRow = { ts: string; action: string; detail: unknown };
@@ -237,7 +238,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
       { heading: t("Cuentas") }, { value: "users", label: t("Usuarios") }, { value: "security", label: t("Seguridad") }, { value: "identity", label: t("Identidad") }, { value: "mail", label: t("Correo (SMTP)") },
       { heading: t("Modelos de IA") }, { value: "llm", label: t("Modelo LLM") }, { value: "embedding", label: t("Embeddings") }, { value: "decision", label: t("Decisor") }, { value: "usage", label: t("Consumo") },
       { heading: t("Documentos") }, { value: "folders", label: t("Carpetas") }, { value: "docs", label: t("Límites") },
-      { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "notifications", label: t("Notificaciones") }, { value: "metrics", label: t("Métricas") }, { value: "audit", label: t("Auditoría") },
+      { heading: t("Sistema") }, { value: "general", label: t("General") }, { value: "graph", label: t("Base de datos del grafo") }, { value: "recall", label: t("Recuerdo (recall)") }, { value: "ingest", label: t("Ingesta y trabajos") }, { value: "notifications", label: t("Notificaciones") }, { value: "metrics", label: t("Métricas") }, { value: "audit", label: t("Auditoría") },
     ] : []),
   ];
   // a link to a section this person cannot see (or to one that no longer exists) opens the first one
@@ -317,6 +318,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
           {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
           {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
           {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}
+          {section === "graph" && <AdminGraph />}
           {section === "notifications" && <AdminNotifications />}
           {section === "metrics" && <AdminMetrics />}
           {["general", "security", "mail", "identity", "docs", "recall", "ingest"].includes(section) && <AdminSettings group={section} />}

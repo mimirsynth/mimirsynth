@@ -1,4 +1,5 @@
 """Configuración (variables MIMIRSYNTH_*). El nombre visible vive solo aquí."""
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,9 +9,11 @@ class Settings(BaseSettings):
     static_dir: str = ""  # directorio del build de la web; si existe se sirve en /
     cors_origins: str = "*"
 
-    # Graph database (#357): one backend per instance, `falkordb` or `neo4j`
-    graph_backend: str = "falkordb"
-    falkor_host: str = "localhost"
+    # Graph database (#357): one backend per instance, `falkordb` or `neo4j`. When none of graph_backend, falkor_host and neo4j_uri
+    # is set (non-empty), the connection comes from Administration → Graph and, without one there, it is the bundled FalkorDB (#358).
+    graph_backend: str = ""
+    falkor_bundled_host: str = "localhost"  # where the bundled FalkorDB answers (compose: falkordb), the default connection
+    falkor_host: str = ""  # empty: the bundled FalkorDB's host
     falkor_port: int = 6379
     falkor_username: str = ""  # FalkorDB ACL, for an existing server that asks for it
     falkor_password: str = ""
@@ -119,6 +122,11 @@ class Settings(BaseSettings):
     default_language: str = "en"  # idioma de la interfaz y de los correos cuando la persona no ha elegido uno
     require_2fa: str = "no"  # "yes": quien entra con contraseña debe activar el doble factor
     admin_emails: str = ""  # emails (coma) que son administradores de la instancia al iniciar sesión
+
+    @field_validator("falkor_port", mode="before")
+    @classmethod
+    def _empty_port(cls, v):  # compose passes an unset variable as an empty value
+        return 6379 if v is None or (isinstance(v, str) and not v.strip()) else v
 
 
 settings = Settings()

@@ -205,6 +205,22 @@ class AppSetting(Base):
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
 
+class GraphConnection(Base):
+    """The graph database the instance uses, as saved from Administration → Graph (#358): one row (id 1) or none. The environment
+    variables, when set, win over it; without either, the instance uses the bundled FalkorDB. The password is sealed."""
+    __tablename__ = "graph_connection"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    backend: Mapped[str] = mapped_column(String(16))  # falkordb | neo4j
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column()
+    username: Mapped[str] = mapped_column(String(255), default="")
+    password_enc: Mapped[str] = mapped_column(Text, default="")
+    tls: Mapped[bool] = mapped_column(Boolean, default=False)
+    database: Mapped[str] = mapped_column(String(255), default="")  # Neo4j: empty is the server's default database
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
 class ApiToken(Base):
     """Token de API para agentes y MCP: acotado a un brain y con rol máximo; se guarda solo el hash."""
     __tablename__ = "api_tokens"
