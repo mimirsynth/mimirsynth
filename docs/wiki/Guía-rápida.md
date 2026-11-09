@@ -22,22 +22,24 @@ Comprueba Docker, pregunta si arrancar un FalkorDB incluido o usar tu propio Fal
 **Si los modelos van en tu propio Ollama**, descárgalos antes (`ollama pull nomic-embed-text` y un modelo de extracción, ver el paso 2). Con Ollama en el **mismo host Linux**, haz que escuche en todas las interfaces para que el contenedor llegue a él: ver [Preparar Ollama](Instalaci%C3%B3n#preparar-ollama).
 
 ## 2. Sigue el asistente de configuración
-<!-- TODO(#361): escrito a partir del alcance del asistente v2; confirmar los nombres de los pasos cuando se fusione #361. -->
-En el navegador, el asistente recorre toda la configuración y retoma donde lo dejaste:
-1. **Cuenta de administrador**, con el código de inicio.
-2. **Base de datos del grafo:** la prueba de conexión tiene que pasar; se ofrece a adoptar los grafos que ya haya.
-3. **Embeddings:** un preajuste *Ollama (local)* o *Compatible con OpenAI / OpenRouter*; la prueba tiene que pasar.
-4. **LLM:** los mismos preajustes. Se puede saltar, con un aviso en la pantalla de inicio hasta que se configure.
+<!-- TODO(#361): contrastado con el código del asistente; comparar con el apartado «For the wiki guide (#365)» del PR de #361 cuando se fusione. -->
+En el navegador, introduce el código de inicio y crea la cuenta de administrador. La **Configuración inicial** (`/configuracion`) recorre después el resto y retoma donde lo dejaste, desde cualquier dispositivo:
+1. **Tu cuenta** (ya hecha).
+2. **Base de datos del grafo:** la página de Administración → Base de datos del grafo, con su prueba de conexión, el cambio de conexión y la adopción de grafos existentes. No se puede saltar: **Siguiente** solo pasa con la prueba superada.
+3. **Embeddings:** **Ollama en local** (lo busca, lista sus modelos y puede descargar `nomic-embed-text`) o **Un servicio compatible con OpenAI** (URL base, clave, modelo). No se puede saltar. El modelo tiene que coincidir con la dimensión del índice (768 por defecto); para otro, el paso te manda a **Reindexar**.
+4. **Modelo LLM:** los mismos dos tipos de endpoint. Se puede saltar, con un recordatorio en el inicio hasta que haya uno.
 5. **Decisor** (opcional).
-6. **Primer brain:** nombre y slug.
-7. **Token:** un token de colaborador para tu agente, que se muestra una vez.
-8. **Conecta tu agente** (paso 3).
+6. **Tu primer brain:** un nombre (el slug sale de él), o un brain que ya existe o que adoptaste.
+7. **Token de API:** rol Colaborador, válido 90 días, ya puesto en el paso siguiente.
+8. **Conecta tu agente** (el paso 3 de abajo); **Terminar** lleva al inicio.
+
+**Configurar a mano** cierra el asistente del todo; el botón **Asistente de configuración**, arriba en Administración, lo vuelve a abrir.
 
 Qué modelo de extracción: en local, un modelo *instruct* de unos **14B parámetros o más** (p. ej. `qwen2.5:14b-instruct`, unos 10 GB de memoria); por API, un modelo pequeño y barato con salida estructurada. Los de 4B o menos bastan para probar la instalación, no para una memoria que quieras conservar: espera entidades mal formadas o que se pierden. Evita los modelos que «razonan» por defecto, salvo que lo desactives. Ver [[Proveedores de IA]].
 
 > **Elige con cuidado el modelo de embeddings.** Se puede cambiar después (**Reindexar** en Administración → Embeddings), pero eso recalcula todos los vectores de todos los brains. El índice de texto se crea con 768 dimensiones salvo que `MIMIRSYNTH_EMBEDDING_DIM` diga otra cosa antes del primer arranque: ver [La dimensión de los embeddings no coincide](Soluci%C3%B3n-de-problemas#la-dimensi%C3%B3n-de-los-embeddings-no-coincide).
 
-Con el primer brain creado aparece un **recorrido guiado** de ocho pasos por la navegación, el selector de brain, las propuestas, el grafo, Preguntar y la administración. Sale una vez por persona; se cierra con Escape o con **Saltar recorrido**, y el **menú de ayuda** (el signo de interrogación abajo en la barra lateral) lo vuelve a poner.
+Al terminar el asistente aparece un **recorrido guiado** de ocho pasos por la navegación, el selector de brain, las propuestas, el grafo, Preguntar y la administración. Sale una vez por persona; se cierra con Escape o con **Saltar recorrido**, y el **menú de ayuda** (el signo de interrogación abajo en la barra lateral) lo vuelve a poner.
 
 ## 3. Conecta tu primer agente
 **Administración → Brain → Conectar un agente** (el último paso del asistente) da, para Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw o cualquier cliente MCP, lo que hay que pegar, ya con el servidor, el brain y un token, y se pone en verde con la primera llamada del agente. A mano, con Claude Code por MCP y un token de **Colaborador** de **Mi cuenta → Tokens de API**:

@@ -22,22 +22,24 @@ It checks Docker, asks whether to start a bundled FalkorDB or use your own Falko
 **If the models run on your own Ollama**, download them first (`ollama pull nomic-embed-text` and an extraction model, see step 2). With Ollama on the **same Linux host**, make it listen on all interfaces so the container can reach it: see [Preparing Ollama](Installation#preparing-ollama).
 
 ## 2. Follow the setup wizard
-<!-- TODO(#361): written from the scope of the setup wizard v2; confirm the step names when #361 is merged. -->
-In the browser, the wizard goes through the whole setup and resumes where you left it:
-1. **Administrator account**, with the first-start code.
-2. **Graph database:** the connection test must pass; it offers to adopt graphs that are already there.
-3. **Embeddings:** an *Ollama (local)* or *OpenAI-compatible / OpenRouter* preset; the test must pass.
-4. **LLM:** the same presets. It can be skipped, with a warning on the home screen until it is configured.
+<!-- TODO(#361): checked against the wizard's code; compare with the «For the wiki guide (#365)» section of the #361 pull request when it is merged. -->
+In the browser, enter the first-start code and create the administrator account. **First-run setup** (`/configuracion`) then goes through the rest and resumes where you left it, on any device:
+1. **Your account** (already done).
+2. **Graph database:** the Administration → Graph database page, with its connection test, the change of connection and the adoption of existing graphs. It cannot be skipped: **Next** passes only with a passing test.
+3. **Embeddings:** **Local Ollama** (finds it, lists its models and can download `nomic-embed-text`) or **An OpenAI-compatible service** (base URL, key, model). It cannot be skipped. The model must match the index dimension (768 by default); for another one, the step sends you to **Reindex**.
+4. **LLM model:** the same two kinds of endpoint. It can be skipped, with a reminder on the home screen until there is one.
 5. **Decider** (optional).
-6. **First brain:** name and slug.
-7. **Token:** a contributor token for your agent, shown once.
-8. **Connect your agent** (step 3).
+6. **Your first brain:** a name (the slug is derived from it), or an existing or adopted brain.
+7. **API token:** Contributor role, valid for 90 days, already filled into the next step.
+8. **Connect your agent** (step 3 below); **Finish** goes to the home screen.
+
+**Set up by hand** closes the wizard altogether; the **Setup wizard** button at the top of Administration opens it again.
 
 Which extraction model: locally, an *instruct* model of about **14B parameters or more** (e.g. `qwen2.5:14b-instruct`, about 10 GB of memory); through an API, a small, cheap model with structured output. Models of 4B or less are enough to try the installation, not for a memory you want to keep: expect malformed or missing entities. Avoid models that "reason" by default unless you turn that off. See [[AI providers]].
 
 > **Choose the embedding model with care.** It can be changed later (**Reindex** under Administration → Embeddings), but that recomputes every vector of every brain. The text index is created with 768 dimensions unless `MIMIRSYNTH_EMBEDDING_DIM` says otherwise before the first start: see [Embedding dimension mismatch](Troubleshooting#embedding-dimension-mismatch).
 
-With the first brain in place, a **guided tour** of eight steps shows the navigation, the brain switcher, proposals, the graph, Ask and administration. It appears once per person; Escape or **Skip tour** closes it, and the **help menu** (the question mark at the bottom of the sidebar) plays it again.
+When the wizard is finished, a **guided tour** of eight steps shows the navigation, the brain switcher, proposals, the graph, Ask and administration. It appears once per person; Escape or **Skip tour** closes it, and the **help menu** (the question mark at the bottom of the sidebar) plays it again.
 
 ## 3. Connect your first agent
 **Administration → Brain → Connect an agent** (the wizard's last step) gives, for Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw or any MCP client, what to paste, already filled in with the server, the brain and a token, and turns green on the agent's first call. By hand, with Claude Code over MCP and a **Contributor** token from **My account → API tokens**:

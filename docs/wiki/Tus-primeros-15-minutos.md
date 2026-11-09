@@ -44,28 +44,31 @@ Después genera las contraseñas, lo arranca todo (la primera vez descarga las i
 Si el instalador se detiene, dice por qué y no borra nada: corrige la causa y vuelve a ejecutar la misma línea. Ver [Si algo falla](#si-algo-falla). Más sobre el instalador, sus opciones y cómo comprobar la descarga: [[Instalación]].
 
 ## 2. Sigue el asistente de configuración (unos 5 minutos)
-<!-- TODO(#361): esta sección está escrita a partir del alcance del asistente de configuración v2 (issue #361), no de las pantallas publicadas. Confirmar los nombres de los pasos, los preajustes y los botones, y añadir las capturas, cuando se fusione #361. -->
-En el navegador, un asistente te guía por la configuración, un paso por pantalla. Puedes cerrar el navegador en cualquier momento: se vuelve a abrir en el paso donde lo dejaste. Algunos pasos prueban lo que has puesto y no te dejan seguir hasta que la prueba pasa, para que nunca acabes con una memoria que no puede funcionar.
+<!-- TODO(#361): contrastado con el código del asistente antes de que se abriera su PR. Comparar con el apartado «For the wiki guide (#365)» del PR de #361, y añadir las capturas, cuando se fusione. -->
+Lo primero, el navegador pide el **código de inicio** del terminal, y después tu nombre, tu correo y una contraseña (al menos 12 caracteres; el formulario marca cada regla mientras escribes). Esta cuenta administra toda la instalación.
 
-1. **Cuenta de administrador.** Pega el código de inicio del terminal, y después tu nombre, tu correo y una contraseña (al menos 12 caracteres; el formulario marca cada regla mientras escribes). Esta cuenta administra toda la instalación.
-   <!-- captura: asistente, cuenta de administrador -->
-2. **Base de datos del grafo.** Dónde guardan los brains sus entidades y sus hechos. Si elegiste *local* en el instalador, muestra el FalkorDB incluido: pulsa **Probar la conexión**. Si tienes tu propio FalkorDB o Neo4j, pon su dirección y sus credenciales. No puedes seguir hasta que la prueba pasa. Si esa base de datos ya tiene grafos (de Graphiti, por ejemplo), el asistente se ofrece a adoptarlos como brains.
+Después se abre la **Configuración inicial**: un paso por pantalla, con la lista de pasos al lado. Puedes dejarlo en cualquier paso: al volver, desde cualquier dispositivo, sigue donde lo dejaste. Los pasos del grafo y de los embeddings no se pueden saltar: al pulsar **Siguiente**, el servidor los comprueba, para que nunca acabes con una memoria que no puede funcionar.
+
+1. **Tu cuenta.** Ya está hecha: el paso solo cuenta lo que viene.
+2. **Base de datos del grafo.** Dónde vive la memoria: entidades (personas, servidores, proyectos) unidas por hechos. Es la misma página que **Administración → Base de datos del grafo**. Muestra la conexión en uso (el FalkorDB incluido si elegiste *local* en el instalador), y **Probar la conexión** la comprueba. **Cambiar** la apunta a otro FalkorDB o Neo4j. Si esa base de datos ya tiene grafos (de Graphiti, por ejemplo), aquí puedes adoptarlos como brains.
    <!-- captura: asistente, base de datos del grafo con la prueba pasada -->
-3. **Embeddings.** Elige un preajuste:
-   - **Ollama (local):** encuentra el Ollama de tu equipo, lista los modelos que tienes y se ofrece a descargar `nomic-embed-text` si falta. Con el Ollama que arrancó el instalador, la dirección es `http://ollama:11434/v1`.
-   - **Compatible con OpenAI / OpenRouter:** la URL base (suele terminar en `/v1`), tu clave de API y el modelo.
+3. **Embeddings.** Elige una de las dos:
+   - **Ollama en local**: gratis y privado, porque los textos no salen de tu equipo; recomendado para empezar. **Buscar Ollama** lo busca en las direcciones habituales (el que arrancó el instalador y luego tu equipo) y lista sus modelos. Si falta `nomic-embed-text`, **Descargar nomic-embed-text** lo trae. Después pulsa **Usar nomic-embed-text**.
+   - **Un servicio compatible con OpenAI**: OpenAI, OpenRouter u otro proveedor. Pon la URL base (suele terminar en `/v1`), tu clave de API y el modelo, y pulsa **Probar y usar**.
 
-   Pulsa **Probar**. No puedes seguir hasta que pasa. Elige este modelo con cuidado: cambiarlo después recalcula toda la memoria.
-   <!-- captura: asistente, embeddings con el preajuste de Ollama -->
-4. **LLM.** Los mismos preajustes, para el modelo que extrae los hechos. Pulsa **Probar**. Puedes saltarte este paso, pero hasta que lo configures un aviso en la pantalla de inicio te recuerda que las propuestas aprobadas no se convierten en memoria.
-   <!-- captura: asistente, LLM -->
-5. **Decisor** (opcional). Un modelo que aprueba por su cuenta lo que encaja con claridad en el brain y te pasa el resto; nunca rechaza. Sáltatelo la primera vez: aprobarás a mano en el paso 5 de esta guía.
-6. **Primer brain.** Un nombre (por ejemplo «Mis notas») y un **slug**, el nombre corto que va en las direcciones (`mis-notas`). Si adoptaste un grafo en el paso 2, ya está ahí.
-7. **Token.** El asistente crea un **token de API** para tu agente: una contraseña larga que empieza por `mst_` y permite a un agente usar un brain. Es un token de **colaborador**: el agente puede leer la memoria y proponer hechos nuevos, que esperan a que los apruebes. **Solo se muestra una vez**: cópialo ahora, o deja el asistente abierto para el paso siguiente.
-   <!-- captura: asistente, token mostrado una vez -->
-8. **Conecta tu agente.** El mismo panel que en la sección siguiente de esta guía.
+   El modelo tiene que dar vectores del tamaño del índice de la instancia: 768 dimensiones, salvo que la instalación dijera otra cosa, que es lo que da `nomic-embed-text`. Con un modelo de otro tamaño, el paso te dice que te pases a él con **Reindexar** en Administración → Embeddings; con la memoria aún vacía tarda segundos. Elige con cuidado: más adelante, cambiar de modelo recalcula toda la memoria.
+   <!-- captura: asistente, embeddings con Ollama en local -->
+4. **Modelo LLM.** El modelo que lee lo que propone tu agente y saca de ahí entidades y hechos. **Usar Ollama en local** pone la dirección de tu Ollama; para un proveedor, pon su URL base, su clave y el modelo. Para una memoria que vas a conservar, usa un modelo *instruct* de unos 14B o más (en Ollama, `qwen2.5:14b-instruct`) o uno pequeño y barato de un proveedor. Puedes **Saltar** este paso, pero hasta que añadas uno las propuestas aprobadas no entran en la memoria, y el inicio te lo recuerda.
+   <!-- captura: asistente, modelo LLM -->
+5. **Decisor** (opcional). Un modelo que aprueba solo las propuestas claramente factuales, por encima de un umbral de confianza, y deja lo dudoso a una persona. Sin decisor, cada propuesta espera a que la revise un curador. **Sáltalo** la primera vez: aprobarás a mano en el paso 5 de esta guía.
+6. **Tu primer brain.** Una memoria separada, con su propio grafo, sus miembros y sus tokens: por ejemplo, una por equipo o por proyecto. Escribe un nombre («Mis notas»); el asistente enseña el identificador que usará en las direcciones, el **slug** («Su identificador será «mis-notas»»). Si adoptaste un grafo en el paso 2, elígelo en **Usar un brain que ya existe**. Si se adoptó de solo lectura, tu agente podrá consultarlo, pero no proponer nada en él.
+7. **Token de API.** Tu agente se identifica con un **token**: un secreto largo que empieza por `mst_` y da a un agente acceso a un brain. Ponle un nombre para reconocerlo después (el agente o el equipo que lo usa). El token tiene el rol **Colaborador**, así que el agente lee la memoria y propone hechos nuevos, que esperan a que alguien los apruebe, y vale 90 días. Solo se muestra una vez, pero no hace falta copiarlo: el paso siguiente ya lo pone en lo que copies.
+   <!-- captura: asistente, token de API creado -->
+8. **Conecta tu agente.** El panel **Conectar un agente**, que se explica en la sección siguiente de esta guía. El paso se pone en verde cuando tu agente hace su primera llamada. **Terminar** te lleva al inicio; si prefieres conectar el agente más tarde, pulsa **Terminar** igualmente y encontrarás el panel en **Administración → Brain → Conectar un agente**.
 
-Un administrador puede volver a abrir el asistente más tarde desde **Administración**. Con el primer brain creado, un **recorrido guiado** de ocho pasos enseña el menú, el selector de brain, las propuestas, el grafo, Preguntar y la administración. Escape o **Saltar recorrido** lo cierra; el **menú de ayuda** (la interrogación al pie de la barra lateral) lo vuelve a poner.
+**Configurar a mano**, arriba del asistente, lo cierra del todo: a partir de ahí lo configuras tú en Administración. El botón **Asistente de configuración**, arriba en **Administración**, lo vuelve a abrir.
+
+Al terminar el asistente, un **recorrido guiado** de ocho pasos enseña el menú, el selector de brain, las propuestas, el grafo, Preguntar y la administración. Escape o **Saltar recorrido** lo cierra; el **menú de ayuda** (la interrogación al pie de la barra lateral) lo vuelve a poner.
 
 ![El primer paso del recorrido guiado](images/first-15-minutes/es/tour.png)
 
@@ -120,7 +123,7 @@ Ya está: tu agente tiene memoria. En la pantalla de inicio, la lista **Para emp
 | El instalador dice que Docker no está instalado o no está en marcha | [Docker no está en marcha](Soluci%C3%B3n-de-problemas#docker-no-est%C3%A1-en-marcha) |
 | La prueba de embeddings o del LLM falla con «conexión rechazada» o tiempo agotado, con Ollama | [El contenedor no llega a Ollama](Soluci%C3%B3n-de-problemas#el-contenedor-no-llega-a-ollama) |
 | Falla la prueba de la base de datos del grafo | [Errores de conexión al grafo](Soluci%C3%B3n-de-problemas#errores-de-conexi%C3%B3n-al-grafo) |
-| «el índice de texto es de 768 dimensiones y este modelo da …» | [La dimensión de los embeddings no coincide](Soluci%C3%B3n-de-problemas#la-dimensi%C3%B3n-de-los-embeddings-no-coincide) |
+| «… da 1536 dimensiones y el índice es de 768», o «el índice de texto es de 768 dimensiones y este modelo da …» | [La dimensión de los embeddings no coincide](Soluci%C3%B3n-de-problemas#la-dimensi%C3%B3n-de-los-embeddings-no-coincide) |
 | El panel nunca se pone en verde | [Agentes](Soluci%C3%B3n-de-problemas#agentes): casi siempre un token o una dirección mal puestos en la configuración del agente |
 | La propuesta está aprobada pero no aparecen hechos | No hay LLM configurado, o el modelo es demasiado pequeño: [Memoria](Soluci%C3%B3n-de-problemas#memoria) |
 

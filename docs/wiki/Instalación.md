@@ -109,14 +109,14 @@ curl -s http://localhost:8000/api/health   # {"ok":true,"db":true,"graph":true,.
 ```
 
 ## Primer arranque
-Una instancia sin administradores muestra el **asistente de configuración** en la web e imprime un **código de inicio** en su registro. El instalador te lo muestra; tras una instalación manual:
+Una instancia sin administradores pide un **código de inicio** en la web y lo imprime en su registro. El instalador te lo muestra; tras una instalación manual:
 ```bash
 docker compose logs mimirsynth | grep -A3 "PRIMER ARRANQUE"
 ```
 El código solo existe mientras no haya ningún administrador (si lo pierdes, reinicia el contenedor para generar otro).
 
-<!-- TODO(#361): escrito a partir del alcance del asistente v2; confirmar cuando se fusione #361. -->
-El asistente va de la cuenta de administrador al primer recall, un paso por pantalla, y retoma donde lo dejaste: **cuenta de administrador** (el código y después una contraseña cuyas reglas el formulario marca mientras escribes) → **base de datos del grafo** (la prueba de conexión tiene que pasar) → **embeddings** (la prueba tiene que pasar) → **LLM** (se puede saltar, con un aviso en la pantalla de inicio) → **decisor** (opcional) → **primer brain** → **token** → **conecta tu agente**. Cada paso se explica en [[Tus primeros 15 minutos]]. Un administrador puede volver a abrirlo desde Administración.
+<!-- TODO(#361): contrastado con el código del asistente; comparar con el PR de #361 cuando se fusione. -->
+Pégalo y crea la cuenta de administrador (el formulario marca cada regla de la contraseña mientras escribes). Después se abre la **Configuración inicial** en `/configuracion`, que sigue hasta el primer recall, un paso por pantalla, y retoma donde lo dejaste: **tu cuenta** → **base de datos del grafo** (la prueba de conexión tiene que pasar) → **embeddings** (el motor tiene que responder con la dimensión del índice) → **modelo LLM** (se puede saltar, con un recordatorio en el inicio) → **decisor** (opcional) → **tu primer brain** → **token de API** (Colaborador, 90 días) → **conecta tu agente**. Cada paso se explica en [[Tus primeros 15 minutos]]. **Configurar a mano** lo cierra; el botón **Asistente de configuración**, arriba en Administración, lo vuelve a abrir. Mientras no haya ningún brain y el asistente esté cerrado, un administrador llega a **Primeros pasos**, con un botón **Crea tu primer brain** y enlaces a cada pantalla.
 
 Cualquier otra persona sin brain ve «No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.»
 
