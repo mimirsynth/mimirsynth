@@ -19,7 +19,7 @@ irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps
 ```
 What it does, in order:
 1. **Checks Docker and Compose v2.** On Linux, if Docker is missing, it offers to install it with Docker's official script (`get.docker.com`, needs `sudo`). On macOS and Windows it points you to Docker Desktop, and starts it if it is installed but not running; on Windows, Docker Desktop needs WSL2 (`wsl --install` in a PowerShell opened as administrator).
-2. **Asks where your knowledge graph lives.** *Local* (the default) starts a bundled FalkorDB next to MimirSynth. *Existing* asks for the type (FalkorDB or Neo4j), host, port, user and password of a server you already run, and checks that it answers before going on. A server on the same computer (`localhost`) is reached from the container as `host.docker.internal`; on Linux it must listen on an address the containers reach, not only on `127.0.0.1`. The full connection test (credentials, version, permissions) happens in the setup wizard.
+2. **Asks where your knowledge graph lives.** *Local* (the default) starts a bundled FalkorDB next to MimirSynth. *Existing* asks for the type (FalkorDB or Neo4j), host, port, user and password of a server you already run, and checks that it answers. Before starting anything it then runs the full connection test, the same one as Administration → Graph database (address, TLS, credentials, version, write permission and the graphs it already holds), from a MimirSynth container, so it reaches the server as MimirSynth will. If the test fails, it says which step and why and asks again; without questions it stops and leaves nothing installed. A Neo4j that asks for TLS, such as Neo4j Aura, needs `--graph-tls`. A server on the same computer (`localhost`) is reached from the container as `host.docker.internal`; on Linux it must listen on an address the containers reach, not only on `127.0.0.1`. The connection goes into `.env`, which wins over the interface: Administration → Graph database shows it read-only, and it changes in `.env` with a restart.
 3. **Offers a bundled Ollama** for embeddings (the `ollama` profile) and downloads `nomic-embed-text`. The image is a download of about 3.5 GB and runs on the CPU; if Ollama already runs on the computer, the installer uses it instead. On a Mac with Apple silicon, the native Ollama app is faster: it uses the GPU.
 4. **Writes `docker-compose.yml` and `.env`** in `~/mimirsynth` (`%USERPROFILE%\mimirsynth` on Windows), with a random `POSTGRES_PASSWORD` and `MIMIRSYNTH_SESSION_SECRET`, the release version pinned in `MIMIRSYNTH_VERSION`, a free port (8000, or the next one) and the chosen profiles in `COMPOSE_PROFILES`, so a plain `docker compose up -d` in that folder starts the same services later.
 5. **Starts the stack**, waits until `/api/health` answers, prints the address and the **first-start code**, and opens the browser.
@@ -32,13 +32,13 @@ Every answer has a flag, for scripts and automation (`--help` lists them). With 
 curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash -s -- --yes --ollama
 MIMIRSYNTH_GRAPH_PASSWORD='…' ./install.sh --yes --graph existing --graph-type neo4j --graph-host graph.example.com
 ```
-In PowerShell the parameters have the same names (`-Yes`, `-Ollama`, `-Graph existing`, `-GraphType`, `-GraphHost`, `-GraphPort`, `-GraphUser`, `-Dir`, `-Port`, `-Version`, `-Lang`, `-NoBrowser`, `-NoStart`):
+In PowerShell the parameters have the same names (`-Yes`, `-Ollama`, `-Graph existing`, `-GraphType`, `-GraphHost`, `-GraphPort`, `-GraphUser`, `-GraphDatabase`, `-GraphTls`, `-SkipGraphCheck`, `-Dir`, `-Port`, `-Version`, `-Lang`, `-NoBrowser`, `-NoStart`):
 ```powershell
 & ([scriptblock]::Create((irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps1))) -Yes -Ollama
 ```
 The password of an existing graph database is read from `MIMIRSYNTH_GRAPH_PASSWORD`, never from the command line, so it does not stay in the shell history. Messages are in English or Spanish, following the system language (`--lang es`); the instance's default language follows them.
 
-Neo4j needs a MimirSynth version with Neo4j support. Until then, the installer writes the connection to `.env` but the instance only talks to FalkorDB.
+Neo4j needs a release after 0.14.0. With an older one the installer cannot run the full test before the start (it says so and only checks that the server answers), writes the connection to `.env`, and the instance only talks to FalkorDB.
 
 ### Checking the download
 Each release lists the SHA-256 of its assets in its notes and in `SHA256SUMS`. To check the installer before running it:
@@ -166,7 +166,7 @@ Building from source is for contributors: see [CONTRIBUTING.md](../CONTRIBUTING.
 ## Common problems
 - **"define POSTGRES_PASSWORD" or "define MIMIRSYNTH_SESSION_SECRET" on start:** they are missing from `.env`.
 - **The installer says Docker needs `sudo`:** your user was just added to the `docker` group, which takes effect at the next login. The installer uses `sudo` meanwhile; log out and in again to run `docker` without it.
-- **The installer stops at «nothing answers» for an existing graph database:** check the host, the port and the firewall from that computer. To write the configuration anyway, answer that you want to continue, or add `--skip-graph-check`.
+- **The installer stops at «nothing answers» or «the connection test failed» for an existing graph database:** the message names the step that failed (address, TLS, credentials, version or write permission). Check the host, the port and the firewall from that computer, and the user and password. To install anyway, answer that you want to continue, or add `--skip-graph-check`: the instance then starts with that connection, and the setup wizard's graph step waits until it passes, after you fix it in `.env` and run `docker compose up -d`.
 - **Approved proposals stay "approved":** no LLM is configured. Add an engine under Administration → LLM model.
 - **Embeddings fail with a connection error, with Ollama on the same Linux host:** Ollama is only listening on `127.0.0.1`; see [Preparing Ollama](#preparing-ollama). If you use your own `docker-compose.yml`, check that the `mimirsynth` service has `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **Recall returns nothing:** check the embeddings (Administration → Embeddings → Test) and that the text index is synchronised (the Ask tab shows its status).
