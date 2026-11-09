@@ -1,6 +1,6 @@
 {
   "name": "@mimirsynth/openclaw",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MimirSynth for OpenClaw: recall before each prompt, what changed at session start, search and remember, and an optional, quarantined capture of each session.",
   "license": "Apache-2.0",
   "homepage": "https://github.com/mimirsynth/mimirsynth/tree/main/integrations/openclaw",

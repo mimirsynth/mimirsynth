@@ -1,6 +1,6 @@
 {
   "name": "@mimirsynth/opencode",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MimirSynth memory for OpenCode: recall before every prompt, what changed at session start, commands to set up, check, search and remember, the brain's MCP server, and an optional, quarantined capture of what each session learned.",
   "license": "Apache-2.0",
   "type": "module",

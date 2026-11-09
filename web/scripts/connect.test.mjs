@@ -37,7 +37,7 @@ test("each plugin's install is the one its README and the wiki give", () => {
   assert.equal(block("codex", "install"), "codex plugin marketplace add mimirsynth/mimirsynth && codex plugin add mimirsynth@mimirsynth");
   assert.equal(block("opencode", "install"), "opencode plugin @mimirsynth/opencode --global");
   assert.equal(block("hermes", "install"), "hermes plugins install mimirsynth/mimirsynth/integrations/hermes-agent/plugin && hermes memory setup mimirsynth");
-  assert.equal(block("openclaw", "install"), "openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup");
+  assert.equal(block("openclaw", "install"), "openclaw plugins install npm:@mimirsynth/openclaw && openclaw mimirsynth setup");
 });
 
 test("Claude Code and Codex can also add the brain's MCP server from the command line", () => {

@@ -27,10 +27,10 @@ Es un **plugin acompañante**: no ocupa la ranura exclusiva de memoria de OpenCl
 En la máquina donde corre el Gateway de OpenClaw (OpenClaw 2026.9.36 o posterior):
 
 ```bash
-openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup
+openclaw plugins install npm:@mimirsynth/openclaw && openclaw mimirsynth setup
 ```
 
-OpenClaw muestra las capacidades del plugin (dos herramientas, sus hooks, un comando de CLI, una skill) y pide que las aceptes. Después `setup` pide:
+El plugin está en npm, no en ClawHub; de ahí el prefijo `npm:`. OpenClaw avisa de que la fuente queda fuera de la revisión de ClawHub y pide que lo confirmes; después muestra las capacidades del plugin (dos herramientas, sus hooks, un comando de CLI, una skill) y pide que las aceptes. Después `setup` pide:
 - la URL de MimirSynth y el slug del cerebro;
 - un token **lector** para el recall (Mi cuenta → Tokens de API, permiso Recall);
 - opcionalmente un token **colaborador** para proponer. La captura nunca envía con un token de curador, porque sus propuestas se saltarían la cuarentena;
@@ -39,10 +39,10 @@ OpenClaw muestra las capacidades del plugin (dos herramientas, sus hooks, un com
 
 Compruébalo con `openclaw mimirsynth status`, o `/mimirsynth status` en un chat. Las mismas claves pueden venir de variables de entorno `MIMIRSYNTH_*` (ganan al fichero), y una entrada de `projects` puede dar a uno de los workspaces de OpenClaw otro cerebro con sus propios tokens: ver [`docs/es/AGENT_CLIENT.md`](../../docs/es/AGENT_CLIENT.md). El fichero lo comparten todas las integraciones de agentes de MimirSynth de esa máquina, así que un solo `setup` sirve para todas.
 
-**Antes de que esté publicado** (o para probar un cambio), instálalo desde un clon: `npm pack` construye `dist/` y el paquete, y OpenClaw instala el archivo.
+**Para probar un cambio**, instálalo desde un clon: `npm pack` construye `dist/` y el paquete, y OpenClaw instala el archivo.
 
 ```bash
-cd integrations/openclaw && npm ci && npm pack && openclaw plugins install npm-pack:./mimirsynth-openclaw-0.1.0.tgz
+cd integrations/openclaw && npm ci && openclaw plugins install "npm-pack:./$(npm pack | tail -1)"
 ```
 
 ## Quién ve el cerebro
@@ -87,4 +87,4 @@ Cada llamada tiene el tiempo de espera configurado y cada hook lo captura todo: 
 
 El plugin se apoya en la biblioteca cliente compartida ([`integrations/shared/typescript`](../shared/typescript)), que `npm run build` empaqueta en `dist/index.js` (esbuild), así que el paquete no tiene dependencias en tiempo de ejecución ni importa nada de OpenClaw. `npm run check` comprueba los tipos. La CI (`.github/workflows/plugin-openclaw.yml`) además instala el plugin empaquetado en un OpenClaw real y comprueba lo que registra.
 
-**Publicar:** cualquier cambio aquí, o en la biblioteca TypeScript compartida que empaqueta, sube `version` en `package.json`; si no, falla la comprobación `plugin-version`. Publicar necesita el ámbito de npm `@mimirsynth` y una cuenta de ClawHub: `npm publish --access public` desde esta carpeta y luego `clawhub package publish` (ver la [documentación de publicación de plugins](https://docs.openclaw.ai/plugins/building-plugins) de OpenClaw).
+**Publicar:** cualquier cambio aquí, o en la biblioteca TypeScript compartida que empaqueta, sube `version` en `package.json`; si no, falla la comprobación `plugin-version`. Cada release de MimirSynth publica en npm la versión que npm aún no tiene, con procedencia (el job `npm` de `.github/workflows/release.yml`); nadie lanza `npm publish` a mano. No se publica en ClawHub.
