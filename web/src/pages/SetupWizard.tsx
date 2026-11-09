@@ -33,9 +33,9 @@ const INTRO: Record<StepKey, string> = {
   decider: T("Un decisor aprueba solo, con un umbral de confianza, las propuestas claramente factuales; lo dudoso sigue esperando a una persona. Es opcional."),
   brain: T("Un brain es una memoria separada, con su propio grafo, sus miembros y sus tokens: por ejemplo, una por equipo o por proyecto."),
   token: T("Tu agente se identifica con un token. Con el rol Colaborador lee la memoria y propone hechos nuevos, que esperan a que alguien los apruebe."),
-  agent: T("Elige tu agente y copia lo que necesita. El paso se pone en verde cuando el agente hace su primera llamada; después puedes probar qué recibiría."),
+  agent: T("Elige tu agente y copia lo que necesita. El paso se pone en verde cuando el agente hace su primer recall. En cuanto el agente llama, el panel te deja probar qué recibiría."),
 };
-const STATUS: Record<string, string> = { done: T("hecho"), skipped: T("saltado") };
+const STATUS: Record<string, string> = { done: T("completado"), skipped: T("saltado") };
 
 /** The setup wizard (issue 361): a guided first run, from the administrator's account to the agent's first recall. Each step is kept on the
  *  server as it is passed, so closing the browser resumes on the same step; the graph and embedding steps are checked by the server and
@@ -234,7 +234,7 @@ function AgentStep({ w, secret }: { w: Wizard; secret: string }) {
   return (
     <Stack gap="sm">
       {w.agent_connected ? <Notice tone="success" title={t("Tu agente ya ha hecho su primer recall")}>{t("La memoria está lista. Pulsa «Terminar» para ir al inicio.")}</Notice>
-        : <Text size="sm" c="dimmed" className="ms-measure">{t("Cuando tu agente haga su primera llamada, este paso se pondrá en verde. Si prefieres conectarlo más tarde, pulsa «Terminar»: lo tienes en Administración → Conectar un agente.")}</Text>}
+        : <Text size="sm" c="dimmed" className="ms-measure">{t("Cuando tu agente haga su primer recall, este paso se pondrá en verde. Si prefieres conectarlo más tarde, pulsa «Terminar»: lo tienes en Administración → Conectar un agente.")}</Text>}
       <ConnectAgent brain={b} token={w.token_id ? { id: w.token_id, secret: secret || undefined } : undefined} />
     </Stack>
   );

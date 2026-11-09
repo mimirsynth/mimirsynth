@@ -52,7 +52,7 @@ export function GraphTestResult({ r }: { r: TestResult }) {
       </Notice>
       <Steps label={t("Prueba de la conexión")}>
         {r.steps.map((s) => (
-          <Step key={s.step} title={`${t(STEP[s.step] ?? s.step)} · ${s.ok ? t("bien") : t("falla")}`} tone={tone(s.ok)}>
+          <Step key={s.step} title={`${t(STEP[s.step] ?? s.step)} · ${s.ok ? t("pasa") : t("falla")}`} tone={tone(s.ok)}>
             <Text size="xs" c="dimmed">{s.step === "version" && s.ok && v ? `${v.server} ${v.version ?? t("(versión no disponible)")}${v.edition ? ` · ${v.edition}` : ""}${v.database ? ` · ${t("base de datos «{{database}}»", { database: v.database })}` : ""} · ` : ""}{t("{{ms}} ms", { ms: s.ms })}</Text>
           </Step>))}
       </Steps>
