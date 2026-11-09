@@ -218,7 +218,7 @@ def test_ingest_failure_notice_has_no_memory_content(client, monkeypatch):  # no
     """Un aviso de ingesta fallida lleva el título de la propuesta y el error, nunca el texto de la memoria."""
     from mimirsynth import ingest
     from mimirsynth.models import Brain, Proposal
-    client.post("/api/brains", json={"slug": "ing", "name": "Ing"})
+    client.post("/api/brains", json={"slug": "ing", "name": "Ing", "graph_name": "ing"})  # an earlier test may leave the graph «ing» (#359)
     async def boom(*a, **k):
         raise RuntimeError("el modelo respondió 500")
     monkeypatch.setattr(ingest, "add_episode", boom)

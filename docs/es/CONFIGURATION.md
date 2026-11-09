@@ -61,6 +61,13 @@ Con FalkorDB cada brain es un grafo propio, y una consulta no puede llegar a otr
 - **Qué exige a la base de datos.** Una base de datos solo para MimirSynth o, al menos, una en la que ninguna otra aplicación escriba relaciones entre nodos de `group_id` distintos. MimirSynth no necesita ningún plugin: no usa APOC y la consola no llega a él, así que no hay motivo para instalarlo por MimirSynth. Quien llegue a la base de datos en sí (Neo4j Browser, `cypher-shell`, las credenciales de `.env`) ve todos los brains: da ese acceso solo a quien administre la instancia.
 - **Límites.** Con Neo4j, el aislamiento es una reescritura del Cypher, revisada y probada en la CI con una batería de consultas de un lector de un brain contra los datos de otro, no una frontera que imponga la base de datos. Donde los brains deban separarse con una garantía firme, usa FalkorDB, o una instancia (y una base de datos) por cada grupo de personas. Una base de datos por brain con Neo4j Enterprise es una opción posible más adelante.
 
+### Adoptar los grafos que ya hay
+Si la base de datos ya tiene datos de Graphiti (tuyos o de otra herramienta), **Administración → Base de datos del grafo → Grafos de la base de datos** lista cada grafo (FalkorDB) o `group_id` (Neo4j) con sus entidades, aristas y episodios, la dimensión de sus vectores y el brain del que es, si lo es. Cualquier grafo que no sea de ningún brain se puede adoptar como brain, tal cual:
+- **Completo:** se consulta y aprende (propuestas, ingesta, curación). Sus vectores deben tener la dimensión del motor de embeddings por defecto, porque el recall los compara con los de la pregunta.
+- **Solo lectura:** se consulta (recall, hechos, línea temporal, entidades), pero nada lo escribe: ni propuestas, ni ingesta, ni curación, y un cambio de modelo de embeddings deja sus vectores como están. La propia base de datos rechaza cualquier escritura en él, venga de donde venga. Un administrador puede pasarlo de un modo a otro desde la misma lista; completo exige vectores compatibles.
+
+Un grafo que no adoptes no se toca nunca. Un brain nuevo nunca cae sobre un grafo que no es de nadie: crear un brain cuyo slug coincide con uno de esos grafos se rechaza, y el mensaje remite a adoptarlo.
+
 ## Proveedores de IA
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
 - **Modelo LLM:** extrae entidades y hechos al ingerir propuestas. Para modelos que «razonan» y devuelven JSON vacío, usa un proxy que desactive el *thinking*.

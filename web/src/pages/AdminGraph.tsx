@@ -4,6 +4,7 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { fmt, fmtNum, get, send } from "../api";
+import ExistingGraphs from "./AdminGraphAdopt";
 import { Btn, DataState, DataTable, Modal, MutationError, Notice, NumberField, PasswordField, Pill, Radio, RadioGroup, SettingsBody, SettingsGroup, Sheet, SheetRow, Step, Steps, TextField, Toggle, type Tone } from "../ui";
 
 type Backend = "falkordb" | "neo4j";
@@ -133,7 +134,7 @@ export default function AdminGraph() {
   const check = useMutation({ mutationFn: () => send<TestResult>("POST", "admin/graph/test") });
   const c = q.data;
   const sourceTone: Tone = c?.source === "env" ? "neutral" : c?.source === "db" ? "success" : "alt";
-  return (
+  return (<>
     <SettingsGroup title={t("Base de datos del grafo")}
       description={t("Dónde guardan los brains sus entidades, hechos y episodios: el FalkorDB incluido, o un FalkorDB o Neo4j que ya tengas.")}
       action={c?.editable && <Btn kind="primary" icon="edit" onClick={() => { setSaved(null); setEditing(true); }}>{t("Cambiar")}</Btn>}>
@@ -163,5 +164,6 @@ export default function AdminGraph() {
           onSaved={(s) => { setEditing(false); setSaved(s); check.reset(); qc.setQueryData(["admin-graph"], s); qc.invalidateQueries({ queryKey: ["ai-status"] }); if (s.changed) qc.invalidateQueries(); }} />}
       </SettingsBody>
     </SettingsGroup>
-  );
+    {c && <ExistingGraphs key={c.address} />}
+  </>);
 }

@@ -1,11 +1,57 @@
 from datetime import datetime, timezone
 
 from .config import settings
-from .graphdb import backend
+from .graphdb import ReadOnlyGraph, backend
+
+_read_only: set[str] | None = None  # the graphs of the read-only brains (#359), read once and dropped when a brain changes
+
+
+def read_only_graphs() -> set[str]:
+    global _read_only
+    if _read_only is None:
+        from sqlalchemy import select
+
+        from .models import Brain
+        from .store import _factory
+        try:
+            with _factory()() as db:
+                _read_only = set(db.scalars(select(Brain.graph_name).where(Brain.read_only.is_(True))))
+        except Exception:  # noqa: BLE001  (the control database not ready: nothing is known to be read-only yet, and it is asked again)
+            return set()
+    return _read_only
+
+
+def forget_read_only() -> None:
+    global _read_only
+    _read_only = None
+
+
+def _watch_brains() -> None:
+    """Any session that commits a change to a brain (created, adopted, made read-only or full, renamed, deleted) drops the list."""
+    from sqlalchemy import event
+    from sqlalchemy.orm import Session
+
+    def after_flush(session, _ctx):
+        from .models import Brain
+        if any(isinstance(o, Brain) for o in (*session.new, *session.dirty, *session.deleted)):
+            session.info["brains_changed"] = True
+
+    def after_commit(session):
+        if session.info.pop("brains_changed", False):
+            forget_read_only()
+
+    event.listen(Session, "after_flush", after_flush)
+    event.listen(Session, "after_commit", after_commit)
+
+
+_watch_brains()
 
 
 def graph(name: str | None = None):
-    return backend().graph(name or settings.default_graph)
+    name = name or settings.default_graph
+    b = backend()
+    g = b.graph(name)
+    return ReadOnlyGraph(g, name, b) if name in read_only_graphs() else g
 
 
 def list_graphs() -> list[str]:

@@ -158,6 +158,43 @@ class GraphBackend(ABC):
     def close(self) -> None:
         """Lets go of the driver's connections; the backend is not used after this."""
 
+    def refuses_write(self, e: Exception) -> bool:
+        """Whether `e` is the database refusing a write in a read-only query (`ro_query`)."""
+        return False
+
+
+class ReadOnlyError(PermissionError):
+    """A write reached the graph of a read-only brain (#359). The database itself refused it: `ReadOnlyGraph` runs every query as
+    read-only."""
+
+    def __init__(self, graph: str):
+        super().__init__(f"the graph {graph!r} belongs to a read-only brain")
+        self.graph = graph
+
+
+class ReadOnlyGraph:
+    """The handle of a read-only brain's graph: `query` runs as `ro_query`, so the database refuses any write in it, and that refusal
+    becomes `ReadOnlyError`. Whatever a module writes, through whichever path, cannot change an adopted read-only graph."""
+
+    def __init__(self, inner: Graph, name: str, owner: GraphBackend):
+        self._inner, self._name, self._owner = inner, name, owner
+
+    def query(self, q: str, params: dict | None = None, timeout: int | None = None) -> Result:
+        try:
+            return self._inner.ro_query(q, params, timeout)
+        except Exception as e:
+            if self._owner.refuses_write(e):
+                raise ReadOnlyError(self._name) from None
+            raise
+
+    def ro_query(self, q: str, params: dict | None = None, timeout: int | None = None) -> Result:
+        return self._inner.ro_query(q, params, timeout)
+
+    def __getattr__(self, name: str):
+        if name in ("delete", "copy"):  # FalkorDB's graph-level writes
+            raise ReadOnlyError(self._name)
+        return getattr(self._inner, name)
+
 
 def make(conn: Connection) -> GraphBackend:
     """The backend for a connection, without connecting yet."""

@@ -23,6 +23,14 @@ def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def read_only_error() -> HTTPException:
+    """What a write to a read-only brain gets (#359). A function, so the text is a literal the i18n extractor finds."""
+    return HTTPException(409, "este brain es de solo lectura: se puede consultar, pero nada lo escribe. Un administrador de la instancia "
+                              "puede pasarlo a completo en Administración → Base de datos del grafo")
+
+
+READ_ONLY = read_only_error().detail
+
 SCOPES = ("recall", "documents", "propose")  # what an API token may do, on top of its role (#133); a token without a list has all
 
 
@@ -148,6 +156,8 @@ def brain_access(minimum: str):
                 raise HTTPException(403, f"este token no tiene el alcance «{need}»")
         if not allows(role, minimum):
             raise HTTPException(403, f"requiere rol {minimum} o superior")
+        if brain.read_only and minimum in ("contributor", "curator") and request.method not in ("GET", "HEAD"):
+            raise read_only_error()  # an adopted read-only brain is never written (#359)
         request.state.brain_id = brain.id  # a write that succeeds drops the «needs your attention» counters of the brain (attention.py)
         return BrainCtx(brain, user, role, db, tok)
 

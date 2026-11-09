@@ -287,7 +287,7 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
                 {cur ? (
                   <Group justify="space-between" wrap="nowrap">
                     <Stack gap={2}>
-                      <Group gap="xs"><Title order={3}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill></Group>
+                      <Group gap="xs"><Title order={3}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill>{cur.read_only && <Pill size="xs" tone="warn">{t("solo lectura")}</Pill>}</Group>
                       <Text size="xs" c="dimmed" className="ms-data">{cur.slug} {t("· grafo")} {cur.graph_name}</Text>
                     </Stack>
                     <Group gap={6}>

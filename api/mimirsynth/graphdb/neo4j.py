@@ -524,6 +524,9 @@ class Neo4jBackend(GraphBackend):
         if "driver" in self.__dict__:
             self.driver.close()
 
+    def refuses_write(self, e: Exception) -> bool:
+        return getattr(e, "code", "") == "Neo.ClientError.Statement.AccessMode"
+
     def version(self) -> dict:
         try:
             rows = self._run("CALL dbms.components() YIELD name, versions, edition RETURN name, versions, edition", read=True)

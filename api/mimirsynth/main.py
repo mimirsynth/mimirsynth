@@ -16,7 +16,7 @@ from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_provider
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn
 from .config import settings
 from .db import list_graphs
-from .graphdb import backend
+from .graphdb import ReadOnlyError, backend
 from .models import Brain, User
 from .secretbox import SealedSecretError
 from .store import _factory, engine, init_db
@@ -121,6 +121,14 @@ async def sealed_secret_error(request, exc: SealedSecretError):
     return JSONResponse({"detail": i18n.tr("No se puede leer un secreto guardado: la clave secreta de la instancia (MIMIRSYNTH_SESSION_SECRET) "
                                            "no es la que lo cifró. Un administrador tiene los detalles en Administración.", i18n.language(request))},
                         status_code=503)
+
+
+@app.exception_handler(ReadOnlyError)
+async def read_only_brain(request, exc: ReadOnlyError):
+    """A write that reached a read-only brain's graph by a path that did not check it first: the database refused it (#359)."""
+    from .deps import READ_ONLY
+    logging.getLogger("mimirsynth").warning("%s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse({"detail": i18n.translate(READ_ONLY, i18n.language(request))}, status_code=409)
 
 
 app.add_middleware(

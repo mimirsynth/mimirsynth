@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from . import auth, i18n, ratelimit
 from .config import settings
 from .deps import audit, current_user, require_admin
-from .graphdb import BACKENDS, DEFAULT_PORTS, Connection, reload
+from .graphdb import BACKENDS, DEFAULT_PORTS, Connection, backend, reload
 from .graphdb.probe import PROBE_PREFIX, Unsupported, cause, opener  # noqa: F401  (PROBE_PREFIX: for the tests)
 from .models import Brain, GraphConnection, User, now
 from .secretbox import seal, unseal
@@ -300,3 +300,118 @@ def save_connection(body: ConnIn, request: Request, user: User = Depends(require
     audit(db, user, "graph.connection", backend=conn.backend, address=conn.address(), database=conn.database or None, moved=changed)
     reload()
     return {**describe(db), "changed": changed, "test": _with_brains(result, db)}
+
+
+# --- existing graphs: what the database holds, and adopting them as brains (#359) -----------------------
+
+def _engine_dim() -> int:
+    from .embed import resolve_embedding
+    return int(resolve_embedding()["dim"])
+
+
+def _first(g, q: str):
+    rows = g.ro_query(q).result_set
+    return rows[0][0] if rows else None
+
+
+def _partition(name: str) -> dict:
+    """What one graph (FalkorDB) or group_id (Neo4j) holds, read-only: its counts, whether Graphiti wrote it, the dimension of its
+    vectors (one sample) and the group_ids inside it, which on FalkorDB may differ from the graph's name."""
+    g = backend().graph(name)
+    out = {"name": name}
+    for k, q in (("nodes", "MATCH (n) RETURN count(n)"), ("edges", "MATCH ()-[r]->() RETURN count(r)"),
+                 ("entities", "MATCH (n:Entity) RETURN count(n)"), ("episodes", "MATCH (n:Episodic) RETURN count(n)")):
+        out[k] = int(_first(g, q) or 0)
+    vec = (_first(g, "MATCH (n:Entity) WHERE n.name_embedding IS NOT NULL RETURN n.name_embedding LIMIT 1")
+           or _first(g, "MATCH ()-[r:RELATES_TO]->() WHERE r.fact_embedding IS NOT NULL RETURN r.fact_embedding LIMIT 1"))
+    out["dim"] = len(vec) if isinstance(vec, (list, tuple)) else None
+    out["graphiti"] = out["entities"] + out["episodes"] > 0
+    out["group_ids"] = sorted(str(r[0]) for r in g.ro_query("MATCH (n) WHERE n.group_id IS NOT NULL RETURN DISTINCT n.group_id LIMIT 6").result_set)
+    return out
+
+
+def inventory(db: Session) -> dict:
+    """Every graph the database in use holds, the hidden ones left out, with what each one is and whether it can be adopted."""
+    from .brains import GRAPH
+    taken = {g: (s, ro) for s, g, ro in db.execute(select(Brain.slug, Brain.graph_name, Brain.read_only))}
+    dim = _engine_dim()
+    names = sorted(n for n in backend().list_graphs() if not n.startswith("_"))
+    graphs = []
+    for n in names[:MAX_LISTED]:
+        try:
+            p = _partition(n)
+        except Exception as e:  # noqa: BLE001  (one graph that does not answer does not hide the others)
+            log.warning("could not read the graph %s", n, exc_info=True)
+            p = {"name": n, "error": str(e)[:200]}
+        slug, ro = taken.get(n, (None, False))
+        p.update(brain=slug, read_only=bool(ro) if slug else None, valid_name=bool(GRAPH.match(n)),
+                 dim_ok=p.get("dim") in (None, dim))
+        graphs.append(p)
+    return {"backend": backend().name, "engine_dim": dim, "graphs": graphs, "truncated": len(names) > MAX_LISTED}
+
+
+class AdoptIn(BaseModel):
+    graph: str = Field(min_length=1, max_length=255)
+    slug: str
+    name: str = Field(min_length=1, max_length=255)
+    description: str = Field("", max_length=4000)
+    read_only: bool = False
+
+
+def _check_full(graph: str) -> None:
+    """A full brain is searched with the default embedding engine: its vectors must have that dimension."""
+    dim, have = _engine_dim(), _partition(graph)["dim"]
+    if have is not None and have != dim:
+        raise HTTPException(409, f"sus vectores tienen {have} dimensiones y el motor de embeddings por defecto, {dim}: adóptalo de solo "
+                                 "lectura, o cambia antes el motor por uno de esa dimensión")
+
+
+@router.get("/inventory")
+def get_inventory(_: User = Depends(require_admin), db: Session = Depends(get_db)):
+    return inventory(db)
+
+
+@router.post("/adopt", status_code=201)
+def adopt(body: AdoptIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """A graph already in the database becomes a brain, as it is: nothing in it is changed, and nothing else in the database is touched."""
+    from .brains import GRAPH, SLUG, _brain_out
+    graph = body.graph
+    if graph.startswith("_") or not backend().exists(graph):
+        raise HTTPException(404, f"la base de datos no tiene un grafo «{graph}»")
+    if not GRAPH.match(graph):
+        raise HTTPException(409, f"MimirSynth no puede usar un grafo llamado «{graph}» (letras, números, - y _, de 2 a 64)")
+    if db.scalar(select(Brain).where(Brain.graph_name == graph)):
+        raise HTTPException(409, f"el grafo «{graph}» ya es de un brain")
+    if not SLUG.match(body.slug):
+        raise HTTPException(400, "slug inválido (minúsculas, números y guiones, 2-41 caracteres)")
+    if db.scalar(select(Brain).where(Brain.slug == body.slug)):
+        raise HTTPException(409, "ya existe un brain con ese slug")
+    if not body.read_only:
+        _check_full(graph)
+    b = Brain(slug=body.slug, name=body.name.strip(), description=body.description, graph_name=graph, read_only=body.read_only,
+              created_by=user.id)
+    db.add(b)
+    db.commit()
+    audit(db, user, "brain.adopt", b, slug=b.slug, graph=graph, read_only=body.read_only)
+    return _brain_out(b, "owner")
+
+
+class ModeIn(BaseModel):
+    read_only: bool
+
+
+@router.patch("/brains/{slug}")
+def set_mode(slug: str, body: ModeIn, user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Makes a brain read-only, or full again (which needs its vectors to match the default embedding engine)."""
+    from .brains import _brain_out
+    b = db.scalar(select(Brain).where(Brain.slug == slug))
+    if not b:
+        raise HTTPException(404, "brain no encontrado")
+    if b.read_only == body.read_only:
+        return _brain_out(b, "owner")
+    if not body.read_only and backend().exists(b.graph_name):
+        _check_full(b.graph_name)
+    b.read_only = body.read_only
+    db.commit()
+    audit(db, user, "brain.read_only" if body.read_only else "brain.full", b, slug=b.slug)
+    return _brain_out(b, "owner")

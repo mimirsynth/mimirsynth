@@ -1,0 +1,8 @@
+{
+ "MimirSynth no puede usar un grafo llamado «{{graph}}» (letras, números, - y _, de 2 a 64)": "MimirSynth cannot use a graph named «{{graph}}» (letters, digits, - and _, 2 to 64 characters)",
+ "el grafo «{{graph}}» ya es de un brain": "the graph «{{graph}}» already belongs to a brain",
+ "este brain es de solo lectura: se puede consultar, pero nada lo escribe. Un administrador de la instancia puede pasarlo a completo en Administración → Base de datos del grafo": "this brain is read-only: it can be queried, but nothing writes to it. An instance administrator can make it full in Administration → Graph database",
+ "la base de datos no tiene un grafo «{{graph}}»": "the database has no graph «{{graph}}»",
+ "la base de datos ya tiene un grafo «{{slug}}» que no es de ningún brain: adóptalo en Administración → Base de datos del grafo o elige otro slug": "the database already has a graph «{{slug}}» that is no brain's: adopt it in Administration → Graph database or choose another slug",
+ "sus vectores tienen {{have}} dimensiones y el motor de embeddings por defecto, {{dim}}: adóptalo de solo lectura, o cambia antes el motor por uno de esa dimensión": "its vectors have {{have}} dimensions and the default embedding engine {{dim}}: adopt it read-only, or first switch to an engine with that dimension"
+}
