@@ -43,6 +43,12 @@ def tr(key: str, lang: str, **values) -> str:
     return _PLACEHOLDER.sub(lambda m: str(values.get(m.group(1), m.group(0))), text)
 
 
+def T(text: str) -> str:
+    """Marks a server text kept in a constant for the catalogue (`i18n_extract` collects it) without translating it, like the
+    interface's `T()`: it is translated where it is shown, by `translate` or the interface's `translateServer`."""
+    return text
+
+
 def translate(msg: str, lang: str) -> str:
     """Un mensaje ya formado (el `detail` de un error): coincidencia exacta o con una plantilla del catálogo, como hace la interfaz."""
     if lang == SOURCE or not msg:

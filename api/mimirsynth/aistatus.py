@@ -6,7 +6,7 @@ from functools import partial
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from . import decider as _decider
+from . import llmcheck
 from . import graphconn
 from .config import settings
 from .graphdb import backend
@@ -21,14 +21,9 @@ router = APIRouter(prefix="/api")
 
 
 def _llm_ping(base_url: str, model: str, key: str) -> None:
-    import httpx
-    try:
-        r = httpx.post(f"{base_url.rstrip('/')}/chat/completions", timeout=30, headers={"Authorization": f"Bearer {key}"} if key else {},
-                       json={"model": model, "messages": [{"role": "user", "content": "ok"}], "max_tokens": 4})
-    except Exception as ex:  # noqa: BLE001
-        raise RuntimeError(f"no se pudo contactar con el endpoint: {str(ex)[:150]}")
-    if r.status_code != 200:
-        raise RuntimeError(f"el endpoint respondió HTTP {r.status_code}: {r.text[:150]}")
+    """Not just «does it answer»: does it return the structured output ingestion needs (#420)? Raises RuntimeError when the endpoint
+    does not answer and `llmcheck.StructuredOutputError` when it answers with something ingestion cannot read."""
+    llmcheck.require(base_url, model, key, timeout=90)
 
 
 @router.get("/ai-status")
@@ -60,7 +55,7 @@ def ai_status(check: bool = False, user: User = Depends(current_user), db: Sessi
         else:
             probes.append(("embedding", settings.embedding_model, partial(_probe, settings.embedding_base_url, settings.embedding_model, settings.embedding_api_key)))
         if dec:
-            probes.append(("decider", dec.model, partial(_decider.decide, dec.base_url, dec.model, unseal(dec.api_key_enc), "x", "¿ok?", ["Sí", "No"], timeout=30)))
+            probes.append(("decider", dec.model, partial(llmcheck.require_decider, dec.base_url, dec.model, unseal(dec.api_key_enc), timeout=30)))
         if out["graph"]["configured"]:
             probes.append(("graph", out["graph"]["name"], lambda: backend().list_graphs()))
 
@@ -69,7 +64,7 @@ def ai_status(check: bool = False, user: User = Depends(current_user), db: Sessi
             try:
                 fn(); out[kind]["healthy"] = True
             except Exception as e:  # noqa: BLE001
-                out[kind]["healthy"] = False; out[kind]["error"] = str(getattr(e, "detail", None) or e)[:160]
+                out[kind]["healthy"] = False; out[kind]["error"] = str(getattr(e, "detail", None) or e)[:400]
             out[kind].update(model=model, ms=round((time.monotonic() - t0) * 1000))
         with ThreadPoolExecutor(max_workers=4) as pool:  # en paralelo: la espera es la del más lento, no la suma
             list(pool.map(lambda p: run(*p), probes))

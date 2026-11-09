@@ -1,6 +1,5 @@
 """Administración de decisores (solo administrador de la instancia) y su uso en el triaje de propuestas."""
 import logging
-import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -10,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import decider
 from .deps import audit, require_admin
 from .models import DecisionEngine, User
-from .secretbox import SealedSecretError, seal, unseal
+from .secretbox import seal, unseal
 from .store import get_db
 
 log = logging.getLogger("mimirsynth.decider")
@@ -96,17 +95,12 @@ def delete_engine(eid: int, user: User = Depends(require_admin), db: Session = D
 
 @router.post("/{eid}/test")
 def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Una decisión de ejemplo: comprueba conexión, logprobs y formato de respuesta."""
+    """Una decisión de ejemplo con el mecanismo del decisor: una letra de las opciones y sus logprobs. Sin logprobs no mide su confianza
+    y nunca aprueba solo, así que eso también es un fallo (#420). La interfaz la lanza también al añadir o editar un decisor."""
+    from . import llmcheck
     e = _get(db, eid)
-    t0 = time.time()
-    try:
-        r = decider.decide(e.base_url, e.model, unseal(e.api_key_enc), "Entidad: 'Nextcloud'", "¿Qué tipo de entidad es?",
-                           ["Persona", "Servicio de software", "Dispositivo físico", "Ubicación"])
-        return {"ok": True, "ms": int((time.time() - t0) * 1000), "reply": f"{r['letter']} ({r['prob']}) {r['probs']}"}
-    except SealedSecretError:
-        raise  # its key cannot be read: the app's own clear answer (#193)
-    except Exception as ex:  # noqa: BLE001
-        return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(ex)[:200]}
+    key = unseal(e.api_key_enc)  # SealedSecretError: its key cannot be read, the app's own clear answer (#193)
+    return llmcheck.decider(e.base_url, e.model, key)
 
 
 def triage_proposal(pid: int) -> None:

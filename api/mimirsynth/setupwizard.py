@@ -153,10 +153,26 @@ def _check_llm() -> None:
         e = {"base_url": settings.llm_base_url, "model": settings.llm_model, "api_key": settings.llm_api_key}
     if not e:
         raise HTTPException(409, "no hay ningún motor LLM: añade uno, o sáltate este paso")
+    from .llmcheck import StructuredOutputError
     try:
         _llm_ping(e["base_url"], e["model"], e["api_key"])
+    except StructuredOutputError as ex:   # it answers, but not with what ingestion reads (#420): the engine stays, the step is not done
+        raise HTTPException(409, f"el motor LLM {ex}. Prueba con otro modelo, o sáltate este paso") from None
     except RuntimeError as ex:
         raise HTTPException(409, f"el motor LLM no responde: {ex}") from None
+
+
+def _check_decider(db: Session) -> None:
+    from .deciders_admin import default_decider
+    from .llmcheck import require_decider
+    from .secretbox import unseal
+    d = default_decider(db)
+    if not d:
+        raise HTTPException(409, "no hay ningún decisor: añade uno, o sáltate este paso")
+    try:
+        require_decider(d.base_url, d.model, unseal(d.api_key_enc))
+    except RuntimeError as ex:
+        raise HTTPException(409, f"el decisor no pasa la prueba: {ex}") from None
 
 
 @router.post("/steps/{step}")
@@ -175,9 +191,7 @@ def mark(step: str, body: MarkIn, request: Request, user: User = Depends(require
         elif step == "llm":
             _check_llm()
         elif step == "decider":
-            from .deciders_admin import default_decider
-            if not default_decider(db):
-                raise HTTPException(409, "no hay ningún decisor: añade uno, o sáltate este paso")
+            _check_decider(db)
         elif step == "brain":
             if not body.brain or not db.scalar(select(Brain.id).where(Brain.slug == body.brain)):
                 raise HTTPException(409, "elige o crea un brain")

@@ -34,7 +34,6 @@
  "Buscar contradicciones entre hechos": "Find contradictions between facts",
  "Buscar documentos duplicados": "Find duplicate documents",
  "Búsquedas en todos los brains por persona y hora": "Searches in all brains per person and hour",
- "Cada cuántos minutos se comprueba que el grafo y los modelos de IA responden (un modelo con clave de pago recibe una llamada mínima). 0 = no comprobar.": "How many minutes between checks that the graph and the AI models respond (a model behind a paid key receives one minimal call). 0 = do not check.",
  "Cada cuántos minutos se copia el texto de los episodios al índice. 0 = desactivada.": "How many minutes between copies of the episode text into the index. 0 = disabled.",
  "Caducidad máxima de los tokens de API": "Longest life of API tokens",
  "Cambio de modelo de embeddings (intercambio)": "Embedding model change (swap)",

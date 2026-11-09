@@ -1,4 +1,4 @@
-import { T, locale, tr } from "../i18n";
+import { T, locale, tr, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
@@ -188,7 +188,7 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
     text = r ? t("Propuesta #{{id}} en el grafo: {{ents}} y {{facts}}.", { id, ents, facts }) : t("Propuesta #{{id}} en el grafo.", { id });
     if (r && r.edges === 0) text += " " + t("No se extrajo ningún hecho: revisa el texto de la propuesta.");
   } else if (p.data?.status === "failed") {
-    tone = "danger"; step = "failed"; view = true; text = t("Propuesta #{{id}}: falló la ingesta. {{error}}", { id, error: p.data.ingest_error });
+    tone = "danger"; step = "failed"; view = true; text = t("Propuesta #{{id}}: falló la ingesta. {{error}}", { id, error: translateServer(p.data.ingest_error) });
   } else {
     step = "entering"; text = t("Propuesta #{{id}} aprobada: entrando en el grafo…", { id });
   }
@@ -385,7 +385,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
           {d.episode_uuid && <Btn size="row" kind="link" component={Link} to={`/diario?episodio=${d.episode_uuid}`}>{t("Ver el episodio en Diario")}</Btn>}
           {d.episode_uuid && <CopyBtn value={d.episode_uuid} label={t("Copiar id")} doneLabel={t("Copiado")} />}</Group>}
         {d.status === "ingested" && d.ingest_report && <Text size="xs" c="dimmed">{d.ingest_report.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: d.ingest_report.entities })}{d.ingest_report.untyped_entities ? ` (${t("{{n}} sin tipo", { n: d.ingest_report.untyped_entities })})` : ""} · {d.ingest_report.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: d.ingest_report.edges })}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</Text>}
-        {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error || t("error sin detalle")}{" "}
+        {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error ? translateServer(d.ingest_error) : t("error sin detalle")}{" "}
           <Btn kind="link" component={Link} to="/trabajos">{t("Ver los trabajos")}</Btn> · <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Revisar el modelo LLM")}</Btn></Notice>}
         {d.status === "approved" && <Text size="xs" c="dimmed">{t("Pendiente de ingestar.")}</Text>}
         {d.status === "ingested" && d.selftest && <SelfTest s={d.selftest} />}
