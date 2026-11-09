@@ -264,6 +264,8 @@ jobs:
     # Docker with get.docker.com, starts the stack and opens the browser on the first-start screen, where the setup wizard begins.
     # The distribution runs in a container on the host's network; the Docker CLI installed inside drives the runner's daemon through
     # its socket, and the install folder has the same path on both sides, so the compose file's bind mount means the same folder.
+    # #418: apt's lists lock is held as just after boot (a POSIX lock, as apt-daily or cloud-init's apt-get takes it) for 20 s. A run
+    # allowed to wait 3 s stops with nothing installed; the real one, started right after, waits for it and installs.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -284,10 +286,21 @@ jobs:
               apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates >/dev/null
               if command -v docker; then echo "this image already has Docker"; exit 1; fi
               mkdir -p /tmp/bin && printf "#!/bin/sh\necho \"\$1\" > /tmp/opened\n" > /tmp/bin/xdg-open && chmod +x /tmp/bin/xdg-open
+              LC_ALL=C perl -MFcntl -e "open(my \$f, q(>>), q(/var/lib/apt/lists/lock)) or die; my \$l = pack(q(s s x4 q q i x4), F_WRLCK, 0, 0, 0, 0);
+                fcntl(\$f, F_SETLK, \$l) or die; open(my \$m, q(>), q(/tmp/held)) or die; close \$m; sleep 20" &
+              i=0; until [ -e /tmp/held ]; do i=$((i + 1)); [ "$i" -lt 50 ] || exit 1; sleep 0.2; done
+              if APT_WAIT_SECONDS=3 bash /src/install.sh --yes --install-docker --from /src --version ci --dir "$DIR" > /tmp/short.log 2>&1; then
+                cat /tmp/short.log; echo "it did not stop while apt was locked"; exit 1
+              fi
+              cat /tmp/short.log
+              grep -q "APT_WAIT_SECONDS" /tmp/short.log; [ ! -e "$DIR/.env" ]
+              if command -v docker; then echo "Docker was installed while apt was locked"; exit 1; fi
               cat /src/install.sh | PATH="/tmp/bin:$PATH" DISPLAY=:0 bash -s -- --yes --install-docker --from /src --version ci --dir "$DIR"
               sleep 2; cp /tmp/opened "$DIR/opened"
             ' 2>&1 | tee "$RUNNER_TEMP/clean.log"
           grep -q "${{ matrix.code }}: [A-Za-z0-9_-]\{16\}" "$RUNNER_TEMP/clean.log"
+          # the lock and the program holding it, named twice by the run that stops (waiting, giving up) and again by the one that waits (#418)
+          [ "$(grep -cE '/var/lib/apt/lists/lock, [a-z ]+ perl .*\(PID [0-9]+\)' "$RUNNER_TEMP/clean.log")" -ge 3 ]
           cd "$dir"
           # .env belongs to the container's root, readable only by it (mode 600): sudo
           url="$(cat opened)"; port="$(sudo grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)"; base="http://localhost:$port"
