@@ -28,8 +28,9 @@ class EngineIn(BaseModel):
 
 
 def _out(e: LlmEngine) -> dict:
+    from .fitness import view
     return {"id": e.id, "name": e.name, "base_url": e.base_url, "model": e.model, "small_model": e.small_model,
-            "has_key": bool(e.api_key_enc), "enabled": e.enabled, "is_default": e.is_default}
+            "has_key": bool(e.api_key_enc), "enabled": e.enabled, "is_default": e.is_default, "fitness": view(e)}
 
 
 def default_engine(db: Session) -> LlmEngine | None:
@@ -117,6 +118,8 @@ def make_default(eid: int, user: User = Depends(require_admin), db: Session = De
     e = _get(db, eid)
     if not e.enabled:
         raise HTTPException(409, "el motor está desactivado")
+    from . import fitness
+    fitness.made_default(e)
     for o in db.scalars(select(LlmEngine)):
         o.is_default = o.id == eid
     db.commit()
@@ -137,11 +140,12 @@ def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depend
     """What ingestion needs, not just an answer (#420): a small extraction with graphiti's own request (`response_format` with a JSON
     schema), and whether the relation between the two entities comes back. {ok, ms, reply | error, warning?, structured}. The interface
     calls it right after adding or editing an engine too: an engine that fails it is kept, with the warning."""
-    from . import llmcheck
+    from . import fitness
     e = _get(db, eid)
-    key = unseal(e.api_key_enc) if e.api_key_enc else ""
+    if e.api_key_enc:
+        unseal(e.api_key_enc)  # a key that cannot be read: the app's own clear answer (#193), not a failed test
     t0 = time.time()
     try:
-        return llmcheck.structured(e.base_url, e.model, key, quality=True)
+        return fitness.check(db, "llm", e, quality=True)  # kept on the engine and shown in Administration (#424)
     except Exception as ex:  # noqa: BLE001
         return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(ex)[:300], "structured": None}

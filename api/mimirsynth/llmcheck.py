@@ -6,10 +6,10 @@ nothing passes a plain «say ok» and then fails every ingestion with a raw Pyth
   JSON schema of its `ExtractedEntities`, the same temperature and token limit, and parses the answer the way graphiti does (a ```json
   fence is stripped, as graphiti strips it). With `quality`, a second request asks for the relation between the two entities, the way
   graphiti's edge extraction does, and warns when it does not come back (a model too small to link entities: 0 facts).
-- `require` is the same check for the places that only need yes or no (the wizard's step, the health checks): it raises a
-  `StructuredOutputError` with the reason in words.
 - `ingest_failure` puts a failed ingestion into words when its cause is the model's output; the raw exception goes to the job's log.
 - `decider` checks the decider's own mechanism: one letter of the options, with logprobs. Without them it can never approve alone.
+- `ping` is not a check of fitness, only of life (#424): the periodic health check uses it, because the full check costs about 2,000
+  tokens a request and keeps a local model busy. When and how often the full check runs is `fitness.py`'s business.
 
 Every text is in Spanish, the server's source language, with its English entry in the server catalogue."""
 import json
@@ -43,10 +43,6 @@ CAUSES = {
 FENCED = T("lo envolvió en ``` y {{cause}}")
 UNREACHABLE = T("no se pudo contactar con el endpoint: {{v}}")  # the same texts as before, already in the catalogue
 HTTP = T("el endpoint respondió HTTP {{status_code}}: {{text}}")
-
-
-class StructuredOutputError(RuntimeError):
-    """The model answers, but not with JSON that matches the schema: ingestion will fail with it."""
 
 
 def _fill(template: str, **values) -> str:
@@ -158,13 +154,6 @@ def structured(base_url: str, model: str, api_key: str = "", quality: bool = Fal
     return out
 
 
-def require(base_url: str, model: str, api_key: str = "", timeout: float = TIMEOUT) -> None:
-    """Raises RuntimeError when the endpoint does not answer and StructuredOutputError when the model's answer would fail ingestion."""
-    r = structured(base_url, model, api_key, timeout=timeout)
-    if not r["ok"]:
-        raise (StructuredOutputError if r["structured"] is False else RuntimeError)(r["error"])
-
-
 def ingest_failure(exc: BaseException) -> str | None:
     """A failed ingestion in words when the model's output caused it (empty, not JSON, a list, other keys), else None."""
     from graphiti_core.llm_client.errors import EmptyResponseError
@@ -205,21 +194,51 @@ NO_LOGPROBS = T("responde, pero sin logprobs: el decisor no puede medir su confi
 
 
 def decider(base_url: str, model: str, api_key: str = "", timeout: float = 60) -> dict:
-    """The decider's own mechanism: one letter of the options with logprobs (it never asks for JSON). {ok, ms, reply | error}."""
+    """The decider's own mechanism: one letter of the options with logprobs (it never asks for JSON). {ok, ms, reply | error, structured}:
+    `structured` says, as for the LLM, whether the model answers in the form it is used in (True), answers in another (False: no letter
+    of the options, or no logprobs) or could not be asked (None)."""
     from . import decider as _decider
     t0 = time.monotonic()
     try:
         r = _decider.decide(base_url, model, api_key, "Entidad: 'Nextcloud'", "¿Qué tipo de entidad es?",
                             ["Persona", "Servicio de software", "Dispositivo físico", "Ubicación"], timeout=timeout)
+    except ValueError as ex:  # it answered, but not with a letter of the options (httpx's own errors are not ValueError)
+        return {"ok": False, "ms": int((time.monotonic() - t0) * 1000), "error": str(ex)[:300], "structured": False}
     except Exception as ex:  # noqa: BLE001
-        return {"ok": False, "ms": int((time.monotonic() - t0) * 1000), "error": str(getattr(ex, "detail", None) or ex)[:300]}
+        return {"ok": False, "ms": int((time.monotonic() - t0) * 1000), "error": str(getattr(ex, "detail", None) or ex)[:300], "structured": None}
     ms = int((time.monotonic() - t0) * 1000)
     if not r["probs"]:
-        return {"ok": False, "ms": ms, "error": NO_LOGPROBS}
-    return {"ok": True, "ms": ms, "reply": f"{r['letter']} ({r['prob']}) {r['probs']}"}
+        return {"ok": False, "ms": ms, "error": NO_LOGPROBS, "structured": False}
+    return {"ok": True, "ms": ms, "reply": f"{r['letter']} ({r['prob']}) {r['probs']}", "structured": True}
 
 
-def require_decider(base_url: str, model: str, api_key: str = "", timeout: float = 60) -> None:
-    r = decider(base_url, model, api_key, timeout=timeout)
-    if not r["ok"]:
-        raise RuntimeError(r["error"])
+def _auth(api_key: str) -> dict:
+    return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+
+
+def ping(base_url: str, model: str, api_key: str = "", timeout: float = 30) -> None:
+    """Is the model there? The periodic health check's question (#424), not «is it fit for ingestion». Raises RuntimeError when not.
+
+    An endpoint without a key (a local Ollama) is asked for its models list, which costs nothing and does not load the model on the CPU;
+    when it lists the model, that is the answer. Otherwise (a key to prove, no list, or a list without the model) one chat request with
+    a one-word prompt and `max_tokens` 1: a few tokens, where the full check sends about 2,000."""
+    base = base_url.rstrip("/")
+    if not api_key:
+        try:
+            r = httpx.get(f"{base}/models", timeout=timeout)
+        except Exception as ex:  # noqa: BLE001
+            raise RuntimeError(_fill(UNREACHABLE, v=str(ex)[:150])) from None
+        if r.status_code == 200:
+            try:
+                ids = {m.get("id") for m in r.json().get("data") or [] if isinstance(m, dict)}
+            except (ValueError, AttributeError):
+                ids = set()
+            if model in ids or f"{model}:latest" in ids:
+                return
+    try:
+        r = httpx.post(f"{base}/chat/completions", timeout=timeout, headers=_auth(api_key),
+                       json={"model": model, "messages": [{"role": "user", "content": "ok"}], "max_tokens": 1})
+    except Exception as ex:  # noqa: BLE001
+        raise RuntimeError(_fill(UNREACHABLE, v=str(ex)[:150])) from None
+    if r.status_code != 200:
+        raise RuntimeError(_fill(HTTP, status_code=r.status_code, text=r.text[:150]))

@@ -26,8 +26,9 @@ class DecIn(BaseModel):
 
 
 def _out(e: DecisionEngine) -> dict:
+    from .fitness import view
     return {"id": e.id, "name": e.name, "base_url": e.base_url, "model": e.model, "has_key": bool(e.api_key_enc),
-            "threshold": e.threshold, "enabled": e.enabled, "is_default": e.is_default}
+            "threshold": e.threshold, "enabled": e.enabled, "is_default": e.is_default, "fitness": view(e)}
 
 
 def default_decider(db: Session) -> DecisionEngine | None:
@@ -78,6 +79,8 @@ def make_default(eid: int, user: User = Depends(require_admin), db: Session = De
     e = _get(db, eid)
     if not e.enabled:
         raise HTTPException(409, "el decisor está desactivado")
+    from . import fitness
+    fitness.made_default(e)
     for o in db.scalars(select(DecisionEngine)):
         o.is_default = o.id == eid
     db.commit()
@@ -97,10 +100,10 @@ def delete_engine(eid: int, user: User = Depends(require_admin), db: Session = D
 def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depends(get_db)):
     """Una decisión de ejemplo con el mecanismo del decisor: una letra de las opciones y sus logprobs. Sin logprobs no mide su confianza
     y nunca aprueba solo, así que eso también es un fallo (#420). La interfaz la lanza también al añadir o editar un decisor."""
-    from . import llmcheck
+    from . import fitness
     e = _get(db, eid)
-    key = unseal(e.api_key_enc)  # SealedSecretError: its key cannot be read, the app's own clear answer (#193)
-    return llmcheck.decider(e.base_url, e.model, key)
+    unseal(e.api_key_enc)  # SealedSecretError: its key cannot be read, the app's own clear answer (#193)
+    return fitness.check(db, "decider", e)  # kept on the engine and shown in Administration (#424)
 
 
 def triage_proposal(pid: int) -> None:

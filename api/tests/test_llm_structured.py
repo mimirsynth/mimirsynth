@@ -57,8 +57,6 @@ def test_gemma_fenced_json_with_other_keys_or_a_list_fails_in_words(monkeypatch)
     monkeypatch.setattr(llmcheck.httpx, "post", _answer(FENCED_LIST))
     r = llmcheck.structured("http://llm/v1", "gemma4:31b-cloud")
     assert "(lo envolvió en ``` y devolvió una lista)" in r["error"] and "la ingesta fallará" in r["error"]
-    with pytest.raises(llmcheck.StructuredOutputError):
-        llmcheck.require("http://llm/v1", "gemma4:31b-cloud")
 
 
 def test_a_fence_alone_is_fine_because_graphiti_strips_it(monkeypatch):
@@ -89,9 +87,6 @@ def test_an_endpoint_that_does_not_answer_is_not_a_structured_output_failure(mon
     monkeypatch.setattr(llmcheck.httpx, "post", _answer(status=500))
     r = llmcheck.structured("http://llm/v1", "m")
     assert not r["ok"] and r["structured"] is None and r["error"].startswith("el endpoint respondió HTTP 500")
-    with pytest.raises(RuntimeError) as e:
-        llmcheck.require("http://llm/v1", "m")
-    assert not isinstance(e.value, llmcheck.StructuredOutputError)
 
     def refuse(*a, **k):
         raise httpx.ConnectError("connection refused")
@@ -114,9 +109,7 @@ def test_the_decider_check_needs_one_letter_and_logprobs(monkeypatch):
     assert r["ok"] and r["reply"].startswith("B (")
     monkeypatch.setattr(decider.httpx, "post", answer(False))
     r = llmcheck.decider("http://llm/v1", "m")
-    assert not r["ok"] and r["error"] == llmcheck.NO_LOGPROBS
-    with pytest.raises(RuntimeError):
-        llmcheck.require_decider("http://llm/v1", "m")
+    assert not r["ok"] and r["error"] == llmcheck.NO_LOGPROBS and r["structured"] is False       # it answers: a verdict, not «no answer»
 
 
 # --- the failed ingestion, in words -------------------------------------------------------------------------------------------
@@ -194,8 +187,7 @@ def engine(client):  # noqa: F811
         client.post(f"/api/llm-engines/{before}/default")
 
 
-def test_admin_test_and_health_use_the_structured_check(client, engine, monkeypatch):  # noqa: F811
-    from mimirsynth import aistatus
+def test_admin_test_uses_the_structured_check_and_keeps_its_result(client, engine, monkeypatch):  # noqa: F811
     eid = engine("s420", "gemma4:31b-cloud")
     monkeypatch.setattr(llmcheck.httpx, "post", _answer(FENCED_LIST))
     r = client.post(f"/api/llm-engines/{eid}/test").json()
@@ -203,23 +195,21 @@ def test_admin_test_and_health_use_the_structured_check(client, engine, monkeypa
     monkeypatch.setattr(llmcheck.httpx, "post", _answer(GOOD, UNLINKED))
     r = client.post(f"/api/llm-engines/{eid}/test").json()
     assert r["ok"] and r["reply"].startswith("devuelve salida estructurada") and r["warning"] == llmcheck.WEAK
-    monkeypatch.setattr(aistatus, "_probe", lambda *a: 768)
-    monkeypatch.setattr(llmcheck.httpx, "post", _answer("", reasoning="thinking"))
-    s = client.get("/api/ai-status?check=true").json()
-    assert s["llm"]["healthy"] is False and "no devolvió nada, solo su razonamiento" in s["llm"]["error"]
-    assert s["llm"]["error"].endswith("la ingesta fallará con este modelo")                     # not cut halfway: it stays translatable
+    kept = next(e for e in client.get("/api/llm-engines").json() if e["id"] == eid)["fitness"]       # kept and shown (#424)
+    assert kept["ok"] and kept["fit"] is True and kept["warning"] == llmcheck.WEAK and kept["current"] and kept["at"]
 
 
-def test_the_health_notice_names_the_structured_output(client, engine, monkeypatch):  # noqa: F811
-    from mimirsynth import notify
+def test_the_notice_names_the_structured_output(client, engine, monkeypatch):  # noqa: F811
+    """Raised by the full check (`fitness`, #424), no longer by the periodic ping, with #420's words."""
+    from mimirsynth import fitness, notify
     engine("h420", "m")
     seen = []
-    monkeypatch.setattr(notify, "_fail", lambda event, title, body, key: seen.append((event, title, body, key)))
-    monkeypatch.setattr(notify, "_ok", lambda event, key: None)
+    monkeypatch.setattr(notify, "emit", lambda event, title, body="", **k: seen.append((event, title, body, k.get("key"))))
+    monkeypatch.setattr(notify, "resolve", lambda *a, **k: False)
     monkeypatch.setattr(llmcheck.httpx, "post", _answer(FENCED_KEYS))
-    notify.check_health()
-    llm = [s for s in seen if s[3] == "llm"]
-    assert llm and llm[0][1] == "El modelo LLM no devuelve la salida estructurada que necesita la ingesta"
+    fitness.due()
+    llm = [s for s in seen if s[3] == "llm.fit"]
+    assert llm and llm[0][0] == "model.unavailable" and llm[0][1] == "El modelo LLM no devuelve la salida estructurada que necesita la ingesta"
     assert "devolvió JSON con otras claves" in llm[0][2]
 
 

@@ -93,7 +93,9 @@ function Tokens({ brain }: { brain: Brain }) {
   );
 }
 
-type Engine = { threshold?: number; dim?: number; id: number; name: string; base_url: string; model: string; small_model: string; has_key: boolean; enabled: boolean; is_default: boolean };
+// The last full check of an LLM or a decider (issue 424): the structured output ingestion needs, or the letter with logprobs.
+type Fitness = { at: string; ok: boolean; fit: boolean | null; text: string; warning?: string; current: boolean };
+type Engine = { threshold?: number; dim?: number; id: number; name: string; base_url: string; model: string; small_model: string; has_key: boolean; enabled: boolean; is_default: boolean; fitness?: Fitness | null };
 type EngineForm = { threshold?: number; id?: number; name: string; base_url: string; model: string; small_model: string; api_key: string; enabled: boolean };
 const EMPTY: EngineForm = { name: "", base_url: "", model: "", small_model: "", api_key: "", enabled: true };
 
@@ -115,9 +117,9 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   const def = (list.data ?? []).find((e) => e.is_default);
   const otherModel = (e: Engine) => emb && e.enabled && !e.is_default && (!def || def.model !== e.model || def.dim !== e.dim);
   const test = useMutation({ mutationFn: (id: number) => send<{ ok: boolean; ms: number; error?: string; reply?: string; warning?: string }>("POST", `${path}/${id}/test`),
-    onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok
+    onSuccess: (r, id) => { qc.invalidateQueries({ queryKey: [path] }); setTests((prev) => ({ ...prev, [id]: r.ok
       ? { ok: true, text: `OK · ${r.ms} ms · ${emb ? `«${r.reply}»` : translateServer(r.reply ?? "")}`, warning: r.warning ? translateServer(r.warning) : undefined }
-      : { ok: false, text: t("Error: {{error}}", { error: translateServer(r.error ?? "") }) } })),
+      : { ok: false, text: t("Error: {{error}}", { error: translateServer(r.error ?? "") }) } })); },
     onError: (err, id) => setTests((prev) => ({ ...prev, [id]: { ok: false, text: t("Error: {{error}}", { error: (err as Error).message }) } })) });
   const [models, setModels] = useState<string[]>([]); const [mErr, setMErr] = useState("");
   const loadModels = useMutation({ mutationFn: (f: EngineForm) => send<{ models: string[]; error: string | null }>("POST", "llm-engines/models", { base_url: f.base_url, api_key: f.api_key || undefined, engine_id: f.id }),
@@ -141,7 +143,8 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
               <DataTable.Td>{e.name}</DataTable.Td><DataTable.Td><Text size="xs" className="ms-breakall">{e.base_url}</Text></DataTable.Td><DataTable.Td>{e.model}{emb && e.dim ? ` · ${e.dim}d` : ""}{dec && e.threshold ? t(" · umbral {{threshold}}", { threshold: e.threshold }) : ""}</DataTable.Td>
               <DataTable.Td><Group gap={4}>{e.is_default && <Pill size="sm" tone="success">{t("por defecto")}</Pill>}{!e.enabled && <Pill size="sm">{t("desactivado")}</Pill>}{!e.has_key && <Pill size="sm" tone="warn">{t("sin clave")}</Pill>}</Group>
                 {tests[e.id] && <Text size="xs" className={tests[e.id].ok ? "ms-text-ok" : "ms-text-danger"}>{tests[e.id].text}</Text>}
-                {tests[e.id]?.warning && <Group gap={4} wrap="nowrap" align="flex-start"><Pill size="sm" tone="warn">{t("Aviso")}</Pill><Text size="xs">{tests[e.id].warning}</Text></Group>}</DataTable.Td>
+                {tests[e.id]?.warning && <Group gap={4} wrap="nowrap" align="flex-start"><Pill size="sm" tone="warn">{t("Aviso")}</Pill><Text size="xs">{tests[e.id].warning}</Text></Group>}
+                {!emb && <FitnessLine fitness={e.fitness} decider={dec} />}</DataTable.Td>
               <DataTable.Td><Group gap={4} wrap="nowrap">
                 <Btn size="row" loading={test.isPending && test.variables === e.id} onClick={() => test.mutate(e.id)} icon="test">{t("Probar")}</Btn>
                 {!e.is_default && e.enabled && (!otherModel(e) || !def) && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
@@ -174,6 +177,22 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
       </Modal>
     </Stack></SettingsBody>
     </SettingsGroup>
+  );
+}
+
+// «Structured output: checked 09/11 08:00 ✅»: kept on the engine, so it is there on every visit and after a change of engine (issue 424).
+function FitnessLine({ fitness: f, decider }: { fitness?: Fitness | null; decider: boolean }) {
+  const { t } = useTranslation();
+  if (!f) return <Text size="xs" c="dimmed">{decider ? t("Letra y logprobs: sin comprobar todavía") : t("Salida estructurada: sin comprobar todavía")}</Text>;
+  const at = new Date(f.at).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const mark = f.fit === null ? "⚠️" : f.ok && !f.warning ? "✅" : f.ok ? "⚠️" : "❌";  // i18n-ok: symbols
+  const why = f.fit === null ? t("no respondió; se repite en una hora") : !f.ok || f.warning ? translateServer(f.warning ?? f.text) : "";
+  return (
+    <Text size="xs" c={f.current ? undefined : "dimmed"}>
+      {decider ? t("Letra y logprobs: comprobados el {{at}}", { at }) : t("Salida estructurada: comprobada el {{at}}", { at })} {mark}
+      {!f.current && <>{" "}{t("(antes del último cambio de modelo o endpoint)")}</>}
+      {why && <Text span className={f.ok ? undefined : "ms-text-danger"}>{" · "}{why}</Text>}
+    </Text>
   );
 }
 

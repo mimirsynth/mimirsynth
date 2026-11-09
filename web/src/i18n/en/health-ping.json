@@ -1,0 +1,8 @@
+{
+ "(antes del último cambio de modelo o endpoint)": "(before the last change of model or endpoint)",
+ "Letra y logprobs: comprobados el {{at}}": "Letter and logprobs: checked {{at}}",
+ "Letra y logprobs: sin comprobar todavía": "Letter and logprobs: not checked yet",
+ "Salida estructurada: comprobada el {{at}}": "Structured output: checked {{at}}",
+ "Salida estructurada: sin comprobar todavía": "Structured output: not checked yet",
+ "no respondió; se repite en una hora": "it did not answer; tried again within an hour"
+}

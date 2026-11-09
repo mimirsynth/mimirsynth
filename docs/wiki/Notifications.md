@@ -19,7 +19,7 @@ What changed in a brain (new facts, proposals waiting…) is not an alert: each 
 <!-- generated:start (scripts/wiki_reference.py writes this part from the code: do not edit it by hand) -->
 | Event | Severity | When |
 |---|---|---|
-| `model.unavailable` | critical | The default LLM, embedding or decider engine does not answer the periodic check |
+| `model.unavailable` | critical | The default LLM, embedding or decider engine does not answer the periodic check, or answers but fails the full check (the structured output ingestion needs, or the decider's letter with logprobs), which runs when the engine in use changes and once a day |
 | `graph.down` | critical | The graph database (FalkorDB or Neo4j) does not answer |
 | `ingest.failed` | warning | An approved proposal could not be ingested after its retries |
 | `job.failed` | warning | Any other background job failed |

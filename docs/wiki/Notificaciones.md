@@ -19,7 +19,7 @@ Lo que cambia en un brain (hechos nuevos, propuestas pendientes…) no es un avi
 <!-- generated:start (scripts/wiki_reference.py writes this part from the code: do not edit it by hand) -->
 | Evento | Severidad | Cuándo |
 |---|---|---|
-| `model.unavailable` | crítico | El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica |
+| `model.unavailable` | crítico | El motor LLM, de embeddings o decisor por defecto no responde a la comprobación periódica, o responde pero no pasa la comprobación completa (la salida estructurada que necesita la ingesta, o la letra con logprobs del decisor), que se hace cuando cambia el motor en uso y una vez al día |
 | `graph.down` | crítico | La base de datos del grafo (FalkorDB o Neo4j) no responde |
 | `ingest.failed` | aviso | Una propuesta aprobada no se pudo ingerir tras sus reintentos |
 | `job.failed` | aviso | Cualquier otro trabajo en segundo plano ha fallado |
