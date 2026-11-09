@@ -1,8 +1,0 @@
-{
- "Idiomas con los que Tesseract lee los PDF escaneados y las imágenes, unidos con + (p. ej. spa+eng). Cada uno tiene que estar instalado en el servicio OCR.": "Languages Tesseract reads scanned PDFs and images with, joined with + (e.g. spa+eng). Each one has to be installed in the OCR service.",
- "Idiomas del OCR": "OCR languages",
- "Motor de visión para el OCR": "Vision engine for OCR",
- "Nombre del motor LLM que lee las páginas en los brains que activan el modelo de visión. Tiene que admitir imágenes. Vacío: el motor LLM predeterminado.": "Name of the LLM engine that reads the pages in the brains that turn the vision model on. It has to accept images. Empty: the default LLM engine.",
- "Páginas con OCR por documento": "OCR pages per document",
- "Páginas que se leen con OCR como mucho en cada documento; las siguientes se quedan sin texto y el documento lo dice.": "Pages read with OCR at most in each document; the following ones are left without text and the document says so."
-}

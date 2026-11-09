@@ -1,4 +1,0 @@
-{
- "Escribe una pregunta como la haría tu agente y pulsa Buscar: verás qué hechos, fragmentos y pasajes recibiría, en el orden en que los lee, y el contexto exacto que se le inyecta.": "Write a question as your agent would ask it and press Search: you will see which facts, fragments and passages it would get, in the order it reads them, and the exact context injected into it.",
- "«Incorrecto» solo está en los hechos de este brain: un fragmento o un pasaje es lo que se escribió, y lo prestado por otro brain se corrige allí.": "«Incorrect» is only on this brain's facts: a fragment or a passage is what was written, and what another brain lends is corrected there."
-}
