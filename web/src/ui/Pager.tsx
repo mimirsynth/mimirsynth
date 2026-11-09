@@ -11,7 +11,7 @@ export function Pager({ total, offset, limit, onChange, sizes = [25, 50, 100, 20
   const to = Math.min(offset + limit, total);
   return (
     <Group justify="space-between" gap="sm" wrap="wrap">
-      <Text size="xs" c="dimmed">{total === 0 ? t("Sin resultados") : `${from}–${to} de ${total}`}</Text>
+      <Text size="xs" c="dimmed">{total === 0 ? t("Sin resultados") : t("{{from}}–{{to}} de {{total}}", { from, to, total })}</Text>
       <Group gap={6} wrap="wrap">
         <SelectField w={150} aria-label={t("Elementos por página")} allowDeselect={false} value={String(limit)} onChange={(v) => v && onChange({ offset: 0, limit: Number(v) })} data={sizes.map((n) => ({ value: String(n), label: t("{{n}} por página", { n: n }) }))} />
         <Btn disabled={offset <= 0} onClick={() => onChange({ offset: Math.max(0, offset - limit), limit })}>{t("Anterior")}</Btn>

@@ -764,7 +764,6 @@
  "Esc": "Esc",
  "Escanear": "Scan",
  "Escribe el código de 6 dígitos de tu app de autenticación, o uno de tus códigos de recuperación.": "Enter the 6-digit code from your authenticator app, or one of your recovery codes.",
- "Escribe el código de instalación que el servicio ha impreso en su log (docker logs del contenedor).": "Enter the installation code the service printed in its log (docker logs of the container).",
  "Escribe el título y el texto con {{ph}} para sacar valores del JSON (las listas, con su número: alerts.0.labels). Con «Estado», los valores resolved, ok, up o recovery cierran la alerta; sin él, cada petición es un evento.": "Write the title and the text with {{ph}} to take values from the JSON (lists with their number: alerts.0.labels). With «State», the values resolved, ok, up or recovery close the alert; without it, every request is an event.",
  "Escribe una pregunta como la haría tu agente y pulsa Buscar: verás qué hechos, fragmentos y pasajes recibiría, en el orden en que los lee, y el contexto exacto que se le inyecta.": "Write a question as your agent would ask it and press Search: you will see which facts, fragments and passages it would get, in the order it reads them, and the exact context injected into it.",
  "Escribe «{{requireText}}» para confirmar": "Type “{{requireText}}” to confirm",

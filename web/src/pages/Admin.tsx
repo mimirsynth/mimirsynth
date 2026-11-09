@@ -150,7 +150,7 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
       {emb && <StartReindex engine={reindex} onClose={() => setReindex(null)} />}
       <ConfirmDialog opened={!!ask} onClose={() => setAsk(null)} title={t("Borrar motor")} action={t("Borrar motor")} subject={ask?.name}
         warning={t("Los brains que lo usen pasan al motor por defecto, o a las variables de entorno si no hay otro.")} onConfirm={() => del.mutateAsync(ask!.id)} />
-      <Modal opened={!!form} onClose={() => setForm(null)} title={(form?.id ? t("Editar ") : t("Añadir ")) + (emb ? t("motor de embeddings") : dec ? "decisor" : "motor LLM")} centered>
+      <Modal opened={!!form} onClose={() => setForm(null)} title={(form?.id ? t("Editar ") : t("Añadir ")) + (emb ? t("motor de embeddings") : dec ? t("decisor") : t("motor LLM"))} centered>
         {form && <Stack gap="xs">
           <TextField label={t("Endpoint (base URL)")} placeholder={t("http://gateway:4000/v1")} value={form.base_url} onChange={(e) => set("base_url", e.currentTarget.value)} />
           <PasswordField label={t("Clave de API")} description={form.id ? t("Vacío = conservar la actual") : undefined} value={form.api_key} onChange={(e) => set("api_key", e.currentTarget.value)}

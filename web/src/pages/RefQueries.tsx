@@ -133,7 +133,7 @@ export default function RefQueries({ graph }: { graph: string }) {
                 <DataTable.Td>{`${r.summary.found}/${r.summary.expected}`}{r.summary.recall !== null ? ` (${Math.round(r.summary.recall * 100)} %)` : ""}</DataTable.Td>
                 <DataTable.Td>{r.summary.false_positives}</DataTable.Td>
                 <DataTable.Td>{r.summary.docs_mismatch}</DataTable.Td>
-                <DataTable.Td>{r.summary.ms_p50 !== null ? `${r.summary.ms_p50} ms` : "—"}</DataTable.Td>
+                <DataTable.Td>{r.summary.ms_p50 !== null ? `${r.summary.ms_p50} ms` : "—"}</DataTable.Td>  {/* i18n-ok: unit */}
                 <DataTable.Td><DeltaPill d={r.summary.delta} /></DataTable.Td>
               </> : <DataTable.Td colSpan={5}><Pill size="xs" tone={r.status === "error" ? "danger" : "warn"} title={r.error || undefined}>{r.status === "error" ? t("error") : t("en curso")}</Pill></DataTable.Td>}
               <DataTable.Td>{r.summary && <Btn size="row" onClick={() => setOpen(r.id)}>{t("Ver")}</Btn>}</DataTable.Td>

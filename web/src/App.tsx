@@ -61,7 +61,7 @@ function sessionProblem(error: unknown, t: (k: string) => string) {
   const text = gateway ? t("El servidor de MimirSynth no responde: puede estar arrancando o actualizándose. Vuelve a intentarlo en un momento y, si sigue igual, avisa a quien administra la instancia.")
     : GENERIC_STATUS.has(error.message) ? t("El servidor de MimirSynth ha fallado al cargar tu sesión. Vuelve a intentarlo y, si sigue igual, avisa a quien administra la instancia.")
     : error.message;
-  return <><Text size="sm">{text}</Text><Text size="xs" c="dimmed" className="ms-data">{`HTTP ${error.status}`}</Text></>;
+  return <><Text size="sm">{text}</Text><Text size="xs" c="dimmed" className="ms-data">{`HTTP ${error.status}`}</Text></>;  // i18n-ok: protocol status code
 }
 
 export default function App() {
@@ -128,7 +128,7 @@ export default function App() {
   if (me.error) {
     return (
       <Center component="main" className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack>
-        <h1 className="ms-sr">{`${cfg.data?.name ?? "MimirSynth"} · ${t("No se pudo cargar tu sesión")}`}</h1>
+        <h1 className="ms-sr">{`${cfg.data?.name ?? "MimirSynth"} · ${t("No se pudo cargar tu sesión")}`}</h1>  {/* i18n-ok: product name */}
         <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>
           <Stack gap={4}>{sessionProblem(me.error, t)}</Stack>
         </Notice>
@@ -163,7 +163,7 @@ export default function App() {
           <div data-tour="brain">
             <SelectField size="xs" aria-label={t("Brain activo")} value={brain} onChange={(v) => v && setBrain(v)} allowDeselect={false} data={(brains.data ?? []).map((b) => ({ value: b.slug, label: b.name }))} />
           </div>
-          <UserCard to="/cuenta" label={`Mi cuenta · ${me.data.name}${cur ? t(" · rol {{role}}", { role: cur.role }) : ""}`} avatar={<Avatar src={me.data.avatar} name={me.data.name} size={26} />} name={me.data.name}>
+          <UserCard to="/cuenta" label={`${t("Mi cuenta · {{name}}", { name: me.data.name })}${cur ? t(" · rol {{role}}", { role: cur.role }) : ""}`} avatar={<Avatar src={me.data.avatar} name={me.data.name} size={26} />} name={me.data.name}>
             {me.data.auth_mode !== "off" && <RoundButton label={t("Cerrar sesión")} onClick={() => logout.mutate()}><Icon name="logout" /></RoundButton>}
           </UserCard>
           <div className="ms-iconrow">
