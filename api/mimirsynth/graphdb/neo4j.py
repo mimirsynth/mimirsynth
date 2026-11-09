@@ -6,7 +6,8 @@ FalkorDB, where a brain is a graph of its own and `MATCH (n:Entity)` only sees t
 the partition before running it (`scope()`): every node pattern a query reads gets `group_id: $partition`, and every node a
 query creates with a label or properties gets it too. A relationship is in a brain when its two ends are.
 
-The same applies to Community and Enterprise: one database (`MIMIRSYNTH_NEO4J_DATABASE`, or the server's default). A database
+The same applies to Community and Enterprise: one database (`MIMIRSYNTH_NEO4J_DATABASE`, or the user's home database, which on Neo4j
+Aura is named after the instance: `home_database()`, shared with the connection test so both find the same one, #408). A database
 per brain on Enterprise would need its own names (Neo4j's rules are stricter than a brain's slug), its own copy and its own
 export; one model for both editions keeps snapshots, export, import and the Cypher the same. `version()` says which edition
 answered.
@@ -27,6 +28,15 @@ from . import Edge, GraphBackend, Node, Path, Unscopable
 
 PARTITION = "mimirsynth_partition"  # the parameter the scoped Cypher reads the partition from
 BATCH = 1000
+
+
+def home_database(driver, timeout: float | None = None) -> str:
+    """The name of the user's home database: a session opened without a database is in it. Graphiti's driver needs the database by
+    name, so an empty `MIMIRSYNTH_NEO4J_DATABASE` becomes this. Over `bolt://` a cluster member that does not host it answers
+    `DatabaseNotFound`; the routing scheme (`neo4j://`, `neo4j+s://`) reaches the member that does (#408)."""
+    from neo4j import READ_ACCESS, Query
+    with driver.session(default_access_mode=READ_ACCESS) as s:
+        return s.run(Query("CALL db.info() YIELD name RETURN name", timeout=timeout)).single()["name"]
 
 # --- scoping the Cypher written for one graph per brain ---------------------------------------------------------------------
 #
@@ -448,7 +458,7 @@ class Neo4jBackend(GraphBackend):
 
     def __init__(self, uri: str, user: str, password: str, database: str | None = None):
         if not uri:
-            raise ValueError("the Neo4j backend needs a URI (MIMIRSYNTH_NEO4J_URI=bolt://host:7687, or Administration → Graph)")
+            raise ValueError("the Neo4j backend needs a URI (MIMIRSYNTH_NEO4J_URI=neo4j://host:7687, or Administration → Graph)")
         self.uri, self.user, self.password, self._database = uri, user, password, database
 
     @cached_property
@@ -458,11 +468,8 @@ class Neo4jBackend(GraphBackend):
 
     @cached_property
     def database(self) -> str:
-        """The configured database or, without one, the server's default: Graphiti's driver needs it by name."""
-        if self._database:
-            return self._database
-        records, _, _ = self.driver.execute_query("CALL db.info() YIELD name RETURN name")
-        return records[0]["name"]
+        """The configured database or, without one, the user's home database: Graphiti's driver needs it by name."""
+        return self._database or home_database(self.driver)
 
     def _run(self, q: str, params: dict | None = None, read: bool = False) -> list:
         """Cypher on the whole database, unscoped and with the driver's own values: the partitions themselves."""

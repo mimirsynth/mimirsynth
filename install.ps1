@@ -16,6 +16,9 @@ MIMIRSYNTH_GRAPH_PASSWORD environment variable, never from the command line.
 local: start the bundled FalkorDB (default). existing: use your FalkorDB or Neo4j server (-GraphType, -GraphHost, -GraphPort,
 -GraphUser, -GraphDatabase, and -GraphTls for a Neo4j that asks for TLS, as Neo4j Aura does). Before anything starts it passes the
 full connection test (address, credentials, version and write permission), or nothing is installed, unless -SkipGraphCheck.
+Neo4j is reached with neo4j:// (neo4j+s:// with -GraphTls), which a cluster such as Neo4j Aura needs and a single server accepts too;
+-GraphScheme bolt connects directly to one server instead. Without -GraphDatabase the user's default database is used (on Neo4j
+Aura, the instance's own), and the test names it.
 #>
 [CmdletBinding()]
 param(
@@ -29,6 +32,7 @@ param(
     [string]$GraphUser = "",
     [string]$GraphDatabase = "",
     [switch]$GraphTls,
+    [ValidateSet("", "neo4j", "bolt")][string]$GraphScheme = "",
     [switch]$SkipGraphCheck,
     [switch]$Ollama,
     [switch]$NoOllama,
@@ -57,8 +61,9 @@ $Interactive = (-not $Yes) -and [Environment]::UserInteractive -and -not [Consol
 # Shared state. A hashtable, not $script: variables: run as `& ([scriptblock]::Create(...))` the parameters live in another scope.
 $St = @{ Version = $Version; Port = $Port; Graph = $Graph; GraphType = $GraphType; GraphHost = $GraphHost; GraphPort = $GraphPort;
          GraphUser = $GraphUser; GraphDatabase = $GraphDatabase; GraphPassword = [string]$env:MIMIRSYNTH_GRAPH_PASSWORD;
-         GraphTls = $(if ($GraphTls) { "1" } else { "" }); ContainerHost = ""; UseOllama = $false;
-         EnvLines = @(); HealthBody = ""; SetupCode = ""; GraphTestAnswer = ""; Probed = $false; Wrote = $false; Removed = $false }
+         GraphTls = $(if ($GraphTls) { "1" } else { "" }); GraphScheme = $GraphScheme; ContainerHost = ""; UseOllama = $false;
+         EnvLines = @(); HealthBody = ""; SetupCode = ""; GraphTestAnswer = ""; GraphTestParts = @(); Probed = $false; GraphDown = $false;
+         Wrote = $false; Removed = $false; Started = $false }
 
 function T([string]$En, [string]$Es, [object[]]$Fmt = @()) {
     $s = if ($Lang -eq "es") { [regex]::Unescape($Es) } else { $En }
@@ -115,7 +120,8 @@ function Get-Http([string]$Url, [string]$Method = "GET", [string]$Body = "", [ha
     # -> @{ Code; Body }; Code 0 when nothing answers
     $p = @{ Uri = $Url; Method = $Method; UseBasicParsing = $true; TimeoutSec = $Timeout; Headers = $Headers }
     if ($Body) { $p.Body = [Text.Encoding]::UTF8.GetBytes($Body); $p.ContentType = "application/json" }
-    try { $r = Invoke-WebRequest @p; return @{ Code = [int]$r.StatusCode; Body = [string]$r.Content } }
+    # The body as UTF-8, as the API sends it: Windows PowerShell reads a JSON answer without a charset as ISO-8859-1 (#408).
+    try { $r = Invoke-WebRequest @p; return @{ Code = [int]$r.StatusCode; Body = [Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray()) } }
     catch {
         $code = 0
         if ($_.Exception.Response) { try { $code = [int]$_.Exception.Response.StatusCode } catch { } }
@@ -246,7 +252,7 @@ function Test-Docker {
 
 # ---- questions ----
 function Clear-GraphValues {
-    $St.GraphType = ""; $St.GraphHost = ""; $St.GraphPort = 0; $St.GraphUser = ""; $St.GraphPassword = ""; $St.GraphDatabase = ""; $St.GraphTls = ""
+    $St.GraphType = ""; $St.GraphHost = ""; $St.GraphPort = 0; $St.GraphUser = ""; $St.GraphPassword = ""; $St.GraphDatabase = ""; $St.GraphTls = ""; $St.GraphScheme = ""
 }
 function Read-GraphChoice {
     Step "Graph database" "Base de datos de grafos"
@@ -280,10 +286,11 @@ function Read-GraphChoice {
         if ($St.GraphType -eq "neo4j" -and -not $St.GraphUser) { $St.GraphUser = "neo4j" }
         if ($Interactive -and -not $St.GraphPassword) { $St.GraphPassword = AskSecret "Password (empty if it has none)" "Contrase\u00f1a (vac\u00eda si no tiene)" }
         if ($St.GraphType -eq "neo4j" -and $Interactive -and -not $St.GraphDatabase) {
-            $St.GraphDatabase = Ask "Database (empty: the server's default)" "Base de datos (vac\u00edo: la predeterminada del servidor)" ""
+            $St.GraphDatabase = Ask "Database (empty: the user's default, which the test finds; on Neo4j Aura, the instance's own)" `
+                "Base de datos (vac\u00edo: la predeterminada del usuario, que la prueba encuentra; en Neo4j Aura, la de la instancia)" ""
         }
         if ($St.GraphType -eq "neo4j" -and -not $St.GraphTls) {
-            $St.GraphTls = if (YesNo "Does it ask for TLS (bolt+s, as Neo4j Aura does)?" "\u00bfPide TLS (bolt+s, como Neo4j Aura)?" $false) { "1" } else { "0" }
+            $St.GraphTls = if (YesNo "Does it ask for TLS (neo4j+s://, as Neo4j Aura does)?" "\u00bfPide TLS (neo4j+s://, como Neo4j Aura)?" $false) { "1" } else { "0" }
         }
         # The environment has no TLS setting for FalkorDB: that connection is saved in Administration > Graph database instead.
         if ($St.GraphType -eq "falkordb" -and $St.GraphTls -eq "1") {
@@ -389,6 +396,13 @@ function Save-EnvFile {
     Save-Utf8 $envFile (($St.EnvLines -join "`n") + "`n")
     if ($OnMac) { Invoke-Native "chmod" @("600", $envFile) -Quiet | Out-Null }
 }
+# The URI the test before the start tries and .env gets, the same string for both (#408): the routing scheme (neo4j://, neo4j+s://),
+# which a cluster such as Neo4j Aura needs and a single server accepts too, unless -GraphScheme bolt asks for a direct connection.
+function Get-Neo4jUri {
+    $scheme = if ($St.GraphScheme) { $St.GraphScheme } else { "neo4j" }
+    if ($St.GraphTls -eq "1") { $scheme = "$scheme+s" }
+    return ("{0}://{1}:{2}" -f $scheme, $St.ContainerHost, $St.GraphPort)
+}
 # The environment wins over Administration > Graph database when it is set (#358): an existing database the installer was told about
 # goes in .env, read-only in the interface. A local install writes none of these, so the interface can change it.
 function Set-GraphEnv {
@@ -406,8 +420,7 @@ function Set-GraphEnv {
         if ($St.GraphPassword) { Set-EnvValue "MIMIRSYNTH_FALKOR_PASSWORD" (Format-EnvValue $St.GraphPassword) }
     }
     else {
-        $scheme = if ($St.GraphTls -eq "1") { "bolt+s" } else { "bolt" }
-        Set-EnvValue "MIMIRSYNTH_NEO4J_URI" (Format-EnvValue ("{0}://{1}:{2}" -f $scheme, $St.ContainerHost, $St.GraphPort))
+        Set-EnvValue "MIMIRSYNTH_NEO4J_URI" (Format-EnvValue (Get-Neo4jUri))
         Set-EnvValue "MIMIRSYNTH_NEO4J_USER" (Format-EnvValue $St.GraphUser)
         if ($St.GraphPassword) { Set-EnvValue "MIMIRSYNTH_NEO4J_PASSWORD" (Format-EnvValue $St.GraphPassword) }
         if ($St.GraphDatabase) { Set-EnvValue "MIMIRSYNTH_NEO4J_DATABASE" (Format-EnvValue $St.GraphDatabase) }
@@ -418,12 +431,14 @@ function Set-GraphEnv {
 # version, write permission and what the database holds), in a throwaway container of the release's own image (plain `docker run`,
 # so it creates no volume or network of the project), which reaches the server as MimirSynth will. The connection goes in on stdin
 # (base64 JSON, the endpoint's body), never on a command line. Exit status 3: a release without graphconn (before #358); 4: the test
-# itself could not run. The same text as PROBE_PY in install.sh (CI compares them).
-$ProbePy = "import base64,json,os,sys,importlib.util as u;sys.excepthook=lambda t,v,b:(print(repr(v)),sys.stdout.flush(),os._exit(4));u.find_spec('mimirsynth.graphconn') or sys.exit(3);from mimirsynth.graphconn import probe;from mimirsynth.graphdb import Connection;b=json.loads(base64.b64decode(sys.stdin.buffer.read()));r=probe(Connection(b['backend'],b['host'],int(b.get('port') or 0),b.get('user') or '',b.get('password') or '',bool(b.get('tls')),b.get('database') or ''),sys.argv[1]);s=r['server'] or {};print(' '.join(str(x) for x in (s.get('server'),s.get('version')) if x)+'|'+str(len(r['graphs'])) if r['ok'] else r['error']['message']);sys.exit(0 if r['ok'] else 1)"
+# itself could not run. The same text as PROBE_PY in install.sh (CI compares them). Asked for JSON (the last argument), it prints
+# ["server version", "database", "graphs"] or [cause] in ASCII, so no console code page garbles the cause on its way here (#408).
+$ProbePy = "import base64,json,logging,os,sys,importlib.util as u;logging.disable(50);sys.excepthook=lambda t,v,b:(print(ascii(v)),sys.stdout.flush(),os._exit(4));u.find_spec('mimirsynth.graphconn') or sys.exit(3);from mimirsynth.graphconn import probe;from mimirsynth.graphdb import Connection;b=json.loads(base64.b64decode(sys.stdin.buffer.read()));r=probe(Connection(b['backend'],b['host'],int(b.get('port') or 0),b.get('user') or '',b.get('password') or '',bool(b.get('tls')),b.get('database') or '',b.get('uri') or ''),sys.argv[1]);s=r['server'] or {};a=[' '.join(str(x) for x in (s.get('server'),s.get('version')) if x),str(s.get('database') or ''),str(len(r['graphs']))] if r['ok'] else [r['error']['message']];print(json.dumps(a) if sys.argv[2:]==['json'] else '|'.join(a));sys.exit(0 if r['ok'] else 1)"
 function Invoke-GraphProbe {
-    # -> 0 passed (GraphTestAnswer: "server version|graphs"), 1 failed (GraphTestAnswer: the cause, in the user's language), 3 not available
+    # -> 0 passed (GraphTestParts: server version, database, graphs), 1 failed (GraphTestAnswer: the cause, in the user's language), 3 not available
+    $uri = if ($St.GraphType -eq "neo4j") { Get-Neo4jUri } else { "" }
     $body = @{ backend = $St.GraphType; host = $St.ContainerHost; port = [int]$St.GraphPort; user = [string]$St.GraphUser;
-               password = [string]$St.GraphPassword; tls = ($St.GraphTls -eq "1"); database = [string]$St.GraphDatabase } | ConvertTo-Json -Compress
+               password = [string]$St.GraphPassword; tls = ($St.GraphTls -eq "1"); database = [string]$St.GraphDatabase; uri = $uri } | ConvertTo-Json -Compress
     $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
     $img = (Get-NativeOutput "docker" @("compose", "config", "--images", "mimirsynth") | Where-Object { $_ -match "/mimirsynth:" } | Select-Object -First 1)   # it lists postgres too, in no fixed order
     if (-not $img) { $img = "ghcr.io/mimirsynth/mimirsynth:$($St.Version)" }
@@ -432,7 +447,7 @@ function Invoke-GraphProbe {
         try { $enc = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false } catch { $enc = $null }
         # (the pipe may put a byte order mark before the text: the test reads bytes and base64 skips it)
         $out = @($b64 | & docker run --rm -i --add-host "host.docker.internal:host-gateway" --read-only --tmpfs /tmp --cap-drop ALL `
-                     --security-opt no-new-privileges $img python -c $ProbePy $Lang)
+                     --security-opt no-new-privileges $img python -c $ProbePy $Lang "json")
         $rc = $LASTEXITCODE
     }
     catch { $out = @(); $rc = -1 }
@@ -441,6 +456,13 @@ function Invoke-GraphProbe {
         $ErrorActionPreference = $old
     }
     $St.GraphTestAnswer = if ($out.Count) { [string]$out[-1] } else { "" }
+    $St.GraphTestParts = @()
+    if ($rc -in @(0, 1)) {
+        # (Windows PowerShell passes a JSON array down the pipeline as one object: foreach takes its items)
+        try { $j = $St.GraphTestAnswer | ConvertFrom-Json; $St.GraphTestParts = @(foreach ($v in $j) { [string]$v }) } catch { }
+        if ($rc -eq 1 -and $St.GraphTestParts.Count) { $St.GraphTestAnswer = $St.GraphTestParts[0] }
+        if ($rc -eq 0 -and $St.GraphTestParts.Count -ne 3) { $St.GraphTestParts = @($St.GraphTestAnswer, "", "?") }
+    }
     if ($rc -in @(0, 1, 3)) { return $rc }
     Warn "could not run the connection test in a container (exit status {0}): {1}" "no se ha podido ejecutar la prueba de conexi\u00f3n en un contenedor (c\u00f3digo {0}): {1}" @($rc, $St.GraphTestAnswer)
     return 3
@@ -461,8 +483,14 @@ function Test-GraphBeforeStart {
         $rc = Invoke-GraphProbe
         if ($rc -eq 0) {
             $St.Probed = $true
-            $parts = $St.GraphTestAnswer.Split("|")
-            Say "Connection test passed: {0}, {1} graph(s) or partition(s) found." "La prueba de conexi\u00f3n ha pasado: {0}, {1} grafo(s) o partici\u00f3n(es) encontrados." @($parts[0], $parts[-1])
+            $parts = $St.GraphTestParts
+            $dbEn = ""; $dbEs = ""
+            if ($parts[1] -and -not $St.GraphDatabase) {
+                $dbEn = ", database " + [char]0xAB + $parts[1] + [char]0xBB + " (the user's default)"
+                $dbEs = ", base de datos " + [char]0xAB + $parts[1] + [char]0xBB + " (la predeterminada del usuario)"
+            }
+            elseif ($parts[1]) { $dbEn = ", database " + [char]0xAB + $parts[1] + [char]0xBB; $dbEs = ", base de datos " + [char]0xAB + $parts[1] + [char]0xBB }
+            Say "Connection test passed: {0}{1}, {2} graph(s) or partition(s) found." "La prueba de conexi\u00f3n ha pasado: {0}{1}, {2} grafo(s) o partici\u00f3n(es) encontrados." @($parts[0], $(if ($Lang -eq "es") { $dbEs } else { $dbEn }), $parts[2])
             return
         }
         if ($rc -eq 3) {
@@ -529,21 +557,40 @@ function Test-GraphViaApi {
     return 1
 }
 
+# -> $false when the running instance cannot use the existing graph database: the container does not reach it, the test through the
+# API fails, or /api/health said the graph does not answer and nothing says otherwise.
 function Test-GraphFromContainer {
     Step "Graph database" "Base de datos de grafos"
+    $ok = $true
     $py = "import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 5)"
     if ((Dc @("exec", "-T", "mimirsynth", "python", "-c", $py, $St.ContainerHost, [string]$St.GraphPort) -Quiet) -eq 0) {
         Say "The container reaches {0}:{1}." "El contenedor llega a {0}:{1}." @($St.ContainerHost, $St.GraphPort)
     }
     else {
-        Warn "the container does not reach {0}:{1}: check the address, the server's listen address and the firewall, then change .env and run 'docker compose up -d'" `
-             "el contenedor no llega a {0}:{1}: revisa la direcci\u00f3n, la direcci\u00f3n en la que escucha el servidor y el cortafuegos, cambia .env y ejecuta 'docker compose up -d'" @($St.ContainerHost, $St.GraphPort)
+        Warn "the container does not reach {0}:{1}: check the address, the server's listen address and the firewall" `
+             "el contenedor no llega a {0}:{1}: revisa la direcci\u00f3n, la direcci\u00f3n en la que escucha el servidor y el cortafuegos" @($St.ContainerHost, $St.GraphPort)
+        $ok = $false
     }
     switch (Test-GraphViaApi) {
-        0 { Say "Connection test passed." "La prueba de conexi\u00f3n ha pasado." }
-        1 { Warn "the connection test failed: {0}" "la prueba de conexi\u00f3n ha fallado: {0}" @($St.GraphTestAnswer) }
-        default { Say "The full connection test (credentials, version, permissions) runs in the setup wizard." "La prueba completa de conexi\u00f3n (credenciales, versi\u00f3n, permisos) se hace en el asistente." }
+        0 { Say "Connection test passed." "La prueba de conexi\u00f3n ha pasado."; $ok = $true }
+        1 { Warn "the connection test failed: {0}" "la prueba de conexi\u00f3n ha fallado: {0}" @($St.GraphTestAnswer); $ok = $false }
+        default {
+            Say "The full connection test (credentials, version, permissions) runs in the setup wizard." "La prueba completa de conexi\u00f3n (credenciales, versi\u00f3n, permisos) se hace en el asistente."
+            if ($St.GraphDown) { $ok = $false }
+        }
     }
+    return $ok
+}
+
+# MimirSynth is running, but without its graph database nothing works: the run fails (#408), unless -SkipGraphCheck.
+function Stop-GraphUnusable {
+    if ($SkipGraphCheck) {
+        Warn "MimirSynth is running, but cannot use the graph database until the connection works: fix it in .env and run 'docker compose up -d' in {0}" `
+             "MimirSynth est\u00e1 en marcha, pero no puede usar la base de datos de grafos hasta que la conexi\u00f3n funcione: corr\u00edgela en .env y ejecuta 'docker compose up -d' en {0}" @($Dir)
+        return
+    }
+    Fail "MimirSynth is running in {0}, but cannot use the graph database until the connection works: fix it in .env (MIMIRSYNTH_NEO4J_* or MIMIRSYNTH_FALKOR_*) and run 'docker compose up -d' there (or add -SkipGraphCheck)" `
+         "MimirSynth est\u00e1 en marcha en {0}, pero no puede usar la base de datos de grafos hasta que la conexi\u00f3n funcione: corr\u00edgela en .env (MIMIRSYNTH_NEO4J_* o MIMIRSYNTH_FALKOR_*) y ejecuta all\u00ed 'docker compose up -d' (o a\u00f1ade -SkipGraphCheck)" @($Dir)
 }
 
 # =================================================================================================================================
@@ -580,7 +627,7 @@ try {
         $St.UseOllama = ("," + (Get-EnvValue "COMPOSE_PROFILES") + ",") -like "*,ollama,*"
         $St.GraphType = Get-EnvValue "MIMIRSYNTH_GRAPH_BACKEND"; if (-not $St.GraphType) { $St.GraphType = "falkordb" }
         if ($St.GraphType -eq "neo4j") {
-            $u = (Get-EnvValue "MIMIRSYNTH_NEO4J_URI") -replace '^[a-z+]+://', ''
+            $u = (Get-EnvValue "MIMIRSYNTH_NEO4J_URI") -replace '^[a-z0-9+]+://', ''   # neo4j://, neo4j+s://, bolt://...
             $St.ContainerHost = $u.Substring(0, $u.LastIndexOf(":")); $St.GraphPort = [int]$u.Substring($u.LastIndexOf(":") + 1)
             $St.Graph = "existing"
         }
@@ -611,6 +658,7 @@ try {
     Step "Start" "Arranque"
     Say "Downloading the images and starting the services (the first time takes a few minutes)..." "Descargando las im\u00e1genes y arrancando los servicios (la primera vez tarda unos minutos)..."
     if ((Dc @("up", "-d")) -ne 0) { Fail "docker compose up failed: see the messages above" "docker compose up ha fallado: mira los mensajes de arriba" }
+    $St.Started = $true
 
     if ($St.UseOllama) {
         Step "Embedding model" "Modelo de embeddings"
@@ -622,7 +670,10 @@ try {
     Step "Waiting for MimirSynth" "Esperando a MimirSynth"
     switch (Wait-Health) {
         0 { Say "It answers and reaches its databases." "Responde y llega a sus bases de datos." }
-        2 { Warn "it answers, but does not reach everything it needs: {0}" "responde, pero no llega a todo lo que necesita: {0}" @($St.HealthBody) }
+        2 {
+            Warn "it answers, but does not reach everything it needs: {0}" "responde, pero no llega a todo lo que necesita: {0}" @($St.HealthBody)
+            try { $St.GraphDown = (($St.HealthBody | ConvertFrom-Json).graph -eq $false) } catch { }
+        }
         default {
             Dc @("logs", "--tail", "30", "mimirsynth") | Out-Null
             Fail "it did not answer within {0}s: see 'docker compose logs mimirsynth' in {1}" "no ha respondido en {0}s: mira 'docker compose logs mimirsynth' en {1}" @($WaitSeconds, $Dir)
@@ -633,7 +684,9 @@ try {
     if ((Get-Http "http://127.0.0.1:$($St.Port)/api/auth/options").Body -match '"setup":\s*true') {
         for ($i = 0; $i -lt 10 -and -not $St.SetupCode; $i++) { $St.SetupCode = Get-SetupCode; if (-not $St.SetupCode) { Start-Sleep -Seconds 1 } }
     }
-    if ($St.Graph -eq "existing" -and -not $St.Probed) { Test-GraphFromContainer }
+    if ($St.Graph -eq "existing" -and (-not $St.Probed -or $St.GraphDown)) {
+        if (-not (Test-GraphFromContainer)) { Stop-GraphUnusable }
+    }
 
     $Url = "http://localhost:$($St.Port)"
     # The setup wizard (#361) is at /configuracion. Its API answers 401 without a session; a release without it serves the web app on
@@ -656,6 +709,7 @@ catch {
     Write-Host ""
     Write-Host $_.Exception.Message -ForegroundColor Red
     if ($St.Removed) { Write-Host (T "The installer stopped: fix the cause and run it again." "El instalador se ha detenido: corrige la causa y vuelve a ejecutarlo.") }
+    elseif ($St.Started) { Write-Host (T "The installer stopped. MimirSynth stays installed and started: nothing was removed." "El instalador se ha detenido. MimirSynth sigue instalado y en marcha: no se ha borrado nada.") }
     else { Write-Host (T "The installer stopped. Nothing was removed: fix the cause and run it again." "El instalador se ha detenido. No se ha borrado nada: corrige la causa y vuelve a ejecutarlo.") }
     $failed = $true
 }

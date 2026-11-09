@@ -10,8 +10,9 @@ REPO="MimirSynth/mimirsynth"
 EMBED_MODEL="nomic-embed-text"
 WAIT_SECONDS="${WAIT_SECONDS:-300}"
 DIR=""; VERSION=""; PORT=""; FROM=""; YES=0; LANG_OPT=""
-GRAPH=""; GTYPE=""; GHOST=""; GPORT=""; GUSER=""; GDB=""; GTLS=""; GPASS="${MIMIRSYNTH_GRAPH_PASSWORD:-}"; SKIP_GRAPH_CHECK=0
+GRAPH=""; GTYPE=""; GHOST=""; GPORT=""; GUSER=""; GDB=""; GTLS=""; GSCHEME=""; GPASS="${MIMIRSYNTH_GRAPH_PASSWORD:-}"; SKIP_GRAPH_CHECK=0
 PROBED=0; WROTE=0  # PROBED: the existing graph database passed the full test before the start; WROTE: this run wrote the configuration
+GRAPH_DOWN=0       # after the start, /api/health said the graph database does not answer
 OLLAMA=""; INSTALL_DOCKER=0; UPGRADE=0; START=1; BROWSER=1
 
 usage() {
@@ -27,7 +28,10 @@ Options:
   --graph local|existing   local: start the bundled FalkorDB (default); existing: use your FalkorDB or Neo4j server
   --graph-type falkordb|neo4j   --graph-host HOST   --graph-port N   --graph-user USER   --graph-database DB
                            the password is read from MIMIRSYNTH_GRAPH_PASSWORD, never from the command line
-  --graph-tls              the existing Neo4j asks for TLS (bolt+s, as Neo4j Aura does)
+  --graph-tls              the existing Neo4j asks for TLS (neo4j+s://, as Neo4j Aura does)
+  --graph-scheme neo4j|bolt   how to reach Neo4j: neo4j (default) routes, as a cluster such as Neo4j Aura needs, and works with a
+                           single server too; bolt only connects directly to that one server. With no --graph-database, the
+                           user's default database is used (on Neo4j Aura, the instance's own), and the test names it
   --skip-graph-check       go on even if the existing graph database does not answer or does not pass the connection
                            test (address, credentials, version and write permission, run before anything starts)
   --ollama | --no-ollama   start a bundled Ollama for embeddings and download nomic-embed-text (default without
@@ -56,6 +60,7 @@ while [ $# -gt 0 ]; do
     --graph-user) GUSER="${2:-}"; shift ;;
     --graph-database) GDB="${2:-}"; shift ;;
     --graph-tls) GTLS=1 ;;
+    --graph-scheme) GSCHEME="${2:-}"; shift ;;
     --skip-graph-check) SKIP_GRAPH_CHECK=1 ;;
     --ollama) OLLAMA=1 ;;
     --no-ollama) OLLAMA=0 ;;
@@ -255,10 +260,14 @@ ask_graph() {
     fi
     [ "$GTYPE" != neo4j ] || [ -n "$GUSER" ] || GUSER=neo4j
     if [ "$TTY" = 1 ] && [ -z "$GPASS" ]; then ask_secret "Password (empty if it has none)" "Contraseña (vacía si no tiene)"; GPASS="$REPLY"; fi
-    if [ "$GTYPE" = neo4j ] && [ "$TTY" = 1 ] && [ -z "$GDB" ]; then ask "Database (empty: the server's default)" "Base de datos (vacío: la predeterminada del servidor)" ""; GDB="$REPLY"; fi
-    if [ "$GTYPE" = neo4j ] && [ -z "$GTLS" ]; then
-      if yesno "Does it ask for TLS (bolt+s, as Neo4j Aura does)?" "¿Pide TLS (bolt+s, como Neo4j Aura)?" n; then GTLS=1; else GTLS=0; fi
+    if [ "$GTYPE" = neo4j ] && [ "$TTY" = 1 ] && [ -z "$GDB" ]; then
+      ask "Database (empty: the user's default, which the test finds; on Neo4j Aura, the instance's own)" \
+          "Base de datos (vacío: la predeterminada del usuario, que la prueba encuentra; en Neo4j Aura, la de la instancia)" ""; GDB="$REPLY"
     fi
+    if [ "$GTYPE" = neo4j ] && [ -z "$GTLS" ]; then
+      if yesno "Does it ask for TLS (neo4j+s://, as Neo4j Aura does)?" "¿Pide TLS (neo4j+s://, como Neo4j Aura)?" n; then GTLS=1; else GTLS=0; fi
+    fi
+    case "${GSCHEME:-neo4j}" in neo4j|bolt) ;; *) die "--graph-scheme must be neo4j or bolt" "--graph-scheme debe ser neo4j o bolt" ;; esac
     # The environment has no TLS setting for FalkorDB: that connection is saved in Administration > Graph database instead.
     [ "$GTYPE" != falkordb ] || [ "${GTLS:-0}" = 0 ] || die "a FalkorDB with TLS is configured in Administration > Graph database: install with --graph local and change it there" \
       "un FalkorDB con TLS se configura en Administración > Base de datos de grafos: instala con --graph local y cámbialo allí"
@@ -267,7 +276,7 @@ ask_graph() {
     warn "nothing answers at $GHOST:$GPORT" "nada responde en $GHOST:$GPORT"
     if [ "$SKIP_GRAPH_CHECK" = 1 ]; then break; fi
     [ "$TTY" = 1 ] || die "check the address, or add --skip-graph-check" "revisa la dirección, o añade --skip-graph-check"
-    if yesno "Enter the values again?" "¿Volver a introducir los datos?" y; then GTYPE=""; GHOST=""; GPORT=""; GUSER=""; GPASS=""; GDB=""; GTLS=""; continue; fi
+    if yesno "Enter the values again?" "¿Volver a introducir los datos?" y; then GTYPE=""; GHOST=""; GPORT=""; GUSER=""; GPASS=""; GDB=""; GTLS=""; GSCHEME=""; continue; fi
     yesno "Continue anyway?" "¿Continuar de todos modos?" n || die "cancelled" "cancelado"
     break
   done
@@ -356,6 +365,13 @@ MIMIRSYNTH_NEO4J_URI MIMIRSYNTH_NEO4J_USER MIMIRSYNTH_NEO4J_PASSWORD MIMIRSYNTH_
 unsetenv() {  # KEY: back to its commented example in .env, without the value
   (umask 077; K="$1" awk 'BEGIN { k = ENVIRON["K"] } $0 ~ "^" k "=" { print "# " k "="; next } { print }' .env > .env.tmp) && mv .env.tmp .env && chmod 600 .env
 }
+# The URI the test before the start tries and .env gets, the same string for both (#408): the routing scheme (neo4j://, neo4j+s://),
+# which a cluster such as Neo4j Aura needs and a single server accepts too, unless --graph-scheme bolt asks for a direct connection.
+neo4j_uri() {
+  local scheme="${GSCHEME:-neo4j}"
+  if [ "${GTLS:-0}" = 1 ]; then scheme="$scheme+s"; fi
+  printf '%s://%s:%s' "$scheme" "$CHOST" "$GPORT"
+}
 # The environment wins over Administration > Graph database when it is set (#358): an existing database the installer was told about
 # goes in .env, read-only in the interface. A local install writes none of these, so the interface can change it.
 write_graph_env() {
@@ -368,8 +384,7 @@ write_graph_env() {
     [ -z "$GUSER" ] || setenv MIMIRSYNTH_FALKOR_USERNAME "$(env_quote "$GUSER")"
     [ -z "$GPASS" ] || setenv MIMIRSYNTH_FALKOR_PASSWORD "$(env_quote "$GPASS")"
   else
-    local scheme=bolt; [ "${GTLS:-0}" = 1 ] && scheme=bolt+s
-    setenv MIMIRSYNTH_NEO4J_URI "$(env_quote "$scheme://$CHOST:$GPORT")"
+    setenv MIMIRSYNTH_NEO4J_URI "$(env_quote "$(neo4j_uri)")"
     setenv MIMIRSYNTH_NEO4J_USER "$(env_quote "$GUSER")"
     [ -z "$GPASS" ] || setenv MIMIRSYNTH_NEO4J_PASSWORD "$(env_quote "$GPASS")"
     [ -z "$GDB" ] || setenv MIMIRSYNTH_NEO4J_DATABASE "$(env_quote "$GDB")"
@@ -380,11 +395,13 @@ write_graph_env() {
 # version, write permission and what the database holds), in a throwaway container of the release's own image (plain `docker run`,
 # so it creates no volume or network of the project), which reaches the server as MimirSynth will. The connection goes in on stdin
 # (base64 JSON, the endpoint's body), never on a command line. Exit status 3: a release without graphconn (before #358); 4: the test
-# itself could not run. Shared with install.ps1 (CI compares them): no double quotes.
-PROBE_PY="import base64,json,os,sys,importlib.util as u;sys.excepthook=lambda t,v,b:(print(repr(v)),sys.stdout.flush(),os._exit(4));u.find_spec('mimirsynth.graphconn') or sys.exit(3);from mimirsynth.graphconn import probe;from mimirsynth.graphdb import Connection;b=json.loads(base64.b64decode(sys.stdin.buffer.read()));r=probe(Connection(b['backend'],b['host'],int(b.get('port') or 0),b.get('user') or '',b.get('password') or '',bool(b.get('tls')),b.get('database') or ''),sys.argv[1]);s=r['server'] or {};print(' '.join(str(x) for x in (s.get('server'),s.get('version')) if x)+'|'+str(len(r['graphs'])) if r['ok'] else r['error']['message']);sys.exit(0 if r['ok'] else 1)"
-graph_probe() {  # 0 passed (REPLY: «server version|graphs»), 1 failed (REPLY: the cause, in the user's language), 3 not available
-  local body out img rc=0
-  body="{\"backend\":$(json_str "$GTYPE"),\"host\":$(json_str "$CHOST"),\"port\":${GPORT:-0},\"user\":$(json_str "$GUSER"),\"password\":$(json_str "$GPASS"),\"tls\":$([ "${GTLS:-0}" = 1 ] && echo true || echo false),\"database\":$(json_str "$GDB")}"
+# itself could not run. It prints «server version|database|graphs» or the cause; install.ps1 asks for JSON instead (ASCII only, so no
+# console code page can garble the cause). Shared with install.ps1 (CI compares them): no double quotes.
+PROBE_PY="import base64,json,logging,os,sys,importlib.util as u;logging.disable(50);sys.excepthook=lambda t,v,b:(print(ascii(v)),sys.stdout.flush(),os._exit(4));u.find_spec('mimirsynth.graphconn') or sys.exit(3);from mimirsynth.graphconn import probe;from mimirsynth.graphdb import Connection;b=json.loads(base64.b64decode(sys.stdin.buffer.read()));r=probe(Connection(b['backend'],b['host'],int(b.get('port') or 0),b.get('user') or '',b.get('password') or '',bool(b.get('tls')),b.get('database') or '',b.get('uri') or ''),sys.argv[1]);s=r['server'] or {};a=[' '.join(str(x) for x in (s.get('server'),s.get('version')) if x),str(s.get('database') or ''),str(len(r['graphs']))] if r['ok'] else [r['error']['message']];print(json.dumps(a) if sys.argv[2:]==['json'] else '|'.join(a));sys.exit(0 if r['ok'] else 1)"
+graph_probe() {  # 0 passed (REPLY: «server version|database|graphs»), 1 failed (REPLY: the cause, in the user's language), 3 not available
+  local body out img uri="" rc=0
+  [ "$GTYPE" != neo4j ] || uri="$(neo4j_uri)"
+  body="{\"backend\":$(json_str "$GTYPE"),\"host\":$(json_str "$CHOST"),\"port\":${GPORT:-0},\"user\":$(json_str "$GUSER"),\"password\":$(json_str "$GPASS"),\"tls\":$([ "${GTLS:-0}" = 1 ] && echo true || echo false),\"database\":$(json_str "$GDB"),\"uri\":$(json_str "$uri")}"
   img="$(dc config --images mimirsynth 2>/dev/null | grep -m 1 "/mimirsynth:" || true)"  # it lists postgres too, in no fixed order
   img="${img:-ghcr.io/mimirsynth/mimirsynth:$VERSION}"
   out="$(printf '%s' "$body" | base64 | tr -d '\n' | $DOCKER run --rm -i --add-host host.docker.internal:host-gateway --read-only --tmpfs /tmp \
@@ -409,8 +426,12 @@ test_graph() {
     local rc=0; graph_probe || rc=$?
     case "$rc" in
       0) PROBED=1
-         say "Connection test passed: ${REPLY%|*}, ${REPLY##*|} graph(s) or partition(s) found." \
-             "La prueba de conexión ha pasado: ${REPLY%|*}, ${REPLY##*|} grafo(s) o partición(es) encontrados."
+         local srv db n den="" des=""
+         IFS='|' read -r srv db n <<<"$REPLY"
+         if [ -n "$db" ] && [ -z "$GDB" ]; then den=", database «$db» (the user's default)"; des=", base de datos «$db» (la predeterminada del usuario)"
+         elif [ -n "$db" ]; then den=", database «$db»"; des=", base de datos «$db»"; fi
+         say "Connection test passed: $srv$den, $n graph(s) or partition(s) found." \
+             "La prueba de conexión ha pasado: $srv$des, $n grafo(s) o partición(es) encontrados."
          return 0 ;;
       3) say "This release cannot test it before the start: it is tested once MimirSynth answers." \
              "Esta versión no puede probarla antes del arranque: se prueba cuando MimirSynth responda."
@@ -420,7 +441,7 @@ test_graph() {
     if [ "$SKIP_GRAPH_CHECK" = 1 ]; then return 0; fi
     if [ "$TTY" = 1 ]; then
       if yesno "Enter the values again?" "¿Volver a introducir los datos?" y; then
-        GTYPE=""; GHOST=""; GPORT=""; GUSER=""; GPASS=""; GDB=""; GTLS=""
+        GTYPE=""; GHOST=""; GPORT=""; GUSER=""; GPASS=""; GDB=""; GTLS=""; GSCHEME=""
         ask_graph; write_graph_env; continue
       fi
       if yesno "Install anyway?" "¿Instalar de todos modos?" n; then return 0; fi
@@ -471,20 +492,37 @@ graph_api_test() {
   esac
 }
 
+# Returns 1 when the running instance cannot use the existing graph database: the container does not reach it, the test through the
+# API fails, or /api/health said the graph does not answer and nothing says otherwise.
 check_graph_from_container() {
   step "Graph database" "Base de datos de grafos"
+  local bad=0
   if dc exec -T mimirsynth python -c 'import socket, sys; socket.create_connection((sys.argv[1], int(sys.argv[2])), 5)' "$CHOST" "$GPORT" >/dev/null 2>&1; then
     say "The container reaches $CHOST:$GPORT." "El contenedor llega a $CHOST:$GPORT."
   else
-    warn "the container does not reach $CHOST:$GPORT: check the address, the server's listen address and the firewall, then change .env and run 'docker compose up -d'" \
-         "el contenedor no llega a $CHOST:$GPORT: revisa la dirección, la dirección en la que escucha el servidor y el cortafuegos, cambia .env y ejecuta 'docker compose up -d'"
+    warn "the container does not reach $CHOST:$GPORT: check the address, the server's listen address and the firewall" \
+         "el contenedor no llega a $CHOST:$GPORT: revisa la dirección, la dirección en la que escucha el servidor y el cortafuegos"
+    bad=1
   fi
   local rc=0; graph_api_test || rc=$?
   case "$rc" in
-    0) say "Connection test passed." "La prueba de conexión ha pasado." ;;
-    1) warn "the connection test failed: $REPLY" "la prueba de conexión ha fallado: $REPLY" ;;
-    *) say "The full connection test (credentials, version, permissions) runs in the setup wizard." "La prueba completa de conexión (credenciales, versión, permisos) se hace en el asistente." ;;
+    0) say "Connection test passed." "La prueba de conexión ha pasado."; bad=0 ;;
+    1) warn "the connection test failed: $REPLY" "la prueba de conexión ha fallado: $REPLY"; bad=1 ;;
+    *) say "The full connection test (credentials, version, permissions) runs in the setup wizard." "La prueba completa de conexión (credenciales, versión, permisos) se hace en el asistente."
+       [ "$GRAPH_DOWN" = 0 ] || bad=1 ;;
   esac
+  return "$bad"
+}
+
+# MimirSynth is running, but without its graph database nothing works: the run fails (#408), unless --skip-graph-check.
+graph_unusable() {
+  if [ "$SKIP_GRAPH_CHECK" = 1 ]; then
+    warn "MimirSynth is running, but cannot use the graph database until the connection works: fix it in .env and run 'docker compose up -d' in $DIR" \
+         "MimirSynth está en marcha, pero no puede usar la base de datos de grafos hasta que la conexión funcione: corrígela en .env y ejecuta 'docker compose up -d' en $DIR"
+    return 0
+  fi
+  die "MimirSynth is running in $DIR, but cannot use the graph database until the connection works: fix it in .env (MIMIRSYNTH_NEO4J_* or MIMIRSYNTH_FALKOR_*) and run 'docker compose up -d' there (or add --skip-graph-check)" \
+      "MimirSynth está en marcha en $DIR, pero no puede usar la base de datos de grafos hasta que la conexión funcione: corrígela en .env (MIMIRSYNTH_NEO4J_* o MIMIRSYNTH_FALKOR_*) y ejecuta allí 'docker compose up -d' (o añade --skip-graph-check)"
 }
 
 open_browser() {
@@ -561,7 +599,8 @@ step "Waiting for MimirSynth" "Esperando a MimirSynth"
 rc=0; wait_health || rc=$?
 case "$rc" in
   0) say "It answers and reaches its databases." "Responde y llega a sus bases de datos." ;;
-  2) warn "it answers, but does not reach everything it needs: $HEALTH_BODY" "responde, pero no llega a todo lo que necesita: $HEALTH_BODY" ;;
+  2) warn "it answers, but does not reach everything it needs: $HEALTH_BODY" "responde, pero no llega a todo lo que necesita: $HEALTH_BODY"
+     case "$HEALTH_BODY" in *'"graph":false'*) GRAPH_DOWN=1 ;; esac ;;
   *) dc logs --tail 30 mimirsynth >&2 || true
      die "it did not answer within ${WAIT_SECONDS}s: see 'docker compose logs mimirsynth' in $DIR" "no ha respondido en ${WAIT_SECONDS}s: mira 'docker compose logs mimirsynth' en $DIR" ;;
 esac
@@ -570,7 +609,7 @@ SETUP_CODE=""
 if curl -fsS --max-time 5 "http://127.0.0.1:$PORT/api/auth/options" 2>/dev/null | grep -q '"setup":true'; then
   i=0; until [ -n "$SETUP_CODE" ] || [ "$i" -ge 10 ]; do SETUP_CODE="$(setup_code)"; [ -n "$SETUP_CODE" ] || sleep 1; i=$((i + 1)); done
 fi
-if [ "$GRAPH" = existing ] && [ "$PROBED" = 0 ]; then check_graph_from_container; fi
+if [ "$GRAPH" = existing ] && { [ "$PROBED" = 0 ] || [ "$GRAPH_DOWN" = 1 ]; }; then check_graph_from_container || graph_unusable; fi
 
 URL="http://localhost:$PORT"
 # The setup wizard (#361) is at /configuracion. Its API answers 401 without a session; a release without it serves the web app on any

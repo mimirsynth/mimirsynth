@@ -14,7 +14,7 @@ type Conn = {
 };
 type TestResult = {
   ok: boolean; label: string; address: string; steps: { step: string; ok: boolean; ms: number }[];
-  server: { server: string; version: string | null; edition?: string; database?: string } | null;
+  server: { server: string; version: string | null; edition?: string; database?: string; home?: boolean } | null;
   graphs: { name: string; nodes: number; brain: string | null }[]; truncated: boolean; error: { step: string; code: string; message: string } | null;
 };
 type Saved = Conn & { changed: boolean; test: TestResult };
@@ -53,7 +53,7 @@ export function GraphTestResult({ r }: { r: TestResult }) {
       <Steps label={t("Prueba de la conexión")}>
         {r.steps.map((s) => (
           <Step key={s.step} title={`${t(STEP[s.step] ?? s.step)} · ${s.ok ? t("pasa") : t("falla")}`} tone={tone(s.ok)}>
-            <Text size="xs" c="dimmed">{s.step === "version" && s.ok && v ? `${v.server} ${v.version ?? t("(versión no disponible)")}${v.edition ? ` · ${v.edition}` : ""}${v.database ? ` · ${t("base de datos «{{database}}»", { database: v.database })}` : ""} · ` : ""}{t("{{ms}} ms", { ms: s.ms })}</Text>
+            <Text size="xs" c="dimmed">{s.step === "version" && s.ok && v ? `${v.server} ${v.version ?? t("(versión no disponible)")}${v.edition ? ` · ${v.edition}` : ""}${v.database ? ` · ${v.home ? t("base de datos «{{database}}», la predeterminada del usuario", { database: v.database }) : t("base de datos «{{database}}»", { database: v.database })}` : ""} · ` : ""}{t("{{ms}} ms", { ms: s.ms })}</Text>
           </Step>))}
       </Steps>
       {r.ok && (r.graphs.length === 0
@@ -104,9 +104,9 @@ function EditConnection({ cur, onClose, onSaved }: { cur: Conn; onClose: () => v
                 value={f.user} onChange={(e) => set("user", e.currentTarget.value)} autoComplete="off" />
               <PasswordField label={t("Contraseña")} description={sameServer && cur.has_password ? t("Vacío = conservar la guardada") : undefined}
                 value={f.password} onChange={(e) => set("password", e.currentTarget.value)} autoComplete="new-password" />
-              {f.kind === "neo4j" && <TextField label={t("Base de datos (opcional)")} description={t("Vacío = la base de datos por defecto del servidor. Todos los brains viven en ella, cada uno con su group_id.")}
+              {f.kind === "neo4j" && <TextField label={t("Base de datos (opcional)")} description={t("Vacío = la base de datos predeterminada del usuario (en Neo4j Aura, la de la instancia); la prueba dice cuál es. Todos los brains viven en ella, cada uno con su group_id.")}
                 value={f.database} onChange={(e) => set("database", e.currentTarget.value)} />}
-              <Toggle label={t("Conexión cifrada (TLS)")} description={f.kind === "neo4j" ? t("Usa bolt+s://, con el certificado comprobado.") : t("Con el certificado comprobado.")}
+              <Toggle label={t("Conexión cifrada (TLS)")} description={f.kind === "neo4j" ? t("Usa neo4j+s://, con el certificado comprobado, como pide Neo4j Aura.") : t("Con el certificado comprobado.")}
                 checked={f.tls} onChange={(e) => set("tls", e.currentTarget.checked)} />
             </>}
         {moves && <Notice tone="warn" title={t("Los datos no se mueven")}>{t("La instancia pasará a usar esta base de datos, pero lo que hay en la actual se queda allí. Un brain cuyo grafo no esté en la nueva se verá vacío hasta que vuelvas a la anterior.")}</Notice>}
@@ -146,7 +146,7 @@ export default function AdminGraph() {
             {c.user && <SheetRow term={t("Usuario")}><Text size="sm" className="ms-data">{c.user}</Text></SheetRow>}
             <SheetRow term={t("Contraseña")}><Text size="sm">{c.has_password ? t("guardada") : t("sin contraseña")}</Text></SheetRow>
             <SheetRow term={t("TLS")}><Text size="sm">{c.tls ? t("sí") : t("no")}</Text></SheetRow>
-            {c.backend === "neo4j" && <SheetRow term={t("Base de datos de Neo4j")}>{c.database ? <Text size="sm" className="ms-data">{c.database}</Text> : <Text size="sm">{t("la del servidor por defecto")}</Text>}</SheetRow>}
+            {c.backend === "neo4j" && <SheetRow term={t("Base de datos de Neo4j")}>{c.database ? <Text size="sm" className="ms-data">{c.database}</Text> : <Text size="sm">{t("la predeterminada del usuario")}</Text>}</SheetRow>}
             {c.updated_at && <SheetRow term={t("Guardada")}>{fmt(c.updated_at)}</SheetRow>}
           </Sheet>
           {c.source === "env" && <Notice tone="info" title={t("Viene de las variables de entorno")}>

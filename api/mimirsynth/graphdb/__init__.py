@@ -32,8 +32,9 @@ DEFAULT_PORTS = {"falkordb": 6379, "neo4j": 7687}
 
 @dataclass(frozen=True)
 class Connection:
-    """Where the graph database is and how to sign in to it. `uri` is Neo4j's as the environment gives it; without it, it is built from
-    host, port and TLS."""
+    """Where the graph database is and how to sign in to it. `uri` is Neo4j's as the environment (or the installer) gives it; without
+    it, it is built from host, port and TLS with the routing scheme (`neo4j://`, `neo4j+s://`, #408): a cluster such as Neo4j Aura needs
+    it, and a single server accepts it too. `bolt://` only when the URI asks for it. `database` empty: the user's home database."""
     backend: str
     host: str = ""
     port: int = 0
@@ -48,7 +49,11 @@ class Connection:
         return BACKENDS.get(self.backend, self.backend)
 
     def neo4j_uri(self) -> str:
-        return self.uri or f"{'bolt+s' if self.tls else 'bolt'}://{self.host}:{self.port or DEFAULT_PORTS['neo4j']}"
+        return self.uri or f"{'neo4j+s' if self.tls else 'neo4j'}://{self.host}:{self.port or DEFAULT_PORTS['neo4j']}"
+
+    @property
+    def neo4j_scheme(self) -> str:
+        return self.neo4j_uri().split("://", 1)[0].lower()
 
     def address(self) -> str:
         """What people read: host:port, or Neo4j's URI."""

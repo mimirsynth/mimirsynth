@@ -1,6 +1,7 @@
 """The graph database connection saved from Administration → Graph (#358): the environment wins and is read-only, a connection that does
 not pass its test is never saved, the password never comes back, the saved one is only reused for the same server, the installer can
-test with the first-start code, and saving switches the backend without a restart."""
+test with the first-start code, and saving switches the backend without a restart. Neo4j is reached with the routing scheme unless the
+URI asks for bolt, and an empty database is the user's home database, which the test names (#408)."""
 import os
 import socket
 
@@ -95,9 +96,29 @@ def test_each_failure_names_its_cause(client):  # noqa: F811
     assert r["ok"] is False and r["error"]["code"] == "refused" and r["error"]["step"] == "reach"
     assert f"127.0.0.1:{port}" in r["error"]["message"] and r["steps"] == [{"step": "reach", "ok": False, "ms": r["steps"][0]["ms"]}]
     r = client.post("/api/admin/graph/test", json={"backend": "neo4j", "host": "no-such-host.invalid"}).json()
-    assert r["error"]["code"] == "dns" and r["address"] == "bolt://no-such-host.invalid:7687"
+    assert r["error"]["code"] == "dns" and r["address"] == "neo4j://no-such-host.invalid:7687"
     assert client.post("/api/admin/graph/test", json={"backend": "mongo", "host": "x"}).status_code == 422
     assert client.post("/api/admin/graph/test", json={"backend": "neo4j", "host": "bolt://x"}).status_code == 422   # a host, not a URI
+
+
+def test_neo4j_is_reached_with_the_routing_scheme_unless_the_uri_says_bolt():
+    """Neo4j Aura is a cluster: over bolt+s:// the driver talks to one member, which may not host the database (#408)."""
+    assert Connection("neo4j", "n4j", 7687).neo4j_uri() == "neo4j://n4j:7687"
+    assert Connection("neo4j", "abc123.databases.neo4j.io", 7687, tls=True).neo4j_uri() == "neo4j+s://abc123.databases.neo4j.io:7687"
+    assert Connection("neo4j", "n4j", 7687, uri="bolt://n4j:7687").neo4j_uri() == "bolt://n4j:7687"
+    assert Connection("neo4j", "n4j", uri="bolt+s://n4j:7687").neo4j_scheme == "bolt+s"
+
+
+def test_a_missing_database_says_which_and_what_to_do(monkeypatch):
+    monkeypatch.setattr(G, "cause", lambda e: "database")
+    code, msg = G._classify(RuntimeError(), Connection("neo4j", "n4j", database="neo4j"), "es")
+    assert code == "database" and "«neo4j»" in msg and "vacía" in msg and "bolt" not in msg
+    code, msg = G._classify(RuntimeError(), Connection("neo4j", "n4j"), "es")
+    assert code == "database" and "predeterminada" in msg and "«»" not in msg
+    code, msg = G._classify(RuntimeError(), Connection("neo4j", "n4j", tls=True, uri="bolt+s://n4j:7687"), "es")
+    assert "bolt+s://" in msg and "neo4j+s://" in msg
+    code, msg = G._classify(RuntimeError(), Connection("neo4j", "n4j"), "en")
+    assert msg == "The server cannot find this user's default database."
 
 
 def test_a_server_that_is_not_the_backend_says_so():
@@ -109,7 +130,7 @@ def test_a_server_that_is_not_the_backend_says_so():
     port = srv.getsockname()[1]
 
     def answer():
-        for _ in range(4):
+        for _ in range(40):
             try:
                 c, _ = srv.accept()
             except OSError:
@@ -122,6 +143,10 @@ def test_a_server_that_is_not_the_backend_says_so():
         assert not r["ok"] and r["error"]["code"] in ("protocol", "other") and r["error"]["step"] == "auth"
         r = G.probe(Connection("falkordb", "127.0.0.1", port, tls=True), timeout=3)
         assert not r["ok"] and r["error"]["code"] == "tls" and r["error"]["step"] == "reach"
+        # with the routing scheme every failure reads «Unable to retrieve routing information»: a direct connection tells the wrong
+        # service apart from a routing table that cannot be reached (#408)
+        r = G.probe(Connection("neo4j", "127.0.0.1", port), timeout=3)
+        assert not r["ok"] and r["error"]["code"] == "protocol" and r["error"]["step"] == "auth", r
     finally:
         srv.close()
 
@@ -202,7 +227,7 @@ def test_a_real_falkordb_passes_lists_its_graphs_and_leaves_nothing_behind(clien
                 c.select_graph(g).delete()
 
 
-@pytest.mark.skipif(not NEO4J, reason="necesita un Neo4j desechable (MIMIRSYNTH_TEST_NEO4J=bolt://host:7687)")
+@pytest.mark.skipif(not NEO4J, reason="necesita un Neo4j desechable (MIMIRSYNTH_TEST_NEO4J=neo4j://host:7687)")
 def test_a_real_neo4j_passes_and_lists_its_group_ids(client):  # noqa: F811
     from neo4j import GraphDatabase
     b = backend()
@@ -217,6 +242,20 @@ def test_a_real_neo4j_passes_and_lists_its_group_ids(client):  # noqa: F811
         host, port, _ = G._split_uri(settings.neo4j_uri)
         bad = client.post("/api/admin/graph/test", json={"backend": "neo4j", "host": host, "port": port, "password": "not-it"}).json()
         assert bad["error"]["code"] == "auth"
+        # the form, as Administration and the setup wizard send it: no database is the user's home database, named in the answer
+        form = {"backend": "neo4j", "host": host, "port": port, "user": settings.neo4j_user or "neo4j", "password": settings.neo4j_password}
+        home = client.post("/api/admin/graph/test", json=form).json()
+        assert home["ok"], home
+        assert home["address"] == f"neo4j://{host}:{port}" and home["server"]["home"] is True
+        assert home["server"]["database"] == b.database                                  # the one the application uses
+        named = client.post("/api/admin/graph/test", json={**form, "database": b.database}).json()
+        assert named["ok"] and named["server"]["home"] is False and named["server"]["database"] == b.database
+        missing = client.post("/api/admin/graph/test", json={**form, "database": "zz-no-such-db"}).json()
+        assert missing["error"]["code"] == "database" and "«zz-no-such-db»" in missing["error"]["message"]
+        # bolt:// only when the URI asks for it, and a missing database there points at the routing scheme
+        direct = G.probe(Connection("neo4j", host, port, form["user"], form["password"], database="zz-no-such-db",
+                                    uri=f"bolt://{host}:{port}"))
+        assert direct["error"]["code"] == "database" and "neo4j+s://" in direct["error"]["message"]
     finally:
         b.delete_graph("zz_conn_n")
 

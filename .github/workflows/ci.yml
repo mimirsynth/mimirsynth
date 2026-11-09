@@ -51,7 +51,9 @@ jobs:
         run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
   api-neo4j:
     # The same API suite against Neo4j (#357): the oldest version supported (5.26 LTS), Community. MIMIRSYNTH_TEST_NEO4J turns the
-    # graph tests on with the Neo4j backend (tests/conftest.py); the tests of FalkorDB's own dump skip there.
+    # graph tests on with the Neo4j backend (tests/conftest.py); the tests of FalkorDB's own dump skip there. The suite runs with
+    # neo4j://, the routing driver that Neo4j Aura needs and that the installer and Administration use (#408), and the graph tests
+    # again with bolt://, which a URI can still ask for.
     runs-on: ubuntu-latest
     services:
       neo4j:
@@ -73,7 +75,7 @@ jobs:
           --health-cmd "pg_isready -U mimirsynth"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      MIMIRSYNTH_TEST_NEO4J: bolt://localhost:7687
+      MIMIRSYNTH_TEST_NEO4J: neo4j://localhost:7687
       MIMIRSYNTH_NEO4J_USER: neo4j
       MIMIRSYNTH_NEO4J_PASSWORD: mimirsynth-ci
     steps:
@@ -84,6 +86,10 @@ jobs:
       - run: cd api && uv venv && uv pip install -e ".[pdf]" pytest pyyaml
       - name: Tests (con Neo4j real)
         run: cd api && .venv/bin/pytest -q --ignore=tests/test_docs_pg.py
+      - name: Tests del grafo con bolt:// (conexión directa)
+        env:
+          MIMIRSYNTH_TEST_NEO4J: bolt://localhost:7687
+        run: cd api && .venv/bin/pytest -q tests/test_graphdb.py tests/test_graph_connection.py tests/test_neo4j_isolation.py
       - name: Cambio de modelo de embeddings (PostgreSQL + pgvector y Neo4j reales)
         env:
           MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
@@ -182,10 +188,20 @@ jobs:
           for i in $(seq 1 60); do docker exec existing-neo4j cypher-shell -u neo4j -p mimirsynth-ci 'RETURN 1' >/dev/null 2>&1 && break; sleep 2; done
           MIMIRSYNTH_GRAPH_PASSWORD=mimirsynth-ci ./install.sh --yes --from . --version ci --no-browser --dir "$RUNNER_TEMP/neo4j" \
             --graph existing --graph-type neo4j --graph-host localhost --graph-port 7687 | tee "$RUNNER_TEMP/neo4j.log"
-          grep -q "Connection test passed: Neo4j 5.26" "$RUNNER_TEMP/neo4j.log"
+          grep -q "Connection test passed: Neo4j 5.26.*, database «neo4j» (the user's default)" "$RUNNER_TEMP/neo4j.log"
           cd "$RUNNER_TEMP/neo4j"
-          grep -q '^MIMIRSYNTH_NEO4J_URI=bolt://host.docker.internal:7687$' .env
-          curl -sf "localhost:$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)/api/health" | grep -q '"backend":"neo4j"'
+          grep -q '^MIMIRSYNTH_NEO4J_URI=neo4j://host.docker.internal:7687$' .env   # the routing scheme, as Aura needs (#408)
+          curl -sf "localhost:$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)/api/health" | grep -q '"graph":true,.*"backend":"neo4j"'
+      - name: When the started instance cannot use an existing graph database, the installer fails instead of finishing (#408)
+        run: |
+          set -o pipefail
+          export MIMIRSYNTH_GRAPH_PASSWORD=mimirsynth-ci
+          ./install.sh --yes --from . --version ci --no-start --dir "$RUNNER_TEMP/neo4j-nodb" --graph existing --graph-type neo4j \
+            --graph-host localhost --graph-port 7687 --graph-database zz-missing --skip-graph-check | tee "$RUNNER_TEMP/nodb-config.log"
+          grep -q "The server has no database «zz-missing». Leave the database empty" "$RUNNER_TEMP/nodb-config.log"
+          if ./install.sh --yes --from . --version ci --no-browser --dir "$RUNNER_TEMP/neo4j-nodb" 2>&1 | tee "$RUNNER_TEMP/nodb.log"; then exit 1; fi
+          grep -q "cannot use the graph database until the connection works" "$RUNNER_TEMP/nodb.log"
+          cd "$RUNNER_TEMP/neo4j-nodb" && docker compose down -v
       - name: The installer stops when an existing graph database does not answer (#360)
         run: |
           if ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/nothing" --no-start --graph existing --graph-host 127.0.0.1 --graph-port 6391; then exit 1; fi
@@ -270,9 +286,12 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           /bin/bash install.sh --yes --from . --version ci --no-start --dir "$RUNNER_TEMP/sh-neo4j" --lang es \
             --graph existing --graph-type neo4j --graph-host localhost --graph-port 1 --graph-tls --skip-graph-check
-          grep -q '^MIMIRSYNTH_NEO4J_URI=bolt+s://host.docker.internal:1$' "$RUNNER_TEMP/sh-neo4j/.env"
+          grep -q '^MIMIRSYNTH_NEO4J_URI=neo4j+s://host.docker.internal:1$' "$RUNNER_TEMP/sh-neo4j/.env"
           grep -q '^MIMIRSYNTH_DEFAULT_LANGUAGE=es$' "$RUNNER_TEMP/sh-neo4j/.env"
           grep -q '^COMPOSE_PROFILES=$' "$RUNNER_TEMP/sh-neo4j/.env"
+          /bin/bash install.sh --yes --from . --version ci --no-start --dir "$RUNNER_TEMP/sh-bolt" --graph existing --graph-type neo4j \
+            --graph-host db.example.com --graph-port 7687 --graph-scheme bolt --skip-graph-check
+          grep -q '^MIMIRSYNTH_NEO4J_URI=bolt://db.example.com:7687$' "$RUNNER_TEMP/sh-bolt/.env"
       - name: A stand-in docker (Windows)
         if: runner.os == 'Windows'
         shell: powershell

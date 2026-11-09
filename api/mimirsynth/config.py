@@ -17,10 +17,10 @@ class Settings(BaseSettings):
     falkor_port: int = 6379
     falkor_username: str = ""  # FalkorDB ACL, for an existing server that asks for it
     falkor_password: str = ""
-    neo4j_uri: str = ""  # bolt://host:7687 or neo4j://host:7687
+    neo4j_uri: str = ""  # neo4j://host:7687 (neo4j+s:// with TLS, as Neo4j Aura needs); bolt:// only for a direct connection
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
-    neo4j_database: str = ""  # empty: the server's default database
+    neo4j_database: str = ""  # empty: the user's home database (on Neo4j Aura, the instance id)
     default_graph: str = "default"
     bootstrap_graphs: str = ""  # grafos existentes a adoptar como brains al arrancar: "docs:Docs,otro"
 

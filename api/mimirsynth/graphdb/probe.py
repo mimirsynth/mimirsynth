@@ -72,10 +72,14 @@ class FalkorProbe:
 
 
 class Neo4jProbe:
+    """Connects as the backend does (`graphdb.make`): the same URI from the same `Connection`, and without a database the user's home
+    database, found the same way (`home_database`) and then used by name, as Graphiti will (#408)."""
+
     def __init__(self, conn: Connection, timeout: float):
         from neo4j import GraphDatabase
-        self.timeout, self.database = timeout, conn.database or None
-        self.driver = GraphDatabase.driver(conn.neo4j_uri(), auth=(conn.user or "neo4j", conn.password), connection_timeout=timeout,
+        self.timeout, self.database, self.home = timeout, conn.database or None, not conn.database
+        self.uri, self.auth_ = conn.neo4j_uri(), (conn.user or "neo4j", conn.password)
+        self.driver = GraphDatabase.driver(self.uri, auth=self.auth_, connection_timeout=timeout,
                                            connection_acquisition_timeout=timeout, max_transaction_retry_time=0,
                                            notifications_min_severity="OFF")
 
@@ -84,10 +88,29 @@ class Neo4jProbe:
         with self.driver.session(database=self.database, default_access_mode=WRITE_ACCESS if write else READ_ACCESS) as s:
             return list(s.run(Query(q, timeout=self.timeout), params or {}))
 
+    def _direct(self) -> None:
+        """Whether the server answers a direct connection (`bolt` instead of `neo4j`): raises what that one fails with."""
+        from neo4j import GraphDatabase
+        scheme, rest = self.uri.split("://", 1)
+        with GraphDatabase.driver(f"bolt{scheme[len('neo4j'):]}://{rest}", auth=self.auth_, connection_timeout=self.timeout,
+                                  connection_acquisition_timeout=self.timeout, notifications_min_severity="OFF") as d:
+            d.verify_connectivity()
+
     def auth(self) -> None:
-        self.driver.verify_connectivity()
-        if not self.database:  # Graphiti's driver needs the database by name, as the backend does
-            self.database = self._q("CALL db.info() YIELD name RETURN name")[0]["name"]
+        from neo4j.exceptions import ServiceUnavailable
+
+        from .neo4j import home_database
+        try:
+            self.driver.verify_connectivity()
+        except ServiceUnavailable as e:
+            # With the routing scheme every failure to connect reads «Unable to retrieve routing information»: a wrong port, a
+            # missing TLS. A direct connection tells them apart: when it fails too, its error is the cause; when it works, the
+            # server answers but the addresses it gives for routing cannot be reached.
+            if self.uri.lower().startswith("neo4j") and "routing" in str(e).lower():
+                self._direct()
+            raise
+        if self.home:  # a session without a database: the user's home database, by name from here on
+            self.database = home_database(self.driver, self.timeout)
         else:
             self._q("RETURN 1 AS ok")
 
@@ -101,7 +124,7 @@ class Neo4jProbe:
             parts = MIN_NEO4J  # a version this does not understand is let through: the write step still has to pass
         if parts < MIN_NEO4J:
             raise Unsupported("neo4j", v)
-        return {"server": "Neo4j", "version": v, "edition": r["edition"], "database": self.database}
+        return {"server": "Neo4j", "version": v, "edition": r["edition"], "database": self.database, "home": self.home}
 
     def write(self) -> None:
         self._q("CREATE (n:MimirSynthProbe {group_id: $g}) DELETE n", {"g": PROBE_PREFIX + secrets.token_hex(4)}, write=True)
@@ -120,8 +143,9 @@ def opener(conn: Connection, timeout: float) -> FalkorProbe | Neo4jProbe:
 
 
 def cause(e: Exception) -> str | None:
-    """What a driver's error means for a connection test: auth, permission, database, timeout, protocol (it answers, but not as that
-    backend, or not without TLS), redis (no graph module), or None when it is something else."""
+    """What a driver's error means for a connection test: auth, permission, database, timeout, routing (Neo4j answers, but the
+    addresses its routing table gives cannot be reached), protocol (it answers, but not as that backend, or not without TLS), redis (no
+    graph module), or None when it is something else."""
     from neo4j.exceptions import AuthError, ClientError, Forbidden, ServiceUnavailable
     from redis.exceptions import AuthenticationError, NoPermissionError, ResponseError
     from redis.exceptions import ConnectionError as RedisConnectionError
@@ -135,6 +159,8 @@ def cause(e: Exception) -> str | None:
         return "database"
     if isinstance(e, (RedisTimeout, TimeoutError)):
         return "timeout"
+    if isinstance(e, ServiceUnavailable) and "routing" in text.lower():
+        return "routing"
     if isinstance(e, (ServiceUnavailable, RedisConnectionError)):
         return "protocol"
     if isinstance(e, ResponseError) and "unknown command" in text.lower():

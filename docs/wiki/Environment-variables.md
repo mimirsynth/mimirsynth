@@ -39,7 +39,7 @@ Where the graph connection comes from, in this order:
 | `MIMIRSYNTH_GRAPH_BACKEND` | empty | `falkordb` or `neo4j` (Neo4j 5.26 or later). Empty: `neo4j` when `MIMIRSYNTH_NEO4J_URI` has a value, otherwise `falkordb` |
 | `MIMIRSYNTH_FALKOR_HOST` / `_PORT` | empty / `6379` | An existing FalkorDB. Only with the `falkordb` backend |
 | `MIMIRSYNTH_FALKOR_USERNAME` / `_PASSWORD` | empty | Credentials of a FalkorDB with ACL users. Only with the `falkordb` backend |
-| `MIMIRSYNTH_NEO4J_URI` | empty | Neo4j address (`bolt://host:7687` or `neo4j://host:7687`). Only with the `neo4j` backend |
+| `MIMIRSYNTH_NEO4J_URI` | empty | Neo4j address: `neo4j://host:7687`, or `neo4j+s://` with TLS (Neo4j Aura); `bolt://` connects directly to one server only. Only with the `neo4j` backend |
 | `MIMIRSYNTH_NEO4J_USER` / `_PASSWORD` | `neo4j` / empty | Neo4j credentials. Only with the `neo4j` backend |
 | `MIMIRSYNTH_NEO4J_DATABASE` | empty | The Neo4j database every brain lives in, each one as its own `group_id`; empty: the server's default. Only with the `neo4j` backend |
 | `MIMIRSYNTH_FALKOR_BUNDLED_HOST` | `falkordb` (compose) / `localhost` | Where the bundled FalkorDB answers. Fixed by the official compose |

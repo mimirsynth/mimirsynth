@@ -167,13 +167,14 @@ Si tus grafos están en Neo4j (5.26 LTS o posterior, Community o Enterprise), no
 ```bash
 # en .env
 MIMIRSYNTH_GRAPH_BACKEND=neo4j
-MIMIRSYNTH_NEO4J_URI=bolt://mi-neo4j:7687
+MIMIRSYNTH_NEO4J_URI=neo4j://mi-neo4j:7687
 MIMIRSYNTH_NEO4J_USER=neo4j
 MIMIRSYNTH_NEO4J_PASSWORD=…
-# opcional: otra base de datos que no sea la predeterminada del servidor
+# opcional: otra base de datos que no sea la predeterminada del usuario
 MIMIRSYNTH_NEO4J_DATABASE=
 docker compose up -d
 ```
+Usa `neo4j://`, o `neo4j+s://` con TLS: un clúster necesita este esquema con enrutamiento y un servidor suelto también lo acepta. **Neo4j Aura** es un clúster así: `MIMIRSYNTH_NEO4J_URI=neo4j+s://<id de la instancia>.databases.neo4j.io:7687` (no `bolt+s://`), y deja `MIMIRSYNTH_NEO4J_DATABASE` vacía, porque Aura llama a su base de datos como el id de la instancia y MimirSynth usa la predeterminada del usuario. El instalador hace todo esto solo con `--graph-tls` y sin `--graph-database`.
 Todos los brains comparten esa base de datos: un brain son los nodos cuyo `group_id` es su nombre, tal como los escribe Graphiti, y `MIMIRSYNTH_BOOTSTRAP_GRAPHS` adopta los `group_id` existentes del mismo modo. Una exportación lleva entonces solo la copia JSON del grafo, y la consola Cypher solo ejecuta lo que sabe mantener dentro del brain. Detalles y versiones soportadas en [la referencia de configuración](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/CONFIGURATION.md#base-de-datos-de-grafos), y qué separa los brains, con sus límites, en [Aislamiento entre brains con Neo4j](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/CONFIGURATION.md#aislamiento-entre-brains-con-neo4j). Neo4j no entra en las copias que hace `update.sh`: guárdalo tú.
 
 ## Modo desarrollo (sin inicio de sesión)
