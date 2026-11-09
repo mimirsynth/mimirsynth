@@ -2,6 +2,7 @@
 **[MimirSynth](Home)** · [Español](Inicio)
 
 **Start**
+- [[Your first 15 minutes]]
 - [[Concepts]]
 - [[Quick start]]
 - [[Installation]]
@@ -72,7 +73,7 @@
 <details>
 <summary><b>Español</b></summary>
 
-**Empezar:** [[Conceptos]] · [[Guía rápida]] · [[Instalación]] · [[Actualización y copias de seguridad]] · [[HTTPS y proxy inverso]]
+**Empezar:** [[Tus primeros 15 minutos]] · [[Conceptos]] · [[Guía rápida]] · [[Instalación]] · [[Actualización y copias de seguridad]] · [[HTTPS y proxy inverso]]
 
 **Usar:** [[Resumen]] · [[Diario]] · [[Hechos]] · [[Página de entidad]] · [[Conocimiento]] · [[Preguntar]] · [[Consultas de referencia]] · [[Grafo]] · [[Consulta Cypher]] · [[Propuestas]] · [[Calidad del contenido]] · [[Salud de la memoria]] · [[Curador]] · [[Hechos verificables]] · [[Vocabulario]] · [[Contradicciones]] · [[Trabajos]] · [[Mi cuenta]]
 
