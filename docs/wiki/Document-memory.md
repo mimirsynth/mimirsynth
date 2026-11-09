@@ -33,20 +33,21 @@ In agents' **recall** (REST API and the MCP `recall` tool), document passages go
 The budget and the threshold are adjusted in [[Recall and ingestion]].
 
 ## Scanned PDFs and images (OCR)
-With the OCR service running (see [[Installation]]), MimirSynth reads:
+With the OCR service running (the `ocr` profile and `MIMIRSYNTH_OCR_URL`, see [Compose profiles](Environment-variables#compose-profiles)), MimirSynth reads:
 - the pages of a PDF that have no text, which a mixed PDF only sends;
 - `.png`, `.jpg` and `.jpeg` images.
 
 Details:
 - **Type:** it is recognised by the file's content, not by its extension.
 - **Progress:** the job shows it page by page and can be cancelled between pages.
-- **Citations:** the recall cites the page.
-- **Limit:** at most **50 pages** per document by default (*OCR pages per document*, [[Settings reference]]). The rest stay unread and the document says so.
+- **Citations:** the recall cites the page. A chunk never spans two pages of a PDF, scanned or not, so the page it cites is exact. A PDF indexed before this rule may have chunks that span two pages: **Reindex** it in [[Knowledge]] to chunk it again.
+- **Limit:** at most **50 pages** per document by default (*OCR pages per document*, `ocr_max_pages`, [[Settings reference]]). The rest stay unread and the document says so.
 - **Languages:** `spa+eng` by default (*OCR languages*).
 - **Secrets:** the text read goes through the secret detector like any other.
 - **Folders and repositories:** they only bring images in when OCR is configured.
+- **Without OCR:** a scanned PDF or an image fails with an error that says how to enable it; a mixed PDF is indexed with its text pages and says how many it could not read. Under [[Knowledge]], a brain administrator sees whether the OCR service answers and its languages.
 
-A brain administrator can turn on **Read with the vision model** under [[Knowledge]]. The pages are then read by the vision model of an LLM engine instead of Tesseract, and Tesseract reads those the model cannot. Each page is one call to the engine.
+A brain administrator can turn on **Read with the vision model** under [[Knowledge]], for that brain only. The pages are then read by the vision model of an LLM engine instead of Tesseract, and Tesseract reads those the model cannot. The engine is the one named in *Vision engine for OCR* ([[Settings reference]]; empty: the default LLM engine), and it has to accept images. Each page is one call to the engine, so it is off by default, and the calls count as the brain's AI usage under «Document OCR» ([[AI consumption]]). A lone image then does not need the OCR service, but a PDF still does, to turn its pages into images.
 
 ## Duplicate documents
 A document whose extracted text matches one already indexed in the brain is marked **duplicate**: it is neither chunked nor embedded, so the same content never takes two places in the index or in recall. The rules:

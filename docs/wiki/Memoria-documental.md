@@ -33,20 +33,21 @@ En el **recall** de los agentes (API REST y herramienta `recall` del MCP), los p
 El presupuesto y el umbral se ajustan en [[Recuerdo e ingesta]].
 
 ## PDF escaneados e imágenes (OCR)
-Con el servicio OCR en marcha (ver [[Instalación]]), MimirSynth lee:
+Con el servicio OCR en marcha (el perfil `ocr` y `MIMIRSYNTH_OCR_URL`, ver [Perfiles de Compose](Variables-de-entorno#perfiles-de-compose)), MimirSynth lee:
 - las páginas de un PDF que no tienen texto, las únicas que manda un PDF mixto;
 - las imágenes `.png`, `.jpg` y `.jpeg`.
 
 Detalles:
 - **Tipo:** se reconoce por el contenido del fichero, no por su extensión.
 - **Progreso:** el trabajo lo muestra página a página y se puede cancelar entre páginas.
-- **Citas:** el recall cita la página.
-- **Límite:** como mucho **50 páginas** por documento por defecto (*Páginas con OCR por documento*, [[Referencia de ajustes]]). Las demás se quedan sin leer y el documento lo dice.
+- **Citas:** el recall cita la página. Un fragmento nunca abarca dos páginas de un PDF, escaneado o no, así que la página que cita es exacta. Un PDF indexado antes de esta regla puede tener fragmentos que abarcan dos páginas: **reindéxalo** en [[Conocimiento]] para volver a trocearlo.
+- **Límite:** como mucho **50 páginas** por documento por defecto (*Páginas con OCR por documento*, `ocr_max_pages`, [[Referencia de ajustes]]). Las demás se quedan sin leer y el documento lo dice.
 - **Idiomas:** `spa+eng` por defecto (*Idiomas del OCR*).
 - **Secretos:** el texto leído pasa por el detector de secretos como cualquier otro.
 - **Carpetas y repositorios:** solo traen imágenes si el OCR está configurado.
+- **Sin OCR:** un PDF escaneado o una imagen fallan con un error que dice cómo activarlo; un PDF mixto se indexa con sus páginas de texto y dice cuántas no pudo leer. En [[Conocimiento]], quien administra un brain ve si el servicio de OCR responde y sus idiomas.
 
-Quien administra un brain puede activar **Leer con el modelo de visión** en [[Conocimiento]]. Entonces lee las páginas el modelo de visión de un motor LLM en vez de Tesseract, y Tesseract lee las que el modelo no pueda. Cada página es una llamada al motor.
+Quien administra un brain puede activar **Leer con el modelo de visión** en [[Conocimiento]], solo para ese brain. Entonces lee las páginas el modelo de visión de un motor LLM en vez de Tesseract, y Tesseract lee las que el modelo no pueda. El motor es el que diga *Motor de visión para el OCR* ([[Referencia de ajustes]]; vacío: el motor LLM por defecto), y tiene que aceptar imágenes. Cada página es una llamada al motor, así que viene apagado, y las llamadas cuentan como consumo de IA del brain en «OCR de documentos» ([[Consumo de IA]]). Una imagen suelta no necesita entonces el servicio de OCR, pero un PDF sí, para convertir sus páginas en imágenes.
 
 ## Documentos duplicados
 Un documento cuyo texto extraído coincide con el de otro ya indexado en el brain queda como **duplicado**: no se trocea ni se calculan sus embeddings, así que el mismo contenido nunca ocupa dos sitios en el índice ni en el recall. Las reglas:

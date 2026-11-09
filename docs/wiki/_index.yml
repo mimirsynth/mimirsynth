@@ -63,8 +63,13 @@ sidebar:
     es: Agentes
   pages:
   - Connect agents
-  - REST API
+  - Agent plugin configuration
   - Claude Code integration
+  - Codex integration
+  - OpenCode integration
+  - Hermes Agent integration
+  - OpenClaw integration
+  - REST API
   - Writing good memory
   - Document memory
 - title:
@@ -148,8 +153,13 @@ home:
   lines:
   - pages:
     - Connect agents
-    - REST API
+    - Agent plugin configuration
     - Claude Code integration
+    - Codex integration
+    - OpenCode integration
+    - Hermes Agent integration
+    - OpenClaw integration
+    - REST API
     - Writing good memory
     - Document memory
     - Environment variables

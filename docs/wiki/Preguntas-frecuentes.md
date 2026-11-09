@@ -18,6 +18,16 @@ Sí, apunta `MIMIRSYNTH_FALKOR_HOST` a tu FalkorDB. Ver [[Instalación]].
 **¿Qué es un brain y cuántos necesito?**
 Un dominio aislado. Uno basta para empezar; crea más para separar equipos, proyectos o personas. Ver [[Conceptos]].
 
+## Agentes
+**¿Qué integración de agente uso?**
+Si tu agente tiene plugin nativo (Claude Code, Codex, OpenCode, Hermes Agent u OpenClaw), instálalo: lleva la memoria a cada prompt sin que el modelo tenga que pedirla, y un solo `setup` sirve para todos los agentes de la máquina. Cualquier otro agente que hable MCP se conecta al servidor MCP del brain; un script, un bot o un servicio usan la API HTTP. Se pueden combinar: un plugin y el servidor MCP conviven. La tabla está en [2. Elige tu agente](Conectar-agentes#2-elige-tu-agente).
+
+**¿Qué token le doy a un plugin?**
+Un token de **lector** para el recall y uno de **colaborador** para proponer, los dos del mismo brain; nunca uno de curador, cuyas propuestas se saltarían la cuarentena. Ver [[Configuración de los plugins de agente]].
+
+**¿Activo la captura?**
+Empieza con ella apagada, y prueba primero `draft`: cada sesión se guarda en tu máquina, redactada, hasta que la revises. `send` convierte cada sesión que lo merezca en una propuesta en cuarentena, así que sigue decidiendo un curador qué se queda.
+
 ## Escritura
 **Mi agente escribe pero no veo nada nuevo.**
 Si usa un token de colaborador, la propuesta está **pendiente**: revísala en [[Propuestas]]. Una propuesta en la que el detector de secretos marcó algo también espera a un curador, la envíe quien la envíe. Si ya está aprobada, mira [[Trabajos]] por si la ingesta falló o no hay LLM configurado.

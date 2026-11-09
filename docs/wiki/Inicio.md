@@ -29,7 +29,7 @@ El contenido: [[Calidad del contenido]] · [[Salud de la memoria]] · [[Curador]
 [[Visión general de la administración]] · [[Administrar brains y miembros]] · [[Federación]] · [[Secretos]] · [[Exportar un brain]] · [[Importar un brain]] · [[Notificaciones]] · [[Métricas]] · [[Administrar usuarios]] · [[Seguridad y doble factor]] · [[Identidad OIDC]] · [[Correo SMTP]] · [[Proveedores de IA]] · [[Consumo de IA]] · [[Carpetas y límites]] · [[Recuerdo e ingesta]] · [[Auditoría]] · [[Referencia de ajustes]] · [[Actualización y copias de seguridad]]
 
 ## Para agentes y desarrolladores
-[[Conectar agentes]] · [[API REST]] · [[Integración con Claude Code]] · [[Escribir buena memoria]] · [[Memoria documental]] · [[Variables de entorno]]
+[[Conectar agentes]] · [[Configuración de los plugins de agente]] · [[Integración con Claude Code]] · [[Integración con Codex]] · [[Integración con OpenCode]] · [[Integración con Hermes Agent]] · [[Integración con OpenClaw]] · [[API REST]] · [[Escribir buena memoria]] · [[Memoria documental]] · [[Variables de entorno]]
 
 ## Ayuda
 [[Preguntas frecuentes]] · [[Solución de problemas]] · [[Glosario]]

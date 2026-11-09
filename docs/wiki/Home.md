@@ -29,7 +29,7 @@ The content: [[Content quality]] · [[Memory health]] · [[Curator]] · [[Verifi
 [[Administration overview]] · [[Brains and members]] · [[Federation]] · [[Secrets]] · [[Export a brain]] · [[Import a brain]] · [[Notifications]] · [[Metrics]] · [[Administer users]] · [[Security and two-factor]] · [[OIDC identity]] · [[SMTP email]] · [[AI providers]] · [[AI consumption]] · [[Folders and limits]] · [[Recall and ingestion]] · [[Audit log]] · [[Settings reference]] · [[Upgrade and backups]]
 
 ## For agents and developers
-[[Connect agents]] · [[REST API]] · [[Claude Code integration]] · [[Writing good memory]] · [[Document memory]] · [[Environment variables]]
+[[Connect agents]] · [[Agent plugin configuration]] · [[Claude Code integration]] · [[Codex integration]] · [[OpenCode integration]] · [[Hermes Agent integration]] · [[OpenClaw integration]] · [[REST API]] · [[Writing good memory]] · [[Document memory]] · [[Environment variables]]
 
 ## Help
 [[FAQ]] · [[Troubleshooting]] · [[Glossary]]
