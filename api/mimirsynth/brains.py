@@ -1,5 +1,6 @@
 """Administración de brains, miembros, usuarios y auditoría."""
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,7 +15,8 @@ from .roles import ROLES, rank
 from .store import get_db
 
 router = APIRouter(prefix="/api")
-SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
+_CHECK = ThreadPoolExecutor(max_workers=2, thread_name_prefix="brain-graph-check")
+SLUG =re.compile(r"^[a-z0-9][a-z0-9-]{1,40}$")
 GRAPH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,63}$")
 
 
@@ -48,8 +50,8 @@ def create_brain(body: BrainIn, user: User = Depends(require_admin), db: Session
     if db.scalar(select(Brain).where(Brain.slug == body.slug)):
         raise HTTPException(409, "ya existe un brain con ese slug")
     if not body.graph_name:  # a new brain never lands on a graph that is already there and is nobody's (#359)
-        try:
-            taken = backend().exists(body.slug)
+        try:  # with a short wait: a graph database that does not answer must not hold the creation for its client's retries
+            taken = _CHECK.submit(lambda: backend().exists(body.slug)).result(timeout=1.5)
         except Exception:  # noqa: BLE001  (the graph down: as before, the brain is created and its graph appears with its first write)
             taken = False
         if taken and not db.scalar(select(Brain).where(Brain.graph_name == body.slug)):
