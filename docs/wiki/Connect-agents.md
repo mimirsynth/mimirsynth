@@ -10,7 +10,7 @@ An **agent** (Claude Code, a bot, a script, another service) talks to MimirSynth
 2. Copy what it needs, already filled in with this server, the brain and the token: for a native plugin, the shared `~/.config/mimirsynth/config.json` and the plugin's one-line install (its setup then finds every answer in the file); for any other client, the brain's MCP server in the `mcpServers` form, or its address and header.
 3. Start the agent. The panel turns green («Your agent is connected») a few seconds after the agent's first call with that token, whatever it asks for, and then runs a test recall with what that token may see, so you see what the agent receives. The test recall is a preview: it is not logged and does not count as the agent's recall.
 
-The getting-started checklist on the home screen links to it. The rest of this page is the same thing by hand.
+It is also the last step of the setup wizard, and the getting-started checklist on the home screen links to it. If it is your first agent, [[Your first 15 minutes]] goes through it and on to the first remember, approval and recall. The rest of this page is the same thing by hand.
 
 ## 1. Create a token
 In [[My account]] → **API tokens** (or in [[Brains and members]]):

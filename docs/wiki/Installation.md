@@ -3,11 +3,52 @@
 # Installation
 
 ## Requirements
-- **Docker** with Compose v2 and about **2 GB of RAM** free for the application, PostgreSQL and FalkorDB.
-- An **OpenAI-compatible** endpoint for **embeddings** and another for the extraction **LLM**. They can be local (Ollama, vLLM…) or from a cloud provider, and they are independent of each other. They are configured afterwards, in the interface. Without them the instance starts, but proposals are not ingested and recall returns nothing.
+- **Docker** with Compose v2 and about **2 GB of RAM** free for the application, PostgreSQL and FalkorDB (more with the bundled Ollama).
+- An **OpenAI-compatible** endpoint for **embeddings** and another for the extraction **LLM**. They can be local (Ollama, vLLM…) or from a cloud provider, and they are independent of each other. They are configured afterwards, in the setup wizard. Without them the instance starts, but proposals are not ingested and recall returns nothing.
 - A free port (8000 by default).
 
-## Before you start
+## Install with one command
+If you are new to all this, [[Your first 15 minutes]] walks you through the same installation with every question explained.
+
+The installer checks Docker, asks two questions, generates the secrets, starts everything and opens the browser on the setup wizard. You never edit `.env`.
+
+On **Linux** or **macOS**:
+```bash
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash
+```
+On **Windows**, in PowerShell, with [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) installed:
+```powershell
+irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps1 | iex
+```
+What it does, in order:
+1. **Checks Docker and Compose v2.** On Linux, if Docker is missing, it offers to install it with Docker's official script (`get.docker.com`, needs `sudo`). On macOS and Windows it points you to Docker Desktop, and starts it if it is installed but not running; on Windows, Docker Desktop needs WSL2 (`wsl --install` in a PowerShell opened as administrator).
+2. **Asks where your knowledge graph lives.** *Local* (the default) starts a bundled FalkorDB next to MimirSynth. *Existing* asks for the type (FalkorDB or Neo4j), host, port, user and password of a server you already run, and checks that it answers before going on. A server on the same computer (`localhost`) is reached from the container as `host.docker.internal`. The full connection test (credentials, version, permissions) happens in the setup wizard.
+3. **Offers a bundled Ollama** for embeddings and downloads `nomic-embed-text`. The image is a download of about 3.5 GB and runs on the CPU; if Ollama already runs on the computer, the installer uses it instead. On a Mac with Apple silicon, the native Ollama app is faster: it uses the GPU.
+4. **Writes `docker-compose.yml` and `.env`** in `~/mimirsynth` (`%USERPROFILE%\mimirsynth` on Windows), with a random `POSTGRES_PASSWORD` and `MIMIRSYNTH_SESSION_SECRET`, the release version pinned in `MIMIRSYNTH_VERSION`, a free port (8000, or the next one) and the chosen profiles in `COMPOSE_PROFILES`, so a plain `docker compose up -d` in that folder starts the same services later.
+5. **Starts the stack**, waits until `/api/health` answers, prints the address and the **first-start code**, and opens the browser.
+
+Running it again is safe: if MimirSynth is already installed in that folder, it changes nothing and offers to upgrade with `update.sh` instead (on Linux; see [[Upgrade and backups]]). If it stops halfway, it says why and removes nothing: fix the cause ([First run](Troubleshooting#first-run)) and run it again.
+
+### Without questions
+Every answer has a flag (`--help` lists them). With `--yes` it asks nothing: the bundled FalkorDB, no Ollama unless `--ollama`, and no Docker installation unless `--install-docker`.
+```bash
+curl -fsSL https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh | bash -s -- --yes --ollama
+MIMIRSYNTH_GRAPH_PASSWORD='…' ./install.sh --yes --graph existing --graph-type neo4j --graph-host graph.example.com
+```
+In PowerShell the parameters have the same names (`-Yes`, `-Ollama`, `-Graph existing`, `-GraphType`, `-GraphHost`…). The password of an existing graph database is read from `MIMIRSYNTH_GRAPH_PASSWORD`, never from the command line. Messages follow the system language (`--lang es`), and so does the instance's default language.
+
+### Checking the download
+Each release lists the SHA-256 of its assets in its notes and in `SHA256SUMS`:
+```bash
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.sh
+curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing && bash install.sh
+```
+
+## Manual installation
+The installer does nothing you cannot do by hand. These are the same steps, for when you want to control each one.
+
+### Before you start
 On a bare Linux server (e.g. a minimal Debian or Ubuntu), install `curl` and Docker and check that Compose v2 is there. On macOS or Windows, install [Docker Desktop](https://docs.docker.com/desktop/) instead.
 ```bash
 sudo apt-get update && sudo apt-get install -y curl openssl
@@ -16,7 +57,7 @@ sudo usermod -aG docker "$USER" && newgrp docker      # run docker without sudo
 docker compose version                                 # must answer v2.x
 ```
 
-### Preparing Ollama
+#### Preparing Ollama
 If the models run on [Ollama](https://ollama.com), download them before you start:
 ```bash
 ollama pull nomic-embed-text        # embeddings (768 dimensions, the default)
@@ -31,15 +72,15 @@ ollama pull qwen2.5:14b-instruct    # fact extraction (about 14B or more is reco
 
 For the choice of extraction model (size, what to expect from small models), see [[AI providers]].
 
-## What gets installed
-The `docker-compose.yml` defines:
+### What gets installed
+The `docker-compose.yml` defines (the installer writes the same one):
 - **mimirsynth**: the API and the interface in a single container (unprivileged, read-only file system). It maps `host.docker.internal` to the host, so it can reach services running there (Ollama, for example).
 - **postgres**: PostgreSQL with the pgvector extension (users, brains, proposals, alerts, text and document indexes).
 - **falkordb** (`bundled` profile, optional): the graph engine. If you already have a FalkorDB, do not enable the profile and point `MIMIRSYNTH_FALKOR_HOST` at it.
 
 PostgreSQL and FalkorDB **do not publish ports** outside the Compose network.
 
-## Steps
+### Downloading and starting
 Everything comes from the official release: a Compose file and an environment template. You do not need the source code.
 ```bash
 mkdir mimirsynth && cd mimirsynth
@@ -68,21 +109,22 @@ curl -s http://localhost:8000/api/health   # {"ok":true,"db":true,"graph":true,.
 ```
 
 ## First start
-An instance with no administrators prints an **installation code** in its log and shows a wizard on the web:
+An instance with no administrators shows the **setup wizard** on the web and prints a **first-start code** in its log. The installer prints it for you; after a manual installation:
 ```bash
 docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
-The code only exists while there is no administrator (if you lose it, restart the container to generate another). Open the application, paste it and create the administrator account. The password fields list every rule and tick them as you type.
+The code only exists while there is no administrator (if you lose it, restart the container to generate another).
 
-Then you land on **First steps**: while no brain exists, an administrator sees a **Create your first brain** button and a short checklist (AI models, API token, connecting an agent) with a link to each screen. Anyone else without a brain sees «You do not have access to any brain yet. Ask an administrator to add you.»
+<!-- TODO(#361): written from the scope of the setup wizard v2; confirm when #361 is merged. -->
+The wizard goes from the administrator account to the first recall, one step per screen, and resumes where you left it: **administrator account** (the code, then a password whose rules the form ticks as you type) → **graph database** (the connection test must pass) → **embeddings** (the test must pass) → **LLM** (it can be skipped, with a warning on the home screen) → **decider** (optional) → **first brain** → **token** → **connect your agent**. Each step is explained in [[Your first 15 minutes]]. An administrator can reopen it from Administration.
+
+Anyone else without a brain sees «You do not have access to any brain yet. Ask an administrator to add you.»
 
 ## After installing
-1. Configure the models: [[AI providers]].
-2. Create a brain: [[Brains and members]].
-3. Create an API token and connect your first agent: [[Connect agents]].
-4. If you are going to expose it, put it behind HTTPS: [[HTTPS and reverse proxy]].
-5. Configure email and users: [[SMTP email]], [[Administer users]].
-6. Plan backups and upgrades: [[Upgrade and backups]], and monitor the instance (below).
+1. The models, the first brain, a token and the first agent come with the wizard; to change them later: [[AI providers]], [[Brains and members]], [[Connect agents]].
+2. If you are going to expose it, put it behind HTTPS: [[HTTPS and reverse proxy]].
+3. Configure email and users: [[SMTP email]], [[Administer users]].
+4. Plan backups and upgrades: [[Upgrade and backups]], and monitor the instance (below).
 
 ## Monitoring the instance
 MimirSynth raises alerts about the graph and the AI models itself (the bell and the notification channels), but **not about its own PostgreSQL**: alerts are stored in that database, so while it is down there is nowhere to keep them. Watch it from outside with any HTTP monitor (Uptime Kuma, Gatus, a `curl` in cron…) pointed at `GET /api/health`. It needs no sign-in and answers in under 3 seconds:

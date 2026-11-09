@@ -10,7 +10,8 @@ Esta wiki es la guía de usuario completa, en castellano y [en inglés](Home). S
 | Si quieres… | Ve a |
 |---|---|
 | Entender de qué va (brains, hechos, propuestas…) | [[Conceptos]] |
-| Tenerlo funcionando en 15 minutos | [[Guía rápida]] |
+| Empezar desde cero, si los agentes y Docker son nuevos para ti | [[Tus primeros 15 minutos]] |
+| Tenerlo funcionando en 15 minutos, si conoces Docker | [[Guía rápida]] |
 | Instalarlo con detalle | [[Instalación]] |
 | Conectar un agente (Claude Code u otro) | [[Conectar agentes]] |
 | Saber qué puede hacer cada persona | [[Roles y permisos]] |

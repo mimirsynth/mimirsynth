@@ -35,7 +35,9 @@ Estado: **en desarrollo activo** (0.x). Funciona de extremo a extremo, pero la A
 **Guía de usuario completa en la [wiki](https://github.com/MimirSynth/mimirsynth/wiki/Inicio)**, en castellano y en inglés. Documentación técnica: [instalación](docs/es/INSTALL.md), [configuración](docs/es/CONFIGURATION.md), [conectar agentes](docs/es/AGENTS.md), [arquitectura](docs/es/ARCHITECTURE.md), [ontología](docs/es/ONTOLOGY.md), [memoria documental](docs/es/DOCUMENTS.md), [federación](docs/es/FEDERATION.md) y [notificaciones](docs/es/NOTIFICATIONS.md).
 
 ## Inicio rápido
-Necesitas Docker y dos endpoints compatibles con OpenAI: uno para embeddings y otro para el LLM de extracción ([qué modelo](docs/es/CONFIGURATION.md#elegir-el-modelo-de-extracción)). Sin los dos la instancia arranca, pero no hay nada útil que ver.
+¿Empiezas con agentes de IA? **[Tus primeros 15 minutos](https://github.com/MimirSynth/mimirsynth/wiki/Tus-primeros-15-minutos)** te lleva de un equipo vacío a un agente que recuerda, con cada paso explicado.
+
+Necesitas Docker y dos endpoints compatibles con OpenAI: uno para embeddings y otro para el LLM de extracción ([qué modelo](docs/es/CONFIGURATION.md#elegir-el-modelo-de-extracción)). El instalador puede arrancar un Ollama incluido para los embeddings. Sin LLM la instancia arranca, pero las propuestas aprobadas no se convierten en memoria.
 
 Un comando instala MimirSynth, lo arranca y abre el navegador en el asistente de primer arranque. En Linux o macOS:
 ```bash
@@ -47,10 +49,10 @@ irm https://github.com/MimirSynth/mimirsynth/releases/latest/download/install.ps
 ```
 En Linux ofrece instalar Docker si falta; en macOS y Windows instala antes [Docker Desktop](https://docs.docker.com/desktop/). Pregunta si arrancar un FalkorDB incluido o usar tu propio FalkorDB o Neo4j, y si arrancar un Ollama incluido para los embeddings; genera los secretos y muestra la dirección y el código de primer arranque. Opciones sin preguntas, sumas de comprobación e instalación manual: [docs/es/INSTALL.md](docs/es/INSTALL.md).
 
-En el navegador, introduce el código y crea la cuenta de administrador. Después, en **Administración**, añade los motores de IA (**Modelo LLM** y **Embeddings**, con «Probar» para comprobarlos) y crea un brain (**Brain → Brain activo → Crear brain**).
+En el navegador, el asistente de configuración sigue desde ahí: la cuenta de administrador (con el código), la base de datos del grafo, los embeddings y el LLM (cada uno con su prueba de conexión), el primer brain, un token para tu agente y su conexión.
 
 ### Conecta tu primer agente
-En **Mi cuenta → Tokens de API**, crea un token para ese brain con el rol **Colaborador** (solo se muestra una vez). Con Claude Code, por MCP:
+El último paso del asistente, también en **Administración → Brain → Conectar un agente**, da lo que hay que pegar para Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw o cualquier cliente MCP, ya con el servidor, el brain y un token, y se pone en verde con la primera llamada del agente. A mano, con un token de **Colaborador** de **Mi cuenta → Tokens de API** (solo se muestra una vez) y Claude Code por MCP:
 ```bash
 claude mcp add --transport http mimirsynth "http://localhost:8000/api/brains/mi-brain/mcp" --header "Authorization: Bearer mst_..."
 ```

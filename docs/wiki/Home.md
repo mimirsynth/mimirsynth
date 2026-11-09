@@ -10,7 +10,8 @@ This wiki is the complete user guide, in English and [in Spanish](Inicio). If yo
 | If you want to… | Go to |
 |---|---|
 | Understand what it is about (brains, facts, proposals…) | [[Concepts]] |
-| Have it running in 15 minutes | [[Quick start]] |
+| Start from scratch, if agents and Docker are new to you | [[Your first 15 minutes]] |
+| Have it running in 15 minutes, if you know Docker | [[Quick start]] |
 | Install it in detail | [[Installation]] |
 | Connect an agent (Claude Code or another) | [[Connect agents]] |
 | Know what each person can do | [[Roles and permissions]] |

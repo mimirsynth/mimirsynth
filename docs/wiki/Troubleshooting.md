@@ -4,6 +4,58 @@
 
 First, look at the state: `docker compose ps`, `docker compose logs mimirsynth --tail 100` and `curl http://localhost:8000/api/health` (`200` with `"db": true, "graph": true` means the application reaches PostgreSQL and FalkorDB; `503` says which one fails). The bell in the sidebar also lists the alerts you can see. Then look for your symptom.
 
+## First run
+The four problems that most often stop a first installation. If you are following [[Your first 15 minutes]], this is where its table sends you.
+
+### Docker is not running
+The installer says «Docker is not installed» or «Docker Desktop is not running», or a `docker` command answers `Cannot connect to the Docker daemon`.
+- **Windows:** open Docker Desktop and wait until it says the engine is running. If it does not start, it usually lacks WSL2: run `wsl --install` in a PowerShell opened as administrator and restart the computer.
+- **Windows, running `install.sh` inside WSL** («Docker is not available in this WSL distribution»): in Docker Desktop, turn on *Settings → Resources → WSL integration* for that distribution, or run `install.ps1` from PowerShell instead.
+- **macOS:** open Docker Desktop and wait for it to start (the installer tries to start it itself).
+- **Linux:** start the service with `sudo systemctl start docker` (and `sudo systemctl enable docker` so it starts with the computer). If Docker is missing, the installer offers to install it, or pass `--install-docker`. If it says your user cannot use Docker without `sudo`, it goes on with `sudo` this time; to stop needing it, run `sudo usermod -aG docker "$USER"` and sign out and in again.
+
+Then run the installer again: it removes nothing, and picks up the configuration it already wrote.
+
+### Ollama is not reachable from the container
+The embeddings or LLM test fails with «connection refused», a timeout or «cannot be reached», and the address points at Ollama.
+- **Do not use `localhost` or `127.0.0.1` in the address.** MimirSynth runs in a container, and there `localhost` is the container itself, not your computer. Use:
+
+  | Where Ollama runs | Address |
+  |---|---|
+  | In the container the installer started | `http://ollama:11434/v1` |
+  | On the same computer (the Ollama app or service) | `http://host.docker.internal:11434/v1` |
+  | On another machine | its address, e.g. `http://192.168.1.20:11434/v1` |
+- **Linux, Ollama on the same computer:** Ollama listens only on `127.0.0.1` by default, and the container cannot reach it there. Make it listen on all interfaces and keep port 11434 closed to the outside with your firewall: `sudo systemctl edit ollama`, add `Environment="OLLAMA_HOST=0.0.0.0"` under `[Service]`, then `sudo systemctl restart ollama` ([Preparing Ollama](Installation#preparing-ollama)).
+- **The model is not downloaded** (the test reaches Ollama, but it answers that the model is not found): `ollama pull nomic-embed-text`, or, with the bundled Ollama, `docker compose exec ollama ollama pull nomic-embed-text` in the installation folder. The same for the LLM model.
+- **The bundled Ollama is not running:** `docker compose ps` in the installation folder must list `ollama`. If it is missing, the installation was made without it: install Ollama on the computer, or add `ollama` to `COMPOSE_PROFILES` in `.env` and run `docker compose up -d`.
+- **With your own `docker-compose.yml`:** on Linux the `mimirsynth` service needs `extra_hosts: ["host.docker.internal:host-gateway"]`.
+
+### Graph connection errors
+The graph database test fails, the installer warns that the server does not answer, or `/api/health` answers `"graph": false`. The test says what failed:
+
+| Message | What to do |
+|---|---|
+| «… refuses the connection: check that the server is running and listens on that port» | The server is down or listens elsewhere. With the bundled FalkorDB, `docker compose ps` must show `falkordb` healthy and `.env` must include `bundled` in `COMPOSE_PROFILES`; `docker compose logs falkordb` says why it stopped. With your own server, check the port: 6379 for FalkorDB, 7687 (Bolt) for Neo4j |
+| «… does not answer in time: check the address, the port and the firewall» | A firewall drops the connection, or the address is wrong. A server on the same computer is `host.docker.internal`, never `localhost`; on Linux it must listen on an address the containers reach, not only on `127.0.0.1` |
+| «The server «…» cannot be found: check the name» | The name does not resolve from the container. Use an IP address or `host.docker.internal` |
+| «The server rejects the user or the password» | Wrong credentials. Neo4j's user is usually `neo4j` |
+| «The user cannot write: MimirSynth needs read and write permission» | Give that user write access, or use another one |
+| «The server has no database «…»» | Neo4j: leave the database empty to use the server's default, or create it |
+| «… is not supported: … or later is needed» | MimirSynth needs FalkorDB 4.0 or later, or Neo4j 5.26 or later |
+| «… is a Redis server without the graph module: FalkorDB is needed» | The port belongs to a plain Redis. Point at a FalkorDB |
+| «… accepts the connection but does not answer as …» | It is another service's port, or the server expects TLS: tick **Encrypted connection (TLS)** |
+
+After the installation, the connection is changed under **Administration → Graph database**, which tests it before saving. If that page says the connection comes from the environment variables, change it in `.env` and run `docker compose up -d`.
+
+### Embedding dimension mismatch
+Saving the first embedding engine fails with «the text index has 768 dimensions and this model gives 1536», an engine's **Test** answers «dimension 1024, expected 768», or editing one answers «the endpoint returns a different dimension for that model».
+
+Each embedding model gives vectors of a fixed size, its **dimension**, and the index where MimirSynth searches texts is created on the first start with the size in `MIMIRSYNTH_EMBEDDING_DIM`: 768 by default, the size of `nomic-embed-text`. A model of another size does not fit in it.
+- **The simplest fix:** use a 768-dimension model, such as `nomic-embed-text`.
+- **A new installation where nothing is stored yet**, and you want another model: set `MIMIRSYNTH_EMBEDDING_MODEL` and `MIMIRSYNTH_EMBEDDING_DIM` (for example `1536` for `text-embedding-3-small`) in `.env`, then run `docker compose down -v` and `docker compose up -d` in the installation folder. **`down -v` deletes all the data**, the administrator account included: do it only on an installation you have just made. A new first-start code appears in the log.
+- **An instance that already has memory:** never change the model by hand. Add an engine with the new model and move everything to it with **Reindex** under Administration → Embeddings, which recomputes every vector before switching ([Changing the embedding model](AI-providers#changing-the-embedding-model)).
+- **«the endpoint returns a different dimension»:** the model behind that name changed at the provider (for example, another tag pulled in Ollama). Go back to the model you had, or reindex to a new engine.
+
 ## Startup and installation
 | Symptom | Cause and solution |
 |---|---|
@@ -14,7 +66,7 @@ First, look at the state: `docker compose ps`, `docker compose logs mimirsynth -
 | A variable in `.env` has no effect | The official compose only forwards the variables it lists under `environment:`. Add it there ([[Environment variables]]) |
 | `bind: address already in use` | Port 8000 is taken: change `MIMIRSYNTH_PORT` |
 | A service "unhealthy" | `docker compose logs <service>`. PostgreSQL/FalkorDB take a few seconds; if it persists, check memory and disk space. The application is also marked unhealthy while it cannot reach PostgreSQL or FalkorDB |
-| Embeddings or the LLM fail with a connection error, with Ollama on the same Linux host | Ollama only listens on `127.0.0.1`: make it listen on all interfaces ([Preparing Ollama](Installation#preparing-ollama)). With your own `docker-compose.yml`, check that the `mimirsynth` service has `extra_hosts: ["host.docker.internal:host-gateway"]` |
+| Embeddings or the LLM fail with a connection error, with Ollama | See [Ollama is not reachable from the container](#ollama-is-not-reachable-from-the-container) |
 | I cannot find the installation code | It only appears while there are no administrators; restart the container to generate a new one |
 | The only administrator lost access | In the database, set `is_admin = false` for that user and restart: the first-start wizard returns |
 | An update did not verify | `update.sh` tells you how to go back: `./update.sh --rollback` (add `--with-db` to restore the database too). See [[Upgrade and backups]] |
@@ -45,7 +97,7 @@ First, look at the state: `docker compose ps`, `docker compose logs mimirsynth -
 | A curator's proposal stays pending | It contains a possible secret: a flagged proposal always waits for a person's review ([[Proposals]]) |
 | Recall returns nothing | Empty brain, embeddings down or index not synchronised. [[Ask]]: look at the index status and "Reindex now" |
 | Recall brings no document passages after changing the embedding model | Similarities of different models are not comparable: recalibrate "Minimum similarity of a passage" (Administration → Recall). Reference queries can simulate other thresholds |
-| Embedding dimension errors | The embedding model was changed by hand while vectors of the previous one were stored. Change it only with **Reindex** under Administration → Embeddings, which recomputes every vector before switching ([[AI providers]]) |
+| Embedding dimension errors | See [Embedding dimension mismatch](#embedding-dimension-mismatch) |
 | A model change is left half-way (`reindex.orphan` alert) | A shadow fill failed or stalled. In Administration → Embeddings, **Retry** or **Discard** it; discarding frees the memory it uses |
 | An "AI model not responding" alert that solves itself | The health check alerts after 2 consecutive failures by default ("Consecutive failures before alerting", Administration → Notifications). Raise it if your provider has frequent one-off errors |
 | "text index disabled" | The instance has no PostgreSQL with pgvector (e.g. development SQLite) |
