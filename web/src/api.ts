@@ -49,7 +49,7 @@ export async function send<T>(method: "POST" | "PUT" | "PATCH" | "DELETE", path:
 }
 
 export type Brain = { slug: string; name: string; description: string; graph_name: string; role: string; secret_mode?: string; secret_allow?: string; ocr_vision?: boolean; read_only?: boolean };
-export type Me = { id: number; name: string; email: string | null; is_admin: boolean; auth_mode: string; avatar?: string; account_url?: string; has_password?: boolean; must_change_password?: boolean; totp_enabled?: boolean; must_setup_2fa?: boolean; locale?: string; tour_seen?: boolean };
+export type Me = { id: number; name: string; email: string | null; is_admin: boolean; auth_mode: string; avatar?: string; account_url?: string; has_password?: boolean; must_change_password?: boolean; totp_enabled?: boolean; must_setup_2fa?: boolean; locale?: string; tour_seen?: boolean; setup_pending?: boolean };
 
 export const fmt = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" }) : "—");
 /** A day (a fact's validity, a correction's date), in the same short form as `fmt` without the time. Read in UTC: these are calendar

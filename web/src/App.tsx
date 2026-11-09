@@ -26,6 +26,7 @@ const Knowledge = lazy(() => import("./pages/Knowledge"));
 const Account = lazy(() => import("./pages/Account"));
 const Jobs = lazy(() => import("./pages/Jobs"));
 const FirstSteps = lazy(() => import("./pages/FirstSteps"));
+const SetupWizard = lazy(() => import("./pages/SetupWizard"));
 const EntityPage = lazy(() => import("./pages/EntityPage"));
 const Quality = lazy(() => import("./pages/Quality"));
 const Notifications = lazy(() => import("./pages/Notifications"));
@@ -78,6 +79,14 @@ export default function App() {
   const loc = useLocation();
   const navigate = useNavigate();
   useEffect(() => setMenu(false), [loc.pathname]);
+  // The setup wizard (issue 361) opens by itself, once per visit, for an administrator of an instance not yet set up; leaving it is allowed,
+  // and it resumes where it stopped the next time.
+  const wizardOpened = useRef(false);
+  const onWizard = loc.pathname === "/configuracion";
+  useEffect(() => {
+    if (me.data?.setup_pending && !wizardOpened.current && !onWizard && !loc.pathname.startsWith("/acceso/")) { wizardOpened.current = true; navigate("/configuracion"); }
+    if (onWizard) wizardOpened.current = true;
+  }, [me.data?.setup_pending, onWizard]);  // eslint-disable-line react-hooks/exhaustive-deps
   const setBrain = (slug: string) => { setBrainState(slug); try { localStorage.setItem(KEY, slug); } catch { /* sin almacenamiento */ } };
   // A link with ?brain=<slug> (the periodic summary) opens that brain if the person has it; the parameter then goes away.
   useEffect(() => {
@@ -106,8 +115,8 @@ export default function App() {
   const tourStarted = useRef(false);
   const hasBrain = !!brains.data?.some((b) => b.slug === brain);
   useEffect(() => {
-    if (shouldAutoStart({ tourSeen: me.data?.tour_seen, hasBrain, startedHere: tourStarted.current })) { tourStarted.current = true; setTour(true); }
-  }, [me.data?.tour_seen, hasBrain]);
+    if (!onWizard && !me.data?.setup_pending && shouldAutoStart({ tourSeen: me.data?.tour_seen, hasBrain, startedHere: tourStarted.current })) { tourStarted.current = true; setTour(true); }
+  }, [me.data?.tour_seen, hasBrain, onWizard, me.data?.setup_pending]);  // eslint-disable-line react-hooks/exhaustive-deps
   const tourSeen = useMutation({ mutationFn: () => send("POST", "me/tour", { seen: true }), onSuccess: () => qc.setQueryData<Me>(["me"], (m) => (m ? { ...m, tour_seen: true } : m)) });
   const closeTour = (persist: boolean) => { setTour(false); if (narrow) setMenu(false); if (persist) tourSeen.mutate(); };
   const replayTour = () => { tourStarted.current = true; setTour(true); };
@@ -178,6 +187,7 @@ export default function App() {
           <Route path="/admin" element={<Admin me={me.data} brain={brain} setBrain={setBrain} />} />
           <Route path="/cuenta" element={<Account />} />
           <Route path="/notificaciones" element={<Notifications />} />
+          {me.data.is_admin && <Route path="/configuracion" element={<SetupWizard />} />}
           {brain ? (
             <>
               <Route path="/" element={<Overview graph={brain} role={cur?.role ?? "reader"} />} />
@@ -197,7 +207,7 @@ export default function App() {
             </>
           ) : <Route path="*" element={brains.isPending ? <EmptyState>{t("Cargando…")}</EmptyState>
             // El administrador ve todos los brains: si la lista está vacía es que no existe ninguno, y nadie más puede crearlo.
-            : me.data.is_admin && brains.data?.length === 0 ? <FirstSteps docs={cfg.data?.links?.docs} />
+            : me.data.is_admin && brains.data?.length === 0 ? (me.data.setup_pending ? <Navigate to="/configuracion" replace /> : <FirstSteps docs={cfg.data?.links?.docs} />)
             : <Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}
         </Routes>
         </Suspense>
