@@ -1,6 +1,0 @@
-{
- "Cuando tu agente haga su primer recall, este paso se pondrá en verde. Si prefieres conectarlo más tarde, pulsa «Terminar»: lo tienes en Administración → Conectar un agente.": "When your agent makes its first recall, this step turns green. If you would rather connect it later, press «Finish»: it is in Administration → Connect an agent.",
- "Elige tu agente y copia lo que necesita. El paso se pone en verde cuando el agente hace su primer recall. En cuanto el agente llama, el panel te deja probar qué recibiría.": "Choose your agent and copy what it needs. The step turns green when the agent makes its first recall. As soon as the agent calls, the panel lets you test what it would receive.",
- "completado": "done",
- "pasa": "passes"
-}
