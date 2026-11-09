@@ -41,13 +41,25 @@ To manage from the interface a connection that is set in `.env`, remove those va
 | `neo4j` | Neo4j 5.26 LTS or later, Community or Enterprise (CI runs 5.26 Community) | the nodes whose `group_id` is its name, in one database | `MIMIRSYNTH_NEO4J_URI` (`bolt://` or `neo4j://`), `_USER`, `_PASSWORD` and `_DATABASE` (empty: the server's default) |
 
 What changes with Neo4j:
-- The brains share the database. MimirSynth scopes every query to the brain's `group_id`, as Graphiti does with its own queries. The read-only Cypher console refuses `CALL`, `SHOW` and `USE`, which would see past that.
+- The brains share the database. MimirSynth scopes every query to the brain's `group_id`, as Graphiti does with its own queries, and the read-only Cypher console only runs what it can scope (see [Brain isolation on Neo4j](#brain-isolation-on-neo4j)).
 - Enterprise is used the same way, with one database. MimirSynth does not create a database per brain.
 - An export carries only the graph's JSON copy, because Neo4j has no exact copy (dump) like FalkorDB's. A package exported from FalkorDB goes into Neo4j through its JSON copy, and the other way round.
 - The free-memory check before changing the embedding model only exists on FalkorDB. With Neo4j, watch the server's memory yourself.
 - 5.26 is the oldest version whose Cypher sets labels and relationship types from data, which copying a brain needs (the snapshot before merging entities, renaming a brain's graph).
 
 There is one backend per instance, and changing it, in `.env` or in Administration → Graph database, does not move the data: a brain whose graph is not in the new database looks empty until you switch back. To take brains from one to the other, export them and import them into an instance on the other backend.
+
+### Brain isolation on Neo4j
+With FalkorDB each brain is a graph of its own, and a query cannot reach another brain. With Neo4j the brains share one database, and MimirSynth keeps them apart, not the database:
+- **Scoping.** Before it runs a query, MimirSynth rewrites its Cypher so that every node pattern carries the brain's `group_id`, as a parameter the query cannot override. A relationship is in a brain when its two ends are. A node pattern it cannot read is refused, never run unscoped.
+- **A check on results.** A node or relationship of another brain in a result is refused, which catches what scoping cannot see, such as a procedure's results. The check sees nodes, relationships and paths, not scalar values (`n.name`, `count(*)`): those depend on scoping alone.
+- **The read-only Cypher console** runs Cypher that people write, so with Neo4j it only runs what it can scope, and says why it refuses the rest:
+  - `CALL`, `SHOW`, `USE`, `LOAD` and `TERMINATE`: procedures and other databases are outside the scoping.
+  - Any function that is not one of Neo4j's own (`SHOW FUNCTIONS`, without `graph.*`). No plugin function runs, APOC's included, and some of those run Cypher from a string.
+  - Variable-length relationships (`-[*1..3]-`, and so `shortestPath`), and quantified paths and relationships (`((a)-->(b)){1,3}`, `-->+`): their intermediate nodes have no pattern to scope.
+  - Label expressions it cannot read (`:%`, `IS`, `:(A|B)`, dynamic labels `:$(…)`), comments, parameters, characters outside ASCII outside strings, and `\u` escapes, which Neo4j decodes before it reads the query.
+- **What it requires of the database.** A database for MimirSynth alone, or at least one where no other application writes relationships between nodes of different `group_id`s. MimirSynth needs no plugin: it does not use APOC, and the console does not reach it, so there is no reason to install it for MimirSynth. Whoever can reach the database itself (Neo4j Browser, `cypher-shell`, the credentials in `.env`) sees every brain: give that access only to whoever administers the instance.
+- **Limits.** On Neo4j, isolation is a rewrite of Cypher, reviewed and tested in CI against a battery of queries from a reader of one brain to the data of another, not a boundary the database enforces. Where brains must be kept apart as a hard guarantee, use FalkorDB, or one instance (and one database) per group of people. A database per brain on Neo4j Enterprise is a possible later option.
 
 ## AI providers
 Under **Administration → LLM model / Embeddings / Decider**. Each engine is an OpenAI-compatible endpoint (base URL, key and model). Keys are stored encrypted.

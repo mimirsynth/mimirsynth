@@ -41,13 +41,25 @@ Para gestionar desde la interfaz una conexión que está en `.env`, quita esas v
 | `neo4j` | Neo4j 5.26 LTS o posterior, Community o Enterprise (la CI usa 5.26 Community) | los nodos cuyo `group_id` es su nombre, en una sola base de datos | `MIMIRSYNTH_NEO4J_URI` (`bolt://` o `neo4j://`), `_USER`, `_PASSWORD` y `_DATABASE` (vacío: la predeterminada del servidor) |
 
 Qué cambia con Neo4j:
-- Los brains comparten la base de datos. MimirSynth limita cada consulta al `group_id` del brain, igual que hace Graphiti con las suyas. La consola Cypher de solo lectura rechaza `CALL`, `SHOW` y `USE`, que verían más allá de ese límite.
+- Los brains comparten la base de datos. MimirSynth limita cada consulta al `group_id` del brain, igual que hace Graphiti con las suyas, y la consola Cypher de solo lectura solo ejecuta lo que sabe limitar (ver [Aislamiento entre brains con Neo4j](#aislamiento-entre-brains-con-neo4j)).
 - Enterprise se usa igual, con una sola base de datos. MimirSynth no crea una base de datos por brain.
 - Una exportación lleva solo la copia JSON del grafo, porque Neo4j no tiene una copia exacta (volcado) como la de FalkorDB. Un paquete exportado desde FalkorDB entra en Neo4j por su copia JSON, y al revés.
 - La comprobación de memoria libre antes de cambiar el modelo de embeddings solo existe con FalkorDB. Con Neo4j, vigila tú la memoria del servidor.
 - 5.26 es la versión más antigua cuyo Cypher pone etiquetas y tipos de relación a partir de los datos, algo que necesita la copia de un brain (la instantánea antes de fusionar entidades o el cambio de nombre del grafo de un brain).
 
 Hay un backend por instancia, y cambiarlo, en `.env` o en Administración → Base de datos del grafo, no mueve los datos: un brain cuyo grafo no esté en la base de datos nueva se ve vacío hasta que vuelves a la anterior. Para llevar brains de uno a otro, expórtalos e impórtalos en una instancia con el otro backend.
+
+### Aislamiento entre brains con Neo4j
+Con FalkorDB cada brain es un grafo propio, y una consulta no puede llegar a otro brain. Con Neo4j los brains comparten una base de datos, y es MimirSynth quien los separa, no la base de datos:
+- **Acotado.** Antes de ejecutar una consulta, MimirSynth reescribe su Cypher para que cada patrón de nodo lleve el `group_id` del brain, como un parámetro que la consulta no puede sustituir. Una relación está en un brain cuando sus dos extremos lo están. Un patrón de nodo que no sabe leer se rechaza; nunca se ejecuta sin acotar.
+- **Una comprobación de los resultados.** Un nodo o una relación de otro brain en un resultado se rechaza, lo que cubre lo que el acotado no ve, como los resultados de un procedimiento. La comprobación ve nodos, relaciones y caminos, no valores escalares (`n.name`, `count(*)`): esos dependen solo del acotado.
+- **La consola Cypher de solo lectura** ejecuta Cypher que escriben personas, así que con Neo4j solo ejecuta lo que sabe acotar, y dice por qué rechaza lo demás:
+  - `CALL`, `SHOW`, `USE`, `LOAD` y `TERMINATE`: los procedimientos y las otras bases de datos quedan fuera del acotado.
+  - Cualquier función que no sea de las propias de Neo4j (`SHOW FUNCTIONS`, sin `graph.*`). No se ejecuta ninguna función de un plugin, tampoco las de APOC, y algunas de ellas ejecutan Cypher escrito en una cadena.
+  - Las relaciones de longitud variable (`-[*1..3]-` y, por tanto, `shortestPath`) y los caminos y relaciones cuantificados (`((a)-->(b)){1,3}`, `-->+`): sus nodos intermedios no tienen un patrón que acotar.
+  - Las expresiones de etiqueta que no sabe leer (`:%`, `IS`, `:(A|B)`, etiquetas dinámicas `:$(…)`), los comentarios, los parámetros, los caracteres fuera de ASCII fuera de las cadenas y los escapes `\u`, que Neo4j decodifica antes de leer la consulta.
+- **Qué exige a la base de datos.** Una base de datos solo para MimirSynth o, al menos, una en la que ninguna otra aplicación escriba relaciones entre nodos de `group_id` distintos. MimirSynth no necesita ningún plugin: no usa APOC y la consola no llega a él, así que no hay motivo para instalarlo por MimirSynth. Quien llegue a la base de datos en sí (Neo4j Browser, `cypher-shell`, las credenciales de `.env`) ve todos los brains: da ese acceso solo a quien administre la instancia.
+- **Límites.** Con Neo4j, el aislamiento es una reescritura del Cypher, revisada y probada en la CI con una batería de consultas de un lector de un brain contra los datos de otro, no una frontera que imponga la base de datos. Donde los brains deban separarse con una garantía firme, usa FalkorDB, o una instancia (y una base de datos) por cada grupo de personas. Una base de datos por brain con Neo4j Enterprise es una opción posible más adelante.
 
 ## Proveedores de IA
 En **Administración → Modelo LLM / Embeddings / Decisor**. Cada motor es un endpoint compatible con OpenAI (URL base, clave y modelo). Las claves se guardan cifradas.
