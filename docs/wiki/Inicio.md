@@ -36,4 +36,4 @@ El contenido: [[Calidad del contenido]] · [[Salud de la memoria]] · [[Curador]
 
 <!-- index:end -->
 ---
-*MimirSynth está en desarrollo activo (0.x): la interfaz y la API pueden cambiar entre versiones. Licencia Apache-2.0.*
+*MimirSynth está en beta pública (0.x): hasta la 1.0 la interfaz, la API y el esquema pueden cambiar entre versiones menores. Problemas y comentarios: [abre una issue](https://github.com/MimirSynth/mimirsynth/issues/new/choose); preguntas: [Discussions](https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a). Licencia Apache-2.0.*

@@ -66,7 +66,7 @@ function sessionProblem(error: unknown, t: (k: string) => string) {
 export default function App() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const cfg = useQuery({ queryKey: ["config"], queryFn: () => get<{ name: string; auth_mode: string; version?: string; links?: { docs: string; repo: string; feedback: string } }>("config") });
+  const cfg = useQuery({ queryKey: ["config"], queryFn: () => get<{ name: string; auth_mode: string; version?: string; stage?: string; links?: { docs: string; repo: string; feedback: string } }>("config") });
   const me = useQuery({ queryKey: ["me"], queryFn: () => get<Me>("me"), retry: false });
   const logout = useMutation({ mutationFn: () => send("POST", "auth/logout"), onSuccess: () => { qc.clear(); window.location.href = "/"; } });
   useEffect(() => { if (cfg.data) applyInstanceDefault((cfg.data as { default_language?: string }).default_language); }, [cfg.data]);
@@ -167,7 +167,8 @@ export default function App() {
             <ThemeButton />
             <RoundLink to="/admin" label={t("Administración")} tour="admin"><Icon name="admin" /></RoundLink>
           </div>
-          <div className="ms-version">{name} v{cfg.data?.version ?? ""}</div>
+          <div className="ms-version">{name} v{cfg.data?.version ?? ""}
+            {cfg.data?.stage === "beta" && <> <Pill size="xs" tone="warn" title={t("Hasta la versión 1.0, la API y el esquema pueden cambiar entre versiones menores.")}>{t("Beta pública")}</Pill></>}</div>
         </div>
       </AppShell.Navbar>
       <AppShell.Main>

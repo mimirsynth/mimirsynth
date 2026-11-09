@@ -192,7 +192,7 @@ app.middleware("http")(attention.invalidate_after_writes)
 
 @app.get("/api/config")
 def get_config():
-    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "links": brand.links(), "default_language": appsettings.get("default_language"),
+    return {"name": brand.NAME, "auth_mode": settings.auth_mode, "version": VERSION, "stage": brand.STAGE, "links": brand.links(), "default_language": appsettings.get("default_language"),
             "token_max_days": int(appsettings.get("token_max_days"))}
 
 

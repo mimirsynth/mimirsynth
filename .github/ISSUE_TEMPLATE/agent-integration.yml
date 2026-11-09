@@ -1,0 +1,49 @@
+name: Agent integration problem
+description: A plugin, the MCP server or the REST API does not work as expected from an agent
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Write in English if you can; Spanish is welcome too and a maintainer will add an English title. · Si lo prefieres, escribe en castellano.
+
+        **Never paste API tokens, passwords, API keys or your agent's configuration file with its token in it.** Issues are public: replace every token with `***`. If a token was exposed, revoke it in Administration → API tokens. · **No pegues nunca tokens de API, contraseñas, claves de API ni la configuración de tu agente con su token.**
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      options: [Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw, Another MCP client, The REST API directly]
+    validations: {required: true}
+  - type: input
+    id: agent-version
+    attributes: {label: Agent and plugin version, description: "The agent's own version and, for a native plugin, the plugin's"}
+    validations: {required: true}
+  - type: dropdown
+    id: channel
+    attributes:
+      label: How it connects
+      options: [The native plugin, The MCP server, The REST API, I don't know]
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes: {label: What happens, description: "What you asked the agent or what you called, what you expected and what actually happened"}
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: MimirSynth version, description: "Shown at the bottom of the side menu, or by `GET /api/brains/{slug}/whoami`", placeholder: "0.15.0"}
+    validations: {required: true}
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Graph database
+      options: ["FalkorDB, bundled", "FalkorDB, my own", "Neo4j", "I don't know"]
+    validations: {required: true}
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system the agent runs on
+      options: [Linux, macOS, Windows, Windows (WSL), Other]
+    validations: {required: true}
+  - type: textarea
+    id: logs
+    attributes: {label: Logs, description: "The agent's error or the HTTP status and body. Remove every token, password and private data first", render: shell}

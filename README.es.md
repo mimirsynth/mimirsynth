@@ -4,9 +4,11 @@
 
 [English](README.md) · **Español**
 
+[![Beta pública](https://img.shields.io/badge/estado-beta_p%C3%BAblica-d97706)](#estado) [![Última versión](https://img.shields.io/github/v/release/MimirSynth/mimirsynth?label=versi%C3%B3n)](https://github.com/MimirSynth/mimirsynth/releases/latest)
+
 Memoria para agentes de IA basada en el marco cognitivo CoALA, construida sobre un grafo de conocimiento temporal (Graphiti) y con UI propia. Los hechos no se sobrescriben: se invalidan y se conserva el historial.
 
-Estado: **en desarrollo activo** (0.x). Funciona de extremo a extremo, pero la API y el esquema pueden cambiar entre versiones.
+<a id="estado"></a>Estado: **beta pública** (0.x). Funciona de extremo a extremo, pero hasta la 1.0 la API, las herramientas MCP y el esquema de la base de datos pueden cambiar entre versiones menores (0.14 → 0.15); las migraciones se aplican al arrancar, `update.sh` hace antes una copia de seguridad y lo que requiera un paso por tu parte está en el [changelog](CHANGELOG.md). ¿Algo falla o no se entiende? [Abre una issue](https://github.com/MimirSynth/mimirsynth/issues/new/choose) (sin pegar nunca tokens ni contraseñas); las preguntas, en [Discussions](https://github.com/MimirSynth/mimirsynth/discussions/categories/q-a).
 
 ## Qué ofrece
 **Una memoria que conserva su historia**
