@@ -23,7 +23,7 @@ def test_first_authenticated_call_is_seen_and_a_recall_is_counted(client, fake_r
     assert client.post("/api/brains", json={"slug": "con-a", "name": "Con A"}).status_code == 201
     tok = _new(client, "con-a")
     a = _activity(client, "con-a", tok["id"])
-    assert a == {"id": tok["id"], "connected": False, "last_used_at": None, "recalls": 0, "last_recall_at": None}
+    assert a == {"id": tok["id"], "name": "agente contributor", "connected": False, "last_used_at": None, "recalls": 0, "last_recall_at": None}
 
     # any authenticated call counts as the first one: the plugins' `status` asks /whoami before anything else
     assert client.get("/api/brains/con-a/whoami", headers=_bearer(tok["token"])).status_code == 200
@@ -42,6 +42,23 @@ def test_first_authenticated_call_is_seen_and_a_recall_is_counted(client, fake_r
                       headers={**_bearer(other["token"]), "Accept": "application/json, text/event-stream"})
     assert mcp.status_code == 200, mcp.text
     assert _activity(client, "con-a", other["id"])["connected"] is True
+
+
+def test_a_first_recall_over_mcp_in_an_empty_brain_counts(client, monkeypatch):  # noqa: F811
+    """#421: the beginner's first recall lands in a new, empty brain and finds nothing; it still ticks the checklist and the wizard."""
+    from mimirsynth import mcp_server
+    from test_mcp import rpc
+    monkeypatch.setattr(mcp_server, "recall", lambda *a, **k: {"facts": [], "chunks": [], "documents": [], "context": "", "chunks_state": "ok"})
+    _admin()
+    assert client.post("/api/brains", json={"slug": "con-empty", "name": "Con Empty"}).status_code == 201
+    tok = _new(client, "con-empty")
+    r = rpc(client, "con-empty", "tools/call", {"name": "recall", "arguments": {"query": "¿qué sabes de este proyecto?"}}, token=tok["token"],
+            headers={"Accept": "application/json, text/event-stream"})
+    assert r.status_code == 200, r.text
+    assert "recall_id" not in r.text  # nothing to rate
+    a = _activity(client, "con-empty", tok["id"])
+    assert a["recalls"] == 1 and a["last_recall_at"]
+    assert "agent_recall" in _done(client)
 
 
 def test_a_failed_call_with_a_wrong_token_does_not_connect(client):  # noqa: F811

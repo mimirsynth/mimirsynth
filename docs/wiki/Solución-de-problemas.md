@@ -71,7 +71,7 @@ Cada modelo de embeddings da vectores de un tamaño fijo, su **dimensión**, y e
 | `bind: address already in use` | El puerto 8000 está ocupado: cambia `MIMIRSYNTH_PORT` |
 | Un servicio en «unhealthy» | `docker compose logs <servicio>`. PostgreSQL/FalkorDB tardan unos segundos; si persiste, revisa memoria y espacio en disco. La aplicación también se marca como «unhealthy» mientras no llega a PostgreSQL o a FalkorDB |
 | Los embeddings o el LLM fallan con un error de conexión, con Ollama | Ver [El contenedor no llega a Ollama](#el-contenedor-no-llega-a-ollama) |
-| No encuentro el código de instalación | Solo aparece mientras no haya administradores; reinicia el contenedor para generar uno nuevo |
+| No encuentro el código de inicio | Solo aparece mientras no haya administradores; reinicia el contenedor para generar uno nuevo |
 | He perdido el acceso del único administrador | En la base de datos, pon `is_admin = false` a ese usuario y reinicia: vuelve el asistente de primer arranque |
 | Una actualización no se ha verificado | `update.sh` te dice cómo volver atrás: `./update.sh --rollback` (añade `--with-db` para restaurar también la base de datos). Ver [[Actualización y copias de seguridad]] |
 

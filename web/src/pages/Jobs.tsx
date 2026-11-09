@@ -14,8 +14,8 @@ type Job = {
 type List = { total: number; counts: Record<string, number>; kinds: { kind: string; label: string }[]; items: Job[] };
 
 const TONE: Record<string, Tone> = { queued: "neutral", running: "warn", done: "success", failed: "danger", cancelled: "neutral" };
-const LABEL: Record<string, string> = { queued: T("en cola"), running: T("en marcha"), done: "terminado", failed: "fallido", cancelled: "cancelado" };
-const RESULT: Record<string, string> = { added: "nuevos", changed: "cambiados", unchanged: T("sin cambios"), removed: "eliminados", indexed: "indexados", errors: "errores", chunks: "trozos", analyzed: "analizadas" };
+const LABEL: Record<string, string> = { queued: T("en cola"), running: T("en marcha"), done: T("terminado"), failed: T("fallido"), cancelled: T("cancelado") };
+const RESULT: Record<string, string> = { added: T("nuevos"), changed: T("cambiados"), unchanged: T("sin cambios"), removed: T("eliminados"), indexed: T("indexados"), errors: T("errores"), chunks: T("trozos"), analyzed: T("analizadas") };
 
 function took(a: string | null, b: string | null) {
   if (!a) return "—";

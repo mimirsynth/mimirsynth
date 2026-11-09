@@ -28,12 +28,13 @@ def _tok(client, slug, role):  # noqa: F811
 
 
 def _seed(bid: int) -> None:
-    """Two pending proposals, one pending correction, a decided one, a pending type correction and a reference run that got worse."""
+    """Two pending proposals, one pending correction, a decided one, one whose ingestion failed, a pending type correction and a reference
+    run that got worse."""
     from mimirsynth.models import Proposal, RefRun, RetypeSuggestion, SummarySuggestion, User
     from mimirsynth.store import _factory
     with _factory()() as db:
         uid = db.query(User).first().id
-        for kind, status in (("memory", "pending"), ("memory", "pending"), ("correction", "pending"), ("memory", "rejected")):
+        for kind, status in (("memory", "pending"), ("memory", "pending"), ("correction", "pending"), ("memory", "rejected"), ("memory", "failed")):
             db.add(Proposal(brain_id=bid, author_id=uid, name="p", body="b", kind=kind, status=status))
         db.add(RetypeSuggestion(brain_id=bid, entity_uuid="web", name="web", current_type="", suggested_type="Server", confidence=0.9))
         db.add(SummarySuggestion(brain_id=bid, entity_uuid="web", name="web", current="web HAS_IP ip1\nweb HAS_IP ip2", proposed="web has the IP 10.0.0.2."))
@@ -74,11 +75,28 @@ def test_every_counter_and_who_sees_it(client, graph, monkeypatch):  # noqa: F81
                                                           "shelf_life_days": 90})
     attention.forget(bid)
     out = client.get("/api/brains/at1/attention").json()
-    assert out == {"proposals": 2, "corrections": 1, "duplicates": 1, "conflicts": 1, "stale": 1, "retype": 1, "summaries": 1, "refqueries": 2}
+    assert out == {"proposals": 2, "corrections": 1, "failed": 1, "duplicates": 1, "conflicts": 1, "stale": 1, "retype": 1, "summaries": 1, "refqueries": 2}
     curator = client.get("/api/brains/at1/attention", headers=_tok(client, "at1", "curator")).json()
     assert "retype" not in curator and curator["conflicts"] == 1                       # only administrators can apply a type correction
     assert curator["summaries"] == 1                                                   # a curator approves summaries
     assert client.get("/api/brains/at1/attention", headers=_tok(client, "at1", "contributor")).status_code == 403
+
+
+def test_a_failed_ingestion_waits_for_a_curator(client):  # noqa: F811
+    """#421: a proposal whose ingestion failed is counted apart from the pending ones, until it is retried or rejected."""
+    from types import SimpleNamespace
+
+    from mimirsynth import attention
+    from mimirsynth.models import Brain, Proposal, User
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "at-failed", "name": "At failed"}).status_code == 201
+    with _factory()() as db:
+        uid = db.query(User).first().id
+        b = db.query(Brain).filter(Brain.slug == "at-failed").one()
+        for status in ("pending", "failed", "ingested"):
+            db.add(Proposal(brain_id=b.id, author_id=uid, name="p", body="b", kind="memory", status=status))
+        db.commit()
+        assert attention._proposals(SimpleNamespace(db=db, brain=b)) == {"proposals": 1, "corrections": 0, "failed": 1}
 
 
 @needs_falkor

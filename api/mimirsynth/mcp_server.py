@@ -168,10 +168,12 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
             body = RecallIn(**args)
             out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body), lang=lang,
                          min_similarity=body.min_similarity, **({"archived": True} if body.archived else {}), **federated_kwargs(ctx, body))
+            from . import ratings
+            # Logged even when it found nothing (#421): an agent's first recall lands in a new, empty brain, and that recall is what ticks
+            # «An agent makes its first recall» and the wizard's agent step. The agent can say what was useful with `rate` (#110).
+            rid = ratings.log(ctx, body.query, out, bg, body, "mcp")
             if not out["context"]:
                 return _text(tr("No hay nada relevante en la memoria para esa consulta.", lang))
-            from . import ratings
-            rid = ratings.log(ctx, body.query, out, bg, body, "mcp")  # the agent can say what was useful with `rate` (#110), logged after answering
             return _text(out["context"] + "\n\n" + tr("(recall_id: {{rid}})", lang, rid=rid))
         if name == "rate":
             from . import ratings

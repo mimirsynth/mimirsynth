@@ -76,11 +76,11 @@ Tu agente habla con MimirSynth por **MCP** (Model Context Protocol), la forma es
 1. **¿Qué agente usas?** Elige el tuyo: Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw u **Otro cliente MCP**.
 2. **Token de API.** Usa el del asistente, o pulsa **Crear uno para este agente**. Deja **Colaborador: consulta y propone (recomendado)**. El secreto de un token solo se muestra al crearlo: con uno anterior, los fragmentos llevan `mst_…` donde va el tuyo.
 3. **Copia lo que necesita.** Los fragmentos ya llevan este servidor, este brain y el token. Para un agente con plugin nativo de MimirSynth hay dos: **Guarda la configuración** (un fichero pequeño, `~/.config/mimirsynth/config.json`, que leen todos los plugins de MimirSynth; déjalo legible solo por ti, porque lleva el token) e **Instala el plugin** (una línea en un terminal; si pregunta la URL, el brain o el token, pulsa Intro para quedarte con lo que encontró en el fichero). Para cualquier otro cliente, **Añade el servidor a tu cliente** da el servidor MCP del brain en la forma `mcpServers` que leen la mayoría de clientes.
-4. **Arranca el agente.** Ábrelo, o ejecuta su comando de estado. Unos segundos después de su primera llamada, el panel se pone en verde: **Tu agente está conectado**. Entonces hace un **recall de prueba**, para que veas lo que recibe el agente. En un brain nuevo todavía no encuentra nada, y es lo normal.
+4. **Arranca el agente.** Ábrelo y escríbele un primer mensaje; con MCP a secas, pregúntale algo que deba buscar en MimirSynth. En el asistente el panel espera a ese **primer recall**, y unos segundos después se pone en verde: **Tu agente ya ha hecho su primer recall**. Más adelante, en **Administración**, el mismo panel se pone en verde con la primera llamada del agente, sea cual sea (basta con su comando de estado): **Tu agente está conectado**. En los dos casos hace después un **recall de prueba**, para que veas lo que recibe el agente. En un brain nuevo todavía no encuentra nada, y es lo normal.
 
-![El panel Conectar un agente, esperando la primera llamada del agente](images/first-15-minutes/es/connect-waiting.png)
+![El panel Conectar un agente, en Administración, esperando la primera llamada del agente](images/first-15-minutes/es/connect-waiting.png)
 
-![El panel cuando el agente ya ha llamado: «Tu agente está conectado»](images/first-15-minutes/es/connect-connected.png)
+![El mismo panel cuando el agente ya ha llamado: «Tu agente está conectado»](images/first-15-minutes/es/connect-connected.png)
 
 Cada agente tiene sus detalles (Codex, por ejemplo, pide confiar una vez en sus hooks): ver [[Conectar agentes]].
 

@@ -1,4 +1,4 @@
-import { tr } from "../i18n";
+import { tr, T } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +13,7 @@ type Detail = U & { memberships: { slug: string; name: string; role: string }[] 
 type List = { smtp: boolean; items: U[] };
 type Link = { link: string; purpose?: string; emailed: boolean };
 
-const STATUS: Record<string, string> = { active: "activo", invited: "invitado", disabled: "deshabilitado" };
+const STATUS: Record<string, string> = { active: T("activo"), invited: T("invitado"), disabled: T("deshabilitado") };
 const TONE: Record<string, Tone> = { active: "success", invited: "warn", disabled: "neutral" };
 const ROLE_OPTS = Object.entries(ROLE).map(([value, label]) => ({ value, label }));
 const COLS = {

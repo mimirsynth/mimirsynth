@@ -424,7 +424,6 @@
  "crearía un ciclo de alias": "it would create an alias cycle",
  "cuenta bloqueada temporalmente": "account temporarily locked",
  "cuenta deshabilitada": "account disabled",
- "código de instalación incorrecto (míralo en el log del servicio)": "incorrect installation code (look it up in the service log)",
  "código incorrecto": "incorrect code",
  "debe tener al menos {{n}} caracteres": "must be at least {{n}} characters long",
  "decisor no encontrado": "decider not found",

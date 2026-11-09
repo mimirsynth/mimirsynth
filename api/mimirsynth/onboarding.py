@@ -68,10 +68,11 @@ def _check(db: Session, user: User, step: str, ids: list[int]) -> bool:
 def token_activity(db: Session, tok: ApiToken) -> dict:
     """What an agent has done with one token (#362, the «Connect an agent» panel), from what every call already records: its last
     authenticated call (each one refreshes `last_used_at`, whatever it asks for) and the recalls it made, by the same
-    `recall_logs.token_id` that ticks `agent_recall` above. A recall log goes with its retention period, so `recalls` counts the kept ones."""
+    `recall_logs.token_id` that ticks `agent_recall` above. A recall log goes with its retention period, so `recalls` counts the kept ones.
+    With the token's name, which the setup wizard does not have when it watches the token its previous step made (#421)."""
     n, last = db.execute(select(func.count(RecallLog.id), func.max(RecallLog.created_at))
                          .where(RecallLog.brain_id == tok.brain_id, RecallLog.token_id == tok.id)).one()
-    return {"id": tok.id, "connected": tok.last_used_at is not None, "last_used_at": aware(tok.last_used_at), "recalls": n or 0,
+    return {"id": tok.id, "name": tok.name, "connected": tok.last_used_at is not None, "last_used_at": aware(tok.last_used_at), "recalls": n or 0,
             "last_recall_at": aware(last)}
 
 

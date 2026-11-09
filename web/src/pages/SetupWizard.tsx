@@ -33,7 +33,7 @@ const INTRO: Record<StepKey, string> = {
   decider: T("Un decisor aprueba solo, con un umbral de confianza, las propuestas claramente factuales; lo dudoso sigue esperando a una persona. Es opcional."),
   brain: T("Un brain es una memoria separada, con su propio grafo, sus miembros y sus tokens: por ejemplo, una por equipo o por proyecto."),
   token: T("Tu agente se identifica con un token. Con el rol Colaborador lee la memoria y propone hechos nuevos, que esperan a que alguien los apruebe."),
-  agent: T("Elige tu agente y copia lo que necesita. El paso se pone en verde cuando el agente hace su primer recall. En cuanto el agente llama, el panel te deja probar qué recibiría."),
+  agent: T("Elige tu agente y copia lo que necesita. El paso se pone en verde cuando el agente hace su primer recall, y entonces el panel te deja probar qué recibe."),
 };
 const STATUS: Record<string, string> = { done: T("completado"), skipped: T("saltado") };
 
@@ -63,8 +63,9 @@ export default function SetupWizard() {
     admin: null,
     graph: <AdminGraph />,
     embedding: <EmbeddingStep w={w} />,
-    llm: <LlmStep w={w} kind="llm" />,
-    decider: <LlmStep w={w} kind="decision" />,
+    llm: <LlmStep key="llm" w={w} kind="llm" />,
+    // its own key: the same component as the LLM step, which would otherwise keep that step's endpoint and model filled in (issue 421)
+    decider: <LlmStep key="decider" w={w} kind="decision" />,
     brain: <BrainStep w={w} pick={(brain) => setExtra({ brain })} />,
     token: <TokenStep w={w} brain={extra.brain ?? w.brain} pick={(token_id, s) => { setExtra({ token_id }); setSecret(s); }} />,
     agent: <AgentStep w={w} secret={secret} />,
@@ -233,9 +234,9 @@ function AgentStep({ w, secret }: { w: Wizard; secret: string }) {
   if (!b) return <DataState query={brains} />;
   return (
     <Stack gap="sm">
-      {w.agent_connected ? <Notice tone="success" title={t("Tu agente ya ha hecho su primer recall")}>{t("La memoria está lista. Pulsa «Terminar» para ir al inicio.")}</Notice>
+      {w.agent_connected ? <Notice tone="success" title={t("La memoria está lista")}>{t("Tu agente ya ha hecho su primer recall. Pulsa «Terminar» para ir al inicio.")}</Notice>
         : <Text size="sm" c="dimmed" className="ms-measure">{t("Cuando tu agente haga su primer recall, este paso se pondrá en verde. Si prefieres conectarlo más tarde, pulsa «Terminar»: lo tienes en Administración → Conectar un agente.")}</Text>}
-      <ConnectAgent brain={b} token={w.token_id ? { id: w.token_id, secret: secret || undefined } : undefined} />
+      <ConnectAgent brain={b} token={w.token_id ? { id: w.token_id, secret: secret || undefined } : undefined} untilRecall />
     </Stack>
   );
 }

@@ -97,14 +97,17 @@ export default function App() {
     q.delete("brain");
     navigate({ pathname: loc.pathname, search: q.toString() ? `?${q}` : "" }, { replace: true });
   }, [brains.data, loc.search]);  // eslint-disable-line react-hooks/exhaustive-deps
-  // Recuerda el brain activo entre recargas; si el guardado ya no existe (borrado, sin acceso), cae al primero de la lista.
+  // Recuerda el brain activo entre recargas; si el guardado ya no existe (borrado, sin acceso, otra instalación en la misma dirección),
+  // cae al primero de la lista, o a ninguno si no queda ninguno (issue 421): nada sigue preguntando por un brain que no está. Con la lista ya al
+  // día: un brain recién creado o importado aún no está en la que había.
+  const hasBrain = !!brains.data?.some((b) => b.slug === brain);
   useEffect(() => {
     const list = brains.data;
-    if (list?.length && !list.some((b) => b.slug === brain)) setBrain(list[0].slug);
-  }, [brains.data, brain]);
+    if (list && !brains.isFetching && !hasBrain && (brain || list.length)) setBrain(list[0]?.slug ?? "");
+  }, [brains.data, brains.isFetching, brain]);  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (cfg.data) document.title = cfg.data.name; }, [cfg.data]);
   // Trabajos activos del brain: contador junto a «Trabajos»; se consulta más a menudo mientras haya alguno en marcha.
-  const active = useQuery({ queryKey: ["jobs-summary", brain], enabled: !!me.data && !!brain, queryFn: () => get<{ active: number }>("jobs/summary", { graph: brain }),
+  const active = useQuery({ queryKey: ["jobs-summary", brain], enabled: !!me.data && hasBrain, queryFn: () => get<{ active: number }>("jobs/summary", { graph: brain }),
     refetchInterval: (q) => ((q.state.data?.active ?? 0) > 0 ? 3000 : 20000) });
   const bell = useQuery({ queryKey: ["notifications-summary"], enabled: !!me.data, queryFn: () => get<Summary>("notifications/summary"), refetchInterval: 30000 });
   const name = cfg.data?.name ?? "…";
@@ -113,7 +116,6 @@ export default function App() {
   const narrow = useMediaQuery("(max-width: 48em)") ?? false;
   const [tour, setTour] = useState(false);
   const tourStarted = useRef(false);
-  const hasBrain = !!brains.data?.some((b) => b.slug === brain);
   useEffect(() => {
     if (!onWizard && !me.data?.setup_pending && shouldAutoStart({ tourSeen: me.data?.tour_seen, hasBrain, startedHere: tourStarted.current })) { tourStarted.current = true; setTour(true); }
   }, [me.data?.tour_seen, hasBrain, onWizard, me.data?.setup_pending]);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -188,7 +190,7 @@ export default function App() {
           <Route path="/cuenta" element={<Account />} />
           <Route path="/notificaciones" element={<Notifications />} />
           {me.data.is_admin && <Route path="/configuracion" element={<SetupWizard />} />}
-          {brain ? (
+          {hasBrain ? (
             <>
               <Route path="/" element={<Overview graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/preguntar" element={<Ask graph={brain} role={cur?.role ?? "reader"} />} />
@@ -205,7 +207,7 @@ export default function App() {
               <Route path="/consulta" element={<Query graph={brain} />} />
               <Route path="/entidad/:uuid" element={<EntityPage graph={brain} role={cur?.role ?? "reader"} />} />
             </>
-          ) : <Route path="*" element={brains.isPending ? <EmptyState>{t("Cargando…")}</EmptyState>
+          ) : <Route path="*" element={brains.isPending || (!!brain && brains.isFetching) ? <EmptyState>{t("Cargando…")}</EmptyState>
             // El administrador ve todos los brains: si la lista está vacía es que no existe ninguno, y nadie más puede crearlo.
             : me.data.is_admin && brains.data?.length === 0 ? (me.data.setup_pending ? <Navigate to="/configuracion" replace /> : <FirstSteps docs={cfg.data?.links?.docs} />)
             : <Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}

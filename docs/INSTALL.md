@@ -93,7 +93,7 @@ This pulls the official image (`ghcr.io/mimirsynth/mimirsynth`, for amd64 and ar
 > Do not put comments at the end of a value line in `.env` (`KEY=value # comment`): Docker Compose would read them as part of the value.
 
 ## First-start wizard
-An instance with no administrators prints an **installation code** in its log (the installer shows it for you):
+An instance with no administrators prints a **first-start code** in its log (the installer shows it for you):
 ```bash
 docker compose logs mimirsynth | grep -A3 "FIRST START"
 ```
@@ -104,7 +104,7 @@ Once the administrator exists, the **setup wizard** opens by itself and takes yo
 1. **Graph database:** the one in use (the bundled FalkorDB, or the one the installer set), with its test, changing it, and adopting graphs that are already there.
 2. **Embeddings:** it looks for a local Ollama (the bundled one, your computer's), can download `nomic-embed-text`, or takes an OpenAI-compatible service.
 3. **LLM** (extracts facts from what agents propose) and **decider** (approves clearly factual proposals by itself): both can be skipped. Without an LLM, approved proposals wait and the home screen says so until you add one.
-4. **Your first brain**, an **API token** for your agent (Contributor role, shown once), and **connecting your agent**, which turns green when it makes its first call.
+4. **Your first brain**, an **API token** for your agent (Contributor role, shown once), and **connecting your agent**, which turns green when it makes its first recall.
 
 The graph and embedding steps cannot be skipped: «Next» asks the server to check them. Every step is kept as you pass it, so you can leave at any point and the wizard picks up where you left off, on any device; «Set up by hand» leaves it for good. An administrator can open it again from **Administration → Setup wizard**. An instance that already had brains before this version does not open it by itself.
 
@@ -183,5 +183,5 @@ Building from source is for contributors: see [CONTRIBUTING.md](../CONTRIBUTING.
 - **Embeddings fail with a connection error, with Ollama on the same Linux host:** Ollama is only listening on `127.0.0.1`; see [Preparing Ollama](#preparing-ollama). If you use your own `docker-compose.yml`, check that the `mimirsynth` service has `extra_hosts: ["host.docker.internal:host-gateway"]`.
 - **Recall returns nothing:** check the embeddings (Administration → Embeddings → Test) and that the text index is synchronised (the Ask tab shows its status).
 - **No alert arrived when PostgreSQL went down:** it cannot alert about itself. Watch it with an external monitor: see [Monitoring the instance](#monitoring-the-instance).
-- **I cannot find the installation code:** it only appears while there is no administrator. Restart the container so it generates a new one.
+- **I cannot find the first-start code:** it only appears while there is no administrator. Restart the container so it generates a new one.
 - **The only administrator lost access:** with access to the server, set `is_admin = false` for that user in the `users` table and restart the container: the first-start wizard will reappear with a new code.

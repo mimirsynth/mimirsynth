@@ -82,7 +82,7 @@ def _brain(db: Session, st: dict) -> Brain | None:
 
 
 def _agent_connected(db: Session, st: dict) -> bool:
-    """The agent's first call: a recall through the wizard's token (or any token of its brain)."""
+    """The agent's first recall through the wizard's token (or any token of its brain), even one that found nothing (#421)."""
     b = _brain(db, st)
     if not b:
         return False

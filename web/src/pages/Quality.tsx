@@ -15,7 +15,7 @@ import CuratorPanel from "./CuratorPanel";
 import ProbesPanel from "./Probes";
 
 /** What waits for a person's decision in the brain (`null`: it could not be counted). `retype` only comes to administrators. */
-export type Attention = { proposals: number | null; corrections: number | null; duplicates: number | null; conflicts: number | null;
+export type Attention = { proposals: number | null; corrections: number | null; failed?: number | null; duplicates: number | null; conflicts: number | null;
   stale: number | null; retype?: number | null; summaries?: number | null; refqueries: number | null };
 type Dup = { key: string; members: { uuid: string; name: string; labels: string[]; degree: number }[] };
 type Vocab = { ignored_duplicates?: string[]; duplicates: Dup[] };

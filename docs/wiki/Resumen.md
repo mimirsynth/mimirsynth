@@ -25,13 +25,14 @@ Los curadores y superiores ven primero una lista corta de lo que **espera la dec
 |---|---|
 | Propuestas esperando una decisión | [[Propuestas]], filtradas a pendientes |
 | Correcciones pendientes, de agentes o de valoraciones «incorrecto» | [[Propuestas]], filtradas a correcciones pendientes |
+| Propuestas cuya ingesta falló (reintentar o rechazar) | [[Propuestas]] → Decididas, filtradas a fallidas |
 | Grupos de posibles duplicados | [[Calidad del contenido]] → Duplicados |
 | Posibles contradicciones | [[Calidad del contenido]] → Contradicciones |
 | Hechos a revisar, pasados de su vida útil | [[Calidad del contenido]] → A revisar |
 | Tipos dudosos con un cambio propuesto (solo administradores) | [[Calidad del contenido]] → Tipos dudosos |
 | Consultas de referencia que empeoraron en la última ejecución | [[Preguntar]] → Consultas de referencia |
 
-Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita tu atención». Los contadores son los mismos que calcula cada página y se guardan un minuto para que el inicio sea rápido. Cualquier cambio hecho en el brain (decidir una propuesta, fusionar, resolver una contradicción, confirmar un hecho…) los recalcula, así que se ve al momento; lo que cambia solo (un hecho que pasa su vida útil, un agente que propone por MCP) se ve antes de un minuto. En un brain grande, la primera lectura tras un cambio es más lenta, porque es cuando se hacen los recorridos.
+Las líneas a cero no salen, y cuando no hay nada pendiente dice «Nada necesita tu atención». Los contadores son los mismos que calcula cada página y se guardan un minuto para que el inicio sea rápido. Cualquier cambio hecho en el brain (decidir una propuesta, fusionar, resolver una contradicción, confirmar un hecho…) los recalcula, así que se ve al momento; lo que cambia solo (un hecho que pasa su vida útil, un agente que propone por MCP, una ingesta que falla) se ve antes de un minuto. En un brain grande, la primera lectura tras un cambio es más lenta, porque es cuando se hacen los recorridos.
 
 ## Lo que ha cambiado
 Al lado, para las mismas personas, **Lo que ha cambiado** dice qué se ha movido en el brain en las **últimas 24 horas** o en los **últimos 7 días** (a elegir): hechos nuevos, hechos invalidados, documentos añadidos y propuestas recibidas y decididas. Cada línea abre su página. Son los mismos recuentos del resumen por correo de [[Mi cuenta]], que se los envía a quien los quiera sin abrir la aplicación. Las líneas a cero no salen.

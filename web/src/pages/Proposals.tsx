@@ -1,4 +1,4 @@
-import { T, locale } from "../i18n";
+import { T, locale, tr } from "../i18n";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
@@ -25,7 +25,7 @@ type Claim = { subject: string; relation: string; value: string; valid_from: str
 type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
   invalid_at: string; applied_at?: string; reverted_at?: string };
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
-const LABEL: Record<string, string> = { pending: "pendiente", approved: "aprobada", rejected: "rechazada", ingested: "ingerida", failed: "fallida" };
+const LABEL: Record<string, string> = { pending: T("pendiente"), approved: T("aprobada"), rejected: T("rechazada"), ingested: T("ingerida"), failed: T("fallida") };
 const SOURCE: Record<string, string> = { text: T("texto"), message: T("conversación"), json: T("JSON") };
 const LOW_CONFIDENCE = 0.6;  // the same threshold as the review queue's risk order in the API
 /** Who sent it, by name: the address goes in the tooltip. */
@@ -57,12 +57,13 @@ function decidedBy(p: Prop, t: (k: string) => string): string {
     : p.reviewer ?? "—";
 }
 
-/** How long a proposal has been waiting, in the interface language («hace 3 h»). */
+/** How long a proposal has been waiting, in the interface language («hace 3 h»). Under a minute it says «ahora mismo», never «in 0 min»
+ *  (issue 421); a browser clock a little behind the server's never makes it wait in the future. */
 function waited(iso: string): string {
-  const s = (new Date(iso).getTime() - Date.now()) / 1000;
+  const s = Math.min(0, (new Date(iso).getTime() - Date.now()) / 1000);
   const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: "always", style: "short" });
-  for (const [unit, secs] of [["day", 86400], ["hour", 3600], ["minute", 60]] as const) if (Math.abs(s) >= secs) return rtf.format(Math.round(s / secs), unit);
-  return rtf.format(0, "minute");
+  for (const [unit, secs] of [["day", 86400], ["hour", 3600], ["minute", 60]] as const) if (-s >= secs) return rtf.format(Math.round(s / secs), unit);
+  return tr("ahora mismo");
 }
 
 type PropList = { total: number; limit: number; offset: number; authors: { id: number; name: string }[]; items: Prop[] };
@@ -1056,7 +1057,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
             </Tabs.Panel>
             <Tabs.Panel value="categorias" pt="sm" className="ms-tabpanel-col"><ProposalCategories graph={graph} isAdmin={["admin", "owner"].includes(role)} /></Tabs.Panel>
             <Tabs.Panel value="decididas" pt="sm" className="ms-tabpanel-col">
-              <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialKind={sp.get("tipo") ?? undefined}
+              <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialStatus={estado ?? undefined} initialKind={sp.get("tipo") ?? undefined}
                 first={{ value: "decided", label: t("Todas"), countKey: "decided" }} />
             </Tabs.Panel>
             <Tabs.Panel value="mias" pt="sm" className="ms-tabpanel-col"><MineTab ops={ops} isCurator={isCurator} /></Tabs.Panel>
