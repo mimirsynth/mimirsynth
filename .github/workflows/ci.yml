@@ -197,7 +197,7 @@ jobs:
           set -o pipefail
           export MIMIRSYNTH_GRAPH_PASSWORD=mimirsynth-ci
           ./install.sh --yes --from . --version ci --no-start --dir "$RUNNER_TEMP/neo4j-nodb" --graph existing --graph-type neo4j \
-            --graph-host localhost --graph-port 7687 --graph-database zz-missing --skip-graph-check | tee "$RUNNER_TEMP/nodb-config.log"
+            --graph-host localhost --graph-port 7687 --graph-database zz-missing --skip-graph-check 2>&1 | tee "$RUNNER_TEMP/nodb-config.log"   # WARN goes to stderr
           grep -q "The server has no database «zz-missing». Leave the database empty" "$RUNNER_TEMP/nodb-config.log"
           if ./install.sh --yes --from . --version ci --no-browser --dir "$RUNNER_TEMP/neo4j-nodb" 2>&1 | tee "$RUNNER_TEMP/nodb.log"; then exit 1; fi
           grep -q "cannot use the graph database until the connection works" "$RUNNER_TEMP/nodb.log"
