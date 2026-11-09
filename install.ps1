@@ -49,6 +49,7 @@ $SavedPrefs = @($ErrorActionPreference, $ProgressPreference)   # restored at the
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"   # Invoke-WebRequest is many times slower with the progress bar in Windows PowerShell
 $Repo = "MimirSynth/mimirsynth"
+$Release = "dev"   # the release this installer belongs to: release.yml writes it here ("dev" is a copy from the repository)
 $EmbedModel = "nomic-embed-text"
 $WaitSeconds = 300
 $OnMac = (Get-Variable IsMacOS -ErrorAction SilentlyContinue) -and $IsMacOS
@@ -214,6 +215,52 @@ function Show-UpgradeVerdict {
             "Est\u00e1 en la {0}, m\u00e1s reciente que la \u00faltima versi\u00f3n estable ({1}): no hay nada a lo que actualizar." @($cur, $to)
     }
     return $false
+}
+
+function Update-Updater {
+    # An existing installation always gets the update.sh of this installer's release (#413), checked against that release's SHA256SUMS,
+    # so that ./update.sh run from WSL has its fixes. Never an older one than the update.sh already there or than the installed version:
+    # update.sh then brings itself up to the release it updates to. Failing to download it changes nothing.
+    $dest = Join-Path $Dir "update.sh"
+    if ($From) { Get-ReleaseFile "update.sh" $dest; Say "update.sh: copied from {0}." "update.sh: copiado de {0}." @($From); return }
+    $rel = $Release
+    if (-not (Test-SemVer $rel)) { $rel = $St.Version }
+    if (-not (Test-SemVer $rel)) { try { $rel = [string](Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$Repo/releases/latest" -TimeoutSec 15).tag_name } catch { $rel = "" } }
+    if (-not (Test-SemVer $rel)) { Warn "could not find the latest release: update.sh was not brought up to date" "no se pudo saber la \u00faltima versi\u00f3n: update.sh no se ha puesto al d\u00eda"; return }
+    $rel = $rel -replace '^v', ''
+    if (Test-Path -LiteralPath $dest) {
+        $have = ""; $m = Select-String -LiteralPath $dest -Pattern '^RELEASE="([^"]*)"' | Select-Object -First 1
+        if ($m) { $have = $m.Matches[0].Groups[1].Value }
+        foreach ($floor in @((Get-EnvValue "MIMIRSYNTH_VERSION"), $have)) {
+            if ((Test-SemVer $floor) -and (Compare-SemVer $rel $floor) -lt 0) {
+                Say "update.sh: the one already there is kept, newer than release {0}'s (it brings itself up to date when it runs)." `
+                    "update.sh: se mantiene el que ya hay, m\u00e1s reciente que el de la versi\u00f3n {0} (se pone al d\u00eda solo al ejecutarse)." @($rel)
+                return
+            }
+        }
+    }
+    $url = "https://github.com/$Repo/releases/download/v$rel"
+    $new = Join-Path $Dir (".update.sh." + [guid]::NewGuid().ToString("N").Substring(0, 8))
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri "$url/update.sh" -OutFile $new -TimeoutSec 120
+        $sums = (Invoke-WebRequest -UseBasicParsing -Uri "$url/SHA256SUMS" -TimeoutSec 60).Content
+        if ($sums -is [byte[]]) { $sums = [Text.Encoding]::ASCII.GetString($sums) }
+    }
+    catch {
+        Remove-Item -LiteralPath $new -Force -ErrorAction SilentlyContinue
+        Warn "could not download the update.sh of release {0}: the one in the folder was not changed" "no se pudo descargar el update.sh de la versi\u00f3n {0}: no se ha cambiado el de la carpeta" @($rel)
+        return
+    }
+    $want = ""
+    foreach ($line in ($sums -split "`n")) { $f = -split $line; if ($f.Count -ge 2 -and ($f[1] -eq "update.sh" -or $f[1] -eq "*update.sh")) { $want = $f[0].ToLower(); break } }
+    $got = (Get-FileHash -LiteralPath $new -Algorithm SHA256).Hash.ToLower()
+    if (-not $want -or $want -ne $got) {
+        Remove-Item -LiteralPath $new -Force -ErrorAction SilentlyContinue
+        Warn "the update.sh of release {0} does not match its SHA256SUMS: it was NOT used" "el update.sh de la versi\u00f3n {0} no coincide con su SHA256SUMS: NO se ha usado" @($rel)
+        return
+    }
+    Move-Item -LiteralPath $new -Destination $dest -Force
+    Say "update.sh: the one of release {0} (checked against its SHA256SUMS)." "update.sh: el de la versi\u00f3n {0} (comprobado con su SHA256SUMS)." @($rel)
 }
 
 # ---- Docker Desktop and Compose v2 ----
@@ -631,7 +678,8 @@ try {
     if ($hasCompose -and $hasEnv) {
         if ((Get-NativeOutput "docker" @("compose", "ps", "-aq", "mimirsynth")) -join "") {
             Step "Existing installation" "Instalaci\u00f3n existente"
-            Say "MimirSynth is already installed in {0}. Nothing was changed." "MimirSynth ya est\u00e1 instalado en {0}. No se ha cambiado nada." @($Dir)
+            Say "MimirSynth is already installed in {0}. Nothing was changed in it." "MimirSynth ya est\u00e1 instalado en {0}. No se ha cambiado nada en \u00e9l." @($Dir)
+            Update-Updater
             if (Show-UpgradeVerdict) {
                 Say "To upgrade it: run ./update.sh from WSL in that folder, or back up and run 'docker compose pull' and 'docker compose up -d' there (see Upgrading in docs/INSTALL.md)." `
                     "Para actualizarlo: ejecuta ./update.sh desde WSL en esa carpeta, o haz una copia de seguridad y ejecuta all\u00ed 'docker compose pull' y 'docker compose up -d' (ver Actualizar en docs/es/INSTALL.md)."

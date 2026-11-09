@@ -5,15 +5,20 @@
 #                                refused when its application does not know the database's revision (--force goes anyway)
 #   ./update.sh --check          only say what is running, what is the latest release and what ./update.sh would do
 #   ./update.sh --rollback       go back to the previous version using the backup (add --with-db to restore the database too)
-# Every run keeps ONE backup (./backup): the previous one is replaced only after the new one has been written and checked.
-# Options: --no-files (skip the documents volume), --update-compose / --keep-compose, --force, --yes, --backup-dir DIR.
+# First it brings itself up to date: it takes the target release's update.sh (verified against its SHA256SUMS), never an older one.
+# It keeps ONE backup of a working instance (./backup), replaced only once the new one is written and checked; a run made while the
+# application does not answer leaves it alone and writes its backup beside it (./backup.failed-DATE). --rollback uses ./backup.
+# Options: --no-files (skip the documents volume), --update-compose / --keep-compose, --force, --yes, --backup-dir DIR, --no-self-update.
 set -Eeuo pipefail
 
 REPO="MimirSynth/mimirsynth"
+RELEASE="dev"   # the release this update.sh belongs to: release.yml writes it here ("dev" is a copy from the repository)
 DIR="${MIMIRSYNTH_DIR:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)}"
 BACKUP_DIR="${BACKUP_DIR:-$DIR/backup}"
 WAIT_SECONDS="${WAIT_SECONDS:-180}"
-MODE=update; TARGET=""; FORCE=0; YES=0; FILES=1; COMPOSE_MODE=auto; WITH_DB=0
+MODE=update; TARGET=""; FORCE=0; YES=0; FILES=1; COMPOSE_MODE=auto; WITH_DB=0; SELF_UPDATE=1
+ARGS=("$@")   # to run the new update.sh with the same arguments (#413)
+REEXEC="${MIMIRSYNTH_UPDATER_REEXEC:-}"; unset MIMIRSYNTH_UPDATER_REEXEC   # set when this run is that new update.sh: it does not replace itself again
 
 case "${LC_ALL:-${LANG:-}}" in es*) L=es ;; *) L=en ;; esac
 say()  { if [ "$L" = es ]; then printf '%s\n' "$2"; else printf '%s\n' "$1"; fi; }
@@ -33,7 +38,8 @@ while [ $# -gt 0 ]; do
     --update-compose) COMPOSE_MODE=update ;;
     --keep-compose) COMPOSE_MODE=keep ;;
     --backup-dir) BACKUP_DIR="${2:-}"; shift ;;
-    -h|--help) sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --no-self-update) SELF_UPDATE=0 ;;
+    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown option: $1" "opción desconocida: $1" ;;
   esac
   shift
@@ -95,7 +101,7 @@ newer_in_line() {  # $1 a pre-release: the newest release of its line (the same 
   done
   printf '%s' "$best"
 }
-asset()  { curl -fsSL --max-time 30 "https://github.com/$REPO/releases/download/v$(norm "$1")/docker-compose.yml"; }
+asset()  { curl -fsSL --max-time 30 "https://github.com/$REPO/releases/download/v$(norm "$1")/${2:-docker-compose.yml}"; }   # release, file
 db_version() { $DC exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select version_num from alembic_version"' 2>/dev/null | tr -d '[:space:]' || true; }
 # The database revisions an image knows, one per line, read from its migrations in a throwaway container (#403)
 REVS_PY='import importlib.util as u,pathlib,re
@@ -104,9 +110,63 @@ for f in (pathlib.Path(u.find_spec("mimirsynth").submodule_search_locations[0])/
   m and print(m.group(1))'
 image_revisions() { MIMIRSYNTH_VERSION="$1" $DC run --rm --no-deps -T --entrypoint python mimirsynth -c "$REVS_PY" 2>/dev/null || true; }
 set_env_version() { if grep -qE '^MIMIRSYNTH_VERSION=' .env; then sed -i "s|^MIMIRSYNTH_VERSION=.*|MIMIRSYNTH_VERSION=$1|" .env; else printf '\nMIMIRSYNTH_VERSION=%s\n' "$1" >> .env; fi; }
+info()   { [ -f "$1/INFO" ] || return 0; sed -n "s/^$2=//p" "$1/INFO" | tail -1; }   # a field of a backup's INFO: backup folder, field
 
+# update.sh brings itself up to date before it decides anything (#413): an install keeps the update.sh it was installed with, so a
+# fix to update.sh would never reach it. $1 is the release whose update.sh is compared with this one (the target, or the latest
+# release for --check). Never an older release's: not older than this one, nor than what is installed, so that going down with
+# --version keeps this updater and its checks. The new file is verified against the release's SHA256SUMS, written beside this one
+# and moved over it in one step (the running bash keeps reading the old file), then run with the same arguments, once. When it
+# cannot be downloaded or does not match, this update.sh goes on and says so.
+self_update() {
+  local rel floor self new sums want got
+  rel="$(norm "$1")"
+  [ "$SELF_UPDATE" = 1 ] && [ -z "$REEXEC" ] && semver "$rel" || return 0
+  for floor in "$RELEASE" "$inst"; do
+    if semver "$floor" && [ "$(vercmp "$rel" "$floor")" = -1 ]; then return 0; fi
+  done
+  self="$(readlink -f "${BASH_SOURCE[0]}")"
+  if ! new="$(mktemp "$(dirname "$self")/.update.sh.XXXXXX" 2>/dev/null)"; then
+    warn "cannot write next to $self: update.sh was not checked against release $rel" "no se puede escribir junto a $self: no se ha comparado update.sh con la versión $rel"
+    return 0
+  fi
+  sums="$(mktemp)"
+  if ! asset "$rel" update.sh > "$new" 2>/dev/null || ! [ -s "$new" ] || ! asset "$rel" SHA256SUMS > "$sums" 2>/dev/null; then
+    rm -f "$new" "$sums"
+    warn "could not download the update.sh of release $rel: going on with this one" "no se pudo descargar el update.sh de la versión $rel: se sigue con este"
+    return 0
+  fi
+  if cmp -s "$new" "$self"; then rm -f "$new" "$sums"; return 0; fi
+  want="$(awk '$2 == "update.sh" || $2 == "*update.sh" { print $1; exit }' "$sums")"; got="$(sha256sum "$new" | cut -d' ' -f1)"
+  rm -f "$sums"
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then
+    rm -f "$new"
+    warn "the update.sh of release $rel does not match its SHA256SUMS: it was NOT used, going on with this one" \
+         "el update.sh de la versión $rel no coincide con su SHA256SUMS: NO se ha usado, se sigue con este"
+    return 0
+  fi
+  chmod --reference="$self" "$new" 2>/dev/null || chmod 755 "$new"
+  chown --reference="$self" "$new" 2>/dev/null || true
+  if ! mv -f "$new" "$self"; then
+    rm -f "$new"; warn "could not replace $self: going on with this update.sh" "no se pudo sustituir $self: se sigue con este update.sh"
+    return 0
+  fi
+  say "update.sh replaced by the one of release $rel (checked against its SHA256SUMS): running it again." \
+      "update.sh sustituido por el de la versión $rel (comprobado con su SHA256SUMS): se vuelve a ejecutar."
+  exec 9>&-   # the lock: the new update.sh takes it again
+  MIMIRSYNTH_UPDATER_REEXEC=1 exec "$BASH" "$self" ${ARGS[@]+"${ARGS[@]}"}
+}
+
+# $1 = 1 when the application answers. Then the backup replaces the previous one in $BACKUP_DIR, the one --rollback uses. When it
+# does not answer (#413), the state being saved may be the broken result of a failed update: the backup is written beside it, as
+# $BACKUP_DIR.failed-DATE (only the newest of those is kept), and $BACKUP_DIR stays the backup of the last working instance.
 backup() {
+  local healthy="$1" dest="$BACKUP_DIR" ver
   step "Backup" "Copia de seguridad"
+  if [ "$healthy" != 1 ]; then dest="$BACKUP_DIR.failed-$(date +%Y%m%d-%H%M%S)"; [ ! -e "$dest" ] || dest="$dest-$$"; fi
+  # the INFO always names a version: the running one, else the configured one (#413)
+  ver="$(running_version)"; [ -n "$ver" ] || ver="$cur_run"
+  if [ -z "$ver" ]; then if semver "$cur_cfg"; then ver="$(base "$cur_cfg")"; else ver="$cur_cfg"; fi; fi
   local tmp="$DIR/.backup.new"; rm -rf "$tmp"; (umask 077; mkdir -p "$tmp")
   trap 'rm -rf "$tmp"' ERR
   $DC exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$tmp/mimirsynth.sql.gz"
@@ -125,10 +185,25 @@ backup() {
   else
     warn "FalkorDB is external: it is NOT part of this backup" "FalkorDB es externo: NO forma parte de esta copia"
   fi
-  printf 'version=%s\nconfigured=%s\ndate=%s\nalembic=%s\n' "$(running_version)" "$(envget MIMIRSYNTH_VERSION latest)" "$(date -Is)" "$(db_version)" > "$tmp/INFO"
+  printf 'version=%s\nconfigured=%s\ndate=%s\nalembic=%s\nstate=%s\n' "$ver" "$(envget MIMIRSYNTH_VERSION latest)" "$(date -Is)" "$(db_version)" \
+    "$([ "$healthy" = 1 ] && echo answering || echo not-answering)" > "$tmp/INFO"
   trap - ERR
-  rm -rf "$BACKUP_DIR"; mv "$tmp" "$BACKUP_DIR"   # the previous backup goes away only now, with the new one already complete
-  say "Saved in $BACKUP_DIR (the previous backup was replaced)" "Guardada en $BACKUP_DIR (la copia anterior se ha sustituido)"
+  if [ "$healthy" = 1 ]; then
+    rm -rf "$BACKUP_DIR"; mv "$tmp" "$BACKUP_DIR"   # the previous backup goes away only now, with the new one already complete
+    say "Saved in $BACKUP_DIR (the previous backup was replaced)" "Guardada en $BACKUP_DIR (la copia anterior se ha sustituido)"
+    return 0
+  fi
+  mv "$tmp" "$dest"
+  local old; for old in "$BACKUP_DIR".failed-*; do [ "$old" = "$dest" ] || [ ! -d "$old" ] || rm -rf "$old"; done   # the newest one is enough
+  say "Saved in $dest. The application was not answering, so this backup is not the one --rollback uses." \
+      "Guardada en $dest. La aplicación no respondía, así que esta copia no es la que usa --rollback."
+  if [ -f "$BACKUP_DIR/INFO" ]; then
+    say "The backup of the last working instance is kept: $BACKUP_DIR (version $(info "$BACKUP_DIR" version), $(info "$BACKUP_DIR" date))." \
+        "Se conserva la copia de la última instancia que funcionaba: $BACKUP_DIR (versión $(info "$BACKUP_DIR" version), $(info "$BACKUP_DIR" date))."
+  else
+    warn "there is no backup of a working instance in $BACKUP_DIR: --rollback will have nothing to go back to" \
+         "no hay copia de una instancia que funcionara en $BACKUP_DIR: --rollback no tendrá a qué volver"
+  fi
 }
 
 verify() {  # $1 = expected version
@@ -150,8 +225,21 @@ verify() {  # $1 = expected version
 if [ "$MODE" = rollback ]; then
   step "Rollback" "Vuelta atrás"
   [ -f "$BACKUP_DIR/INFO" ] || die "there is no backup in $BACKUP_DIR" "no hay copia en $BACKUP_DIR"
-  prev="$(sed -n 's/^configured=//p' "$BACKUP_DIR/INFO")"
-  say "Backup of $(sed -n 's/^date=//p' "$BACKUP_DIR/INFO") (version $(sed -n 's/^version=//p' "$BACKUP_DIR/INFO"), database revision $(sed -n 's/^alembic=//p' "$BACKUP_DIR/INFO"))." "Copia del $(sed -n 's/^date=//p' "$BACKUP_DIR/INFO") (versión $(sed -n 's/^version=//p' "$BACKUP_DIR/INFO"), revisión de la base de datos $(sed -n 's/^alembic=//p' "$BACKUP_DIR/INFO"))."
+  prev="$(info "$BACKUP_DIR" configured)"; bver="$(info "$BACKUP_DIR" version)"
+  say "Backup of $(info "$BACKUP_DIR" date) (version ${bver:-none}, database revision $(info "$BACKUP_DIR" alembic))." "Copia del $(info "$BACKUP_DIR" date) (versión ${bver:-ninguna}, revisión de la base de datos $(info "$BACKUP_DIR" alembic))."
+  # Only a backup of a working instance is a place to go back to (#413), checked before anything changes. Without a version it was
+  # made while the application did not answer (an update.sh before #413 wrote those here too): going back there restores that state.
+  if [ -z "$bver" ] || [ "$(info "$BACKUP_DIR" state)" = not-answering ]; then
+    say "That backup was made while the application was not answering (it has no version of a working instance): it is not a valid point to go back to. Nothing was changed." \
+        "Esa copia se hizo con la aplicación sin responder (no tiene la versión de una instancia que funcionara): no es un punto válido al que volver. No se ha cambiado nada."
+    say "Its files are still in $BACKUP_DIR, to restore by hand if needed (see Upgrading in docs/INSTALL.md)." \
+        "Sus ficheros siguen en $BACKUP_DIR, para restaurarlos a mano si hace falta (ver Actualizar en docs/es/INSTALL.md)."
+    die "not going back to that backup" "no se vuelve a esa copia"
+  fi
+  [ -f "$BACKUP_DIR/docker-compose.yml" ] && [ -f "$BACKUP_DIR/env" ] || die "the backup in $BACKUP_DIR is incomplete (no docker-compose.yml or env): nothing was changed" "la copia de $BACKUP_DIR está incompleta (sin docker-compose.yml o env): no se ha cambiado nada"
+  if [ "$WITH_DB" = 1 ] && ! gzip -t "$BACKUP_DIR/mimirsynth.sql.gz" 2>/dev/null; then
+    die "the database dump in $BACKUP_DIR is missing or corrupt: nothing was changed" "el volcado de la base de datos de $BACKUP_DIR falta o está dañado: no se ha cambiado nada"
+  fi
   [ "$WITH_DB" = 1 ] && say "The database will be RESTORED from that backup: whatever was written since is lost." "La base de datos se RESTAURARÁ desde esa copia: lo escrito desde entonces se pierde."
   if [ "$YES" != 1 ]; then
     [ -t 0 ] || die "confirm with --yes" "confirma con --yes"
@@ -166,7 +254,7 @@ if [ "$MODE" = rollback ]; then
     say "Database restored." "Base de datos restaurada."
   fi
   $DC up -d mimirsynth
-  verify "$(sed -n 's/^version=//p' "$BACKUP_DIR/INFO")" || die "the previous version does not answer: check 'docker compose logs mimirsynth'" "la versión anterior no responde: revisa 'docker compose logs mimirsynth'"
+  verify "$bver" || die "the previous version does not answer: check 'docker compose logs mimirsynth'" "la versión anterior no responde: revisa 'docker compose logs mimirsynth'"
   say "Back on ${prev:-the previous version}. The failed files are kept as *.rolledback." "De vuelta en ${prev:-la versión anterior}. Los ficheros de la versión fallida quedan como *.rolledback."
   exit 0
 fi
@@ -177,11 +265,16 @@ cur_cfg="$(envget MIMIRSYNTH_VERSION latest)"; cur_run="$(running_version)"
 inst=""
 if semver "$cur_cfg" && { [ -z "$cur_run" ] || [ "$cur_run" = "$(base "$cur_cfg")" ]; }; then inst="$(norm "$cur_cfg")"
 elif semver "$cur_run"; then inst="$(norm "$cur_run")"; fi
-step "Version" "Versión"
-if [ -z "$TARGET" ]; then
+EXPLICIT=0
+if [ -n "$TARGET" ]; then EXPLICIT=1
+else
   TARGET="$(latest_tag || true)"
   [ -n "$TARGET" ] || die "could not find the latest release (no network?): use --version" "no se pudo saber la última versión (¿sin red?): usa --version"
-  TARGET="$(norm "$TARGET")"
+fi
+TARGET="$(norm "$TARGET")"
+self_update "$TARGET"   # before deciding anything: it may not come back, when it runs the target release's update.sh instead (#413)
+step "Version" "Versión"
+if [ "$EXPLICIT" = 0 ]; then
   # Without --version it never goes down (#403): from a version newer than the latest stable release there is nothing to do
   if [ -n "$inst" ] && semver "$TARGET" && [ "$(vercmp "$inst" "$TARGET")" = 1 ]; then
     say "Running: ${cur_run:-not responding} · configured: $cur_cfg · latest stable release: $TARGET" "En marcha: ${cur_run:-no responde} · configurada: $cur_cfg · última versión estable: $TARGET"
@@ -194,7 +287,6 @@ if [ -z "$TARGET" ]; then
     exit 0
   fi
 fi
-TARGET="$(norm "$TARGET")"
 say "Running: ${cur_run:-not responding} · configured: $cur_cfg · target: $TARGET" "En marcha: ${cur_run:-no responde} · configurada: $cur_cfg · objetivo: $TARGET"
 dirn=""; [ -z "$inst" ] || ! semver "$TARGET" || dirn="$(vercmp "$TARGET" "$inst")"
 if [ "$dirn" = -1 ]; then
@@ -203,7 +295,15 @@ if [ "$dirn" = -1 ]; then
 fi
 if [ "$MODE" = check ]; then exit 0; fi
 if [ "$FORCE" != 1 ] && [ -n "$cur_run" ] && [ "$cur_run" = "$(base "$TARGET")" ] && [ "$cur_cfg" = "$TARGET" ]; then say "Already up to date." "Ya está actualizado."; exit 0; fi
-[ -n "$cur_run" ] || warn "the application is not answering now: the backup only covers what the database holds" "la aplicación no responde ahora: la copia solo cubre lo que haya en la base de datos"
+HEALTHY=0; [ -z "$cur_run" ] || HEALTHY=1
+# rollback_hint: what --rollback goes back to, said before and after the update (the backup of the last working instance, #413)
+rollback_hint() {
+  if [ -f "$BACKUP_DIR/INFO" ]; then printf '%s' "$BACKUP_DIR ($(info "$BACKUP_DIR" version), $(info "$BACKUP_DIR" date))"; fi
+}
+if [ "$HEALTHY" = 0 ]; then
+  warn "the application is not answering now: the backup only covers what the database holds, and it does not replace the one --rollback uses" \
+       "la aplicación no responde ahora: la copia solo cubre lo que haya en la base de datos, y no sustituye a la que usa --rollback"
+fi
 
 step "Download" "Descarga"
 newc="$(mktemp)"; trap 'rm -f "$newc"' EXIT
@@ -227,8 +327,8 @@ if [ "$dirn" = -1 ]; then
         say "Could not check whether $TARGET knows this database's revision (${rev:-unknown}). Nothing was changed." \
             "No se pudo comprobar si $TARGET conoce la revisión de esta base de datos (${rev:-desconocida}). No se ha cambiado nada."
       fi
-      bk="$(sed -n 's/^configured=//p' "$BACKUP_DIR/INFO" 2>/dev/null || true)"
-      if [ -n "$bk" ] && [ "$(norm "$bk")" = "$TARGET" ]; then
+      bk="$(info "$BACKUP_DIR" configured)"
+      if [ -n "$bk" ] && [ "$(norm "$bk")" = "$TARGET" ] && [ -n "$(info "$BACKUP_DIR" version)" ] && [ "$(info "$BACKUP_DIR" state)" != not-answering ]; then
         say "The backup in $BACKUP_DIR is of $TARGET: ./update.sh --rollback --with-db goes back to it with its database (whatever was written since is lost)." \
             "La copia de $BACKUP_DIR es de $TARGET: ./update.sh --rollback --with-db vuelve a ella con su base de datos (lo escrito desde entonces se pierde)."
       else
@@ -240,7 +340,7 @@ if [ "$dirn" = -1 ]; then
   fi
 fi
 
-backup
+backup "$HEALTHY"
 
 step "Update" "Actualización"
 if [ "$have_new" = 1 ]; then
@@ -254,10 +354,18 @@ if [ "$have_new" = 1 ]; then
   fi
 fi
 set_env_version "$TARGET"
+hint="$(rollback_hint)"
 $DC up -d mimirsynth $OCR
 if verify "$TARGET"; then
-  say "Updated to $TARGET. Backup of the previous state: $BACKUP_DIR" "Actualizado a $TARGET. Copia del estado anterior: $BACKUP_DIR"
+  if [ "$HEALTHY" = 1 ]; then say "Updated to $TARGET. Backup of the previous state: $BACKUP_DIR" "Actualizado a $TARGET. Copia del estado anterior: $BACKUP_DIR"
+  else say "Updated to $TARGET. The backup for --rollback is still the one of the last working instance: ${hint:-none}" "Actualizado a $TARGET. La copia para --rollback sigue siendo la de la última instancia que funcionaba: ${hint:-ninguna}"; fi
 else
-  say "The update to $TARGET did not verify. To go back: ./update.sh --rollback  (add --with-db to restore the database too)" "La actualización a $TARGET no se ha verificado. Para volver atrás: ./update.sh --rollback  (añade --with-db para restaurar también la base de datos)"
+  if [ -n "$hint" ]; then
+    say "The update to $TARGET did not verify. To go back to $hint: ./update.sh --rollback  (add --with-db to restore the database too)" \
+        "La actualización a $TARGET no se ha verificado. Para volver a $hint: ./update.sh --rollback  (añade --with-db para restaurar también la base de datos)"
+  else
+    say "The update to $TARGET did not verify, and there is no backup of a working instance to go back to: check 'docker compose logs mimirsynth'" \
+        "La actualización a $TARGET no se ha verificado, y no hay copia de una instancia que funcionara a la que volver: revisa 'docker compose logs mimirsynth'"
+  fi
   exit 1
 fi

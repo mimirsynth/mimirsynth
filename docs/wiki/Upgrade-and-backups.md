@@ -8,7 +8,7 @@ Every release attaches an update script that **backs up, updates and checks** in
 cd mimirsynth
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
 ```
-If you installed with the installer, `update.sh` is already in the installation folder. Running the installer again finds the installation, changes nothing and offers to run `update.sh` (on Linux); `install.sh --upgrade` runs it without asking.
+If you installed with the installer, `update.sh` is already in the installation folder. Running the installer again finds the installation, changes nothing and offers to run `update.sh` (on Linux); `install.sh --upgrade` runs it without asking. Either way the installer first brings that `update.sh` up to date.
 
 | Command | What it does |
 |---|---|
@@ -21,13 +21,15 @@ If you installed with the installer, `update.sh` is already in the installation 
 
 **Going down.** An older application does not start on a database migrated by a newer one. So `./update.sh --version` with an older version first checks, with the image it has just pulled, that the older application knows the database's revision; if it does not, it stops before changing anything. To go back to an older version, restore the database of that version too: `./update.sh --rollback --with-db`, when the backup is of the version you want. `--force` goes down without the check.
 
+**It updates itself first.** Before deciding anything, it compares itself with the `update.sh` of the release it goes to (for `--check`, the latest one). When they differ it replaces itself with that one, after checking it against the release's `SHA256SUMS`, and runs again with the same options. It never takes an older release's `update.sh` (going down with `--version` keeps the current one), and when the download or the checksum fails it carries on as it is and says so; `--no-self-update` keeps yours. Running the installer again also gives an existing installation the `update.sh` of the installer's release, checked the same way and never an older one.
+
 An update runs in this order:
 1. **Download.** It pulls the new image first, so a wrong version or no network stops everything **before touching anything**, and the existing backup stays intact.
-2. **Backup** into `./backup`: PostgreSQL, the documents volume, the bundled FalkorDB (when its container exists in that folder), your `docker-compose.yml` and your `.env`. **Only one backup is kept**: the previous one is replaced only once the new one has been written and checked, so backups never pile up.
+2. **Backup** into `./backup`: PostgreSQL, the documents volume, the bundled FalkorDB (when its container exists in that folder), your `docker-compose.yml` and your `.env`. **Only one backup is kept**: the previous one is replaced only once the new one has been written and checked, so backups never pile up. If the application is not answering when the update starts (after a failed update, for example), that backup does **not** replace the previous one: it goes beside it as `./backup.failed-DATE` (only the newest of those is kept), and `./backup` stays the backup of the last working instance, the one `--rollback` uses.
 3. **Update.** It pins `MIMIRSYNTH_VERSION` in `.env` and recreates only the application, and the OCR service when its container exists in that folder; database **migrations** run on start. It adopts the release's `docker-compose.yml` **only if yours is the unmodified one** of the version you were running; otherwise it keeps yours and tells you.
 4. **Check.** It waits until the application answers with the new version and is healthy, shows the database revision and warns if the log has errors in the last minutes. If it does not verify, it tells you how to go back.
 
-Other options: `--update-compose` always adopts the release's compose file, `--keep-compose` never touches it, `--no-files` skips the documents volume, `--backup-dir DIR` saves the backup elsewhere, `--yes` skips the confirmation of a rollback and `--force` reinstalls the same version or goes down without checking the database. The script speaks Spanish when your `LANG` is Spanish.
+Other options: `--update-compose` always adopts the release's compose file, `--keep-compose` never touches it, `--no-files` skips the documents volume, `--backup-dir DIR` saves the backup elsewhere, `--yes` skips the confirmation of a rollback and `--force` reinstalls the same version or goes down without checking the database, and `--no-self-update` keeps the `update.sh` you have. The script speaks Spanish when your `LANG` is Spanish.
 
 **The bundled Ollama** (the `ollama` profile) is not updated: its image is pinned in `docker-compose.yml`, and `update.sh` never pulls or recreates it. When a release raises that version (the release notes say so) and its compose file is adopted, run `docker compose up -d ollama` afterwards.
 
@@ -37,7 +39,7 @@ Other options: `--update-compose` always adopts the release's compose file, `--k
 `update.sh` runs on Linux: it needs GNU tools (`flock`, GNU `sed` and `stat`). On Windows, run it from WSL in the installation folder. On macOS, back up and upgrade [without the script](#without-the-script); the installer says so when it finds an existing installation.
 
 ### Going back
-`./update.sh --rollback` puts back the `docker-compose.yml` and `.env` of the backup (so the previous image version) and checks that it answers. The files of the failed version are kept as `*.rolledback`. With `--with-db` it also **restores the database** from the backup: anything written since the backup is lost. The documents volume and FalkorDB are not restored automatically: their copies are in `./backup` if you need them (see [Restoring](#restoring)).
+`./update.sh --rollback` puts back the `docker-compose.yml` and `.env` of the backup (so the previous image version) and checks that it answers. The files of the failed version are kept as `*.rolledback`. With `--with-db` it also **restores the database** from the backup: anything written since the backup is lost. It only goes back to a backup of a working instance: one whose `INFO` has no version (made while the application was not answering, by an older `update.sh`) is refused before anything changes. The documents volume and FalkorDB are not restored automatically: their copies are in `./backup` if you need them (see [Restoring](#restoring)).
 
 ### Without the script
 Take a backup (below) and then:

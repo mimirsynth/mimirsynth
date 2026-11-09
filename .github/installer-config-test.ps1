@@ -52,9 +52,13 @@ $dir = Join-Path $env:RUNNER_TEMP "ps-local"
 $envFile = Join-Path $dir ".env"
 [IO.File]::WriteAllText($envFile, ((Get-Content -Raw $envFile) -replace '(?m)^MIMIRSYNTH_VERSION=.*$', 'MIMIRSYNTH_VERSION=0.15.0-rc.1'))
 $env:FAKE_CONTAINER = "0123456789ab"   # the stand-in docker now says that the application's container exists
-function Get-Verdict([string]$To) { return (& $script -Yes -Lang en -Version $To -Dir $dir 6>&1 | Out-String) }
+function Get-Verdict([string]$To) { return (& $script -Yes -Lang en -Version $To -Dir $dir -From . 6>&1 | Out-String) }
 function Assert-Says([string]$Out, [string]$Text) { if (-not $Out.Contains($Text)) { Write-Host $Out; throw "the installer does not say: $Text" } }
+Remove-Item -LiteralPath (Join-Path $dir "update.sh") -Force -ErrorAction SilentlyContinue
 $o = Get-Verdict "0.15.0"
+# #413: an existing installation always gets the installer's update.sh (here, with -From, the repository's)
+if (-not (Test-Path -LiteralPath (Join-Path $dir "update.sh"))) { throw "update.sh was not given to the existing installation" }
+Assert-Says $o "update.sh: copied from"
 Assert-Says $o "already installed"; Assert-Says $o "Version 0.15.0 is available (it is at 0.15.0-rc.1)."; Assert-Says $o "To upgrade it"
 $o = Get-Verdict "0.14.0"
 Assert-Says $o "0.14.0 is older than 0.15.0-rc.1, the version it is at"

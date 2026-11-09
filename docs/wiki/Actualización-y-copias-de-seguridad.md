@@ -8,7 +8,7 @@ Cada release incluye un script que **hace la copia de seguridad, actualiza y com
 cd mimirsynth
 curl -fsSLO https://github.com/MimirSynth/mimirsynth/releases/latest/download/update.sh && chmod +x update.sh
 ```
-Si instalaste con el instalador, `update.sh` ya está en la carpeta de la instalación. Volver a ejecutar el instalador encuentra la instalación, no cambia nada y ofrece ejecutar `update.sh` (en Linux); `install.sh --upgrade` lo ejecuta sin preguntar.
+Si instalaste con el instalador, `update.sh` ya está en la carpeta de la instalación. Volver a ejecutar el instalador encuentra la instalación, no cambia nada y ofrece ejecutar `update.sh` (en Linux); `install.sh --upgrade` lo ejecuta sin preguntar. En ambos casos, el instalador pone antes al día ese `update.sh`.
 
 | Orden | Qué hace |
 |---|---|
@@ -21,13 +21,15 @@ Si instalaste con el instalador, `update.sh` ya está en la carpeta de la instal
 
 **Bajar de versión.** Una aplicación anterior no arranca sobre una base de datos que ha migrado una más reciente. Por eso `./update.sh --version` con una versión anterior comprueba primero, con la imagen que acaba de descargar, que esa aplicación conoce la revisión de la base de datos; si no, se para antes de cambiar nada. Para volver a una versión anterior, restaura también la base de datos de esa versión: `./update.sh --rollback --with-db`, si la copia es de la versión que quieres. `--force` baja sin la comprobación.
 
+**Primero se actualiza a sí mismo.** Antes de decidir nada, se compara con el `update.sh` de la versión a la que va (con `--check`, el de la última). Si son distintos, se sustituye por ese, tras comprobarlo con el `SHA256SUMS` de la versión, y se vuelve a ejecutar con las mismas opciones. Nunca toma el `update.sh` de una versión anterior (bajar con `--version` conserva el actual), y si la descarga o la suma de comprobación fallan sigue como está y lo dice; `--no-self-update` conserva el tuyo. Volver a ejecutar el instalador también da a una instalación existente el `update.sh` de la versión del instalador, comprobado igual y nunca uno anterior.
+
 Una actualización sigue este orden:
 1. **Descarga.** Baja primero la imagen nueva, así que una versión equivocada o la falta de red paran todo **antes de tocar nada**, y la copia que ya había sigue intacta.
-2. **Copia de seguridad** en `./backup`: PostgreSQL, el volumen de documentos, el FalkorDB incluido (cuando su contenedor existe en esa carpeta), tu `docker-compose.yml` y tu `.env`. **Solo se conserva una copia**: la anterior se sustituye cuando la nueva ya está escrita y comprobada, así que las copias nunca se acumulan.
+2. **Copia de seguridad** en `./backup`: PostgreSQL, el volumen de documentos, el FalkorDB incluido (cuando su contenedor existe en esa carpeta), tu `docker-compose.yml` y tu `.env`. **Solo se conserva una copia**: la anterior se sustituye cuando la nueva ya está escrita y comprobada, así que las copias nunca se acumulan. Si la aplicación no responde cuando empieza la actualización (tras una actualización fallida, por ejemplo), esa copia **no** sustituye a la anterior: se guarda a su lado como `./backup.failed-FECHA` (solo se conserva la más reciente de esas), y `./backup` sigue siendo la copia de la última instancia que funcionaba, la que usa `--rollback`.
 3. **Actualización.** Fija `MIMIRSYNTH_VERSION` en `.env` y recrea solo la aplicación, y el servicio de OCR cuando su contenedor existe en esa carpeta; las **migraciones** de la base de datos se aplican al arrancar. Adopta el `docker-compose.yml` de la versión **solo si el tuyo es el original, sin modificar**, de la versión que tenías; si no, conserva el tuyo y te avisa.
 4. **Comprobación.** Espera a que la aplicación responda con la versión nueva y esté sana, muestra la revisión de la base de datos y avisa si el log tiene errores en los últimos minutos. Si no se verifica, te dice cómo volver atrás.
 
-Otras opciones: `--update-compose` adopta siempre el fichero de Compose de la versión, `--keep-compose` no lo toca nunca, `--no-files` se salta el volumen de documentos, `--backup-dir DIR` guarda la copia en otro sitio, `--yes` se salta la confirmación de una vuelta atrás y `--force` reinstala la misma versión o baja sin comprobar la base de datos. El script habla en español cuando tu `LANG` es español.
+Otras opciones: `--update-compose` adopta siempre el fichero de Compose de la versión, `--keep-compose` no lo toca nunca, `--no-files` se salta el volumen de documentos, `--backup-dir DIR` guarda la copia en otro sitio, `--yes` se salta la confirmación de una vuelta atrás y `--force` reinstala la misma versión o baja sin comprobar la base de datos, y `--no-self-update` conserva el `update.sh` que tienes. El script habla en español cuando tu `LANG` es español.
 
 **El Ollama incluido** (el perfil `ollama`) no se actualiza: su imagen está fijada en `docker-compose.yml`, y `update.sh` nunca la descarga ni la recrea. Cuando una versión sube esa imagen (lo dicen las notas de la versión) y se adopta su fichero de Compose, ejecuta después `docker compose up -d ollama`.
 
@@ -37,7 +39,7 @@ Otras opciones: `--update-compose` adopta siempre el fichero de Compose de la ve
 `update.sh` corre en Linux: necesita herramientas de GNU (`flock`, `sed` y `stat` de GNU). En Windows, ejecútalo desde WSL en la carpeta de la instalación. En macOS, haz la copia de seguridad y actualiza [sin el script](#sin-el-script); el instalador lo dice cuando encuentra una instalación.
 
 ### Volver atrás
-`./update.sh --rollback` devuelve el `docker-compose.yml` y el `.env` de la copia (y con ellos la versión anterior de la imagen) y comprueba que responde. Los ficheros de la versión fallida quedan como `*.rolledback`. Con `--with-db` también **restaura la base de datos** desde la copia: lo escrito desde entonces se pierde. El volumen de documentos y FalkorDB no se restauran solos: sus copias están en `./backup` si las necesitas (ver [Restaurar](#restaurar)).
+`./update.sh --rollback` devuelve el `docker-compose.yml` y el `.env` de la copia (y con ellos la versión anterior de la imagen) y comprueba que responde. Los ficheros de la versión fallida quedan como `*.rolledback`. Con `--with-db` también **restaura la base de datos** desde la copia: lo escrito desde entonces se pierde. Solo vuelve a una copia de una instancia que funcionaba: una cuyo `INFO` no tiene versión (hecha con la aplicación sin responder, por un `update.sh` anterior) se rechaza antes de cambiar nada. El volumen de documentos y FalkorDB no se restauran solos: sus copias están en `./backup` si las necesitas (ver [Restaurar](#restaurar)).
 
 ### Sin el script
 Haz una copia de seguridad (abajo) y después:

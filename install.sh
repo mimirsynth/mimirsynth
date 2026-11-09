@@ -7,6 +7,7 @@
 set -Eeuo pipefail
 
 REPO="MimirSynth/mimirsynth"
+RELEASE="dev"   # the release this installer belongs to: release.yml writes it here ("dev" is a copy from the repository)
 EMBED_MODEL="nomic-embed-text"
 WAIT_SECONDS="${WAIT_SECONDS:-300}"
 DIR=""; VERSION=""; PORT=""; FROM=""; YES=0; LANG_OPT=""
@@ -119,6 +120,32 @@ SUDO=""; if [ "$(id -u)" != 0 ] && command -v sudo >/dev/null; then SUDO="sudo";
 DOCKER="docker"
 dc() { $DOCKER compose "$@"; }
 norm() { printf '%s' "${1#v}"; }
+# Versions compare as SemVer 2.0 (#403): 0.15.0 > 0.15.0-rc.2 > 0.15.0-rc.1 > 0.14.0, a pre-release below its final release.
+# Names such as "latest" or "ci" are not versions: nothing is compared with them.
+SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z.-]+)?$'
+semver() { [[ "$(norm "$1")" =~ $SEMVER_RE ]]; }
+vercmp() {  # prints -1, 0 or 1 when $1 is older than, the same as or newer than $2 (both semver); what follows "+" does not count
+  local a b x y i n; local -a A B
+  a="$(norm "$1")"; b="$(norm "$2")"; a="${a%%+*}"; b="${b%%+*}"
+  IFS=. read -r -a A <<<"${a%%-*}"; IFS=. read -r -a B <<<"${b%%-*}"
+  for i in 0 1 2; do
+    if [ "${A[i]}" -gt "${B[i]}" ]; then echo 1; return; elif [ "${A[i]}" -lt "${B[i]}" ]; then echo -1; return; fi
+  done
+  if [[ $a != *-* ]]; then if [[ $b != *-* ]]; then echo 0; else echo 1; fi; return; fi
+  if [[ $b != *-* ]]; then echo -1; return; fi
+  IFS=. read -r -a A <<<"${a#*-}"; IFS=. read -r -a B <<<"${b#*-}"
+  n=${#A[@]}; [ "${#B[@]}" -ge "$n" ] || n=${#B[@]}
+  for ((i = 0; i < n; i++)); do   # identifier by identifier: numbers as numbers and below words, words in ASCII order
+    x="${A[i]}"; y="${B[i]}"; [ "$x" != "$y" ] || continue
+    if [[ $x =~ ^[0-9]+$ && $y =~ ^[0-9]+$ ]]; then if [ "$x" -gt "$y" ]; then echo 1; else echo -1; fi
+    elif [[ $x =~ ^[0-9]+$ ]]; then echo -1
+    elif [[ $y =~ ^[0-9]+$ ]]; then echo 1
+    elif [ "$(printf '%s\n%s\n' "$x" "$y" | LC_ALL=C sort | head -n 1)" = "$x" ]; then echo -1
+    else echo 1; fi
+    return
+  done
+  if [ "${#A[@]}" -gt "${#B[@]}" ]; then echo 1; elif [ "${#A[@]}" -lt "${#B[@]}" ]; then echo -1; else echo 0; fi
+}
 gen_secret() { if command -v openssl >/dev/null; then openssl rand -hex 32; else od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; fi; }
 port_busy() { (exec 4<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 tcp_check() {  # host port -> 0 if a TCP connection opens within 5 seconds
@@ -212,6 +239,51 @@ fetch() {  # release asset name, destination
 }
 
 # ---- an existing install: offer update.sh instead ----
+# It always gets the update.sh of this installer's release (#413), checked against that release's SHA256SUMS: it used to be
+# downloaded only when missing, so a fixed update.sh never reached an existing install. Never an older one than the update.sh
+# already there or than the installed version: update.sh then brings itself up to the release it updates to.
+refresh_updater() {
+  local rel="$RELEASE" floor new sums want got url
+  if [ -n "$FROM" ]; then fetch update.sh update.sh && chmod +x update.sh && return 0; die "could not copy update.sh from $FROM" "no se pudo copiar update.sh de $FROM"; fi
+  semver "$rel" || rel="$VERSION"
+  semver "$rel" || rel="$(curl -fsS --max-time 15 "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1 || true)"
+  rel="$(norm "$rel")"
+  if ! semver "$rel"; then
+    [ -f update.sh ] || die "could not find the latest release to download update.sh (no network?)" "no se pudo saber la última versión para descargar update.sh (¿sin red?)"
+    warn "could not find the latest release: keeping the update.sh already there" "no se pudo saber la última versión: se mantiene el update.sh que ya hay"
+    return 0
+  fi
+  if [ -f update.sh ]; then
+    for floor in "$(envget MIMIRSYNTH_VERSION .env)" "$(sed -n 's/^RELEASE="\([^"]*\)".*/\1/p' update.sh | head -1)"; do
+      if semver "$floor" && [ "$(vercmp "$rel" "$floor")" = -1 ]; then
+        say "update.sh: the one already there is kept, newer than release $rel's (it brings itself up to date when it runs)." \
+            "update.sh: se mantiene el que ya hay, más reciente que el de la versión $rel (se pone al día solo al ejecutarse)."
+        return 0
+      fi
+    done
+  fi
+  url="https://github.com/$REPO/releases/download/v$rel"
+  if ! new="$(mktemp ./.update.sh.XXXXXX 2>/dev/null)"; then
+    [ -f update.sh ] || die "cannot write update.sh in $DIR" "no se puede escribir update.sh en $DIR"
+    warn "cannot write in $DIR: keeping the update.sh already there" "no se puede escribir en $DIR: se mantiene el update.sh que ya hay"
+    return 0
+  fi
+  sums="$(mktemp)"
+  if curl -fsSL --retry 3 --max-time 120 "$url/update.sh" -o "$new" && curl -fsSL --retry 3 --max-time 60 "$url/SHA256SUMS" -o "$sums"; then
+    want="$(awk '$2 == "update.sh" || $2 == "*update.sh" { print $1; exit }' "$sums")"; got="$(sha256sum "$new" | cut -d' ' -f1)"
+    if [ -n "$want" ] && [ "$want" = "$got" ]; then
+      rm -f "$sums"; chmod 755 "$new"; mv -f "$new" update.sh
+      say "update.sh: the one of release $rel (checked against its SHA256SUMS)." "update.sh: el de la versión $rel (comprobado con su SHA256SUMS)."
+      return 0
+    fi
+    warn "the update.sh of release $rel does not match its SHA256SUMS: it was NOT used" "el update.sh de la versión $rel no coincide con su SHA256SUMS: NO se ha usado"
+  else
+    warn "could not download the update.sh of release $rel" "no se pudo descargar el update.sh de la versión $rel"
+  fi
+  rm -f "$new" "$sums"
+  [ -f update.sh ] || die "could not download update.sh" "no se pudo descargar update.sh"
+  say "Keeping the update.sh already there." "Se mantiene el update.sh que ya hay."
+}
 existing_install() {
   step "Existing installation" "Instalación existente"
   say "MimirSynth is already installed in $DIR." "MimirSynth ya está instalado en $DIR."
@@ -220,7 +292,7 @@ existing_install() {
         "Para actualizarlo: haz una copia de seguridad y ejecuta 'docker compose pull && docker compose up -d' en esa carpeta (ver Actualizar en docs/es/INSTALL.md)."
     exit 0
   fi
-  [ -f update.sh ] || { fetch update.sh update.sh && chmod +x update.sh; } || die "could not download update.sh" "no se pudo descargar update.sh"
+  refresh_updater
   local run=0
   if [ "$UPGRADE" = 1 ]; then run=1
   elif [ "$TTY" = 1 ] && yesno "Upgrade it now with update.sh (backup, update and check)?" "¿Actualizarlo ahora con update.sh (copia de seguridad, actualización y comprobación)?" y; then run=1; fi
