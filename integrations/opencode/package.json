@@ -1,6 +1,6 @@
 {
   "name": "@mimirsynth/opencode",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MimirSynth memory for OpenCode: recall before every prompt, what changed at session start, commands to set up, check, search and remember, the brain's MCP server, and an optional, quarantined capture of what each session learned.",
   "license": "Apache-2.0",
   "type": "module",
@@ -45,12 +45,11 @@
     "test:live": "node --experimental-strip-types --no-warnings --test test/live.test.ts",
     "prepack": "npm run build"
   },
-  "dependencies": {
-    "@opencode-ai/plugin": "^1.14.0"
-  },
   "devDependencies": {
+    "@opencode-ai/plugin": "^1.14.0",
     "@types/node": "^22.15.0",
     "esbuild": "^0.25.0",
-    "typescript": "~5.8.3"
+    "typescript": "~5.8.3",
+    "zod": "^4.6.7"
   }
 }
