@@ -29,10 +29,13 @@ jobs:
           else files="$(git diff --name-only HEAD^1 HEAD)"; grep -qx '.github/workflows/ci.yml' <<<"$files" && all=true
           fi
           printf '%s\n' "$files"
-          out() { if [ $all = true ] || grep -qE "$2" <<<"$files"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
-          # api, api-neo4j: the API and what its tests read (plugins, scripts, docs and wiki, marketplaces, the server's translations)
-          out api '^(api/|integrations/|scripts/|docs/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)'
-          out api-neo4j '^(api/|integrations/|scripts/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)'   # docs/: the api job checks them
+          # out NAME REGEX [EXCLUDE]: NAME runs when a changed file matches REGEX and not EXCLUDE
+          out() { if [ $all = true ] || grep -vE "${3:-^$}" <<<"$files" | grep -qE "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          # api, api-neo4j: the API and what its tests read (plugins, scripts, docs and wiki, marketplaces, the server's translations).
+          # Not the npm plugins: their tests in api/tests need `npm ci` in the plugin, which only their own workflows run (here they skip).
+          npm_plugins='^integrations/(opencode|openclaw)/'
+          out api '^(api/|integrations/|scripts/|docs/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"
+          out api-neo4j '^(api/|integrations/|scripts/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"   # docs/: the api job checks them
           out web '^web/'
           out agent-client '^integrations/shared/'
           out npm-packages '^(integrations/(opencode|openclaw|shared)/|scripts/npm_package\.mjs$)'
