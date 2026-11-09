@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select, text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.staticfiles import NotModifiedResponse
 
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, metrics
 from . import appsettings, brand, i18n,settings_admin, mcp_server, oidc_providers, users_admin, mfa, aistatus, auth, retype, ontology, brains, deciders_admin, embeddings_admin, graphapi, index, llm, memory, proposals, vocab, entity_types, facts_admin, docs, docindex, docstore, account, jobs, jobs_api, docsources, docroots, docbridge, federation, passkeys, notifications, notify, refqueries, conflicts, corrections, entity_page, brainexport, brainimport, retention, usage, shelflife, ratings, attention, answer, webhooks, digest, search, entity_aliases, summary_review, sealcheck, health, replay, curator, verify, categories, selftest, statecard, replayrun, archive, distil, forget, onboarding, graphconn, setupwizard
@@ -243,11 +244,37 @@ async def health():
 
 
 # --- SPA (build de web/) servida por la propia API: un solo contenedor ---
-_static = Path(settings.static_dir) if settings.static_dir else None
-if _static and _static.is_dir():
-    app.mount("/assets", StaticFiles(directory=_static / "assets"), name="assets")
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+
+class HashedAssets(StaticFiles):
+    """Vite names every file under assets/ after a hash of its content, so what a name serves never changes: the browser keeps it for a
+    year without asking again (#429). The files of web/public/ are copied to the root without a hash, and are not served from here."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = IMMUTABLE
+        return response
+
+
+def mount_spa(app: FastAPI, static: Path) -> None:
+    """Serves the web build: /assets with a long cache, the files at the root as they are, and index.html for / and every SPA route.
+    index.html goes out with `no-cache` (#429): without a Cache-Control the browser may reuse its own copy by heuristic freshness after
+    an upgrade, and that copy points to hashed chunks the new image no longer has. With `no-cache` it always asks first, and the ETag
+    keeps the answer a cheap 304 while nothing changed (FileResponse alone ignores If-None-Match, so the check is StaticFiles')."""
+    assets = HashedAssets(directory=static / "assets")
+    app.mount("/assets", assets, name="assets")
 
     @app.get("/{path:path}", include_in_schema=False)
-    def spa(path: str):
-        f = _static / path
-        return FileResponse(f if path and f.is_file() else _static / "index.html")
+    def spa(path: str, request: Request):
+        f = static / path
+        if path and f.is_file() and f.name != "index.html":
+            return FileResponse(f)
+        index = static / "index.html"
+        response = FileResponse(index, headers={"Cache-Control": "no-cache"}, stat_result=index.stat())
+        return NotModifiedResponse(response.headers) if assets.is_not_modified(response.headers, request.headers) else response
+
+
+_static = Path(settings.static_dir) if settings.static_dir else None
+if _static and _static.is_dir():
+    mount_spa(app, _static)
