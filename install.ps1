@@ -14,7 +14,8 @@ MIMIRSYNTH_GRAPH_PASSWORD environment variable, never from the command line.
 
 .PARAMETER Graph
 local: start the bundled FalkorDB (default). existing: use your FalkorDB or Neo4j server (-GraphType, -GraphHost, -GraphPort,
--GraphUser, -GraphDatabase).
+-GraphUser, -GraphDatabase, and -GraphTls for a Neo4j that asks for TLS, as Neo4j Aura does). Before anything starts it passes the
+full connection test (address, credentials, version and write permission), or nothing is installed, unless -SkipGraphCheck.
 #>
 [CmdletBinding()]
 param(
@@ -27,6 +28,7 @@ param(
     [int]$GraphPort = 0,
     [string]$GraphUser = "",
     [string]$GraphDatabase = "",
+    [switch]$GraphTls,
     [switch]$SkipGraphCheck,
     [switch]$Ollama,
     [switch]$NoOllama,
@@ -54,8 +56,9 @@ if (-not $Lang) { if ((Get-UICulture).TwoLetterISOLanguageName -eq "es" -or (Get
 $Interactive = (-not $Yes) -and [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
 # Shared state. A hashtable, not $script: variables: run as `& ([scriptblock]::Create(...))` the parameters live in another scope.
 $St = @{ Version = $Version; Port = $Port; Graph = $Graph; GraphType = $GraphType; GraphHost = $GraphHost; GraphPort = $GraphPort;
-         GraphUser = $GraphUser; GraphDatabase = $GraphDatabase; GraphPassword = ""; ContainerHost = ""; UseOllama = $false;
-         EnvLines = @(); HealthBody = ""; SetupCode = ""; GraphTestAnswer = "" }
+         GraphUser = $GraphUser; GraphDatabase = $GraphDatabase; GraphPassword = [string]$env:MIMIRSYNTH_GRAPH_PASSWORD;
+         GraphTls = $(if ($GraphTls) { "1" } else { "" }); ContainerHost = ""; UseOllama = $false;
+         EnvLines = @(); HealthBody = ""; SetupCode = ""; GraphTestAnswer = ""; Probed = $false; Wrote = $false; Removed = $false }
 
 function T([string]$En, [string]$Es, [object[]]$Fmt = @()) {
     $s = if ($Lang -eq "es") { [regex]::Unescape($Es) } else { $En }
@@ -187,6 +190,9 @@ function Test-Docker {
 }
 
 # ---- questions ----
+function Clear-GraphValues {
+    $St.GraphType = ""; $St.GraphHost = ""; $St.GraphPort = 0; $St.GraphUser = ""; $St.GraphPassword = ""; $St.GraphDatabase = ""; $St.GraphTls = ""
+}
 function Read-GraphChoice {
     Step "Graph database" "Base de datos de grafos"
     if (-not $St.Graph) {
@@ -196,7 +202,6 @@ function Read-GraphChoice {
         $St.Graph = if ($a -match '^(2|e|existing|existente)$') { "existing" } else { "local" }
     }
     if ($St.Graph -ne "existing") { return }
-    $St.GraphPassword = [string]$env:MIMIRSYNTH_GRAPH_PASSWORD
     while ($true) {
         if (-not $St.GraphType) { $St.GraphType = Ask "Type: falkordb or neo4j" "Tipo: falkordb o neo4j" "falkordb" }
         if ($St.GraphType -notin @("falkordb", "neo4j")) {
@@ -222,13 +227,21 @@ function Read-GraphChoice {
         if ($St.GraphType -eq "neo4j" -and $Interactive -and -not $St.GraphDatabase) {
             $St.GraphDatabase = Ask "Database (empty: the server's default)" "Base de datos (vac\u00edo: la predeterminada del servidor)" ""
         }
+        if ($St.GraphType -eq "neo4j" -and -not $St.GraphTls) {
+            $St.GraphTls = if (YesNo "Does it ask for TLS (bolt+s, as Neo4j Aura does)?" "\u00bfPide TLS (bolt+s, como Neo4j Aura)?" $false) { "1" } else { "0" }
+        }
+        # The environment has no TLS setting for FalkorDB: that connection is saved in Administration > Graph database instead.
+        if ($St.GraphType -eq "falkordb" -and $St.GraphTls -eq "1") {
+            Fail "a FalkorDB with TLS is configured in Administration > Graph database: install with -Graph local and change it there" `
+                 "un FalkorDB con TLS se configura en Administraci\u00f3n > Base de datos de grafos: instala con -Graph local y c\u00e1mbialo all\u00ed"
+        }
         Say "Checking that {0}:{1} answers..." "Comprobando que {0}:{1} responde..." @($St.GraphHost, $St.GraphPort)
         if (Test-Tcp $St.GraphHost $St.GraphPort) { Say "It answers." "Responde."; break }
         Warn "nothing answers at {0}:{1}" "nada responde en {0}:{1}" @($St.GraphHost, $St.GraphPort)
         if ($SkipGraphCheck) { break }
         if (-not $Interactive) { Fail "check the address, or add -SkipGraphCheck" "revisa la direcci\u00f3n, o a\u00f1ade -SkipGraphCheck" }
         if (YesNo "Enter the values again?" "\u00bfVolver a introducir los datos?" $true) {
-            $St.GraphType = ""; $St.GraphHost = ""; $St.GraphPort = 0; $St.GraphUser = ""; $St.GraphPassword = ""; $St.GraphDatabase = ""
+            Clear-GraphValues
             continue
         }
         if (-not (YesNo "Continue anyway?" "\u00bfContinuar de todos modos?" $false)) { Fail "cancelled" "cancelado" }
@@ -289,6 +302,7 @@ function Write-Config {
     }
     $St.Version = $St.Version.TrimStart("v")
     $compose = Join-Path $Dir "docker-compose.yml"; $envFile = Join-Path $Dir ".env"
+    $St.Wrote = $true
     Get-ReleaseFile "docker-compose.yml" $compose
     Get-ReleaseFile "env.example" $envFile
     Get-ReleaseFile "update.sh" (Join-Path $Dir "update.sh")
@@ -307,26 +321,113 @@ function Write-Config {
     Set-EnvValue "MIMIRSYNTH_DEFAULT_LANGUAGE" $Lang
     Set-EnvValue "COMPOSE_PROFILES" ($profiles -join ",")
     if ($St.UseOllama) { Set-EnvValue "MIMIRSYNTH_EMBEDDING_BASE_URL" "http://ollama:11434/v1" }
-    if ($St.Graph -eq "existing") {
-        Set-EnvValue "MIMIRSYNTH_GRAPH_BACKEND" $St.GraphType
-        if ($St.GraphType -eq "falkordb") {
-            Set-EnvValue "MIMIRSYNTH_FALKOR_HOST" (Format-EnvValue $St.ContainerHost)
-            Set-EnvValue "MIMIRSYNTH_FALKOR_PORT" ([string]$St.GraphPort)
-            if ($St.GraphUser) { Set-EnvValue "MIMIRSYNTH_FALKOR_USERNAME" (Format-EnvValue $St.GraphUser) }
-            if ($St.GraphPassword) { Set-EnvValue "MIMIRSYNTH_FALKOR_PASSWORD" (Format-EnvValue $St.GraphPassword) }
-        }
-        else {
-            Set-EnvValue "MIMIRSYNTH_NEO4J_URI" (Format-EnvValue ("bolt://{0}:{1}" -f $St.ContainerHost, $St.GraphPort))
-            Set-EnvValue "MIMIRSYNTH_NEO4J_USER" (Format-EnvValue $St.GraphUser)
-            if ($St.GraphPassword) { Set-EnvValue "MIMIRSYNTH_NEO4J_PASSWORD" (Format-EnvValue $St.GraphPassword) }
-            if ($St.GraphDatabase) { Set-EnvValue "MIMIRSYNTH_NEO4J_DATABASE" (Format-EnvValue $St.GraphDatabase) }
-        }
-    }
-    Save-Utf8 $envFile (($St.EnvLines -join "`n") + "`n")
-    if ($OnMac) { Invoke-Native "chmod" @("600", $envFile) -Quiet | Out-Null }
+    Set-GraphEnv
+    Save-EnvFile
     if ((Dc @("config", "-q") -Quiet) -ne 0) { Fail "the generated configuration is not valid (docker compose config)" "la configuraci\u00f3n generada no es v\u00e1lida (docker compose config)" }
     $pn = if ($profiles.Count) { $profiles -join "," } else { T "none" "ninguno" }
     Say "Version {0} | port {1} | profiles: {2} | secrets generated in {3}" "Versi\u00f3n {0} | puerto {1} | perfiles: {2} | secretos generados en {3}" @($St.Version, $St.Port, $pn, $envFile)
+}
+
+# ---- an existing graph database ----
+function Save-EnvFile {
+    $envFile = Join-Path $Dir ".env"
+    Save-Utf8 $envFile (($St.EnvLines -join "`n") + "`n")
+    if ($OnMac) { Invoke-Native "chmod" @("600", $envFile) -Quiet | Out-Null }
+}
+# The environment wins over Administration > Graph database when it is set (#358): an existing database the installer was told about
+# goes in .env, read-only in the interface. A local install writes none of these, so the interface can change it.
+function Set-GraphEnv {
+    $keys = @("MIMIRSYNTH_GRAPH_BACKEND", "MIMIRSYNTH_FALKOR_HOST", "MIMIRSYNTH_FALKOR_PORT", "MIMIRSYNTH_FALKOR_USERNAME", "MIMIRSYNTH_FALKOR_PASSWORD",
+              "MIMIRSYNTH_NEO4J_URI", "MIMIRSYNTH_NEO4J_USER", "MIMIRSYNTH_NEO4J_PASSWORD", "MIMIRSYNTH_NEO4J_DATABASE")
+    for ($i = 0; $i -lt $St.EnvLines.Count; $i++) {   # back to the commented examples, without the values
+        foreach ($k in $keys) { if ($St.EnvLines[$i] -match "^$k=") { $St.EnvLines[$i] = "# $k=" } }
+    }
+    if ($St.Graph -ne "existing") { return }
+    Set-EnvValue "MIMIRSYNTH_GRAPH_BACKEND" $St.GraphType
+    if ($St.GraphType -eq "falkordb") {
+        Set-EnvValue "MIMIRSYNTH_FALKOR_HOST" (Format-EnvValue $St.ContainerHost)
+        Set-EnvValue "MIMIRSYNTH_FALKOR_PORT" ([string]$St.GraphPort)
+        if ($St.GraphUser) { Set-EnvValue "MIMIRSYNTH_FALKOR_USERNAME" (Format-EnvValue $St.GraphUser) }
+        if ($St.GraphPassword) { Set-EnvValue "MIMIRSYNTH_FALKOR_PASSWORD" (Format-EnvValue $St.GraphPassword) }
+    }
+    else {
+        $scheme = if ($St.GraphTls -eq "1") { "bolt+s" } else { "bolt" }
+        Set-EnvValue "MIMIRSYNTH_NEO4J_URI" (Format-EnvValue ("{0}://{1}:{2}" -f $scheme, $St.ContainerHost, $St.GraphPort))
+        Set-EnvValue "MIMIRSYNTH_NEO4J_USER" (Format-EnvValue $St.GraphUser)
+        if ($St.GraphPassword) { Set-EnvValue "MIMIRSYNTH_NEO4J_PASSWORD" (Format-EnvValue $St.GraphPassword) }
+        if ($St.GraphDatabase) { Set-EnvValue "MIMIRSYNTH_NEO4J_DATABASE" (Format-EnvValue $St.GraphDatabase) }
+    }
+}
+
+# The full test, before anything starts: graphconn.probe, the same steps as POST /api/admin/graph/test (address, TLS, credentials,
+# version, write permission and what the database holds), in a throwaway container of the release's own image (plain `docker run`,
+# so it creates no volume or network of the project), which reaches the server as MimirSynth will. The connection goes in on stdin
+# (base64 JSON, the endpoint's body), never on a command line. Exit status 3: a release without graphconn (before #358); 4: the test
+# itself could not run. The same text as PROBE_PY in install.sh (CI compares them).
+$ProbePy = "import base64,json,os,sys,importlib.util as u;sys.excepthook=lambda t,v,b:(print(repr(v)),sys.stdout.flush(),os._exit(4));u.find_spec('mimirsynth.graphconn') or sys.exit(3);from mimirsynth.graphconn import probe;from mimirsynth.graphdb import Connection;b=json.loads(base64.b64decode(sys.stdin.buffer.read()));r=probe(Connection(b['backend'],b['host'],int(b.get('port') or 0),b.get('user') or '',b.get('password') or '',bool(b.get('tls')),b.get('database') or ''),sys.argv[1]);s=r['server'] or {};print(' '.join(str(x) for x in (s.get('server'),s.get('version')) if x)+'|'+str(len(r['graphs'])) if r['ok'] else r['error']['message']);sys.exit(0 if r['ok'] else 1)"
+function Invoke-GraphProbe {
+    # -> 0 passed (GraphTestAnswer: "server version|graphs"), 1 failed (GraphTestAnswer: the cause, in the user's language), 3 not available
+    $body = @{ backend = $St.GraphType; host = $St.ContainerHost; port = [int]$St.GraphPort; user = [string]$St.GraphUser;
+               password = [string]$St.GraphPassword; tls = ($St.GraphTls -eq "1"); database = [string]$St.GraphDatabase } | ConvertTo-Json -Compress
+    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
+    $img = (Get-NativeOutput "docker" @("compose", "config", "--images", "mimirsynth") | Where-Object { $_ -match "/mimirsynth:" } | Select-Object -First 1)   # it lists postgres too, in no fixed order
+    if (-not $img) { $img = "ghcr.io/mimirsynth/mimirsynth:$($St.Version)" }
+    $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"; $enc = $null
+    try {
+        try { $enc = [Console]::OutputEncoding; [Console]::OutputEncoding = New-Object Text.UTF8Encoding $false } catch { $enc = $null }
+        # (the pipe may put a byte order mark before the text: the test reads bytes and base64 skips it)
+        $out = @($b64 | & docker run --rm -i --add-host "host.docker.internal:host-gateway" --read-only --tmpfs /tmp --cap-drop ALL `
+                     --security-opt no-new-privileges $img python -c $ProbePy $Lang)
+        $rc = $LASTEXITCODE
+    }
+    catch { $out = @(); $rc = -1 }
+    finally {
+        if ($enc) { try { [Console]::OutputEncoding = $enc } catch { } }
+        $ErrorActionPreference = $old
+    }
+    $St.GraphTestAnswer = if ($out.Count) { [string]$out[-1] } else { "" }
+    if ($rc -in @(0, 1, 3)) { return $rc }
+    Warn "could not run the connection test in a container (exit status {0}): {1}" "no se ha podido ejecutar la prueba de conexi\u00f3n en un contenedor (c\u00f3digo {0}): {1}" @($rc, $St.GraphTestAnswer)
+    return 3
+}
+
+function Remove-Written {
+    # removes what this run wrote, so that running the installer again starts from the questions
+    if (-not $St.Wrote) { return }
+    foreach ($f in @("docker-compose.yml", ".env", "update.sh")) { Remove-Item -LiteralPath (Join-Path $Dir $f) -Force -ErrorAction SilentlyContinue }
+    $St.Removed = $true
+}
+
+function Test-GraphBeforeStart {
+    Step "Graph database: connection test" "Base de datos de grafos: prueba de conexi\u00f3n"
+    while ($true) {
+        Say "Testing {0} at {1}:{2} from a MimirSynth container: credentials, version and write permission (the first time, the image is downloaded)..." `
+            "Probando {0} en {1}:{2} desde un contenedor de MimirSynth: credenciales, versi\u00f3n y permiso de escritura (la primera vez se descarga la imagen)..." @($St.GraphType, $St.ContainerHost, $St.GraphPort)
+        $rc = Invoke-GraphProbe
+        if ($rc -eq 0) {
+            $St.Probed = $true
+            $parts = $St.GraphTestAnswer.Split("|")
+            Say "Connection test passed: {0}, {1} graph(s) or partition(s) found." "La prueba de conexi\u00f3n ha pasado: {0}, {1} grafo(s) o partici\u00f3n(es) encontrados." @($parts[0], $parts[-1])
+            return
+        }
+        if ($rc -eq 3) {
+            Say "This release cannot test it before the start: it is tested once MimirSynth answers." "Esta versi\u00f3n no puede probarla antes del arranque: se prueba cuando MimirSynth responda."
+            return
+        }
+        Warn "the connection test failed: {0}" "la prueba de conexi\u00f3n ha fallado: {0}" @($St.GraphTestAnswer)
+        if ($SkipGraphCheck) { return }
+        if ($Interactive) {
+            if (YesNo "Enter the values again?" "\u00bfVolver a introducir los datos?" $true) {
+                Clear-GraphValues
+                Read-GraphChoice; Set-GraphEnv; Save-EnvFile
+                continue
+            }
+            if (YesNo "Install anyway?" "\u00bfInstalar de todos modos?" $false) { return }
+        }
+        Remove-Written
+        Fail "the graph database does not pass the connection test, so nothing was installed: fix the cause, or add -SkipGraphCheck" `
+             "la base de datos de grafos no pasa la prueba de conexi\u00f3n, as\u00ed que no se ha instalado nada: corrige la causa, o a\u00f1ade -SkipGraphCheck"
+    }
 }
 
 # ---- after the start ----
@@ -357,13 +458,12 @@ function Get-SetupCode {
     return $code
 }
 
-# Full test of an existing graph database through the API (#358): address, credentials, version and write permission. While there
-# is no administrator the endpoint takes the first-start code as X-Setup-Code. It answers 200 with "ok" true or false and, when false,
-# the cause in "error.message"; a release without it answers 404. Returns 0 ok, 1 failed (GraphTestAnswer has the cause), 3 not available.
+# The same full test through the API (#358), of the connection in force (no body: the one in .env, with its password), for when it
+# did not run before the start. While there is no administrator the endpoint takes the first-start code as X-Setup-Code. It answers
+# 200 with "ok" true or false and, when false, the cause in "error.message"; a release without it answers 404. Returns 0 ok, 1 failed
+# (GraphTestAnswer has the cause), 3 not available.
 function Test-GraphViaApi {
-    $body = @{ backend = $St.GraphType; host = $St.ContainerHost; port = $St.GraphPort; user = $St.GraphUser;
-               password = $St.GraphPassword; database = $St.GraphDatabase } | ConvertTo-Json -Compress
-    $r = Get-Http "http://127.0.0.1:$($St.Port)/api/admin/graph/test" -Method POST -Body $body -Headers @{ "X-Setup-Code" = $St.SetupCode } -Timeout 30
+    $r = Get-Http "http://127.0.0.1:$($St.Port)/api/admin/graph/test" -Method POST -Headers @{ "X-Setup-Code" = $St.SetupCode; "Accept-Language" = $Lang } -Timeout 30
     $St.GraphTestAnswer = if ($r.Body.Length -gt 300) { $r.Body.Substring(0, 300) } else { $r.Body }
     if ($r.Code -in @(0, 401, 403, 404, 405)) { return 3 }
     if ($r.Code -ge 200 -and $r.Code -lt 300) {
@@ -442,6 +542,7 @@ try {
         Read-OllamaChoice
         Select-Port
         Write-Config
+        if ($St.Graph -eq "existing") { Test-GraphBeforeStart }
     }
 
     if ($NoStart) {
@@ -475,9 +576,12 @@ try {
     if ((Get-Http "http://127.0.0.1:$($St.Port)/api/auth/options").Body -match '"setup":\s*true') {
         for ($i = 0; $i -lt 10 -and -not $St.SetupCode; $i++) { $St.SetupCode = Get-SetupCode; if (-not $St.SetupCode) { Start-Sleep -Seconds 1 } }
     }
-    if ($St.Graph -eq "existing") { Test-GraphFromContainer }
+    if ($St.Graph -eq "existing" -and -not $St.Probed) { Test-GraphFromContainer }
 
     $Url = "http://localhost:$($St.Port)"
+    # The setup wizard (#361) is at /configuracion. Its API answers 401 without a session; a release without it serves the web app on
+    # any path (200), and there /configuracion would be a page that does not exist once the administrator signs in.
+    if ((Get-Http "http://127.0.0.1:$($St.Port)/api/setup").Code -in @(401, 403)) { $Url = "$Url/configuracion" }
     Step "Ready" "Listo"
     Say "  Open:             {0}" "  Abre:             {0}" @($Url)
     if ($St.SetupCode) {
@@ -494,7 +598,8 @@ try {
 catch {
     Write-Host ""
     Write-Host $_.Exception.Message -ForegroundColor Red
-    Write-Host (T "The installer stopped. Nothing was removed: fix the cause and run it again." "El instalador se ha detenido. No se ha borrado nada: corrige la causa y vuelve a ejecutarlo.")
+    if ($St.Removed) { Write-Host (T "The installer stopped: fix the cause and run it again." "El instalador se ha detenido: corrige la causa y vuelve a ejecutarlo.") }
+    else { Write-Host (T "The installer stopped. Nothing was removed: fix the cause and run it again." "El instalador se ha detenido. No se ha borrado nada: corrige la causa y vuelve a ejecutarlo.") }
     $failed = $true
 }
 finally {
