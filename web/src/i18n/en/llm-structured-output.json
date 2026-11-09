@@ -1,8 +1,0 @@
-{
- "Añadido, pero no pasa la prueba": "Added, but it does not pass the test",
- "Funciona, con un aviso": "It works, with a warning",
- "Probando el modelo con una extracción de ejemplo…": "Testing the model with a sample extraction…",
- "Puedes probar con otro modelo o saltar este paso.": "You can try another model or skip this step.",
- "Puedes probar con otro modelo o saltar este paso; con este, «Siguiente» no lo da por hecho.": "You can try another model or skip this step; with this one, «Next» does not mark the step done.",
- "Responde con una opción y su probabilidad: {{reply}}": "It answers with an option and its probability: {{reply}}"
-}
