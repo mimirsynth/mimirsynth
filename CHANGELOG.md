@@ -8,6 +8,71 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-09
+### Added
+- scanned PDFs and images (`.png`, `.jpg`) are indexed with OCR. Tesseract runs in an optional service apart from the main image (the `ocr` profile of the compose file, `MIMIRSYNTH_OCR_URL`), page by page with progress, at most 50 pages per document and in `spa+eng` by default. A brain can read its scanned pages with the vision model of an LLM engine instead. Without OCR, the error says how to enable it. (#135) (#345)
+- Ask's ratings can be taken back by pressing the pressed one again (`DELETE /api/brains/{slug}/recall/{rid}/ratings`), the note sent with «Incorrecto» shows on its card, and rating the same fact incorrect again points to the correction already pending instead of opening another. (#344)
+- One-command installer: `install.sh` (Linux, macOS) and `install.ps1` (Windows with Docker Desktop) check Docker, ask whether to start the bundled FalkorDB or use an existing FalkorDB or Neo4j, generate the secrets, start everything and open the browser with the first-start code. Running it again detects the installation and offers `update.sh`. A non-interactive mode covers automation. (#376)
+- Optional bundled Ollama for embeddings: the `ollama` compose profile, which the installer offers and for which it downloads `nomic-embed-text`. (#376)
+- Each release publishes the installers and a `SHA256SUMS` file, and its notes list the checksums. (#376)
+- Agent integrations share one client library (`integrations/shared/`, Python and a TypeScript port) and a frozen configuration contract, documented in `docs/AGENT_CLIENT.md`, with contract tests every plugin can run against a test instance (#369). (#375)
+- A `projects` map in `~/.config/mimirsynth/config.json` gives some folders their own brain and tokens; the Claude Code plugin applies it to the session's folder (#369). (#375)
+- The capture mode accepts `drafts` and `auto` as aliases of `draft` and `send`, and `MIMIRSYNTH_CONFIG` names another configuration file (#369). (#375)
+- A «Getting started» checklist at the top of the home screen: six steps (an agent's first recall, its first proposal, the first approval, the first document or folder, a first question in Ask, a second agent or person) tick themselves when they happen in the person's brains, each linking to its screen and its wiki section, until all are done or the card is closed. (#381)
+- Recall logs record the API token a recall came through, telling an agent's recall from a question in Ask. (#381)
+- A native Hermes Agent plugin, a memory provider that recalls from the brain before each turn, brings what changed at session start, gives the agent `mimirsynth_search` and `mimirsynth_remember` (proposals wait in quarantine), adds `hermes mimirsynth` and `/mimirsynth` commands and an optional session capture, off by default; installed with one command and configured by the shared `~/.config/mimirsynth/config.json` (#372). (#380)
+- Native plugin for the Codex CLI: recall before every prompt, what changed at session start, the skills `$mimirsynth:setup`, `:status`, `:search` and `:remember`, and an optional capture (off by default) that turns a finished session, read from Codex's own session file, into one quarantined proposal. Install with `codex plugin marketplace add mimirsynth/mimirsynth && codex plugin add mimirsynth@mimirsynth`. (#382)
+- OpenClaw plugin (`@mimirsynth/openclaw`): recall before each prompt, what changed at session start, `mimirsynth_search` and `mimirsynth_remember` agent tools, `/mimirsynth` chat and `openclaw mimirsynth` terminal commands, and an opt-in session capture, reading the shared agent configuration; installed with `openclaw plugins install @mimirsynth/openclaw && openclaw mimirsynth setup`. (#383)
+- A native OpenCode plugin (`@mimirsynth/opencode`, `integrations/opencode`), installed with `npx -y @mimirsynth/opencode install`: recall before every prompt, what changed at session start, the commands `/mimirsynth-setup`, `-status`, `-search` and `-remember`, the brain's MCP server, and an optional capture of each session as one quarantined proposal, off by default (#371). (#384)
+- a guided tour of eight steps (navigation, brain switcher, proposals, graph, Ask, administration and help) on a person's first visit once there is a brain, keyboard and screen-reader accessible, working on phones with the menu open, and without movement for those who ask for reduced motion. Whether it was seen is kept per person on the server, so it is not shown again on another device; people who had already signed in are not shown it. (#385)
+- **Neo4j as the graph database** (#357). `MIMIRSYNTH_GRAPH_BACKEND=neo4j` keeps every brain in an existing Neo4j 5.26 or later (Community or Enterprise). There, a brain is the nodes whose `group_id` is its name, as Graphiti writes them, and every query is kept to that brain. Configure it with `MIMIRSYNTH_NEO4J_URI`, `_USER`, `_PASSWORD` and `_DATABASE`. (#386)
+- `MIMIRSYNTH_FALKOR_USERNAME` and `MIMIRSYNTH_FALKOR_PASSWORD`, for a FalkorDB with ACL users. (#386)
+- «Connect an agent» on the brain page (Administration → Brain): pick Claude Code, Codex, OpenCode, Hermes Agent, OpenClaw or another MCP client, copy its install line or MCP configuration already filled in with the server, the brain and a token, and see it turn green within seconds of the agent's first call, followed by a test recall of what the agent receives. (#387)
+- Administration → Graph database shows which graph database the instance uses and where the connection comes from, tests it step by step (address, credentials, version, write permission) and lists the graphs it already holds; administrators can switch to the bundled FalkorDB, an existing FalkorDB or an existing Neo4j, and the instance uses the new connection without a restart once its test passes. The password is stored encrypted and never shown again. (#390)
+- `POST /api/admin/graph/test` and `PUT /api/admin/graph`; during the first start the test also accepts the first-start code, so the installer checks an existing database with the same checks. (#390)
+- `/api/health` and `/api/ai-status` say which graph backend is in use. (#390)
+- The configuration reference describes how brains are kept apart on Neo4j, what that requires of the database and its limits. (#400)
+- the public beta is labelled beside the version at the bottom of the side menu, in the README and at the top of the release notes, with the warning that until 1.0 the API and the schema may change between minor versions. (#366) (#392)
+- issue templates for beta feedback, installer problems and agent integration problems, which ask for the version, graph database, agent and operating system and warn never to paste tokens or secrets; questions go to Discussions. (#366) (#392)
+- The installer takes a Neo4j that asks for TLS, such as Neo4j Aura (`--graph-tls`, `-GraphTls`). (#394)
+- each release publishes the OpenCode and OpenClaw plugins to npm (`@mimirsynth/opencode`, `@mimirsynth/openclaw`) with provenance, when their version is not on npm yet; a pre-release publishes them under the dist-tag `next`. (#398)
+- Administration → Graph database lists the graphs the database already holds, with their entities, edges, episodes and vector dimension, and an administrator can adopt any graph that is no brain's as a brain, as it is; graphs that are not adopted are never touched. (#391)
+- Read-only brains: an adopted graph can be queried (recall, facts, timeline) without anything writing to it — no proposals, ingestion, curation or embedding model change — and the database itself refuses any write; administrators switch a brain between read-only and full, and full needs vectors that match the default embedding engine. (#391)
+- A setup wizard takes an administrator from the first-start account to an agent's first recall: graph database, embeddings (it finds a local Ollama and can download nomic-embed-text), LLM, decider, first brain, a contributor token and connecting the agent. Each step is kept as it is passed, so the wizard resumes where it stopped on any device; the graph and embedding steps are checked by the server and cannot be skipped, and the LLM and the decider can. (#395)
+- While there is no LLM, the home screen tells curators and administrators that approved proposals are waiting, with a link to add one. (#395)
+- Administrators can open the setup wizard again from Administration. (#395)
+
+### Changed
+- Ask writes the question and its limits into the address, and coming back with Back after opening an entity or a source shows the same results, ratings, marks and answer; the browser asks before closing the tab while marks are not saved. (#342)
+- In the proposal review queue, a pending proposal shows a sheet beside its text with who sent it, when, from where, the author's confidence and the decider's verdict in words, and its text and the facts the brain knows stop at a readable line length. (#350)
+- A pending proposal's text marks what it adds to the brain only when it almost repeats something the brain knows, and lists those words under it; a mostly new proposal reads clean. (#351)
+- In Ask's Answer mode, the evidence shows a fact's entities as in Context, says «cited» in words on what the answer cites, leads back to the citation, and its labels no longer leave the page. (#343)
+- Under a pending proposal, each fact the brain knows is a card of its own with its entities as chips and its similarity and dates on one line, the fact it is read against heads them, the other similar ones follow under a heading, and those only related stay folded last with a sentence on why. (#352)
+- Running text across the interface (page help, list cards, notices, empty states, settings help and field descriptions) stops at about 72 characters a line, and a notice wraps its text instead of stretching across the page. (#354)
+- Ask numbers its results in one sequence across facts, fragments and passages, the order the agent reads them in, and says under each heading what orders that section. (#348)
+- In Ask, a marked result says so on its card, the count and «Save as reference query» stay at the foot of the results while marking, a fact's data shares the line of its entities, and on a phone the injected context shows whole. (#349)
+- Ask lists «Context» first among its modes, explains before the first search what it will show, says why only the brain's own facts can be rated incorrect, and shows a written answer as a card instead of an information notice. (#353)
+- The Claude Code plugin is version 0.2.0, so `/plugin update` brings the shared library to existing installs (#369). (#375)
+- the documentation, source code and feedback links of the sidebar are now in a help menu, which can also replay the guided tour. (#385)
+- A brain export records its graph database (`graph_backend`). A package moves between FalkorDB and Neo4j through its JSON copy, because only FalkorDB has the exact copy. (#386)
+- The `graph.down` notification is now «The graph database (FalkorDB or Neo4j) does not answer», and the embedding-model estimate reports `graph_db` instead of `falkor`. (#386)
+- The environment variables for the graph database win only when they have a value; `docker-compose.yml` no longer fills them in, and the bundled FalkorDB's address is `MIMIRSYNTH_FALKOR_BUNDLED_HOST`. An `.env` that sets them keeps working as before, and the interface then shows the connection read-only. (#390)
+- the help menu's «Comments and bugs» opens the issue templates instead of the issue list. (#366) (#392)
+- The installer tests an existing graph database fully before starting anything, with the same checks as Administration → Graph database (address, TLS, credentials, version and write permission); if the test fails it says why and asks again, and without questions it stops and leaves nothing installed. (#394)
+- Creating a brain whose slug names an existing graph that belongs to no brain is refused with a pointer to adopting it, instead of silently taking it over. (#391)
+- The guided tour does not start while the setup wizard is pending or open. (#395)
+- The wiki's agents section is reorganised (token, pick your agent, MCP, HTTP API, security), each native plugin (Codex, OpenCode, Hermes Agent, OpenClaw) has its own page, a shared page explains the agent plugin configuration, and the reference pages cover the graph backend variables, Compose profiles, OCR and upgrading installs made by the installer. (#388) (#399)
+
+### Fixed
+- a document chunk no longer spans two PDF pages, so the recall cites the right page. (#135) (#345)
+- Hermes Agent's install scan no longer takes the secret detector's sample keys for leaked ones; the Claude Code plugin is 0.2.1 with the same behaviour (#372). (#380)
+- The installer no longer takes a local installation that was configured but not started for an existing database. (#390)
+- the OpenClaw plugin is installed with `openclaw plugins install npm:@mimirsynth/openclaw`, from npm, because it is not on ClawHub. (#398)
+
+### Security
+- On Neo4j, the read-only Cypher console no longer lets a reader of one brain read another brain's data. Paths of one node, a node's inline `WHERE` or property map, path selectors (`ANY`, `SHORTEST`), patterns listed in a `COUNT {}` subquery, label expressions, comments and `\u` escapes all reached past the brain's scoping. The console now runs only what it can keep inside the brain: it refuses any function that is not one of Neo4j's own (plugins such as APOC included), variable-length paths, comments, parameters and `TERMINATE`, and says why. (#400)
+- On Neo4j, a node pattern that the brain scoping cannot read is refused instead of run unscoped. (#400)
+
 ## [0.14.0] - 2026-11-08
 ### Added
 - a document passage that states something no longer true is marked «may be superseded», with what stopped being true and what is true now, and goes after the other passages; the current fact that replaced it joins the recall. Each passage also says when its page was last updated. (#286) (#287)

@@ -84,7 +84,7 @@ Edita `.env` y define, como mínimo, `POSTGRES_PASSWORD` y `MIMIRSYNTH_SESSION_S
 ```bash
 docker compose --profile bundled up -d
 ```
-Descarga la imagen oficial (`ghcr.io/mimirsynth/mimirsynth`, para amd64 y arm64). Para fijar una versión, pon `MIMIRSYNTH_VERSION=0.14.0` en `.env` (por defecto, `latest`).
+Descarga la imagen oficial (`ghcr.io/mimirsynth/mimirsynth`, para amd64 y arm64). Para fijar una versión, pon `MIMIRSYNTH_VERSION=0.15.0` en `.env` (por defecto, `latest`).
 - `--profile bundled` arranca también un FalkorDB incluido, que es el que se usa si no eliges otro. Si ya tienes un FalkorDB o un Neo4j, omite el perfil y ponlo en **Administración → Base de datos del grafo** tras el primer arranque, o en `.env` (ver [Base de datos de grafos](CONFIGURATION.md#base-de-datos-de-grafos)).
 - La aplicación queda en `http://localhost:8000` (cambia el puerto con `MIMIRSYNTH_PORT`).
 
