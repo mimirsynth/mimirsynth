@@ -484,7 +484,8 @@ graph_api_test() {
   REPLY="$(head -c 4000 "$TMPF" 2>/dev/null || true)"
   case "$code" in
     2??)
-      case "$REPLY" in *'"ok":true'*) return 0 ;; esac
+      # the answer's own "ok", its first key: every step that passed has an "ok":true of its own (#408)
+      case "$REPLY" in '{"ok":true'*) return 0 ;; esac
       REPLY="$(printf '%s' "$REPLY" | sed -n 's/.*"message":"\([^"]*\)".*/\1/p')"; REPLY="${REPLY:-?}"
       return 1 ;;
     401|403|404|405|"") return 3 ;;
@@ -492,8 +493,19 @@ graph_api_test() {
   esac
 }
 
+health_graph_ok() {  # /api/health says the instance reaches its graph database (a few tries: the backend connects on demand)
+  local i
+  for i in 1 2 3; do
+    curl -s -o "$TMPF" --max-time 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null || true
+    HEALTH_BODY="$(cat "$TMPF" 2>/dev/null || true)"
+    case "$HEALTH_BODY" in *'"graph":true'*) return 0 ;; esac
+    [ "$i" = 3 ] || sleep 3
+  done
+  return 1
+}
+
 # Returns 1 when the running instance cannot use the existing graph database: the container does not reach it, the test through the
-# API fails, or /api/health said the graph does not answer and nothing says otherwise.
+# API fails, or /api/health said the graph does not answer and still says so after a test that passes.
 check_graph_from_container() {
   step "Graph database" "Base de datos de grafos"
   local bad=0
@@ -506,7 +518,12 @@ check_graph_from_container() {
   fi
   local rc=0; graph_api_test || rc=$?
   case "$rc" in
-    0) say "Connection test passed." "La prueba de conexión ha pasado."; bad=0 ;;
+    0) say "Connection test passed." "La prueba de conexión ha pasado."; bad=0
+       if [ "$GRAPH_DOWN" = 1 ] && ! health_graph_ok; then
+         warn "the connection test passes, but MimirSynth still does not reach the graph database: $HEALTH_BODY" \
+              "la prueba de conexión pasa, pero MimirSynth sigue sin llegar a la base de datos de grafos: $HEALTH_BODY"
+         bad=1
+       fi ;;
     1) warn "the connection test failed: $REPLY" "la prueba de conexión ha fallado: $REPLY"; bad=1 ;;
     *) say "The full connection test (credentials, version, permissions) runs in the setup wizard." "La prueba completa de conexión (credenciales, versión, permisos) se hace en el asistente."
        [ "$GRAPH_DOWN" = 0 ] || bad=1 ;;

@@ -557,8 +557,18 @@ function Test-GraphViaApi {
     return 1
 }
 
+function Test-HealthGraph {
+    # /api/health says the instance reaches its graph database (a few tries: the backend connects on demand)
+    for ($i = 1; $i -le 3; $i++) {
+        $St.HealthBody = (Get-Http "http://127.0.0.1:$($St.Port)/api/health" -Timeout 10).Body
+        try { if (($St.HealthBody | ConvertFrom-Json).graph -eq $true) { return $true } } catch { }
+        if ($i -lt 3) { Start-Sleep -Seconds 3 }
+    }
+    return $false
+}
+
 # -> $false when the running instance cannot use the existing graph database: the container does not reach it, the test through the
-# API fails, or /api/health said the graph does not answer and nothing says otherwise.
+# API fails, or /api/health said the graph does not answer and still says so after a test that passes.
 function Test-GraphFromContainer {
     Step "Graph database" "Base de datos de grafos"
     $ok = $true
@@ -572,7 +582,14 @@ function Test-GraphFromContainer {
         $ok = $false
     }
     switch (Test-GraphViaApi) {
-        0 { Say "Connection test passed." "La prueba de conexi\u00f3n ha pasado."; $ok = $true }
+        0 {
+            Say "Connection test passed." "La prueba de conexi\u00f3n ha pasado."; $ok = $true
+            if ($St.GraphDown -and -not (Test-HealthGraph)) {
+                Warn "the connection test passes, but MimirSynth still does not reach the graph database: {0}" `
+                     "la prueba de conexi\u00f3n pasa, pero MimirSynth sigue sin llegar a la base de datos de grafos: {0}" @($St.HealthBody)
+                $ok = $false
+            }
+        }
         1 { Warn "the connection test failed: {0}" "la prueba de conexi\u00f3n ha fallado: {0}" @($St.GraphTestAnswer); $ok = $false }
         default {
             Say "The full connection test (credentials, version, permissions) runs in the setup wizard." "La prueba completa de conexi\u00f3n (credenciales, versi\u00f3n, permisos) se hace en el asistente."
