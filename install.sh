@@ -178,6 +178,105 @@ json_str() {  # a JSON string literal
   local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; s="${s//$'\n'/\\n}"; s="${s//$'\r'/\\r}"; s="${s//$'\t'/\\t}"; printf '"%s"' "$s"
 }
 
+# ---- apt's locks (#418) ----
+# Just after a machine starts, its own updates (apt-daily, unattended-upgrades) or cloud-init's packages hold apt's locks for a few
+# minutes, and get.docker.com's first apt-get then fails («Unable to lock directory /var/lib/apt/lists/»). apt and dpkg take POSIX
+# (fcntl) locks, which flock(1) neither sees nor waits for, and which /proc/locks lists to every user: finding them needs neither
+# root nor fuser or lsof, missing from a minimal Debian or Ubuntu. The wait is at most APT_WAIT_SECONDS in all, retries included.
+APT_LOCKS="/var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock"
+APT_WAIT_SECONDS="${APT_WAIT_SECONDS:-300}"
+case "$APT_WAIT_SECONDS" in ""|*[!0-9]*) APT_WAIT_SECONDS=300 ;; esac
+APT_DEADLINE=""; APT_HELD=""
+apt_holder() {  # 0 while one of apt's locks is held, with APT_HELD «the lock, held by the program (PID n)»; 1 when all are free
+  local f di dev ino key pid what
+  for f in $APT_LOCKS; do
+    [ -e "$f" ] || continue
+    pid=""
+    if [ -r /proc/locks ]; then
+      di="$(stat -c '%d %i' "$f" 2>/dev/null)" || continue
+      dev="${di% *}"; ino="${di#* }"
+      # /proc/locks names the file as major:minor:inode, the device split as the kernel does; by its inode alone when no device
+      # matches (a btrfs subvolume reports another device). Waiters ("->") hold nothing.
+      key="$(printf '%02x:%02x:%s' $(( (dev >> 8) & 0xfff )) $(( (dev & 0xff) | ((dev >> 12) & 0xfff00) )) "$ino")"
+      pid="$(awk -v k="$key" -v i="$ino" '$2 == "POSIX" || $2 == "OFDLCK" {
+               if ($6 == k) { exact = $5; exit }
+               split($6, a, ":"); if (a[3] == i && loose == "") loose = $5 }
+             END { print (exact != "" ? exact : loose) }' /proc/locks 2>/dev/null || true)"
+    elif command -v fuser >/dev/null 2>&1; then  # without /proc/locks: whoever has the file open (sudo -n: never a password prompt here)
+      pid="$(${SUDO:+$SUDO -n} fuser "$f" 2>/dev/null | awk '{ print $1 }' || true)"
+    fi
+    [ -n "$pid" ] || continue
+    what=""
+    if [ "$pid" -gt 0 ] 2>/dev/null; then
+      what="$(tr -s '\000-\037' ' ' <"/proc/$pid/cmdline" 2>/dev/null | cut -c1-60 || true)"; what="${what% }"   # one line
+      [ -n "$what" ] || what="$(cat "/proc/$pid/comm" 2>/dev/null || true)"
+    fi
+    if [ -z "$what" ]; then
+      if [ "$L" = es ]; then APT_HELD="$f, retenido por otro proceso"; else APT_HELD="$f, held by another process"; fi
+    elif [ "$L" = es ]; then APT_HELD="$f, retenido por $what (PID $pid)"
+    else APT_HELD="$f, held by $what (PID $pid)"; fi
+    return 0
+  done
+  return 1
+}
+apt_wait() {  # until apt's locks have been free for a few seconds: 0; 1 once the APT_WAIT_SECONDS are spent (APT_HELD says why)
+  command -v dpkg >/dev/null 2>&1 || return 0   # not a Debian or Ubuntu: get.docker.com uses another package manager
+  [ -n "$APT_DEADLINE" ] || APT_DEADLINE=$((SECONDS + APT_WAIT_SECONDS))
+  local free=0 told="" waited
+  # free three times in a row, two seconds apart: apt-daily, unattended-upgrades and cloud-init run apt more than once
+  while [ "$free" -lt 3 ]; do
+    if apt_holder; then
+      free=0; waited=$((SECONDS + APT_WAIT_SECONDS - APT_DEADLINE))
+      if [ -z "$told" ]; then
+        say "Waiting for apt, which another program is using: $APT_HELD. Just after a machine starts, its own updates (apt-daily, unattended-upgrades) or cloud-init usually hold it for a few minutes. Waiting up to $((APT_DEADLINE - SECONDS))s..." \
+            "Esperando a apt, que está usando otro programa: $APT_HELD. Justo después de arrancar una máquina, sus propias actualizaciones (apt-daily, unattended-upgrades) o cloud-init suelen tenerlo unos minutos. Se espera hasta $((APT_DEADLINE - SECONDS)) s..."
+        told=$SECONDS
+      elif [ $((SECONDS - told)) -ge 30 ]; then
+        say "Still waiting for apt (${waited}s): $APT_HELD" "Se sigue esperando a apt (${waited} s): $APT_HELD"
+        told=$SECONDS
+      fi
+      [ "$SECONDS" -lt "$APT_DEADLINE" ] || return 1
+    else
+      free=$((free + 1))
+    fi
+    [ "$free" -ge 3 ] || sleep 2
+  done
+  [ -z "$told" ] || say "apt is free again." "apt vuelve a estar libre."
+}
+
+# Docker's official script, after apt's locks are free. Its apt-get calls wait for dpkg's lock themselves for the rest of the time
+# (DPkg::Lock::Timeout, through APT_CONFIG, which apt reads before its own configuration); apt-get update has no such wait for the
+# lists lock, so a run that fails on an apt lock (a program that took it in the meantime) waits again and tries again, twice at most.
+install_docker() {
+  local tmp try=1 left
+  apt_wait || apt_gave_up
+  tmp="$(mktemp -d)"
+  if ! curl -fsSL --retry 3 --max-time 120 https://get.docker.com -o "$tmp/get-docker.sh"; then
+    rm -rf "$tmp"
+    die "could not download Docker's installation script (https://get.docker.com)" "no se pudo descargar el script de instalación de Docker (https://get.docker.com)"
+  fi
+  while :; do
+    left=60; [ -z "$APT_DEADLINE" ] || [ $((APT_DEADLINE - SECONDS)) -le 60 ] || left=$((APT_DEADLINE - SECONDS))
+    printf 'DPkg::Lock::Timeout "%s";\n' "$left" >"$tmp/apt.conf"
+    if $SUDO env APT_CONFIG="$tmp/apt.conf" sh "$tmp/get-docker.sh" </dev/null 2>&1 | tee "$tmp/log"; then break; fi
+    if [ "$try" -lt 3 ] && grep -qE '^E: .*(/var/lib/dpkg/lock|/var/lib/apt/lists/|/var/cache/apt/archives/lock)' "$tmp/log"; then
+      try=$((try + 1))
+      warn "another program took apt's lock while Docker was being installed: waiting for it and trying again ($try/3)" \
+           "otro programa ha tomado el bloqueo de apt mientras se instalaba Docker: se espera y se vuelve a intentar ($try/3)"
+      apt_wait && continue
+      rm -rf "$tmp"; apt_gave_up
+    fi
+    rm -rf "$tmp"
+    die "Docker's installation script (get.docker.com) failed: see its output above. Docker was not installed and this installer wrote nothing yet: fix the cause and run it again." \
+        "El script de instalación de Docker (get.docker.com) ha fallado: mira su salida más arriba. No se ha instalado Docker y este instalador aún no ha escrito nada: corrige la causa y vuelve a ejecutarlo."
+  done
+  rm -rf "$tmp"
+}
+apt_gave_up() {
+  die "apt is still in use after ${APT_WAIT_SECONDS}s ($APT_HELD), so Docker was not installed and this installer wrote nothing yet. When that program ends, run the installer again; to wait longer, set APT_WAIT_SECONDS (e.g. curl ... | APT_WAIT_SECONDS=900 bash)." \
+      "apt sigue en uso tras ${APT_WAIT_SECONDS} s ($APT_HELD), así que no se ha instalado Docker y este instalador aún no ha escrito nada. Cuando ese programa termine, vuelve a ejecutar el instalador; para esperar más, define APT_WAIT_SECONDS (p. ej. curl ... | APT_WAIT_SECONDS=900 bash)."
+}
+
 # ---- Docker and Compose v2 ----
 check_docker() {
   step "Docker" "Docker"
@@ -192,7 +291,7 @@ check_docker() {
     say "Docker is not installed. It can be installed now with Docker's official script (get.docker.com), which needs sudo." \
         "Docker no está instalado. Se puede instalar ahora con el script oficial de Docker (get.docker.com), que necesita sudo."
     if [ "$INSTALL_DOCKER" = 1 ] || { [ "$TTY" = 1 ] && yesno "Install Docker now?" "¿Instalar Docker ahora?" y; }; then
-      curl -fsSL https://get.docker.com | $SUDO sh
+      install_docker
       if [ -n "$SUDO" ]; then $SUDO usermod -aG docker "$(id -un)" || true; fi
     else
       die "Install Docker (https://docs.docker.com/engine/install/) and run this installer again, or add --install-docker." \

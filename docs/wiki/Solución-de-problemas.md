@@ -13,6 +13,7 @@ El instalador dice «Docker no está instalado» o «Docker Desktop no está en 
 - **Windows, con `install.sh` dentro de WSL** («Docker no está disponible en esta distribución de WSL»): en Docker Desktop, activa *Settings → Resources → WSL integration* para esa distribución, o ejecuta `install.ps1` desde PowerShell.
 - **macOS:** abre Docker Desktop y espera a que arranque (el instalador intenta arrancarlo él solo).
 - **Linux:** arranca el servicio con `sudo systemctl start docker` (y `sudo systemctl enable docker` para que arranque con el equipo). Si falta Docker, el instalador se ofrece a instalarlo, o pasa `--install-docker`. Si dice que tu usuario no puede usar Docker sin `sudo`, esta vez sigue con `sudo`; para no necesitarlo, ejecuta `sudo usermod -aG docker "$USER"` y cierra la sesión y vuelve a entrar.
+- **Linux, justo después de arrancar la máquina** («Esperando a apt», o «apt sigue en uso tras 300 s»): las propias actualizaciones del sistema (apt-daily, unattended-upgrades) o cloud-init tienen apt unos minutos tras el primer arranque, y el instalador espera a que terminen antes de instalar Docker. Si tardan más, se detiene sin haber instalado nada y dice qué programa es: espera a que termine (`systemctl status unattended-upgrades apt-daily-upgrade`) y vuelve a ejecutar el instalador, o deja que espere más con `curl -fsSL …/install.sh | APT_WAIT_SECONDS=900 bash`.
 
 Después vuelve a ejecutar el instalador: no borra nada y retoma la configuración que ya escribió.
 
