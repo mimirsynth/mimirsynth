@@ -60,6 +60,14 @@ Cada modelo de embeddings da vectores de un tamaño fijo, su **dimensión**, y e
 - **Una instancia que ya tiene memoria:** nunca cambies el modelo a mano. Añade un motor con el modelo nuevo y pásalo todo a él con **Reindexar** en Administración → Embeddings, que recalcula todos los vectores antes de cambiar ([Cambiar el modelo de embeddings](Proveedores-de-IA#cambiar-el-modelo-de-embeddings)).
 - **«el endpoint devuelve otra dimensión»:** el modelo que hay detrás de ese nombre ha cambiado en el proveedor (por ejemplo, otra etiqueta descargada en Ollama). Vuelve al modelo que tenías, o reindexa a un motor nuevo.
 
+### La propuesta está aprobada pero no aparecen hechos
+La propuesta se queda **Aprobada** para siempre, acaba **Fallida** o se ingiere con **0 hechos**. Mira lo que dice la propuesta en **Ingesta en el grafo**:
+- **«Aprobada» y no pasa nada:** no hay LLM. Añade uno en Administración → Modelo LLM ([[Proveedores de IA]]).
+- **«El LLM no devolvió la respuesta estructurada que necesita la ingesta (…)»:** el modelo responde, pero no con lo que lee la ingesta. La ingesta pide al modelo un JSON que cumpla un esquema (un `response_format` con un JSON schema), y algunos modelos lo ignoran. Entre paréntesis dice qué hizo el modelo: **devolvió una lista**, **devolvió JSON con otras claves** (a menudo envuelto en un bloque ```` ```json ````), **no devolvió JSON** o **no devolvió nada** (lo típico de los modelos de *razonamiento*, que se gastan la respuesta pensando). Usa otro modelo: los modelos *instruct* como `qwen2.5:14b-instruct` suelen funcionar; los de razonamiento y los modelos «cloud» que sirve Ollama (`…-cloud`) a menudo no. El error original de Python está en el detalle del trabajo, en **Trabajos**.
+- **Ingerida, con entidades pero 0 hechos:** el modelo devuelve el esquema, pero es demasiado pequeño para relacionar las entidades (el registro del servidor dice «Target entity not found»). Usa un modelo de unos 14B o más.
+
+Todo esto se ve antes de aprobar nada: **Probar** en Administración → Modelo LLM, el botón **Añadir** del asistente de configuración y la comprobación de estado piden al modelo una extracción pequeña de una frase fija, la misma petición que hace la ingesta. Responden «devuelve salida estructurada: …» o «responde, pero no con un JSON que cumpla el esquema (…): la ingesta fallará con este modelo», y avisan cuando no vuelve la relación entre las dos entidades de la frase. Con un modelo que falla, el asistente guarda el motor pero no da el paso por hecho.
+
 ## Arranque e instalación
 | Síntoma | Causa y solución |
 |---|---|
@@ -94,7 +102,7 @@ Cada modelo de embeddings da vectores de un tamaño fijo, su **dimensión**, y e
 |---|---|
 | Propuestas aprobadas que no se ingieren («Aprobadas») | No hay LLM configurado: [[Proveedores de IA]] |
 | Ingestas **fallidas** con «límite de tasa» | Tu proveedor limita las peticiones. Sube los reintentos ([[Recuerdo e ingesta]]) y, si hace falta, baja `MIMIRSYNTH_INGEST_CONCURRENCY` (añádela al fichero de Compose); reintenta desde [[Propuestas]] |
-| Ingestas fallidas con JSON inválido o respuestas vacías | Modelo «razonador» que no devuelve JSON. Usa otro modelo o un proxy que desactive el *thinking* |
+| Ingestas fallidas con «El LLM no devolvió la respuesta estructurada que necesita la ingesta», JSON inválido o respuestas vacías | Un modelo que no devuelve JSON que cumpla el esquema, a menudo uno «razonador». Usa otro modelo o un proxy que desactive el *thinking*: [La propuesta está aprobada pero no aparecen hechos](#la-propuesta-est%C3%A1-aprobada-pero-no-aparecen-hechos) |
 | Entidades mal formadas o que faltan, hechos en inglés de un texto en otro idioma | El modelo de extracción es demasiado pequeño (4B o menos). Usa uno de unos 14B o más, o un modelo pequeño por API con salida estructurada ([[Proveedores de IA]]) |
 | La propuesta se ingiere pero genera 0 hechos | Texto sin información concreta, o extracción fallida: revisa el [[Diario]] y [[Escribir buena memoria]] |
 | Una propuesta se rechaza con `422` y un tipo de secreto | El brain **bloquea** los secretos. Quita la credencial y escribe dónde está guardada |

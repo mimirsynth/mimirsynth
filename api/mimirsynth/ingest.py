@@ -170,7 +170,7 @@ def ingest_proposal(pid: int, job=None) -> str:
                     p.ingest_report = {**(rep or {}), "claims_error": str(e)[:300]}
         except Exception as e:  # noqa: BLE001
             log.exception("ingesta fallida de la propuesta %s", pid)
-            p.status, p.ingest_error = "failed", str(e)[:500]
+            p.status, p.ingest_error = "failed", _in_words(e, job)
         db.commit()
         err = p.ingest_error if p.status == "failed" else ""
         from . import notify
@@ -194,6 +194,23 @@ def ingest_proposal(pid: int, job=None) -> str:
             except Exception:  # noqa: BLE001  (the check never fails an ingestion)
                 log.warning("no se pudo lanzar la comprobación de la propuesta %s", pid, exc_info=True)
         return err
+
+
+def _in_words(e: BaseException, job=None) -> str:
+    """What the proposal says when its ingestion fails. When the cause is the model's answer (empty, not JSON, a list, other keys), it is
+    said in words (#420) and the raw exception goes to the job's log, where whoever looks into it still finds it."""
+    from . import llmcheck
+    raw = (str(e) or e.__class__.__name__)[:500]
+    try:
+        clear = llmcheck.ingest_failure(e)
+    except Exception:  # noqa: BLE001  (putting it into words never hides the failure itself)
+        log.warning("no se pudo clasificar el error de ingesta", exc_info=True)
+        clear = None
+    if not clear:
+        return raw
+    if job:
+        job.note(f"Error original del LLM: {raw}"[:400])
+    return clear
 
 
 def _graph(brain):

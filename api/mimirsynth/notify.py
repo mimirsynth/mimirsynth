@@ -227,7 +227,8 @@ def check_health() -> None:
     except Exception as e:  # noqa: BLE001
         _fail("graph.down", "La base de datos del grafo no responde", f"{b.label}: {e}"[:300], b.name)
     try:
-        from . import decider as _decider
+        from . import llmcheck
+        from .i18n import T
         from .aistatus import _llm_ping
         from .deciders_admin import default_decider
         from .embeddings_admin import _probe, default_embedding
@@ -240,7 +241,7 @@ def check_health() -> None:
             if (e := default_embedding(db)):
                 probes.append(("embedding", e.name, lambda e=e: _probe(e.base_url, e.model, unseal(e.api_key_enc))))
             if (e := default_decider(db)):
-                probes.append(("decider", e.name, lambda e=e: _decider.decide(e.base_url, e.model, unseal(e.api_key_enc), "x", "¿ok?", ["Sí", "No"], timeout=30)))
+                probes.append(("decider", e.name, lambda e=e: llmcheck.require_decider(e.base_url, e.model, unseal(e.api_key_enc), timeout=30)))
     except Exception:  # noqa: BLE001
         log.exception("no se pudieron preparar las comprobaciones de los modelos")
         return
@@ -249,8 +250,10 @@ def check_health() -> None:
         try:
             fn()
             _ok("model.unavailable", kind)
+        except llmcheck.StructuredOutputError as e:   # it answers, but ingestion cannot read what it returns (#420)
+            _fail("model.unavailable", T("El modelo LLM no devuelve la salida estructurada que necesita la ingesta"), f"Motor «{name}»: {str(e)[:400]}", kind)
         except Exception as e:  # noqa: BLE001
-            _fail("model.unavailable", f"El modelo de {names[kind]} no responde", f"Motor «{name}»: {str(e)[:250]}", kind)
+            _fail("model.unavailable", f"El modelo de {names[kind]} no responde", f"Motor «{name}»: {str(e)[:400]}", kind)
 
 
 def _newer(latest: str, current: str) -> bool:

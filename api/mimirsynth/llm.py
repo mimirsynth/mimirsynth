@@ -134,17 +134,14 @@ def delete_engine(eid: int, user: User = Depends(require_admin), db: Session = D
 
 @router.post("/{eid}/test")
 def test_engine(eid: int, _: User = Depends(require_admin), db: Session = Depends(get_db)):
-    """Una petición mínima de chat para comprobar URL, clave y modelo."""
+    """What ingestion needs, not just an answer (#420): a small extraction with graphiti's own request (`response_format` with a JSON
+    schema), and whether the relation between the two entities comes back. {ok, ms, reply | error, warning?, structured}. The interface
+    calls it right after adding or editing an engine too: an engine that fails it is kept, with the warning."""
+    from . import llmcheck
     e = _get(db, eid)
-    headers = {"Authorization": f"Bearer {unseal(e.api_key_enc)}"} if e.api_key_enc else {}
+    key = unseal(e.api_key_enc) if e.api_key_enc else ""
     t0 = time.time()
     try:
-        r = httpx.post(f"{e.base_url}/chat/completions", headers=headers, timeout=45,
-                       json={"model": e.model, "messages": [{"role": "user", "content": "Responde solo: ok"}], "max_tokens": 16})
-        ms = int((time.time() - t0) * 1000)
-        if r.status_code != 200:
-            return {"ok": False, "ms": ms, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
-        msg = (r.json().get("choices") or [{}])[0].get("message", {})
-        return {"ok": True, "ms": ms, "reply": (msg.get("content") or msg.get("reasoning_content") or "")[:80]}
+        return llmcheck.structured(e.base_url, e.model, key, quality=True)
     except Exception as ex:  # noqa: BLE001
-        return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(ex)[:200]}
+        return {"ok": False, "ms": int((time.time() - t0) * 1000), "error": str(ex)[:300], "structured": None}

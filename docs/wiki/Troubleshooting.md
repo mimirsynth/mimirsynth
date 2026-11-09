@@ -60,6 +60,14 @@ Each embedding model gives vectors of a fixed size, its **dimension**, and the i
 - **An instance that already has memory:** never change the model by hand. Add an engine with the new model and move everything to it with **Reindex** under Administration → Embeddings, which recomputes every vector before switching ([Changing the embedding model](AI-providers#changing-the-embedding-model)).
 - **«the endpoint returns a different dimension»:** the model behind that name changed at the provider (for example, another tag pulled in Ollama). Go back to the model you had, or reindex to a new engine.
 
+### The proposal is approved but no facts appear
+The proposal stays **Approved** for good, ends up **Failed**, or is ingested with **0 facts**. Look at what the proposal says under **Ingestion into the graph**:
+- **«Approved» and nothing happens:** there is no LLM. Add one under Administration → LLM model ([[AI providers]]).
+- **«The LLM did not return the structured answer ingestion needs (…)»:** the model answers, but not with what ingestion reads. Ingestion asks the model for JSON that matches a schema (a `response_format` with a JSON schema), and some models ignore it. In brackets it says what the model did: it **returned a list**, **returned JSON with other keys** (often wrapped in a ```` ```json ```` block), **did not return JSON**, or **returned nothing** (typical of *reasoning* models, which spend the answer thinking). Use another model: *instruct* models such as `qwen2.5:14b-instruct` usually work; reasoning models and the «cloud» models that Ollama serves (`…-cloud`) often do not. The original Python error is in the job's details, under **Jobs**.
+- **Ingested, with entities but 0 facts:** the model returns the schema but is too small to link the entities (the server log says «Target entity not found»). Use a model of about 14B or more.
+
+You can see all this before approving anything: **Test** in Administration → LLM model, the **Add** button of the setup wizard and the health check ask the model for a small extraction from a fixed sentence, the same request ingestion makes. They answer «returns structured output: …» or «answers, but not with JSON that matches the schema (…): ingestion will fail with this model», and they warn when the relation between the two entities of the sentence does not come back. With a model that fails, the wizard keeps the engine but does not mark the step done.
+
 ## Startup and installation
 | Symptom | Cause and solution |
 |---|---|
@@ -94,7 +102,7 @@ Each embedding model gives vectors of a fixed size, its **dimension**, and the i
 |---|---|
 | Approved proposals not ingested ("Approved") | No LLM configured: [[AI providers]] |
 | **Failed** ingestions with "rate limit" | Your provider limits requests. Raise the retries ([[Recall and ingestion]]) and, if needed, lower `MIMIRSYNTH_INGEST_CONCURRENCY` (add it to the compose file); retry from [[Proposals]] |
-| Failed ingestions with invalid JSON or empty answers | A "reasoning" model that does not return JSON. Use another model or a proxy that disables *thinking* |
+| Failed ingestions with «The LLM did not return the structured answer ingestion needs», invalid JSON or empty answers | A model that does not return JSON matching the schema, often a "reasoning" one. Use another model or a proxy that disables *thinking*: [The proposal is approved but no facts appear](#the-proposal-is-approved-but-no-facts-appear) |
 | Malformed entities, entities missing, facts in English for a text in another language | The extraction model is too small (4B or less). Use one of about 14B or more, or a small API model with structured output ([[AI providers]]) |
 | The proposal is ingested but produces 0 facts | Text with no concrete information, or failed extraction: check the [[Journal]] and [[Writing good memory]] |
 | A proposal is rejected with `422` and a secret type | The brain **blocks** secrets. Remove the credential and write where it is kept instead |

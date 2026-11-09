@@ -1,4 +1,4 @@
-import { T } from "../i18n";
+import { T, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -156,8 +156,16 @@ function LlmStep({ w, kind }: { w: Wizard; kind: "llm" | "decision" }) {
   const ollama = useMutation({ mutationFn: () => get<Ollama>("setup/ollama"), onSuccess: (o) => { if (o.openai_base) { setBase(o.openai_base); setModel(""); models.mutate(o.openai_base); } } });
   const models = useMutation({ mutationFn: (b: string) => send<{ models: string[]; error: string | null }>("POST", "llm-engines/models", { base_url: b, api_key: key || undefined }) });
   const path = kind === "llm" ? "llm-engines" : "decision-engines";
-  const create = useMutation({ mutationFn: () => send("POST", path, { name: `${model} · ${new URL(base).host}`, base_url: base, model, api_key: key || undefined, ...(kind === "llm" ? { small_model: "" } : { threshold: 0.8 }) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["setup"] }); qc.invalidateQueries({ queryKey: [path] }); } });
+  // Added, then tested at once (issue 420): the LLM must return the structured output ingestion needs, the decider a letter with logprobs.
+  // An engine that fails is kept, with the warning; «Next» runs the same check and does not pass the step.
+  // One that passes becomes the engine in use, so a second try after a model that failed is the one «Next» checks.
+  const check = useMutation({ mutationFn: async (e: { id: number; is_default: boolean }) => {
+    const r = await send<EngineCheck>("POST", `${path}/${e.id}/test`);
+    if (r.ok && !e.is_default) await send("POST", `${path}/${e.id}/default`);
+    return r;
+  }, onSettled: () => { qc.invalidateQueries({ queryKey: ["setup"] }); qc.invalidateQueries({ queryKey: [path] }); } });
+  const create = useMutation({ mutationFn: () => send<{ id: number; is_default: boolean }>("POST", path, { name: `${model} · ${new URL(base).host}`, base_url: base, model, api_key: key || undefined, ...(kind === "llm" ? { small_model: "" } : { threshold: 0.8 }) }),
+    onSuccess: (e) => { qc.invalidateQueries({ queryKey: ["setup"] }); qc.invalidateQueries({ queryKey: [path] }); check.mutate(e); } });
   let valid = false;
   try { valid = /^https?:/.test(new URL(base).protocol); } catch { /* not a URL yet */ }
   return (
@@ -172,13 +180,26 @@ function LlmStep({ w, kind }: { w: Wizard; kind: "llm" | "decision" }) {
       <ComboField label={t("Modelo")} data={models.data?.models ?? []} limit={50} value={model} onChange={setModel} placeholder={t("Elige uno o escribe el nombre")}
         description={kind === "llm" ? t("Para una memoria que vas a conservar, un modelo instruct de unos 14B o más (en Ollama, qwen2.5:14b-instruct) o uno pequeño y barato de un proveedor.") : undefined} />
       {models.data?.error && <Text size="xs" c="dimmed">{models.data.error}</Text>}
-      <Group><Btn icon="plus" disabled={!valid || !model} loading={create.isPending} onClick={() => create.mutate()}>{t("Añadir")}</Btn></Group>
-      <MutationError error={ollama.error ?? create.error} />
+      <Group><Btn icon="plus" disabled={!valid || !model} loading={create.isPending || check.isPending} onClick={() => create.mutate()}>{t("Añadir")}</Btn>
+        {check.isPending && <Text size="xs" c="dimmed">{t("Probando el modelo con una extracción de ejemplo…")}</Text>}</Group>
+      {check.data && <EngineCheckNotice r={check.data} kind={kind} />}
+      <MutationError error={ollama.error ?? create.error ?? check.error} />
     </Stack>
   );
 }
 
-const slugOf = (name: string) => name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 41);
+type EngineCheck = { ok: boolean; ms: number; reply?: string; error?: string; warning?: string };
+
+/** What the test of a just-added LLM or decider found: it works, it works with a warning, or it is kept but ingestion would fail. */
+function EngineCheckNotice({ r, kind }: { r: EngineCheck; kind: "llm" | "decision" }) {
+  const { t } = useTranslation();
+  if (!r.ok) return <Notice tone="warn" title={t("Añadido, pero no pasa la prueba")}>{translateServer(r.error ?? "")}{" "}
+    {kind === "llm" ? t("Puedes probar con otro modelo o saltar este paso; con este, «Siguiente» no lo da por hecho.") : t("Puedes probar con otro modelo o saltar este paso.")}</Notice>;
+  if (r.warning) return <Notice tone="warn" title={t("Funciona, con un aviso")}>{translateServer(r.warning)}</Notice>;
+  return <Notice tone="success">{kind === "llm" ? translateServer(r.reply ?? "") : t("Responde con una opción y su probabilidad: {{reply}}", { reply: r.reply })}</Notice>;
+}
+
+const slugOf =(name: string) => name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 41);
 
 function BrainStep({ w, pick }: { w: Wizard; pick: (slug: string) => void }) {
   const { t } = useTranslation();

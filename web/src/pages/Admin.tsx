@@ -1,4 +1,4 @@
-import { locale, T } from "../i18n";
+import { locale, T, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
 import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
@@ -103,18 +103,22 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   const qc = useQueryClient();
   const list = useQuery({ queryKey: [path], queryFn: () => get<Engine[]>(path) });
   const [form, setForm] = useState<EngineForm | null>(null);
-  const [tests, setTests] = useState<Record<number, string>>({});
+  const [tests, setTests] = useState<Record<number, { text: string; warning?: string; ok: boolean }>>({});
   const refresh = () => { qc.invalidateQueries({ queryKey: [path] }); qc.invalidateQueries({ queryKey: ["ai-status"] }); };
-  const save = useMutation({ mutationFn: (f: EngineForm) => f.id ? send("PATCH", `${path}/${f.id}`, f) : send("POST", path, f), onSuccess: () => { setForm(null); refresh(); } });
+  // An LLM or a decider is tested as soon as it is saved (issue 420): it is kept even when it fails, with the reason in sight.
+  const save = useMutation({ mutationFn: (f: EngineForm) => f.id ? send<Engine>("PATCH", `${path}/${f.id}`, f) : send<Engine>("POST", path, f),
+    onSuccess: (e) => { setForm(null); refresh(); if (!emb && e?.id) test.mutate(e.id); } });
   const del = useMutation({ mutationFn: (id: number) => send("DELETE", `${path}/${id}`), onSuccess: refresh });
   const [ask, setAsk] = useState<Engine | null>(null);
   const mk = useMutation({ mutationFn: (id: number) => send("POST", `${path}/${id}/default`), onSuccess: refresh });
   const [reindex, setReindex] = useState<Engine | null>(null);
   const def = (list.data ?? []).find((e) => e.is_default);
   const otherModel = (e: Engine) => emb && e.enabled && !e.is_default && (!def || def.model !== e.model || def.dim !== e.dim);
-  const test = useMutation({ mutationFn: (id: number) => send<{ ok: boolean; ms: number; error?: string; reply?: string }>("POST", `${path}/${id}/test`),
-    onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok ? `OK · ${r.ms} ms · «${r.reply}»` : t("Error: {{error}}", { error: r.error }) })),
-    onError: (err, id) => setTests((prev) => ({ ...prev, [id]: t("Error: {{error}}", { error: (err as Error).message }) })) });
+  const test = useMutation({ mutationFn: (id: number) => send<{ ok: boolean; ms: number; error?: string; reply?: string; warning?: string }>("POST", `${path}/${id}/test`),
+    onSuccess: (r, id) => setTests((prev) => ({ ...prev, [id]: r.ok
+      ? { ok: true, text: `OK · ${r.ms} ms · ${emb ? `«${r.reply}»` : translateServer(r.reply ?? "")}`, warning: r.warning ? translateServer(r.warning) : undefined }
+      : { ok: false, text: t("Error: {{error}}", { error: translateServer(r.error ?? "") }) } })),
+    onError: (err, id) => setTests((prev) => ({ ...prev, [id]: { ok: false, text: t("Error: {{error}}", { error: (err as Error).message }) } })) });
   const [models, setModels] = useState<string[]>([]); const [mErr, setMErr] = useState("");
   const loadModels = useMutation({ mutationFn: (f: EngineForm) => send<{ models: string[]; error: string | null }>("POST", "llm-engines/models", { base_url: f.base_url, api_key: f.api_key || undefined, engine_id: f.id }),
     onSuccess: (r) => { setModels(r.models); setMErr(r.error ?? ""); } });
@@ -136,7 +140,8 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
             <DataTable.Tr key={e.id}>
               <DataTable.Td>{e.name}</DataTable.Td><DataTable.Td><Text size="xs" className="ms-breakall">{e.base_url}</Text></DataTable.Td><DataTable.Td>{e.model}{emb && e.dim ? ` · ${e.dim}d` : ""}{dec && e.threshold ? t(" · umbral {{threshold}}", { threshold: e.threshold }) : ""}</DataTable.Td>
               <DataTable.Td><Group gap={4}>{e.is_default && <Pill size="sm" tone="success">{t("por defecto")}</Pill>}{!e.enabled && <Pill size="sm">{t("desactivado")}</Pill>}{!e.has_key && <Pill size="sm" tone="warn">{t("sin clave")}</Pill>}</Group>
-                {tests[e.id] && <Text size="xs" className={tests[e.id].startsWith("OK") ? "ms-text-ok" : "ms-text-danger"}>{tests[e.id]}</Text>}</DataTable.Td>
+                {tests[e.id] && <Text size="xs" className={tests[e.id].ok ? "ms-text-ok" : "ms-text-danger"}>{tests[e.id].text}</Text>}
+                {tests[e.id]?.warning && <Group gap={4} wrap="nowrap" align="flex-start"><Pill size="sm" tone="warn">{t("Aviso")}</Pill><Text size="xs">{tests[e.id].warning}</Text></Group>}</DataTable.Td>
               <DataTable.Td><Group gap={4} wrap="nowrap">
                 <Btn size="row" loading={test.isPending && test.variables === e.id} onClick={() => test.mutate(e.id)} icon="test">{t("Probar")}</Btn>
                 {!e.is_default && e.enabled && (!otherModel(e) || !def) && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
@@ -184,7 +189,7 @@ function AiStatus({ kind }: { kind: "llm" | "embedding" | "decision" }) {
   const at = new Date(st.dataUpdatedAt).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   // El resultado se queda a la vista hasta la siguiente comprobación: un aviso efímero no da tiempo a leerlo (#78).
   const result = st.isFetching ? <Text size="xs" c="dimmed">{t("Comprobando la conexión con el proveedor…")}</Text>
-    : e?.healthy !== undefined && <Text size="xs"><Text span className={e.healthy ? "ms-text-ok" : "ms-text-danger"}>{e.healthy ? t("Responde · {{model}} · {{ms}} ms", { model: e.model, ms: e.ms }) : t("Error con {{model}}: {{error}}", { model: e.model, error: e.error })}</Text>
+    : e?.healthy !== undefined && <Text size="xs"><Text span className={e.healthy ? "ms-text-ok" : "ms-text-danger"}>{e.healthy ? t("Responde · {{model}} · {{ms}} ms", { model: e.model, ms: e.ms }) : t("Error con {{model}}: {{error}}", { model: e.model, error: translateServer(e.error ?? "") })}</Text>
       <Text span c="dimmed">{" · "}{t("comprobado a las {{at}}", { at })}</Text></Text>;
   const envHelp = k === "llm" ? t("Se usan las variables MIMIRSYNTH_LLM_* del .env (cambiarlas exige reiniciar la API). Si añades un motor aquí, tiene prioridad sobre ellas.")
     : t("Se usan las variables MIMIRSYNTH_EMBEDDING_* del .env (cambiarlas exige reiniciar la API). Si añades un motor aquí, tiene prioridad sobre ellas.");
