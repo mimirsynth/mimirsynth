@@ -63,6 +63,7 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - Creating a brain whose slug names an existing graph that belongs to no brain is refused with a pointer to adopting it, instead of silently taking it over. (#391)
 - The guided tour does not start while the setup wizard is pending or open. (#395)
 - The wiki's agents section is reorganised (token, pick your agent, MCP, HTTP API, security), each native plugin (Codex, OpenCode, Hermes Agent, OpenClaw) has its own page, a shared page explains the agent plugin configuration, and the reference pages cover the graph backend variables, Compose profiles, OCR and upgrading installs made by the installer. (#388) (#399)
+- the Release workflow publishes the npm plugins through npm trusted publishing (OIDC) instead of an `NPM_TOKEN` secret. (#411)
 
 ### Fixed
 - a document chunk no longer spans two PDF pages, so the recall cites the right page. (#135) (#345)
@@ -73,10 +74,14 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 - `update.sh` (and `install.sh --upgrade`) no longer downgrades a release candidate, or any version newer than the latest stable release, to that release: it says so, changes nothing and names a newer candidate of the same version if there is one. An explicit older `--version` is refused before anything changes when its application does not know the database's revision (`--force` goes anyway), and `--check` gives the same verdict. (#407)
 - the English interface translates the side menu's account link and other texts that were shown in Spanish (the engine dialog title, availability, job owner, two-factor status, the pager and others); the first-start screen says that the installer printed the code, and where it is without the installer; `npm run i18n` now also catches untranslated text built from templates or conditions. (#404) (#406)
 - Neo4j is reached with the routing scheme (`neo4j://`, `neo4j+s://` with TLS) unless a URI asks for `bolt://` (`--graph-scheme bolt` / `-GraphScheme bolt` in the installers), so Neo4j Aura works. The connection test uses the same URI as the application. With no database it uses the user's default one and names it, which on Aura is the instance id. On Windows its messages arrive legible. The installer now fails, instead of finishing, when the started instance cannot use an existing graph database. (#409)
+- the OpenClaw plugin (`@mimirsynth/openclaw`) no longer declares `openclaw` as a peer dependency, which it does not use and which made security scanners report the whole OpenClaw dependency tree against it. (#414)
+- `update.sh` brings itself up to date before it decides anything. It takes the target release's `update.sh` (the latest release's for `--check`), checked against that release's `SHA256SUMS`, and runs it with the same options. It never takes an older release's, and it goes on as it is if the download or the checksum fails (`--no-self-update` keeps yours). `install.sh` (with or without `--upgrade`) and `install.ps1` always give an existing installation the `update.sh` of their release, never an older one. (#416)
+- an update made while the application does not answer no longer replaces the backup of the last working instance. It writes its own beside it (`backup.failed-DATE`, only the newest kept), and `--rollback` keeps going back to `./backup`. Each backup's `INFO` records the version and whether the application answered. `--rollback` refuses a backup with no version, or an incomplete one, before changing anything. (#416)
 
 ### Security
 - On Neo4j, the read-only Cypher console no longer lets a reader of one brain read another brain's data. Paths of one node, a node's inline `WHERE` or property map, path selectors (`ANY`, `SHORTEST`), patterns listed in a `COUNT {}` subquery, label expressions, comments and `\u` escapes all reached past the brain's scoping. The console now runs only what it can keep inside the brain: it refuses any function that is not one of Neo4j's own (plugins such as APOC included), variable-length paths, comments, parameters and `TERMINATE`, and says why. (#400)
 - On Neo4j, a node pattern that the brain scoping cannot read is refused instead of run unscoped. (#400)
+- the OpenCode plugin (`@mimirsynth/opencode`) no longer depends on `@opencode-ai/plugin`, which pinned versions of `zod` and `effect` (and through it `toml`) with high-severity advisories; it now installs no dependencies. (#414)
 
 ## [0.14.0] - 2026-11-08
 ### Added
