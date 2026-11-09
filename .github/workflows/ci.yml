@@ -139,7 +139,7 @@ jobs:
           for i in $(seq 1 30); do (exec 3<>/dev/tcp/127.0.0.1/6379) 2>/dev/null && break; sleep 1; done
           ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/existing" --no-browser \
             --graph existing --graph-type falkordb --graph-host localhost --graph-port 6379 | tee "$RUNNER_TEMP/existing.log"
-          grep -q "The container reaches host.docker.internal:6379" "$RUNNER_TEMP/existing.log"
+          grep -q "Connection test passed: FalkorDB" "$RUNNER_TEMP/existing.log"   # before the start, from a container (host.docker.internal)
           cd "$RUNNER_TEMP/existing"
           grep -q '^MIMIRSYNTH_FALKOR_HOST=host.docker.internal$' .env
           grep -q '^COMPOSE_PROFILES=$' .env
@@ -205,13 +205,14 @@ jobs:
             ' 2>&1 | tee "$RUNNER_TEMP/clean.log"
           grep -q "${{ matrix.code }}: [A-Za-z0-9_-]\{16\}" "$RUNNER_TEMP/clean.log"
           cd "$dir"
-          url="$(cat opened)"; port="$(grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)"; base="http://localhost:$port"
+          # .env belongs to the container's root, readable only by it (mode 600): sudo
+          url="$(cat opened)"; port="$(sudo grep '^MIMIRSYNTH_PORT=' .env | cut -d= -f2)"; base="http://localhost:$port"
           # The browser opened on the setup wizard (/configuracion) when the instance has it (#361; its API answers 401), else on the root
           if [ "$(curl -s -o /dev/null -w '%{http_code}' "$base/api/setup")" = 401 ]; then [ "$url" = "$base/configuracion" ]; else [ "$url" = "$base" ]; fi
           curl -sf "$base/api/health" | grep -q '"graph":true'
           curl -sf "$base/api/auth/options" | grep -q '"setup":true'   # the first-start screen: the administrator, then the wizard
           curl -sf "$url" | grep -q '<div id="root">'
-          [ "$(stat -c %a .env)" = 600 ] && grep -q '^COMPOSE_PROFILES=bundled$' .env
+          [ "$(sudo stat -c %a .env)" = 600 ] && sudo grep -q '^COMPOSE_PROFILES=bundled$' .env
   installer-desktop:
     # #360 where the hosted runners have no Docker Desktop: the scripts under the shells people run them with (macOS's own bash 3.2
     # with BSD tools, PowerShell 7 on macOS, Windows PowerShell 5.1 in the documented `& ([scriptblock]::Create(...))` form) against a
