@@ -5,7 +5,45 @@ on:
 permissions:
   contents: read
 jobs:
+  changes:
+    # Which jobs a pull request needs, from the files it changes (the merge commit against its base). A push to main, or a change to
+    # this file, runs them all. The jobs below fail open: if this job fails, its outputs are empty and every job runs. A job skipped by
+    # its condition reports success, so the required checks (api, web, docker) never wait for a job that has nothing to test.
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.f.outputs.api }}
+      api-neo4j: ${{ steps.f.outputs.api-neo4j }}
+      web: ${{ steps.f.outputs.web }}
+      agent-client: ${{ steps.f.outputs.agent-client }}
+      npm-packages: ${{ steps.f.outputs.npm-packages }}
+      image: ${{ steps.f.outputs.image }}
+      installer-desktop: ${{ steps.f.outputs.installer-desktop }}
+      scripts: ${{ steps.f.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v7
+        with: {fetch-depth: 2}   # the merge commit and its first parent, the base branch
+      - id: f
+        run: |
+          all=false
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then all=true; files=""
+          else files="$(git diff --name-only HEAD^1 HEAD)"; grep -qx '.github/workflows/ci.yml' <<<"$files" && all=true
+          fi
+          printf '%s\n' "$files"
+          out() { if [ $all = true ] || grep -qE "$2" <<<"$files"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
+          # api, api-neo4j: the API and what its tests read (plugins, scripts, docs and wiki, marketplaces, the server's translations)
+          out api '^(api/|integrations/|scripts/|docs/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)'
+          out api-neo4j '^(api/|integrations/|scripts/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)'   # docs/: the api job checks them
+          out web '^web/'
+          out agent-client '^integrations/shared/'
+          out npm-packages '^(integrations/(opencode|openclaw|shared)/|scripts/npm_package\.mjs$)'
+          # docker, installer-clean: the images and the installer that starts them
+          out image '^(Dockerfile|\.dockerignore|docker-compose[^/]*\.yml|install\.sh|api/|web/|ocr/)'
+          out installer-desktop '^(install\.(sh|ps1)|docker-compose\.yml|\.github/installer-config-test\.ps1)$'
+          out scripts '^(install\.(sh|ps1)|update\.sh|\.github/update-version-test\.sh)$'
+          cat "$GITHUB_OUTPUT"
   api:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.api != 'false' }}
     runs-on: ubuntu-latest
     services:
       falkordb:
@@ -50,6 +88,8 @@ jobs:
           MIMIRSYNTH_TEST_FALKOR: localhost
         run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
   api-neo4j:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.api-neo4j != 'false' }}
     # The same API suite against Neo4j (#357): the oldest version supported (5.26 LTS), Community. MIMIRSYNTH_TEST_NEO4J turns the
     # graph tests on with the Neo4j backend (tests/conftest.py); the tests of FalkorDB's own dump skip there. The suite runs with
     # neo4j://, the routing driver that Neo4j Aura needs and that the installer and Administration use (#408), and the graph tests
@@ -99,6 +139,8 @@ jobs:
           MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
         run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
   web:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -106,6 +148,8 @@ jobs:
         with: {node-version: 22, cache: npm, cache-dependency-path: web/package-lock.json}
       - run: cd web && npm ci && npm run build && npm test   # npm test: the tooling in web/scripts (translation fragments)
   agent-client:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.agent-client != 'false' }}
     # The shared client library's TypeScript port (#369): types, and the contract cases every implementation passes. The Python one
     # and both ports against a test instance run in the api job (tests/test_agent_client.py, tests/test_agent_contract.py).
     runs-on: ubuntu-latest
@@ -115,6 +159,8 @@ jobs:
         with: {node-version: 22, cache: npm, cache-dependency-path: integrations/shared/typescript/package-lock.json}
       - run: cd integrations/shared/typescript && npm ci && npm run check && npm test
   npm-packages:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.npm-packages != 'false' }}
     # The plugins the release publishes to npm (OpenCode, OpenClaw) pack into a complete package on every pull request, not only on those
     # that touch them (their own workflows check the rest): what npm would publish (npm pack --dry-run), with every file package.json
     # points at and the metadata npm publish --provenance needs (scripts/npm_package.mjs). Nothing is published.
@@ -130,6 +176,8 @@ jobs:
       - run: cd "integrations/${{ matrix.package }}" && npm ci
       - run: node scripts/npm_package.mjs "integrations/${{ matrix.package }}"
   docker:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.image != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -207,6 +255,8 @@ jobs:
           if ./install.sh --yes --from . --version ci --dir "$RUNNER_TEMP/nothing" --no-start --graph existing --graph-host 127.0.0.1 --graph-port 6391; then exit 1; fi
           [ ! -f "$RUNNER_TEMP/nothing/.env" ]
   installer-clean:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.image != 'false' }}
     # #360 on a clean Ubuntu and a clean Debian, with no Docker: the installer arrives through a pipe as with `curl | bash`, installs
     # Docker with get.docker.com, starts the stack and opens the browser on the first-start screen, where the setup wizard begins.
     # The distribution runs in a container on the host's network; the Docker CLI installed inside drives the runner's daemon through
@@ -245,6 +295,8 @@ jobs:
           curl -sf "$url" | grep -q '<div id="root">'
           [ "$(sudo stat -c %a .env)" = 600 ] && sudo grep -q '^COMPOSE_PROFILES=bundled$' .env
   installer-desktop:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.installer-desktop != 'false' }}
     # #360 where the hosted runners have no Docker Desktop: the scripts under the shells people run them with (macOS's own bash 3.2
     # with BSD tools, PowerShell 7 on macOS, Windows PowerShell 5.1 in the documented `& ([scriptblock]::Create(...))` form) against a
     # stand-in `docker` that says yes, up to the configuration they write. Starting the stack on Docker Desktop is a manual test.
@@ -314,6 +366,8 @@ jobs:
         shell: pwsh
         run: ./.github/installer-config-test.ps1
   scripts:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.scripts != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
