@@ -1,12 +1,11 @@
 import { locale } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, FilterBar, Segments, Modal, Notice, Pager, Pill, Tabs, TextArea, TextField, MutationError, ConfirmDialog, EmptyState, PageHeader, useTabParam, ListCard } from "../ui";
+import { Btn, DataTable, EntityChip, FilterBar, humanRelation, Segments, Modal, Notice, Pager, Pill, Tabs, TextArea, TextField, MutationError, ConfirmDialog, EmptyState, PageHeader, useTabParam, ListCard } from "../ui";
 import { useDebouncedValue } from "@mantine/hooks";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Fact, fmt, get, send, TimelineEvent } from "../api";
+import { Fact, fmt, fmtDay, get, send, TimelineEvent } from "../api";
 import { FillArea, Page } from "../ui";
 
 type Done = { op: number; summary: string };
@@ -48,20 +47,42 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
   const events = useQuery({ queryKey: ["timeline", graph, dq, f.rel, f.since, f.until], enabled: view === "linea", placeholderData: keepPreviousData,
     queryFn: () => get<TimelineEvent[]>("timeline", { graph, entity: dq, rel: f.rel, since: f.since, until: f.until, limit: 300 }) });
   const filtered = !!(f.q || f.rel || f.since || f.until || (view === "lista" && f.status !== "all"));
+  const actions = (f: Fact) => canEdit && <>
+    <Btn size="row" icon="edit" onClick={() => open(f)}>{t("Editar")}</Btn>
+    <Btn size="row" icon={f.status === "invalidated" ? "undo" : "close"} loading={inval.isPending && inval.variables?.uuid === f.uuid} onClick={() => inval.mutate(f)}>{f.status === "invalidated" ? t("Reactivar") : t("Invalidar")}</Btn>
+    <Btn kind="danger" size="row" icon="trash" onClick={() => setDel(f)}>{t("Borrar")}</Btn></>;
+  // The list is a table: one fact per row, a screen holds a dozen of them instead of three cards, and the columns line up the dates.
+  const table = (items: Fact[]) => (
+    <DataTable fz="sm" aria-label={t("Hechos")}>
+      <DataTable.Thead><DataTable.Tr>
+        <DataTable.Th>{t("Hecho")}</DataTable.Th><DataTable.Th>{t("Entre")}</DataTable.Th><DataTable.Th>{t("Vigencia")}</DataTable.Th><DataTable.Th>{t("Registrado")}</DataTable.Th>
+        {canEdit && <DataTable.ActionsHead />}
+      </DataTable.Tr></DataTable.Thead>
+      <DataTable.Tbody>{items.map((x) => (
+        <DataTable.Tr key={x.uuid}>
+          <DataTable.Td><span className="ms-fact-text" data-invalid={x.status === "invalidated" ? "" : undefined}>{x.fact}</span></DataTable.Td>
+          <DataTable.Td><span className="ms-fact-rel"><EntityChip name={x.source} type={x.source_type} to={`/entidad/${x.source_uuid}`} />
+            <Text span size="xs" c="dimmed" title={x.name}>{humanRelation(x.name)}</Text><EntityChip name={x.target} type={x.target_type} to={`/entidad/${x.target_uuid}`} /></span></DataTable.Td>
+          <DataTable.Td className="ms-data ms-fact-when">{x.invalid_at
+            ? <>{fmtDay(x.valid_at)} → <span className="ms-invalid-date">{t("invalidado el {{date}}", { date: fmtDay(x.invalid_at) })}</span></>
+            : t("desde {{date}}", { date: fmtDay(x.valid_at) })}</DataTable.Td>
+          <DataTable.Td className="ms-data ms-fact-when">{fmt(x.created_at)}</DataTable.Td>
+          {canEdit && <DataTable.Td><span className="ms-fact-actions">{actions(x)}</span></DataTable.Td>}
+        </DataTable.Tr>))}
+      </DataTable.Tbody>
+    </DataTable>
+  );
   const card = (f: Fact) => (
         <ListCard key={f.uuid} invalid={f.status === "invalidated"}
-          tags={<><Link to={`/entidad/${f.source_uuid}`} className="ms-nolink"><Pill size="xs">{f.source}</Pill></Link><Text size="xs" className="ms-data">{f.name}</Text>
-            <Link to={`/entidad/${f.target_uuid}`} className="ms-nolink"><Pill size="xs">{f.target}</Pill></Link></>}
+          tags={<><EntityChip name={f.source} type={f.source_type} to={`/entidad/${f.source_uuid}`} /><Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text>
+            <EntityChip name={f.target} type={f.target_type} to={`/entidad/${f.target_uuid}`} /></>}
           meta={<>{t("vigente desde")} {fmt(f.valid_at)}{f.invalid_at && <span className="ms-invalid-date"> {t("· invalidado")} {fmt(f.invalid_at)}</span>}<span> {t("· registrado el")} {fmt(f.created_at)}</span></>}
-          actions={canEdit && <>
-            <Btn size="row" icon="edit" onClick={() => open(f)}>{t("Editar")}</Btn>
-            <Btn size="row" icon={f.status === "invalidated" ? "undo" : "close"} loading={inval.isPending && inval.variables?.uuid === f.uuid} onClick={() => inval.mutate(f)}>{f.status === "invalidated" ? t("Reactivar") : t("Invalidar")}</Btn>
-            <Btn kind="danger" size="row" icon="trash" onClick={() => setDel(f)}>{t("Borrar")}</Btn></>}>
+          actions={actions(f)}>
           {f.fact}
         </ListCard>
   );
   return (
-    <Page>
+    <Page fill>
       <PageHeader title={t("Hechos")} description={<>{t("El conocimiento ya destilado: afirmaciones concretas entre dos entidades (p. ej. «El servicio de correo corre en el servidor 2») con la fecha desde la que son ciertas y, si dejan de serlo, cuándo. Salen de los episodios del Diario. La «Línea temporal» ordena los mismos hechos por cuándo se aprendieron o se invalidaron.")}</>} />
       <Tabs value={view} onChange={setView}>
         <Tabs.List><Tabs.Tab value="lista">{t("Lista")}</Tabs.Tab><Tabs.Tab value="linea">{t("Línea temporal")}</Tabs.Tab></Tabs.List><Tabs.Panel value="lista" keepMounted>{null}</Tabs.Panel><Tabs.Panel value="linea" keepMounted>{null}</Tabs.Panel>
@@ -78,7 +99,7 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
         data={[{ value: "all", label: t("Todos"), count: (data?.counts.current ?? 0) + (data?.counts.invalidated ?? 0) }, { value: "current", label: t("Vigentes"), count: data?.counts.current ?? 0 }, { value: "invalidated", label: t("Invalidados"), count: data?.counts.invalidated ?? 0 }]} />}
       {done && <Notice tone="info">{done.summary}. <Btn kind="link" onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn>{undo.error && ` — ${(undo.error as Error).message}`}</Notice>}
       <FillArea>
-        {view === "lista" ? <Stack gap="xs">{(data?.items ?? []).map((x) => card(x))}{data && data.items.length === 0 && <Text c="dimmed">{filtered ? t("Ningún hecho coincide con los filtros.") : t("Aún no hay hechos.")}</Text>}</Stack> : (
+        {view === "lista" ? (data && data.items.length === 0 ? <EmptyState>{filtered ? t("Ningún hecho coincide con los filtros.") : t("Aún no hay hechos.")}</EmptyState> : table(data?.items ?? [])) : (
           <div className="ms-tl">
             {events.isLoading && <EmptyState>{t("Cargando…")}</EmptyState>}
             {(events.data ?? []).length === 0 && !events.isLoading && <EmptyState>{t("Sin eventos.")}</EmptyState>}

@@ -80,7 +80,7 @@ export default function Vocabulary({ graph, role }: { graph: string; role: strin
   const s = data.summary;
   const rels = data.relations.filter((r) => !tail || r.facts <= 2);
   return (
-    <Page>
+    <Page fill>
       <PageHeader title={t("Vocabulario")} description={<>
         {t("El marco del brain: qué tipos de cosas y de relaciones existen y cómo se normalizan sus nombres. Vale para todo el brain, se aplica a lo que se ingiera a partir de ahora y lo cambian los administradores.")}{" "}
         {t("Ontología es lo declarado, lo que se pide al ingestor; Relaciones y Tipos de entidad son lo observado, lo que hay de verdad en el grafo. Compararlos dice qué falta declarar y qué sobra.")}{" "}

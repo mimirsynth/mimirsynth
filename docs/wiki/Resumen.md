@@ -5,7 +5,7 @@
 Pantalla de inicio. Muestra el estado del **brain activo** de un vistazo: cuánto conocimiento tiene, cómo ha evolucionado y qué es lo más importante en él. Salvo los bloques **Para empezar**, **Por revisar** y **Movimiento**, es de solo lectura.
 
 ## Para empezar
-Hasta que hayas probado las partes principales de MimirSynth, la pantalla de inicio empieza con la lista **Para empezar**. Cada paso se marca solo cuando ocurre en cualquiera de tus brains (en todos, para un administrador de la instancia), sin que nadie lo marque, y muestra el día en que ocurrió:
+Hasta que hayas probado las partes principales de MimirSynth, la pantalla de inicio muestra la lista **Para empezar**, debajo de **Por revisar** y **Movimiento**: lo que espera una decisión va primero. La lista está plegada en una fila que dice cuántos pasos llevas y cuál es el siguiente; **Ver los pasos** la despliega y este navegador lo recuerda. Cada paso se marca solo cuando ocurre en cualquiera de tus brains (en todos, para un administrador de la instancia), sin que nadie lo marque, y muestra el día en que ocurrió:
 
 | Paso | Se marca cuando | Se explica en |
 |---|---|---|

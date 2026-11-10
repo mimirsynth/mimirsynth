@@ -27,7 +27,7 @@ from pydantic import Field
 from . import appsettings, ratelimit, usage
 from .deps import BrainCtx, brain_access
 from .i18n import language, tr
-from .memory import RecallIn, docs_for, federated_kwargs
+from .memory import RecallIn, docs_for, federated_kwargs, recall_failed
 from .recall import recall
 
 log = logging.getLogger("mimirsynth.answer")
@@ -186,7 +186,7 @@ def answer(body: AnswerIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx 
         out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
                      lang=lang, min_similarity=body.min_similarity, **({"archived": True} if body.archived else {}), **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"recall falló: {e}") from e
+        raise recall_failed(e) from e
     from . import ratings
     rid = ratings.log(ctx, body.query, out, bg, body, "answer")
     sources, ev = evidence(out)

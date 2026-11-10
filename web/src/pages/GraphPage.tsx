@@ -148,7 +148,7 @@ export default function GraphPage({ graph }: { graph: string }) {
   const nameOf = (u: any) => nodes.find((n) => n.uuid === id(u))?.name ?? "";
 
   return (
-    <Page>
+    <Page fill>
       <PageHeader title={t("Grafo")} description={t("Entidades y hechos del brain como mapa. Elige cuántas semillas y saltos cargar; pulsa un nodo para ver sus hechos y los documentos que lo mencionan.")} />
       <Group gap="sm" align="flex-end" wrap="wrap">
         <NumberField label={t("Semillas")} value={seeds} min={5} max={100} onChange={(v) => setSeeds(Number(v) || 15)} w={90} size="xs" />

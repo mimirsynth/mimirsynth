@@ -58,7 +58,7 @@ export default function Jobs({ graph, role }: { graph: string; role: string }) {
   const c = list.data?.counts ?? {};
   const d = detail.data;
   return (
-    <Page>
+    <Page fill>
       <PageHeader title={t("Trabajos")} description={<>{t("Todo lo que la aplicación hace en segundo plano en este brain: ingestas, indexación de documentos, reescaneo de carpetas y análisis. Con su progreso, su resultado y la opción de reintentar.")}</>} />
       <Segments label={t("Estado")} value={f.status || "all"} onChange={(v) => setFilter({ status: v === "all" ? "" : v })}
         data={[{ value: "all", label: t("Todos"), count: Object.values(c).reduce((a, b) => a + b, 0) }, ...Object.entries(LABEL).map(([k, v]) => ({ value: k, label: v[0].toUpperCase() + v.slice(1), count: c[k] ?? 0 }))]} />

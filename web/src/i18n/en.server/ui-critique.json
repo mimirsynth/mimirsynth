@@ -1,0 +1,3 @@
+{
+ "el motor de embeddings no responde y sin él no se puede buscar: revisa su dirección y su clave en Administración → Modelos de IA → Embeddings": "the embedding engine is not answering, and without it nothing can be searched: check its address and key in Administration → AI models → Embeddings"
+}

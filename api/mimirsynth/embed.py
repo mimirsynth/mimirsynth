@@ -74,6 +74,10 @@ class _Gate:
 gate = _Gate()
 
 
+class EmbeddingDown(RuntimeError):
+    """The embedding engine did not answer, or answered with an error: without it a question cannot be searched."""
+
+
 class OpenAICompatEmbedder:
     def __init__(self, base_url: str, model: str, api_key: str = "", timeout: float = 60.0):
         self.base_url, self.model, self.api_key, self.timeout = base_url.rstrip("/"), model, api_key, timeout

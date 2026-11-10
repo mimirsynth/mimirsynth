@@ -42,7 +42,7 @@ const NAV = [
   { section: T("Explorar"), items: [
     { to: "/preguntar", icon: "ask" as const, label: T("Preguntar"), tour: "ask" },
     { to: "/grafo", icon: "graph" as const, label: T("Grafo"), tour: "graph" },
-    { to: "/consulta", icon: "query" as const, label: T("Consulta") },
+    { to: "/consulta", icon: "query" as const, label: T("Consulta Cypher") },
   ] },
   { section: T("Curación"), items: [
     { to: "/propuestas", icon: "proposals" as const, label: T("Propuestas"), tour: "proposals" },

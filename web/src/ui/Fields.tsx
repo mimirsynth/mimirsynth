@@ -46,10 +46,23 @@ export function CopyBtn({ value, label = T("Copiar"), doneLabel = T("Copiado") }
   );
 }
 
-/** Error de una mutación o consulta como aviso en línea; no pinta nada si no hay error. */
+/** Error de una mutación o consulta como aviso en línea; no pinta nada si no hay error. What the server wrote for people (a 4xx, a 503
+ *  saying which service does not answer) is shown as it is. A request that never reached the server, or a 500/502 (an unexpected failure,
+ *  whose text is for whoever runs the instance), says in words what happened and what to do, with the server's own text folded under
+ *  «Technical detail». */
 export function MutationError({ error }: { error: unknown }) {
+  const { t } = useTranslation();
   if (!error) return null;
-  return <Notice tone="danger">{error instanceof Error ? error.message : String(error)}</Notice>;
+  const text = error instanceof Error ? error.message : String(error);
+  const status = typeof error === "object" && error !== null && "status" in error ? Number((error as { status: unknown }).status) : 0;
+  const offline = error instanceof TypeError;  // fetch() rejects with a TypeError when the request does not get out
+  if (!offline && status !== 500 && status !== 502) return <Notice tone="danger">{text}</Notice>;
+  return (
+    <Notice tone="danger" title={offline ? t("No hay conexión con el servidor") : t("El servidor no ha podido hacerlo")}>
+      {offline ? t("Comprueba la conexión y vuelve a intentarlo.") : t("Vuelve a intentarlo. Si se repite, avisa a quien administra la instancia con el detalle técnico.")}
+      <details className="ms-errdetail"><summary>{t("Detalle técnico")}</summary><code>{text}</code></details>
+    </Notice>
+  );
 }
 
 /** Mensaje de «no hay nada que mostrar»: una sola forma para listas, tablas y paneles vacíos. */

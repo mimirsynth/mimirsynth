@@ -42,7 +42,7 @@ export default function Retype({ graph, role }: { graph: string; role: string })
   const chosen = sel.filter((id) => allIds.includes(id));  // una fila que un filtro ha ocultado no se aplica por sorpresa
   const summary = (ids: number[]) => Object.entries(items.filter((i) => ids.includes(i.id)).reduce<Record<string, number>>((m, i) => ({ ...m, [i.suggested_type]: (m[i.suggested_type] ?? 0) + 1 }), {})).sort((a, b) => b[1] - a[1]);
   return (
-    <Page>
+    <Page fill>
       <Text size="sm" c="dimmed" className="ms-measure">{t("Graphiti no cambia el tipo de las entidades ya existentes, así que las clasificadas con tipos genéricos (Object, Organization, Location…) se quedan así. El decisor revisa cada una con la ontología del brain como opciones y propone un tipo; un administrador aprueba, y el cambio es reversible.")}</Text>
       {d && !d.ontology && <Notice tone="warn">{t("Este brain no tiene ontología. Aplica un paquete en Vocabulario → Ontología.")}{" "}<Btn kind="link" component={Link} to="/vocabulario?tab=onto">{t("Ir a Ontología")}</Btn></Notice>}
       {d && !d.decider && <Notice tone="warn">{t("No hay decisor configurado (Administración → Proveedores IA → Decisores).")}</Notice>}

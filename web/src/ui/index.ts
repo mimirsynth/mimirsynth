@@ -39,6 +39,7 @@ export { FilePicker } from "./FilePicker";
 export { Legend, LegendSection, LegendItem } from "./Legend";
 export { GraphCanvas, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "./GraphCanvas";
 export { ColGrid } from "./ColGrid";
+export { QueryComposer, MenuButton } from "./QueryComposer";
 export { Form } from "./Form";
 export { LanguageSelect } from "./LanguageSelect";
 export { QrCode } from "./QrCode";

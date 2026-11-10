@@ -49,7 +49,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
   if (!isCurator) return <Page>{header}<EmptyState>{t("La calidad del contenido la revisa un curador o superior. Para leer la memoria, ve a Hechos.")}</EmptyState></Page>;
   const a = att.data;
   return (
-    <Page>
+    <Page fill>
       {header}
       <StatGrid>
         <StatCard label={t("Posibles duplicados")} value={a?.duplicates ?? "—"} hint={t("grupos por revisar")} />

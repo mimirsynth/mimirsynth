@@ -1038,7 +1038,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
     undoLast: () => { if (last && undoable(last) && !undo.isPending) undo.mutate(last.ids ?? [last.id]); } };
   if (role === "reader") return <Page><PageHeader title={t("Propuestas")} description={<>{t("Con rol de lector no puedes proponer ni ver propuestas. Pide rol de colaborador a un administrador del brain.")}</>} /></Page>;
   return (
-    <Page>
+    <Page fill>
       <PageHeader title={t("Propuestas")} description={<>{t("Lo que envían colaboradores y agentes espera aquí a que un curador lo apruebe.")}</>} />
       {ai.data && !ai.data.llm.configured && <Notice tone="warn" title={t("Sin motor LLM configurado")}>{t("Las propuestas aprobadas no se ingieren al grafo y se quedan en «Aprobadas». Un administrador debe configurarlo en Administración → Proveedores IA.")}{" "}
         <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Ir a Modelo LLM")}</Btn></Notice>}

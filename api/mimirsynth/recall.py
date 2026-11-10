@@ -9,7 +9,9 @@ from . import appsettings, index
 from .i18n import tr
 from .config import settings
 from .db import cosine, fact_status, graph, parse_ts, rows, vector
-from .embed import EmbeddingProvider, get_embedder
+import httpx
+
+from .embed import EmbeddingDown, EmbeddingProvider, get_embedder
 from .graphapi import FACT_RETURN
 from .vocab import alias_map, resolve
 
@@ -438,7 +440,10 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     graph_min = float(appsettings.get("recall_min_similarity") if min_similarity is None else min_similarity)
     from .usage import scope
     with scope(brain_id, "recall"):
-        qvec = (embedder or get_embedder()).embed([query])[0]
+        try:
+            qvec = (embedder or get_embedder()).embed([query])[0]
+        except httpx.HTTPError as e:  # refused, timed out or an error status: said as the engine being down, not as a socket error
+            raise EmbeddingDown(str(e)) from e
     t1 = time.time()
     n_docs = appsettings.get("doc_passages") if n_docs is None else n_docs
     t_docs = time.time()

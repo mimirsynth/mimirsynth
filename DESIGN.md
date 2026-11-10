@@ -211,7 +211,7 @@ Pills carry four status tones (success, warn, danger, alt), defined per theme as
 - **Title** (Oxanium 600, 20px): dialog titles. Section headings inside a page use the Mantine heading scale in Oxanium 600.
 - **Stat** (Oxanium 600, 32px / 38px; 28px when inline): key figures on stat cards.
 - **Card label** (Oxanium 600, 13px, 0.06em, uppercase): chart and card titles.
-- **Body** (Instrument Sans 400, 14px, 1.55): list cards, prose and form text. Help text under a page title is 14px muted, up to 760px wide.
+- **Body** (Instrument Sans 400, 14px, 1.55): list cards, prose and form text. A screen's help is not printed under its title: it opens from the «i» beside the title, in a popover at the measure (see Layout).
 - **Label** (Instrument Sans 600, 12px, 0.08em, uppercase): table headers, settings-group headings and nav section headings (11px, 0.1em).
 - **Data** (JetBrains Mono 400, 13px, tabular figures): dates, identifiers, scores, commands and code.
 
@@ -222,9 +222,9 @@ Pills carry four status tones (success, warn, danger, alt), defined per theme as
 
 ## Layout
 
-Each screen is a page that fills the height available. Its data area grows and scrolls inside, and no screen sets heights in `vh`.
+A screen is one of two kinds of page. A **document** (Overview, Ask, an entity, the Journal, settings) grows with its content and the window scrolls, with its bar at the window's edge, as on any web page. A **data surface** (a table, the review queue, a canvas) fills the window, and only its data area scrolls inside, so the title, tabs and filters stay in view while the rows move. No screen sets heights in `vh`.
 
-A screen reads top to bottom: the title, then help text, then the action bar on a single row (tabs, search, the status segments), then the data. Details open in a side panel for reading or a modal for acting. Settings and Administration share one scheme: a 220px sub-navigation in groups on the left, and on the right one settings group per section, with one row per setting. Each row has the name and help on the left and the control on the right, in a 240–340px column. A Save button appears only when something changed.
+A screen reads top to bottom: the title, then the action bar on a single row (tabs, search, the status segments), then the data. What the screen is for is not printed under the title, where it took two to six lines of every screen for something read once: it sits behind an «i» beside the title and opens in a popover, by click, tap or keyboard, or by resting the pointer on it. It says in a few sentences what the screen shows and what can be done there; anything longer goes to the wiki. Details open in a side panel for reading or a modal for acting. Settings and Administration share one scheme: a 220px sub-navigation in groups on the left, and on the right one settings group per section, with one row per setting. Each row has the name and help on the left and the control on the right, in a 240–340px column. A Save button appears only when something changed.
 
 Spacing follows a small rhythm: 4px inside chips, 8px between related controls, 12px between blocks of a page, 16px inside panels, 20px inside settings groups, and 32px between major columns. The widest reading blocks stop at about 1100px (settings body).
 
@@ -235,9 +235,11 @@ Spacing follows a small rhythm: 4px inside chips, 8px between related controls, 
 ### Named Rules
 **The One Height Rule.** Controls in a row are all 36px: buttons, fields, selects, segments and icon buttons.
 
-**The Measure Rule.** Running text (prose, a proposal, facts, notes) stops at about 72 characters (`--ms-measure`): past that the eye loses the start of the next line. Wider panels use the room for a second column, such as a record's sheet, not for longer lines. The token is `33em`, not `72ch`: `ch` is the width of «0», which Instrument Sans draws about one and a half characters wide, so `72ch` ran to some 107. The kit applies it to its own running text (a page's help, a list card's body and note, an empty state, a section's hint, prose, settings descriptions and help, a field's description and a notice's message, which wraps instead of stretching across the page); help text a screen writes itself takes the `ms-measure` class. Tables, code, charts and data grids keep their full width.
+**The Measure Rule.** Running text, the kind that is read line after line (prose, a proposal, facts, notes, a screen's help in its popover), stops at about 72 characters (`--ms-measure`): past that the eye loses the start of the next line. Wider panels use the room for a second column, such as a record's sheet, not for longer lines. The token is `33em`, not `72ch`: `ch` is the width of «0», which Instrument Sans draws about one and a half characters wide, so `72ch` ran to some 107. The kit applies it to its own running text (a list card's body and note, prose, a screen's help); running text a screen writes itself takes the `ms-measure` class. The interface's own short texts are not running text: an empty state, a section's hint, a settings description, a field's description and a notice's message stop at a wider `60em` (`--ms-measure-ui`), so they no longer break after a few words into stacks of short lines, and still do not cross a wide screen. Both wrap evenly (`text-wrap: pretty`), never leaving one word alone on the last line. Tables, code, charts and data grids keep their full width.
 
-**The Page Owns the Height Rule.** Pages fill the window and their data area scrolls. Screens never size themselves against the viewport.
+**The Page Owns the Height Rule.** A data surface (`<Page fill>`) fills the window and its data area scrolls; a document (`<Page>`, the default) grows and the window scrolls. Screens never size themselves against the viewport.
+
+**The Scroll Rule.** A scrollbar never covers or crowds the content. Every bar is thin and drawn in the theme's field line on no track. A data area that scrolls inside the page reaches into the page's right gutter, so its bar sits at the window's edge and the content keeps the same right edge as the title and filters above it; its space is kept whether or not it overflows (`scrollbar-gutter: stable`), so nothing jumps sideways when the bar appears. Where bars overlay the content (macOS, phones, Windows 11's overlay scrollbars) they are drawn over that gutter, never over a button: the kit measures the bar (`--ms-sb`) and keeps the gutter's full width when it is 0.
 
 ## Elevation & Depth
 
@@ -272,7 +274,7 @@ Every action is a button, and it is secondary by default.
 - **Entity chip:** a named entity with a dot and a 3px left edge in its type colour. The name keeps the theme's ink, so contrast never depends on the type colour. It is a link unless it is the entity of the current page, which draws its whole edge in the type colour instead.
 
 ### Segments
-The options of a status filter, shaped like pills but interactive and 36px tall. The active option is filled teal, and each option may carry a count in a 4px-corner counter. They move with the arrow keys. The status of an inbox (proposals, jobs, documents) is always a segment row with its counts and «All» first, never a dropdown.
+The options of a status filter, shaped like pills but interactive and 36px tall. The active option is filled teal, and each option may carry a count in a 4px-corner counter. They move with the arrow keys. The status of an inbox (proposals, jobs, documents) is always a segment row with its counts and «All» first, never a dropdown. A row with a single option is not drawn: one option is no choice, and a lone «All 0» says nothing the list does not.
 
 ### Cards / Containers
 - **Corner Style:** gentle (6px). Settings groups are 10px.
@@ -282,10 +284,13 @@ The options of a status filter, shaped like pills but interactive and 36px tall.
 - **Internal Padding:** 16px for panels and stat cards, 14px × 16px for list cards and 16px × 20px for settings groups.
 - **List card:** a title with a muted aside on the right, a body in 14/1.55 text, then tags and actions. An invalidated card shows its body in rust and struck through. A clickable card turns teal at the edge on hover and opens with Enter or Space. What must be read before the body (that it may be superseded) sits above it as a notice, set off by a 1px rule; a sentence about the body (what it replaces, what replaced it) sits under it in 13px muted text. Those sentences link to the cards they name with `CardLink`, a real link that wraps with the text; the card it lands on takes the focus and a teal edge.
 
+### Query Composer
+How a screen puts a question to the brain, the same in Ask and in the Cypher query: the field under its label at full width; under it one row with the options that shape the run (scope, mode, limits), then the run button (the zone's primary, always in the same place), the shortcut beside it as small keycaps (hidden on touch screens) and the secondary tools (examples, history, as menu buttons). Ctrl/⌘+Enter runs from the field. A field for code (Cypher) is set in the monospace without spelling correction. What the last run returned is said in one line right under it, in a live region. Choosing an example or a past query replaces the field and offers «Undo».
+
 ### Inputs / Fields
 - **Style:** raised fill, a 1px field line, 6px corner and 36px height. Labels are 13px semibold ink and descriptions 12px muted. All fields share one size; a size requested at the call site is ignored.
 - **Focus:** the border turns teal, and a 2px focus ring sits 2px outside the field (teal in light, gold in dark).
-- **Errors:** a mutation error appears as a danger notice under the form, never as loose red text.
+- **Errors:** a mutation error appears as a danger notice under the form, never as loose red text. What the server wrote for people is shown as it is. A request that never reached the server, or an unexpected server failure, says in words what happened and what to do, with the server's own text folded under «Technical detail». A service the instance depends on that does not answer (the embedding engine) is named, with where to fix it.
 
 ### Navigation
 - **Sidebar:** 240px on the raised colour with a 1px right rule. The logo sits at the top, nav items are grouped under 11px uppercase muted section headings, and session controls sit at the bottom. The active item takes the teal wash, teal text, semibold weight and a 3px teal left edge.

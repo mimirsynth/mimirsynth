@@ -293,8 +293,8 @@ export default function Overview({ graph, role }: { graph: string; role: string 
       <PageHeader title={t("Resumen")} />
       <FillArea><Stack gap="md">
         <NoLlmNotice role={role} />
-        <GettingStarted role={role} />
         {curator && <ColGrid min={420}><ToReview graph={graph} /><Movement graph={graph} /></ColGrid>}
+        <GettingStarted role={role} />
         <Knowledge graph={graph} data={data} />
         {curator && (
           <ColGrid min={340}>

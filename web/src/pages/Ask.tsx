@@ -1,7 +1,7 @@
 
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, NumberField, Pill, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink } from "../ui";
+import { Btn, NumberField, Pill, QueryComposer, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
@@ -30,9 +30,6 @@ type Res = { recall_id?: string; query: string; facts: Fact[]; chunks: Chunk[]; 
 /** «0.42», or null for what joins the recall by its link to a fact no longer true rather than by its closeness to the question. */
 const simValue = (x: { similarity?: number | null; score?: number }) => { const v = x.similarity ?? x.score; return typeof v === "number" ? fmtNum(v, 2) : null; };
 type Mark = "expect" | "avoid";
-const KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘+Enter" : "Ctrl+Enter";
-// A touch screen with no keyboard to hand: the button does not offer a shortcut it cannot use.
-const TOUCH = typeof window !== "undefined" && !!window.matchMedia?.("(hover: none) and (pointer: coarse)").matches;
 type Rating = "useful" | "irrelevant" | "incorrect";
 type Scope = "brain" | "all";
 /** What the recall left on screen, kept for this tab so Back restores it: see askSession. */
@@ -280,23 +277,17 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const busyNow = view === "contexto" ? run.isPending || searchAll.isPending : answering;
   const ask = (
     <Stack gap="xs">
-      <TextArea autosize minRows={2} label={t("Pregunta")} placeholder={t("¿Dónde está Nextcloud ahora?")} value={q} onChange={(e) => setQ(e.currentTarget.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && q.trim()) { e.preventDefault(); primary(); } }} />
-      <Group gap="md" align="flex-end">
-        {several && <Segments label={t("Alcance")} value={scope} onChange={(v) => setScope(v as Scope)}
-          data={[{ value: "brain", label: t("Este brain") }, { value: "all", label: t("Todos mis brains") }]} />}
-        {scope === "brain" && <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
-          data={[{ value: "contexto", label: t("Contexto") }, { value: "responder", label: t("Responder") }]} />}
-      </Group>
-      {scope === "all" && <Text size="xs" c="dimmed">{t("La misma búsqueda en todos los brains que puedes leer, con tu rol en cada uno y sin federación. La respuesta redactada, las valoraciones y guardar como consulta de referencia solo están en «Este brain»: los resultados mezclan brains distintos.")}</Text>}
-      <Group align="flex-end">
-        <NumberField size="xs" label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} w={80} />
-        <NumberField size="xs" label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={100} />
-        {/* while it works the button says so in words, instead of a spinner in place of its label */}
-        <Btn kind="primary" disabled={!q.trim() || busyNow} onClick={primary}>
-          {busyNow ? (view === "contexto" ? t("Buscando…") : t("Redactando…"))
-            : view === "contexto" ? (TOUCH ? t("Buscar") : t("Buscar ({{keys}})", { keys: KEYS })) : (TOUCH ? t("Responder") : t("Responder ({{keys}})", { keys: KEYS }))}</Btn>
-      </Group>
+      <QueryComposer label={t("Pregunta")} placeholder={t("Escríbela como la haría tu agente")} value={q} onChange={setQ} onRun={primary} busy={busyNow}
+        runLabel={view === "contexto" ? t("Buscar") : t("Responder")} busyLabel={view === "contexto" ? t("Buscando…") : t("Redactando…")}
+        options={<>
+          {several && <Segments label={t("Alcance")} value={scope} onChange={(v) => setScope(v as Scope)}
+            data={[{ value: "brain", label: t("Este brain") }, { value: "all", label: t("Todos mis brains") }]} />}
+          {scope === "brain" && <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
+            data={[{ value: "contexto", label: t("Contexto") }, { value: "responder", label: t("Responder") }]} />}
+          <NumberField label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} w={84} />
+          <NumberField label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={104} />
+        </>} />
+      {scope === "all" && <Text size="xs" c="dimmed" className="ms-measure">{t("La misma búsqueda en todos los brains que puedes leer, con tu rol en cada uno y sin federación. La respuesta redactada, las valoraciones y guardar como consulta de referencia solo están en «Este brain»: los resultados mezclan brains distintos.")}</Text>}
       <Group gap="xs">
         {status.data && <Pill tone={status.data.enabled ? "success" : "warn"}>{status.data.enabled ? t("índice: {{chunks}} fragmentos de {{episodes}} episodios", { chunks: status.data.chunks, episodes: status.data.episodes }) : t("índice de texto desactivado (requiere PostgreSQL)")}</Pill>}
         {canSync && status.data?.enabled && <Btn size="row" loading={sync.isPending} onClick={() => sync.mutate()} icon="refresh">{t("Reindexar ahora")}</Btn>}

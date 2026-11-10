@@ -5,6 +5,9 @@ import { Link } from "react-router-dom";
 import { fmt, get, send } from "../api";
 import { Btn, MutationError, Section, Step, Steps, type IconName } from "../ui";
 import { T } from "../i18n";
+import { useState } from "react";
+
+const OPEN_KEY = "mimirsynth.gettingStartedOpen";
 
 export type Onboarding = { steps: { key: string; done: boolean; done_at: string | null }[]; done: number; total: number; dismissed: boolean; show: boolean };
 
@@ -59,20 +62,26 @@ export default function GettingStarted({ role }: { role: string }) {
     refetchInterval: (query) => (query.state.data?.show ? 30000 : false) });  // a step ticks while the screen is open
   const cfg = useQuery({ queryKey: ["config"], queryFn: () => get<{ links?: { wiki?: string } }>("config"), staleTime: Infinity });
   const close = useMutation({ mutationFn: () => send<Onboarding>("POST", "onboarding/dismiss"), onSuccess: (d) => qc.setQueryData(["onboarding"], d) });
+  // Folded to one row by default: it sits under what waits for review, which is what the home screen is for (Product principle 1). Its
+  // state is remembered in this browser.
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; } });
+  const toggle = () => setOpen((o) => { try { localStorage.setItem(OPEN_KEY, o ? "0" : "1"); } catch { /* sin almacenamiento */ } return !o; });
   const d = q.data;
   if (!d?.show) return null;
   const wiki = cfg.data?.links?.wiki;
   const lang = i18n.language.startsWith("es") ? "es" : "en";
   const admin = ["admin", "owner"].includes(role);
+  const next = d.steps.find((s) => !s.done && STEPS[s.key]);
   return (
-    <Section title={t("Para empezar")} hint={t("Cada paso se marca solo cuando ocurre en cualquiera de tus brains. La lista desaparece al completarla; si la cierras, no vuelve.")}>
+    <Section title={t("Para empezar")} hint={open ? t("Cada paso se marca solo cuando ocurre en cualquiera de tus brains. La lista desaparece al completarla; si la cierras, no vuelve.") : undefined}
+      actions={<Group gap={6}>
+        <Btn size="row" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls="ms-getting-started" onClick={toggle}>{open ? t("Ocultar los pasos") : t("Ver los pasos")}</Btn>
+        <Btn size="row" kind="ghost" icon="close" loading={close.isPending} onClick={() => close.mutate()}>{t("Cerrar la lista")}</Btn>
+      </Group>}>
       <Stack gap="sm">
-        <Group justify="space-between" gap="xs">
-          <Text size="sm" c="dimmed">{t("{{done}} de {{total}} pasos hechos", { done: d.done, total: d.total })}</Text>
-          <Btn size="row" icon="close" loading={close.isPending} onClick={() => close.mutate()}>{t("Cerrar la lista")}</Btn>
-        </Group>
+        <Text size="sm" c="dimmed">{t("{{done}} de {{total}} pasos hechos", { done: d.done, total: d.total })}{!open && next ? <> · {t("Siguiente:")} {t(STEPS[next.key].title)}</> : null}</Text>
         <MutationError error={close.error} />
-        <Steps label={t("Pasos para empezar")}>
+        {open && <div id="ms-getting-started"><Steps label={t("Pasos para empezar")}>
           {d.steps.filter((s) => STEPS[s.key]).map((s) => {
             const step = STEPS[s.key];
             return (
@@ -87,7 +96,7 @@ export default function GettingStarted({ role }: { role: string }) {
               </Step>
             );
           })}
-        </Steps>
+        </Steps></div>}
       </Stack>
     </Section>
   );
