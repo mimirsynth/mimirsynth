@@ -35,8 +35,8 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Vocabulary** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /vocab/types/{name}/preview` · `POST /vocab/duplicates/preview` · `GET /ontology` | reader |
 | | `POST /vocab/ops/{oid}/revert` · `GET /summaries` · `POST /summaries/entity/{uuid}` · `POST /summaries/{sid}/approve` · `POST /summaries/approve` · `POST /summaries/reject` | curator |
 | | `POST /vocab/aliases` · `DELETE /vocab/aliases/{aid}` · `POST /vocab/types` · `PUT/DELETE /vocab/types/{name}` · `POST /vocab/types/{name}/move` · `POST /vocab/relations` · `PUT/DELETE /vocab/relations/{name}` · `PUT /vocab/map` · `PUT /vocab/instructions` · `POST /vocab/duplicates/merge` · `POST/DELETE /vocab/duplicates/ignore` · `GET /retype` · `POST /retype/scan` · `POST /retype/apply` · `POST /retype/reject` · `POST /retype/{sid}/apply-as` · `POST /retype/{sid}/revert` · `GET/POST /vocab/entity-aliases` · `POST /summaries/scan` · `PUT /ontology` · `POST /ontology/preset/{name}` | administrator |
-| **Needs your attention** | `GET /attention` | curator |
-| **What changed** | `GET /changes` | curator |
+| **To review** | `GET /attention` | curator |
+| **Movement** | `GET /changes` | curator |
 | **Facts to review** | `GET /review/stale` · `POST /review/stale/{uuid}/confirm` | curator |
 | **Contradictions** | `GET /conflicts` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{did}` · `POST /conflicts/resolve` | curator |
 | **Reference queries** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{qid}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{rid}` | curator |

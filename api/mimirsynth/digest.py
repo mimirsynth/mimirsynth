@@ -30,7 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from . import appsettings, brand, mail
-from .db import graph
+from .db import graph, parse_ts
 from .deps import BrainCtx, brain_access, current_user, effective_role
 from .i18n import tr
 from .models import Brain, DigestSubscription, Document, Proposal, User, now
@@ -390,14 +390,56 @@ def preview(user: User = Depends(current_user), db: Session = Depends(get_db)):
 
 
 # ---- Overview ----
+CHANGE_KEYS = ("facts_new", "facts_gone", "docs_new", "proposals_new", "proposals_decided")
+
+
+def _graph_times(brain: Brain, since: datetime) -> tuple[list[str], list[str]]:
+    """When each fact learned or invalidated since `since` was: the same facts `_graph_counts` counts, as ISO timestamps."""
+    g = graph(brain.graph_name)
+    s = since.astimezone(timezone.utc).strftime(ISO)
+    col = lambda q: [r[0] for r in g.query(q, {"s": s}).result_set]  # noqa: E731
+    return (col("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) WHERE r.created_at >= $s RETURN r.created_at"),
+            col("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) WHERE r.invalid_at IS NOT NULL "
+                "AND coalesce(r.expired_at, r.invalid_at) >= $s RETURN coalesce(r.expired_at, r.invalid_at)"))
+
+
 @brain_router.get("")
 def brain_changes(days: int = Query(7, ge=1, le=31), ctx: BrainCtx = Depends(curator)):
     """What changed in the brain over the last `days`, for the Overview of curators and above: the counts of the summary (new and
-    invalidated facts, documents added) and the proposals that came in and were decided. What is waiting is `/attention`."""
-    since = now() - timedelta(days=days)
-    new = section(ctx.db, ctx.brain, ctx.user, "reader", since)["new"]
+    invalidated facts, documents added) and the proposals that came in and were decided. What is waiting is `/attention`.
+    `previous` holds the same counts for the `days` before, to compare; `series` splits the period in hours (one day) or days, oldest
+    first, for the small charts. A fact count is `null` (and so is its series) when the graph could not be read."""
+    end = now()
+    since = end - timedelta(days=days)
+    start = since - timedelta(days=days)
+    step = timedelta(hours=1) if days == 1 else timedelta(days=1)
+    n = int(timedelta(days=days) / step)
     b = ctx.brain.id
-    received = ctx.db.scalar(select(func.count()).select_from(Proposal).where(Proposal.brain_id == b, Proposal.created_at >= since))
-    decided = ctx.db.scalar(select(func.count()).select_from(Proposal).where(
-        Proposal.brain_id == b, Proposal.reviewed_at >= since, Proposal.status != "pending"))
-    return {"days": days, "since": since.isoformat(), **new, "proposals_new": received, "proposals_decided": decided}
+    times: dict[str, list[datetime | None] | None] = {}
+    try:
+        learned, gone = _graph_times(ctx.brain, start)
+        times["facts_new"], times["facts_gone"] = [parse_ts(t) for t in learned], [parse_ts(t) for t in gone]
+    except Exception:  # noqa: BLE001  (the graph is down: the rest still answers)
+        log.warning("cambios: no se pudo leer el grafo del brain %s", b, exc_info=True)
+        times["facts_new"] = times["facts_gone"] = None
+    times["docs_new"] = list(ctx.db.scalars(select(Document.first_seen_at).where(
+        Document.brain_id == b, Document.status != "deleted", Document.first_seen_at >= start)))
+    times["proposals_new"] = list(ctx.db.scalars(select(Proposal.created_at).where(Proposal.brain_id == b, Proposal.created_at >= start)))
+    times["proposals_decided"] = list(ctx.db.scalars(select(Proposal.reviewed_at).where(
+        Proposal.brain_id == b, Proposal.reviewed_at >= start, Proposal.status != "pending")))
+    out: dict = {"days": days, "since": since.isoformat(), "bucket": "hour" if days == 1 else "day", "previous": {}, "series": {}}
+    for key in CHANGE_KEYS:
+        ts = times[key]
+        if ts is None:
+            out[key] = out["previous"][key] = out["series"][key] = None
+            continue
+        series, before = [0] * n, 0
+        for t in (_aware(t) for t in ts):
+            if t is None or t > end:
+                continue
+            if t >= since:
+                series[min(int((t - since) / step), n - 1)] += 1
+            elif t >= start:
+                before += 1
+        out[key], out["previous"][key], out["series"][key] = sum(series), before, series
+    return out

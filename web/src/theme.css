@@ -269,16 +269,23 @@ circle.ms-chart-grid { stroke-width: 16; opacity: 0.35; }
 .ms-avatar[data-img] { background: transparent !important; border-color: transparent !important; }
 
 /* Fila de botones de la barra lateral (estilo compacto) */
-.ms-iconrow { gap: 0; padding: 0; justify-content: space-around; }
+.ms-iconrow { gap: 2px; padding: 0 2px; justify-content: flex-start; }
 .ms-roundbtn { width: 36px; height: 36px; flex: 0 0 36px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--ms-radius); background: transparent; color: var(--ms-muted); cursor: pointer; text-decoration: none; padding: 0; }
 .ms-roundbtn:hover { color: var(--ms-accent); background: transparent; }
 .ms-roundbtn.active { color: var(--ms-accent); }
 .ms-usercard { display: flex; align-items: center; gap: 4px; }
 .ms-usercard-link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 8px; border-radius: var(--ms-radius); color: var(--ms-ink); text-decoration: none; font-size: 13px; font-weight: 600; }
 .ms-usercard-link:hover, .ms-usercard-link.active { background: var(--ms-hover); color: var(--ms-accent); }
+.ms-usercard-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .ms-usercard-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-usercard-sub { font-size: 11px; font-weight: 400; color: var(--ms-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-subnav-exit { margin: 16px 12px 0; padding-top: 12px; border-top: 1px solid var(--ms-line); }
-.ms-version { text-align: center; font-size: 11px; color: var(--ms-muted); letter-spacing: 0.04em; padding-top: 2px; }
+.ms-version { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-family: var(--ms-mono); font-size: 11px; color: var(--ms-muted); }
+/* hidromiel only as a fill (never as text on the light surface): on it, the text goes in the brand's dark ink, in both themes */
+.ms-version-tag { font-family: var(--ms-sans); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; line-height: 16px; padding: 0 5px; color: #0d1f26;
+  background: var(--ms-hidromiel); border-radius: var(--ms-radius); cursor: help; }
+/* Barra lateral: el brain activo va arriba, bajo el logo, porque cambia el contexto de todo lo de debajo */
+.ms-nav-brain { padding: 8px 2px 0; }
 
 /* Cabecera de columna con orden y filtro (ColHead) */
 .ms-colhead { text-align: left; }
@@ -423,7 +430,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-grow { flex: 1; min-width: 0; }
 .ms-breakall { overflow-wrap: anywhere; word-break: break-all; }
 .ms-nolink { text-decoration: none; }
-/* Ask: the results and the injected context side by side while both fit; measured on the content width (the navbar takes 240px), so they stack well before the facts get squeezed */
+/* Ask: the results and the injected context side by side while both fit; measured on the content width (the navbar takes 256px), so they stack well before the facts get squeezed */
 .ms-ask-wrap { container-type: inline-size; }
 .ms-ask-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: var(--mantine-spacing-md); align-items: start; }
 .ms-ask-main, .ms-ask-side { min-width: 0; }
@@ -719,3 +726,48 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-tour-card { animation: ms-tour-in 0.18s ease-out; }
   @keyframes ms-tour-in { from { opacity: 0; } to { opacity: 1; } }
 }
+
+/* Section: título con acciones a su derecha */
+.ms-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 10px; }
+.ms-card-head > .ms-card-title { margin-bottom: 0; }
+.ms-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* Resumen · Por revisar: cifra, qué es (y una nota) y la acción que lo decide */
+.ms-review { display: flex; flex-direction: column; }
+.ms-review-row { display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--ms-line); }
+.ms-review-row:first-child { border-top: 0; padding-top: 0; }
+.ms-review-row > :first-child { display: flex; justify-content: flex-end; }
+.ms-review-text { display: flex; flex-direction: column; min-width: 0; }
+.ms-review-label { font-weight: 600; }
+.ms-review-hint { font-size: 12px; color: var(--ms-muted); }
+
+/* TrendStat y Sparkline */
+.ms-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); overflow: hidden; }
+.ms-trend { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 14px; color: var(--ms-ink); text-decoration: none; box-shadow: 1px 0 0 var(--ms-line), 0 1px 0 var(--ms-line); }
+.ms-trend:hover { background: var(--ms-hover); }
+.ms-trend:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: -2px; }
+.ms-trend-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
+.ms-trend-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.ms-trend-value { font-family: var(--ms-display); font-weight: 600; font-size: 28px; line-height: 1; white-space: nowrap; }
+.ms-trend-note { font-size: 12px; color: var(--ms-muted); }
+.ms-spark { flex: none; display: block; }
+
+/* Meter */
+.ms-meter { position: relative; height: 8px; background: var(--ms-stripe); border-radius: var(--ms-radius); overflow: hidden; }
+.ms-meter-fill { position: absolute; inset: 0 auto 0 0; background: var(--ms-accent); }
+.ms-meter[data-tone="warn"] .ms-meter-fill { background: var(--ms-hidromiel); }
+.ms-meter[data-tone="danger"] .ms-meter-fill { background: var(--ms-invalidado); }
+.ms-meter-mark { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--ms-hidromiel); }
+
+/* Resumen · Qué sabe el brain */
+.ms-totals { display: flex; flex-wrap: wrap; gap: 6px 28px; }
+.ms-total { display: inline-flex; align-items: baseline; gap: 8px; color: var(--ms-ink); text-decoration: none; }
+.ms-total:hover .ms-total-label { color: var(--ms-accent); }
+.ms-total-value { font-family: var(--ms-display); font-weight: 600; font-size: 22px; }
+.ms-total-label { font-size: 13px; color: var(--ms-muted); }
+.ms-subhead { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
+.ms-rule-top { border-top: 1px solid var(--ms-line); padding-top: 14px; }
+.ms-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-figure { font-family: var(--ms-display); font-weight: 600; font-size: 22px; }
+.ms-note-box { padding: 8px 12px; border: 1px dashed var(--ms-line); border-radius: var(--ms-radius); font-size: 12px; color: var(--ms-muted); }
+.ms-note-box b { color: var(--ms-ink); font-weight: 600; }

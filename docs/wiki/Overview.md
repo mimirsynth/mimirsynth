@@ -2,7 +2,7 @@
 
 # Overview
 
-The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Getting started**, **Needs your attention** and **What changed** blocks, it is read-only.
+The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Getting started**, **To review** and **Movement** blocks, it is read-only.
 
 ## Getting started
 Until you have tried the main parts of MimirSynth, the home screen starts with a **Getting started** list. Each step ticks itself when it happens in any of your brains (all of them, for an instance administrator), with no need to mark it, and shows the day it did:
@@ -18,27 +18,39 @@ Until you have tried the main parts of MimirSynth, the home screen starts with a
 
 Each pending step links to the screen where it is done and to its page in this wiki. A step stays ticked even if what showed it goes later (a revoked token, a recall log past its retention). The list disappears once every step is done; **Close the list** hides it for good, whatever is left. The list is yours: other people see their own.
 
-## Needs your attention
-Curators and above see first a short list of what is **waiting for a person's decision** in the brain, each line with its count and a link to the tool where it is decided:
+## To review
+Curators and above see first what is **waiting for a person's decision** in the brain, with the total at the top. Each line has its count, a note on what it is and a button to the tool where it is decided:
 
-| Line | Where it is decided |
-|---|---|
-| Proposals waiting for a decision | [[Proposals]], filtered to pending |
-| Pending corrections, from agents or from «incorrect» ratings | [[Proposals]], filtered to pending corrections |
-| Proposals whose ingestion failed (retry or reject) | [[Proposals]] → Decided, filtered to failed |
-| Groups of possible duplicates | [[Content quality]] → Duplicates |
-| Possible contradictions | [[Content quality]] → Contradictions |
-| Facts to review, past their shelf life | [[Content quality]] → To review |
-| Doubtful types with a proposed change (administrators only) | [[Content quality]] → Doubtful types |
-| Reference queries that got worse in the last run | [[Ask]] → Reference queries |
+| Line | Button | Where it is decided |
+|---|---|---|
+| Proposals waiting for a decision (with the date of the oldest) | Review | [[Proposals]], filtered to pending |
+| Pending corrections, from agents or from «incorrect» ratings | Review | [[Proposals]], filtered to pending corrections |
+| Proposals whose ingestion failed | See | [[Proposals]] → Decided, filtered to failed |
+| Entity summaries to approve | Review | [[Content quality]] → Summaries |
+| Groups of possible duplicates | Merge | [[Content quality]] → Duplicates |
+| Possible contradictions | Resolve | [[Content quality]] → Contradictions |
+| Facts to review, past their shelf life | Review | [[Content quality]] → To review |
+| Doubtful types with a proposed change (administrators only) | Correct | [[Content quality]] → Doubtful types |
+| Reference queries that got worse in the last run | See | [[Ask]] → Reference queries |
 
-Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The counters are the same ones each page computes, kept for a minute so the home screen stays fast. Any change made in the brain (deciding a proposal, merging, resolving a contradiction, confirming a fact…) recalculates them, so it shows at once; what changes on its own (a fact going past its shelf life, an agent proposing over MCP, an ingestion that fails) shows within the minute. On a large brain, the first read after a change is slower, because the scans run then.
+Lines at zero are hidden, and when nothing is waiting it says «Nothing needs your attention». The pending proposals and what waits in Content quality also show as a counter next to **Proposals** and **Content quality** in the side menu. The counters are the same ones each page computes, kept for a minute so the home screen stays fast. Any change made in the brain (deciding a proposal, merging, resolving a contradiction, confirming a fact…) recalculates them, so it shows at once; what changes on its own (a fact going past its shelf life, an agent proposing over MCP, an ingestion that fails) shows within the minute. On a large brain, the first read after a change is slower, because the scans run then.
 
-## What changed
-Next to it, for the same people, **What changed** says what moved in the brain over the **last 24 hours** or the **last 7 days** (you choose): new facts, invalidated facts, documents added, and proposals received and decided. Each line opens its page. They are the same counts as the [[My account]] email summary, which sends them to whoever wants them without opening the application. Lines at zero are hidden.
+## Movement
+Next to it, for the same people, **Movement** says what moved in the brain over the **last 24 hours**, the **last 7 days** or the **last 30 days** (you choose): new facts, invalidated facts, proposals received and decided, and documents added. Each figure has a small chart of the period (by hour over 24 hours, by day otherwise) and the comparison with the previous period of the same length, and opens its page. They are the same counts as the [[My account]] email summary, which sends them to whoever wants them without opening the application.
+
+## What the brain knows
+For everyone who can read the brain:
+- **Totals:** current facts, invalidated ones (those that **stopped being true**, kept as history), entities, episodes and documents, each linking to its page, and since when there are episodes.
+- **Weekly activity:** facts learned, episodes and facts invalidated per week, over the last **12 weeks**, **26 weeks** or **1 year**. It shows whether the brain is "alive" and whether there are peaks of change.
+- **Most connected entities:** the nodes with most facts, usually the brain's central topics; each opens its entity page.
+- **Entities by type:** the 6 classes with most entities. Many "untyped" or generic ones suggest working on the ontology ([[Vocabulary]]).
+- **Documents:** how many are indexed and in how many chunks, and those queued, indexing or with an error. Documents are managed in [[Knowledge]].
 
 ## Memory health
-Below, for the same people, **Memory health** shows the last daily measurement of the brain: coverage of the reference queries, results with something outdated, noise, redundancy, open contradictions and facts to review, each with the value of a week before. **Measure now** measures again. See [[Memory health]] for what each number means.
+Below, for curators and above, **Memory health** shows the last daily measurement of the brain: coverage of the reference queries, results with something outdated, noise, redundancy, open contradictions, proposals that are recalled and facts to review, each with the value of a week before. What cannot be measured in this brain (coverage without reference queries, for example) takes no card: it goes in one sentence, «Not measured», that says why. **Measure now** measures again. See [[Memory health]] for what each number means.
+
+## AI usage
+Next to it, for administrators of the brain only, what the brain has spent **this month** on AI engines: against its monthly budget when it has one (with the mark of the 80 % warning), where it will be by the end of the month at this rate, what it goes on (fact extraction, summaries, answers…, as a percentage of the tokens) and how many 429 responses the provider gave. **See the detail** opens Administration → AI consumption, where the budget is also set ([[AI providers]]).
 
 ## First steps (new instance)
 An instance administrator who opens the home page while **no brain exists yet** sees **First steps** instead. The **Create your first brain** button opens the dialog to create it under Administration ([[Brains and members]]), and a short checklist links to each screen:
@@ -48,27 +60,6 @@ An instance administrator who opens the home page while **no brain exists yet** 
 4. **Connect an agent:** it reads the memory (recall) and proposes facts through the API or MCP ([[Connect agents]]).
 
 Anyone else without access to a brain sees a message asking them to ask an administrator to add them.
-
-## Figures
-| Figure | Meaning |
-|---|---|
-| **Episodes** | Texts stored as they were told (notes, messages, approved proposals). Below, how many were added this week. |
-| **Entities** | Distinct things the graph knows (servers, people, applications…). |
-| **Facts** | Statements between entities, current and invalidated. Below, those learned this week. |
-| **Invalidated** | Facts that **stopped being true**: they are kept as history. |
-| **Communities** | Groups of strongly related entities (only if computed). |
-
-The header text also gives the **last episode** and when it arrived.
-
-## Charts
-- **Weekly activity (last 26 weeks):** facts learned, episodes and facts invalidated per week. It shows whether the brain is "alive" and whether there are peaks of change.
-- **State of the facts:** current, invalidated and *future* (those with a start date later than today).
-- **Entities by type:** the 8 classes with most entities. Many "untyped" or generic ones suggest working on the ontology ([[Vocabulary]]).
-- **Most used relations:** the relation types with most facts. A huge tail of odd relations usually means the vocabulary is not normalised.
-- **Most connected entities:** the nodes with most facts; they are usually the brain's central topics.
-
-## Document knowledge
-At the bottom, how many **documents** and **indexed chunks** there are and in what state: *indexed*, *indexing*, *queued*, *with error* or *duplicate* (a document that repeats another one and is not indexed twice). Documents are managed in [[Knowledge]].
 
 ## Tips
 - If everything is zero, nothing has been ingested yet: create a proposal ([[Proposals]]).

@@ -329,7 +329,10 @@ def test_what_changed_for_the_overview(client, monkeypatch):  # noqa: F811
     from mimirsynth.models import Brain, Document, DocSource, Membership, Proposal, User
     from mimirsynth.store import _factory
     seen = []
-    monkeypatch.setattr(digest, "_graph_counts", lambda brain, since: seen.append(since) or {"facts_new": 4, "facts_gone": 2})
+    iso = lambda d: (datetime.now(UTC) - timedelta(days=d)).strftime(digest.ISO) + "Z"  # noqa: E731
+    # four facts learned and two invalidated in the last 7 days; one more learned in the 7 days before
+    monkeypatch.setattr(digest, "_graph_times", lambda brain, since: seen.append(since) or (
+        [iso(0.1), iso(1.5), iso(1.6), iso(6.5), iso(9)], [iso(0.2), iso(3)]))
     assert client.post("/api/brains", json={"slug": "dg10", "name": "DG10"}).status_code == 201
     old = datetime.now(UTC) - timedelta(days=10)
     with _factory()() as db:
@@ -350,8 +353,16 @@ def test_what_changed_for_the_overview(client, monkeypatch):  # noqa: F811
     d = client.get("/api/brains/dg10/changes").json()
     assert (d["days"], d["facts_new"], d["facts_gone"], d["docs_new"]) == (7, 4, 2, 1)
     assert (d["proposals_new"], d["proposals_decided"]) == (2, 1)
-    assert abs((datetime.now(UTC) - seen[-1]).total_seconds() - 7 * 86400) < 60
+    assert abs((datetime.now(UTC) - seen[-1]).total_seconds() - 14 * 86400) < 60  # the period and the one before, read at once
+    assert d["previous"] == {"facts_new": 1, "facts_gone": 0, "docs_new": 1, "proposals_new": 1, "proposals_decided": 1}  # the old ones, 10 days ago
+    assert d["bucket"] == "day" and d["series"]["facts_new"] == [1, 0, 0, 0, 0, 2, 1] and d["series"]["facts_gone"] == [0, 0, 0, 0, 1, 0, 1]
+    assert d["series"]["proposals_new"][-1] == 2 and sum(d["series"]["docs_new"]) == 1
+    h = client.get("/api/brains/dg10/changes", params={"days": 1}).json()
+    assert h["bucket"] == "hour" and len(h["series"]["facts_new"]) == 24 and h["facts_new"] == 1
     assert client.get("/api/brains/dg10/changes", params={"days": 31}).json()["proposals_new"] == 3
+    monkeypatch.setattr(digest, "_graph_times", lambda brain, since: 1 / 0)               # the graph is down: the rest still answers
+    d = client.get("/api/brains/dg10/changes").json()
+    assert d["facts_new"] is None and d["series"]["facts_new"] is None and d["proposals_new"] == 2
     assert client.get("/api/brains/dg10/changes", params={"days": 32}).status_code == 422
     app.dependency_overrides[current_user] = _signed_in(rid)
     try:

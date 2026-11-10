@@ -11,7 +11,7 @@ At the top, one card per tool with what is **waiting for a decision**: groups of
 
 A line below points to what stays elsewhere:
 - **[[Facts]]**, to read and explore the memory (browse, search, timeline, entity page). A curator can also invalidate or reactivate facts there.
-- **[[Ask]] → Quality** and **[[Reference queries]]**, which measure how well the recall answers. What they produce for a curator (corrections opened by an «incorrect» rating, reference queries that got worse) shows up under **Needs your attention** in [[Overview]].
+- **[[Ask]] → Quality** and **[[Reference queries]]**, which measure how well the recall answers. What they produce for a curator (corrections opened by an «incorrect» rating, reference queries that got worse) shows up under **To review** in [[Overview]].
 
 ## Tabs
 | Tab | What it is for | Who decides |
@@ -39,5 +39,5 @@ Many entities have **the list of their own facts as their summary**, because ear
 ## Old links
 `/vocabulario?tab=dup`, `?tab=conflicts`, `?tab=stale`, `?tab=corrector` and `/tipos` lead here, to the same tab.
 
-## Needs your attention
-The [[Overview]] shows curators a short block with the same counters, plus proposals and corrections waiting and reference queries that got worse, each line linking straight to the right tool. See «Needs your attention» in [[Overview]].
+## To review
+The [[Overview]] shows curators a short block with the same counters, plus proposals and corrections waiting and reference queries that got worse, each line linking straight to the right tool. See «To review» in [[Overview]].

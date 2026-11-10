@@ -25,6 +25,10 @@ Las pantallas no usan los primitivos de Mantine para estos elementos: usan siemp
 | Deslizador | `Slider`, `SliderField` | `SliderField` añade etiqueta y valor. |
 | Barra de progreso | `ProgressBar` | Con texto. |
 | Tarjeta de cifra | `StatCard` | |
+| Cifra de un periodo | `TrendStat` | Cifra con su etiqueta, una `Sparkline` del periodo y una nota (la comparación con el periodo anterior); toda ella enlaza a la página donde se ve. La usa Resumen → Movimiento. |
+| Minigráfica | `Sparkline` | Línea sin ejes junto a una cifra; decorativa (`aria-hidden`): la cifra y su nota dicen los números. |
+| Medidor | `Meter` | Barra de cuánto se ha usado de un total (un presupuesto), con una marca opcional (`mark`, el umbral de aviso) y `tone` warn o danger. |
+| Sección | `Section` | Tarjeta con título en versalitas; `actions` pone a la derecha del título sus botones o su selector de periodo, y `hint` una nota al pie. |
 | Campos | `TextField`, `NumberField`, `PasswordField`, `TextArea`, `SelectField`, `ComboField`, `Check`, `Toggle` | Un solo tamaño y forma; el tamaño que pida un sitio de uso se ignora. |
 | Aviso | `Notice` | Tonos info, warn, danger, success, con icono. |
 | Confirmar una acción | `ConfirmDialog` | Toda acción que borra, quita o revoca pasa por él: aviso de lo que pasa, elemento afectado, «Cancelar» + la acción con su verbo. `onConfirm` devuelve la promesa (`mutateAsync`): él muestra la carga y el error y se cierra al acabar. `requireText` pide escribir un texto para los borrados grandes. |

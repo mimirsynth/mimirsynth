@@ -11,7 +11,7 @@ Arriba, una tarjeta por herramienta con lo que **espera una decisión**: grupos 
 
 Una línea debajo apunta a lo que sigue en otro sitio:
 - **[[Hechos]]**, para leer y explorar la memoria (navegar, buscar, línea temporal, página de entidad). Un curador también puede invalidar o reactivar hechos allí.
-- **[[Preguntar]] → Calidad** y las **[[Consultas de referencia]]**, que miden lo bien que contesta el recall. Lo que producen para un curador (correcciones abiertas por una valoración «incorrecto», consultas de referencia que empeoraron) sale en **Necesita tu atención** del [[Resumen]].
+- **[[Preguntar]] → Calidad** y las **[[Consultas de referencia]]**, que miden lo bien que contesta el recall. Lo que producen para un curador (correcciones abiertas por una valoración «incorrecto», consultas de referencia que empeoraron) sale en **Por revisar** del [[Resumen]].
 
 ## Pestañas
 | Pestaña | Para qué sirve | Quién decide |
@@ -39,5 +39,5 @@ Muchas entidades tienen **como resumen la lista de sus propios hechos**, porque 
 ## Enlaces antiguos
 `/vocabulario?tab=dup`, `?tab=conflicts`, `?tab=stale`, `?tab=corrector` y `/tipos` llevan aquí, a la misma pestaña.
 
-## Necesita tu atención
-El [[Resumen]] enseña a los curadores un bloque corto con los mismos contadores, más las propuestas y correcciones pendientes y las consultas de referencia que empeoraron, cada línea con un enlace directo a la herramienta. Ver «Necesita tu atención» en [[Resumen]].
+## Por revisar
+El [[Resumen]] enseña a los curadores un bloque corto con los mismos contadores, más las propuestas y correcciones pendientes y las consultas de referencia que empeoraron, cada línea con un enlace directo a la herramienta. Ver «Por revisar» en [[Resumen]].

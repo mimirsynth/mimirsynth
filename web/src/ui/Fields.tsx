@@ -68,10 +68,11 @@ export function DataState<T>({ query, children }: { query: { data?: T; isError: 
 }
 
 /** Sección de una pantalla: panel con título en versalitas, contenido y una nota opcional al pie. Llena el alto de su celda en una `ColGrid`. */
-export function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+export function Section({ title, hint, actions, children }: { title: string; hint?: string; actions?: ReactNode; children: ReactNode }) {
   return (
     <Panel className="ms-card">
-      <div className="ms-card-title">{title}</div>
+      {actions ? <div className="ms-card-head"><div className="ms-card-title">{title}</div><div className="ms-card-actions">{actions}</div></div>
+        : <div className="ms-card-title">{title}</div>}
       <div className="ms-card-body">{children}</div>
       {hint && <div className="ms-card-hint">{hint}</div>}
     </Panel>

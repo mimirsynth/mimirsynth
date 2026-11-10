@@ -35,8 +35,8 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Vocabulario** | `GET /vocabulary` · `GET /vocab/aliases` · `GET /vocab/types` · `GET /vocab/types/{name}/preview` · `POST /vocab/duplicates/preview` · `GET /ontology` | lector |
 | | `POST /vocab/ops/{oid}/revert` · `GET /summaries` · `POST /summaries/entity/{uuid}` · `POST /summaries/{sid}/approve` · `POST /summaries/approve` · `POST /summaries/reject` | curador |
 | | `POST /vocab/aliases` · `DELETE /vocab/aliases/{aid}` · `POST /vocab/types` · `PUT/DELETE /vocab/types/{name}` · `POST /vocab/types/{name}/move` · `POST /vocab/relations` · `PUT/DELETE /vocab/relations/{name}` · `PUT /vocab/map` · `PUT /vocab/instructions` · `POST /vocab/duplicates/merge` · `POST/DELETE /vocab/duplicates/ignore` · `GET /retype` · `POST /retype/scan` · `POST /retype/apply` · `POST /retype/reject` · `POST /retype/{sid}/apply-as` · `POST /retype/{sid}/revert` · `GET/POST /vocab/entity-aliases` · `POST /summaries/scan` · `PUT /ontology` · `POST /ontology/preset/{name}` | administrador |
-| **Necesita tu atención** | `GET /attention` | curador |
-| **Lo que ha cambiado** | `GET /changes` | curador |
+| **Por revisar** | `GET /attention` | curador |
+| **Movimiento** | `GET /changes` | curador |
 | **Hechos a revisar** | `GET /review/stale` · `POST /review/stale/{uuid}/confirm` | curador |
 | **Contradicciones** | `GET /conflicts` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{did}` · `POST /conflicts/resolve` | curador |
 | **Consultas de referencia** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{qid}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{rid}` | curador |

@@ -9,7 +9,7 @@ export { Icon } from "./Icon";
 export type { IconName } from "./Icon";
 export { Tabs, Modal, NavItem, IconButton, RoundLink, RoundButton, HelpMenu, UserCard, Page, FillArea, SidePanel, ConfirmDialog, PageHeader, StatGrid, SplitView } from "./Layout";
 export { TextField, NumberField, PasswordField, TextArea, SelectField, ComboField, Check, Radio, RadioGroup, Toggle, Notice, Panel, CopyBtn, MutationError, EmptyState, DataState, Section } from "./Fields";
-export { AreaChart, BarList, Donut } from "./Charts";
+export { AreaChart, BarList, Donut, Sparkline, TrendStat, Meter } from "./Charts";
 export { SERIES } from "./palette";
 export type { AreaSeries, BarItem, Slice } from "./Charts";
 export { Avatar } from "./Avatar";
