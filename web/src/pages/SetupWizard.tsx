@@ -62,13 +62,13 @@ export default function SetupWizard() {
   const body: Record<StepKey, ReactNode> = {
     admin: null,
     graph: <AdminGraph />,
-    embedding: <EmbeddingStep w={w} />,
-    llm: <LlmStep key="llm" w={w} kind="llm" />,
+    embedding: <EmbeddingStep wizard={w} />,
+    llm: <LlmStep key="llm" wizard={w} kind="llm" />,
     // its own key: the same component as the LLM step, which would otherwise keep that step's endpoint and model filled in (issue 421)
-    decider: <LlmStep key="decider" w={w} kind="decision" />,
-    brain: <BrainStep w={w} pick={(brain) => setExtra({ brain })} />,
-    token: <TokenStep w={w} brain={extra.brain ?? w.brain} pick={(token_id, s) => { setExtra({ token_id }); setSecret(s); }} />,
-    agent: <AgentStep w={w} secret={secret} />,
+    decider: <LlmStep key="decider" wizard={w} kind="decision" />,
+    brain: <BrainStep wizard={w} pick={(brain) => setExtra({ brain })} />,
+    token: <TokenStep wizard={w} brain={extra.brain ?? w.brain} pick={(token_id, s) => { setExtra({ token_id }); setSecret(s); }} />,
+    agent: <AgentStep wizard={w} secret={secret} />,
   };
   const ready = step === "brain" ? !!(extra.brain ?? w.brain) : step === "token" ? !!(extra.token_id ?? w.token_id) : true;
   return (
@@ -77,10 +77,10 @@ export default function SetupWizard() {
         actions={<Btn kind="ghost" loading={close.isPending} onClick={() => close.mutate()}>{t("Configurar a mano")}</Btn>} />
       <SettingsLayout nav={<SubNav label={t("Pasos de la configuración")} value={step} onChange={(v) => setOpen(v as StepKey)}
         items={w.steps.slice(0, reach + 1).map((s, i) => ({ value: s.key, label: `${i + 1}. ${t(TITLE[s.key])}${STATUS[s.status] ? ` · ${t(STATUS[s.status])}` : ""}` }))} />}>
-        <SettingsGroup title={`${at + 1}/${w.steps.length} · ${t(TITLE[step])}`} description={t(INTRO[step])}>
+        <SettingsGroup title={`${at + 1}/${w.steps.length} · ${t(TITLE[step])}`} description={t(INTRO[step])}
+          help={meta.blocking ? t("Este paso no se puede saltar: al pulsar «Siguiente», el servidor lo comprueba.") : undefined}>
           <SettingsBody><Stack gap="md">
             {body[step]}
-            {meta.blocking && <Text size="xs" c="dimmed" className="ms-measure">{t("Este paso no se puede saltar: al pulsar «Siguiente», el servidor lo comprueba.")}</Text>}
             <MutationError error={mark.error ?? close.error} />
             <Group justify="space-between">
               <Btn kind="ghost" disabled={at === 0} onClick={() => { setOpen(w.steps[at - 1].key); mark.reset(); }}>{t("Atrás")}</Btn>
@@ -97,7 +97,7 @@ export default function SetupWizard() {
   );
 }
 
-function EmbeddingStep({ w }: { w: Wizard }) {
+function EmbeddingStep({ wizard: w }: { wizard: Wizard }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [kind, setKind] = useState("ollama");
@@ -123,10 +123,10 @@ function EmbeddingStep({ w }: { w: Wizard }) {
       {kind === "ollama" ? <Stack gap="xs">
         <Group gap="xs"><Btn icon="search" loading={ollama.isPending} onClick={() => ollama.mutate()}>{t("Buscar Ollama")}</Btn>
           {o && (o.found ? <Pill tone="success">{t("Encontrado en {{url}}", { url: o.found })}</Pill> : <Pill tone="warn">{t("No se encuentra")}</Pill>)}</Group>
-        {o && !o.found && <Text size="sm" className="ms-measure">{t("No responde ninguna de estas direcciones: {{tried}}. Instálalo desde ollama.com o vuelve a ejecutar el instalador y elige el Ollama incluido.", { tried: (o.tried ?? []).join(", ") })}</Text>}
+        {o && !o.found && <Text size="sm">{t("No responde ninguna de estas direcciones: {{tried}}. Instálalo desde ollama.com o vuelve a ejecutar el instalador y elige el Ollama incluido.", { tried: (o.tried ?? []).join(", ") })}</Text>}
         {o?.found && !o.has_suggested && !pulled && <Group gap="xs">
           <Btn icon="download" loading={pull.isPending || jq.data?.status === "running"} onClick={() => pull.mutate(o)}>{t("Descargar {{model}}", { model: o.suggested })}</Btn>
-          {jq.data?.total ? <ProgressBar done={jq.data.done ?? 0} total={jq.data.total} text={jq.data.message ?? ""} /> : jq.data && <Text size="xs" c="dimmed">{jq.data.message ?? jq.data.status}</Text>}
+          {jq.data?.total ? <ProgressBar done={jq.data.done ?? 0} total={jq.data.total} text={jq.data.message ?? ""} /> : jq.data && <Text size="sm">{jq.data.message ?? jq.data.status}</Text>}
         </Group>}
         {jq.data?.status === "failed" && <Notice tone="danger">{jq.data.error}</Notice>}
         {o?.found && (o.has_suggested || pulled) && !create.data && <Btn icon="check" loading={create.isPending}
@@ -148,7 +148,7 @@ function EmbeddingStep({ w }: { w: Wizard }) {
 }
 
 /** The LLM that extracts facts, or the decider: a local Ollama or an OpenAI-compatible service, its model picked from the provider's list. */
-function LlmStep({ w, kind }: { w: Wizard; kind: "llm" | "decision" }) {
+function LlmStep({ wizard: w, kind }: { wizard: Wizard; kind: "llm" | "decision" }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const cur = kind === "llm" ? w.llm : w.decider;
@@ -171,7 +171,7 @@ function LlmStep({ w, kind }: { w: Wizard; kind: "llm" | "decision" }) {
   return (
     <Stack gap="sm">
       {cur.configured ? <Notice tone="success" title={t("En uso ahora")}>{cur.name ?? t("el de las variables de entorno")}</Notice>
-        : <Notice tone={kind === "llm" ? "warn" : "info"}>{kind === "llm" ? t("Todavía no hay ninguno. Puedes saltar este paso, pero hasta que añadas uno las propuestas aprobadas no entrarán en la memoria, y el inicio te lo recordará.")
+        : <Notice tone={kind === "llm" ? "warn" : "info"} title={t("Ninguno en uso")}>{kind === "llm" ? t("Todavía no hay ninguno. Puedes saltar este paso, pero hasta que añadas uno las propuestas aprobadas no entrarán en la memoria, y el inicio te lo recordará.")
           : t("Todavía no hay ninguno. Sin decisor, cada propuesta espera a que la revise un curador.")}</Notice>}
       <Group gap="xs"><Btn icon="search" loading={ollama.isPending} onClick={() => ollama.mutate()}>{t("Usar Ollama en local")}</Btn>
         {ollama.data && !ollama.data.found && <Pill tone="warn">{t("No se encuentra")}</Pill>}</Group>
@@ -179,9 +179,9 @@ function LlmStep({ w, kind }: { w: Wizard; kind: "llm" | "decision" }) {
       <PasswordField label={t("Clave de API")} description={t("Vacía para Ollama.")} value={key} onChange={(e) => setKey(e.currentTarget.value)} onBlur={() => valid && models.mutate(base)} autoComplete="off" />
       <ComboField label={t("Modelo")} data={models.data?.models ?? []} limit={50} value={model} onChange={setModel} placeholder={t("Elige uno o escribe el nombre")}
         description={kind === "llm" ? t("Para una memoria que vas a conservar, un modelo instruct de unos 14B o más (en Ollama, qwen2.5:14b-instruct) o uno pequeño y barato de un proveedor.") : undefined} />
-      {models.data?.error && <Text size="xs" c="dimmed">{models.data.error}</Text>}
+      {models.data?.error && <Text size="sm">{models.data.error}</Text>}
       <Group><Btn icon="plus" disabled={!valid || !model} loading={create.isPending || check.isPending} onClick={() => create.mutate()}>{t("Añadir")}</Btn>
-        {check.isPending && <Text size="xs" c="dimmed">{t("Probando el modelo con una extracción de ejemplo…")}</Text>}</Group>
+        {check.isPending && <Text size="sm">{t("Probando el modelo con una extracción de ejemplo…")}</Text>}</Group>
       {check.data && <EngineCheckNotice r={check.data} kind={kind} />}
       <MutationError error={ollama.error ?? create.error ?? check.error} />
     </Stack>
@@ -201,7 +201,7 @@ function EngineCheckNotice({ r, kind }: { r: EngineCheck; kind: "llm" | "decisio
 
 const slugOf =(name: string) => name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 41);
 
-function BrainStep({ w, pick }: { w: Wizard; pick: (slug: string) => void }) {
+function BrainStep({ wizard: w, pick }: { wizard: Wizard; pick: (slug: string) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const brains = useQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains") });
@@ -226,7 +226,7 @@ function BrainStep({ w, pick }: { w: Wizard; pick: (slug: string) => void }) {
   );
 }
 
-function TokenStep({ w, brain, pick }: { w: Wizard; brain: string | null; pick: (id: number, secret: string) => void }) {
+function TokenStep({ wizard: w, brain, pick }: { wizard: Wizard; brain: string | null; pick: (id: number, secret: string) => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState(t("Mi agente"));
   const [made, setMade] = useState<{ id: number; token: string } | null>(null);
@@ -248,7 +248,7 @@ function TokenStep({ w, brain, pick }: { w: Wizard; brain: string | null; pick: 
   );
 }
 
-function AgentStep({ w, secret }: { w: Wizard; secret: string }) {
+function AgentStep({ wizard: w, secret }: { wizard: Wizard; secret: string }) {
   const { t } = useTranslation();
   const brains = useQuery({ queryKey: ["brains"], queryFn: () => get<Brain[]>("brains") });
   const b = brains.data?.find((x) => x.slug === w.brain);
@@ -256,7 +256,7 @@ function AgentStep({ w, secret }: { w: Wizard; secret: string }) {
   return (
     <Stack gap="sm">
       {w.agent_connected ? <Notice tone="success" title={t("La memoria está lista")}>{t("Tu agente ya ha hecho su primer recall. Pulsa «Terminar» para ir al inicio.")}</Notice>
-        : <Text size="sm" c="dimmed" className="ms-measure">{t("Cuando tu agente haga su primer recall, este paso se pondrá en verde. Si prefieres conectarlo más tarde, pulsa «Terminar»: lo tienes en Administración → Conectar un agente.")}</Text>}
+        : <Text size="sm">{t("Cuando tu agente haga su primer recall, este paso se pondrá en verde. Si prefieres conectarlo más tarde, pulsa «Terminar»: lo tienes en Administración → Conectar un agente.")}</Text>}
       <ConnectAgent brain={b} token={w.token_id ? { id: w.token_id, secret: secret || undefined } : undefined} untilRecall />
     </Stack>
   );

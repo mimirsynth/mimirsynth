@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fmt, get, send } from "../api";
-import { Btn, Check, ConfirmDialog, MutationError, Notice, ProgressBar } from "../ui";
+import { Btn, Check, ConfirmDialog, Loading, MutationError, Notice, ProgressBar } from "../ui";
 
 // Cambio de modelo de embeddings (#48): relleno en sombra, intercambio y descarte. La API está en embeddings_admin.py.
 type Job = { id: number; status: string; done: number; total: number | null; message: string; error: string; title: string; finished_at: string | null;
@@ -31,11 +31,11 @@ export function StartReindex({ engine, onClose }: { engine: EngineRef | null; on
       subject={engine && `${engine.name} · ${engine.model}${engine.dim ? ` · ${engine.dim}d` : ""}`} disabled={!e || !e.graph_db.ok}
       warning={t("Se calculan con este motor los vectores de todos los brains y se guardan aparte: nada de lo que se usa cambia hasta el intercambio, que se confirma después. Puede tardar y consume llamadas al motor.")}
       onConfirm={() => start.mutateAsync()}>
-      {!e ? <Text size="sm" c="dimmed">{t("Estimando…")}</Text> : <Stack gap={4}>
+      {!e ? <Loading label={t("Estimando…")} /> : <Stack gap={4}>
         <Text size="sm">{t("Hasta {{items}} elementos del grafo y {{chunks}} trozos: unas {{calls}} llamadas al motor.", { items: e.graph_items.toLocaleString(), chunks: e.chunks.toLocaleString(), calls: e.calls.toLocaleString() })}</Text>
         <Text size="sm">{t("Memoria en {{db}}: unos {{need}}; libre: {{free}}.", { db: e.graph_db.backend, need: mb(e.graph_db.need_bytes), free: mb(e.graph_db.free_bytes) })}</Text>
         <Text size="sm">{t("PostgreSQL: unos {{need}} más. El espacio libre en disco no se puede consultar desde aquí: compruébalo tú.", { need: mb(e.postgres.need_bytes) })}</Text>
-        {e.partial && <Text size="xs" c="dimmed">{t("Estimación parcial: {{done}} de {{graphs}} grafos.", { done: e.graphs_estimated, graphs: e.graphs })}</Text>}
+        {e.partial && <Text size="sm">{t("Estimación parcial: {{done}} de {{graphs}} grafos.", { done: e.graphs_estimated, graphs: e.graphs })}</Text>}
         {!e.graph_db.ok && <Notice tone="danger">{t("FalkorDB no tiene memoria libre suficiente para los vectores nuevos.")}</Notice>}
       </Stack>}
       <MutationError error={est.error} />
@@ -43,7 +43,8 @@ export function StartReindex({ engine, onClose }: { engine: EngineRef | null; on
   );
 }
 
-/** Estado del cambio de modelo: progreso, sombras listas o sin terminar, intercambio y resultado. */
+/** Estado del cambio de modelo: progreso, sombras listas o sin terminar, intercambio y resultado. Each state is a titled notice in the
+ *  engines section; with nothing to report it draws nothing. */
 export function ReindexPanel({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -65,8 +66,7 @@ export function ReindexPanel({ onDone }: { onDone: () => void }) {
   const fill = d.job, sh = d.shadow;
   const running = active(sw) ? sw : active(fill) ? fill : null;
   const lastSwitchFailed = !!sw && !!sh && sw.status === "failed" && !!sw.finished_at && sw.finished_at >= sh.started_at;
-  return (
-    <Stack gap="xs">
+  return (<>
       {running && <Notice tone="info" title={running.title}>
         <Stack gap="xs">
           <ProgressBar done={running.done} total={running.total ?? 0} text={running.total ? `${running.done}/${running.total} · ${running.message}` : running.message || "…"} />
@@ -95,7 +95,7 @@ export function ReindexPanel({ onDone }: { onDone: () => void }) {
           <Text size="sm">{t("Los agentes que escriben directamente en Graphiti siguen usando el modelo anterior hasta que los cambies: pásalos al mismo modelo.")}</Text>
         </Stack>
       </Notice>}
-      {!running && !sh && fill?.status === "cancelled" && !switched && <Text size="xs" c="dimmed">{t("Último cálculo en sombra cancelado: se descartó todo lo calculado.")}</Text>}
+      {!running && !sh && fill?.status === "cancelled" && !switched && <Text size="sm">{t("Último cálculo en sombra cancelado: se descartó todo lo calculado.")}</Text>}
       <MutationError error={cancel.error ?? retry.error ?? discard.error} />
       <ConfirmDialog opened={askSwitch} onClose={() => setAskSwitch(false)} tone="primary" title={t("Cambiar al modelo nuevo")} action={t("Cambiar de modelo")} disabled={!backup}
         subject={sh && `${sh.engine} · ${sh.model} · ${sh.dim}d`}
@@ -108,6 +108,5 @@ export function ReindexPanel({ onDone }: { onDone: () => void }) {
         subject={sh && `${sh.engine} · ${sh.model} · ${sh.dim}d`}
         warning={t("Se borran todos los vectores calculados en sombra (en FalkorDB y en PostgreSQL). El modelo en uso no cambia; para volver a intentarlo habrá que calcularlos de nuevo.")}
         onConfirm={() => discard.mutateAsync()} />
-    </Stack>
-  );
+  </>);
 }

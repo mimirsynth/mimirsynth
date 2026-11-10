@@ -10,7 +10,12 @@ import { MutationError, Notice, TextField } from "./Fields";
 function TabsRoot(props: Omit<TabsProps, "variant">) {
   return <MTabs {...props} variant="default" className={`ms-tabs${props.className ? ` ${props.className}` : ""}`} />;
 }
-export const Tabs = Object.assign(TabsRoot, { List: MTabs.List, Tab: MTabs.Tab, Panel: MTabs.Panel });
+/** A tab's view: the kit sets its top space and lays its parts out one under the other with the page's 12px rhythm (a padding asked for
+ *  at the call site is ignored). */
+function TabsPanel({ pt: _pt, className, ...rest }: ComponentProps<typeof MTabs.Panel>) {
+  return <MTabs.Panel {...rest} className={`ms-tabpanel${className ? ` ${className}` : ""}`} />;
+}
+export const Tabs = Object.assign(TabsRoot, { List: MTabs.List, Tab: MTabs.Tab, Panel: TabsPanel });
 
 /** Diálogo de la aplicación: centrado, con título en la tipografía de títulos. Its close button is named («Cerrar»): it is where the focus
  *  lands when a dialog opens, and a nameless one reads as just «button». */
@@ -167,7 +172,7 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
 
 /** Cabecera de pantalla: título igual a la entrada del menú y, a la derecha, acciones. `description`, what the screen is for, is not
  *  printed under the title, where it took two to six lines of every screen for something read once: it sits behind the «i» beside the
- *  title (`PageHelp`). */
+ *  title (`HelpTip`). */
 export function PageHeader({ title, description, actions, meta }: { title: string; description?: ReactNode; actions?: ReactNode; meta?: ReactNode }) {
   useEffect(() => {  // the browser tab and its history say which page this is
     document.title = `${title} · MimirSynth`;
@@ -177,15 +182,16 @@ export function PageHeader({ title, description, actions, meta }: { title: strin
   return (
     <header className="ms-pagehead">
       <div className="ms-pagehead-row"><div className="ms-pagehead-name"><h1 className="ms-pagehead-title">{title}</h1>
-        {description && <PageHelp title={title}>{description}</PageHelp>}{meta && <div className="ms-pagehead-meta">{meta}</div>}</div>
+        {description && <HelpTip title={title}>{description}</HelpTip>}{meta && <div className="ms-pagehead-meta">{meta}</div>}</div>
         {actions && <div className="ms-pagehead-actions">{actions}</div>}</div>
     </header>
   );
 }
 
-/** The «i» beside a screen's title and, in a popover, what the screen is for. A real button: a click, a tap, Enter or Space open it and
- *  Escape closes it, giving the focus back; resting the pointer on it opens it too, and it closes when the pointer leaves both. */
-function PageHelp({ title, children }: { title: string; children: ReactNode }) {
+/** The «i» beside a screen's title, a view's bar or a block's heading and, in a popover, what it is for. The one place where the interface
+ *  explains itself: never as a paragraph on the page. A real button: a click, a tap, Enter or Space open it and Escape closes it, giving
+ *  the focus back; resting the pointer on it opens it too, and it closes when the pointer leaves both. */
+export function HelpTip({ title, children }: { title: string; children: ReactNode }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const pinned = useRef(false);  // opened by a click: the pointer leaving does not close it

@@ -1,8 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { T } from "../i18n";
 import { send } from "../api";
-import { Group, Stack, Text } from "@mantine/core";
-import { Btn, ClearFilters, ColHead, DataTable, FillArea, GraphCanvas, MenuButton, MutationError, QueryComposer, readEffects, Page, PageHeader, Tabs, useTableView, typeColor, CANVAS, type CanvasLink, type CanvasNode } from "../ui";
+import { Group, Text } from "@mantine/core";
+import { Btn, ClearFilters, ColHead, DataTable, EmptyState, GraphCanvas, Loading, MenuButton, MutationError, QueryComposer, readEffects, Page, PageHeader, Tabs, useTableView, typeColor, ViewBar, CANVAS, type CanvasLink, type CanvasNode } from "../ui";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -24,17 +24,19 @@ const cell = (v: any) => (v && typeof v === "object" ? (v._type === "node" ? `($
 /** The uuid of an entity node in a result cell, to link it to its entity page. */
 const entityUuid = (v: any): string | null => (v && v._type === "node" && (v.labels ?? []).includes("Entity") && v.properties?.uuid ? String(v.properties.uuid) : null);
 
-/** Resultado de una consulta Cypher: columnas arbitrarias, cada una con orden y filtro de texto sobre su valor visible. */
+/** Resultado de una consulta Cypher: columnas arbitrarias, cada una con orden y filtro de texto sobre su valor visible. While a column is
+ *  filtered, a bar above the table clears the filters; the tab's panel scrolls the table. */
 function ResultTable({ columns, rows }: { columns: string[]; rows: any[][] }) {
+  const { t } = useTranslation();
   const objs = rows.map((r, i) => ({ i, r }));
   const cols = Object.fromEntries(columns.map((c, j) => [c, { get: (o: { r: any[] }) => { const v = o.r[j]; return typeof v === "number" ? v : typeof v === "string" ? v : cell(v); } }]));
   const v = useTableView(objs, cols);
   return (
-    <FillArea><Stack gap="xs">
-      <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
+    <>
+      {v.active && <ViewBar title={t("Consulta")}><ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} /></ViewBar>}
       <DataTable fz="xs"><DataTable.Thead><DataTable.Tr>{columns.map((c) => <ColHead key={c} sort={v.sortProps(c)} filter={v.text(c)}>{c}</ColHead>)}</DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{v.rows.map((o) => <DataTable.Tr key={o.i}>{o.r.map((x, j) => <DataTable.Td key={j}>{entityUuid(x) ? <Link to={`/entidad/${entityUuid(x)}`}>{cell(x)}</Link> : cell(x)}</DataTable.Td>)}</DataTable.Tr>)}</DataTable.Tbody></DataTable>
-    </Stack></FillArea>
+    </>
   );
 }
 
@@ -87,20 +89,23 @@ ${lab(n)}` })),
         </>}
         status={res ? <>{t("{{total}} filas · {{ms}} ms", { total: res.total, ms: res.ms })}{res.truncated ? t(" · resultado recortado a 500 filas") : ""}</> : ""} />
       <MutationError error={err} />
+      {!res && busy && <Loading label={t("Ejecutando…")} />}
+      {!res && !err && !busy && <EmptyState>{t("Escribe una consulta o elige un ejemplo y pulsa Ejecutar: verás sus filas en una tabla y, si devuelve nodos, también en un grafo.")}</EmptyState>}
       {res && (
         <Tabs value={tab} onChange={(v) => setTab(v ?? "tabla")} className="ms-tabs-fill">
           <Tabs.List>
             <Tabs.Tab value="tabla">{t("Tabla ({{n}})", { n: res.total })}</Tabs.Tab>
             <Tabs.Tab value="grafo" disabled={!res.nodes.length}>{t("Grafo ({{nodes}} nodos · {{edges}} aristas)", { nodes: res.nodes.length, edges: res.edges.length })}</Tabs.Tab>
           </Tabs.List>
-          <Tabs.Panel value="tabla" className="ms-tabpanel-fill" pt="xs">
-            <ResultTable key={res.ms + res.total} columns={res.columns} rows={res.rows} />
+          <Tabs.Panel value="tabla" className="ms-tabpanel-fill">
+            {res.rows.length ? <ResultTable key={res.ms + res.total} columns={res.columns} rows={res.rows} />
+              : <EmptyState>{t("La consulta no ha devuelto ninguna fila.")}</EmptyState>}
           </Tabs.Panel>
-          <Tabs.Panel value="grafo" className="ms-tabpanel-fill" pt="xs">
+          <Tabs.Panel value="grafo" className="ms-tabpanel-fill">
             <div className="ms-canvas ms-canvas-fill">
               <GraphCanvas nodes={graphData.nodes} links={graphData.links} effects={effects} selectedNode={sel} onNodeClick={setSel} onBackgroundClick={() => setSel(null)} />
             </div>
-            {selEntity && <Group gap="xs" mt="xs"><Text size="xs">{selEntity.name}</Text><Btn size="row" icon="graph" component={Link} to={`/entidad/${selEntity.uuid}`}>{t("Ver página")}</Btn></Group>}
+            {selEntity && <Group gap="xs"><Text size="sm">{selEntity.name}</Text><Btn size="row" icon="graph" component={Link} to={`/entidad/${selEntity.uuid}`}>{t("Ver página")}</Btn></Group>}
           </Tabs.Panel>
         </Tabs>
       )}

@@ -1,10 +1,10 @@
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text, Title } from "@mantine/core";
+import { Group, Text } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import { ApiError, fmtDay, langHeaders } from "../api";
 import { translateServer } from "../i18n";
-import { Btn, CardLink, EmptyState, EntityChip, humanRelation, ListCard, MutationError, Pill } from "../ui";
+import { Block, Btn, CardLink, EmptyState, EntityChip, RelationWord, ListCard, Loading, MutationError, Notice, Pill, ViewBar } from "../ui";
 import { loadAsk, saveAsk } from "./askSession";
 
 /** One numbered piece of evidence: what the answer cites as [F1], [E1] or [D1]. */
@@ -44,7 +44,8 @@ async function streamAnswer(graph: string, body: unknown, on: (ev: Record<string
   }
 }
 
-/** Ask → Answer (issue 126): a written answer from the recall, every claim cited to its evidence. */
+/** Ask → Answer (issue 126): a written answer from the recall, every claim cited to its evidence. Its view: a bar with what the mode
+ *  does behind its «i» and the answer's status, the answer, then the evidence as blocks in the order Context shows them. */
 /** `trigger`: each increment writes an answer to `query` (Ask owns the button and Ctrl/⌘+Enter, in the same place as «Buscar»).
  *  `answered`: the last increment acted on, kept by Ask so it outlives this view. Coming back to «Responder» mounts this again with a count
  *  already answered, which must not write by itself; a press made just before it mounted (Ctrl/⌘+Enter right after choosing the mode) must.
@@ -98,7 +99,7 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
     const ref = `${m[1]}${Number(m[2])}`, s = byRef.get(ref);
     const id = s && !first.has(ref) ? (first.add(ref), citeAnchor(ref)) : undefined;
     parts.push(<Fragment key={`t${m.index}`}>{text.slice(last, m.index)}</Fragment>);
-    parts.push(!s ? <Pill key={`c${m.index}`} size="xs" tone="danger" title={t("Esta cita no estaba entre las pruebas: no lleva a ningún sitio.")}>{t("cita sin origen")}</Pill>
+    parts.push(!s ? <Pill key={`c${m.index}`} tone="danger" title={t("Esta cita no estaba entre las pruebas: no lleva a ningún sitio.")}>{t("cita sin origen")}</Pill>
       : <CardLink key={`c${m.index}`} id={id} to={evAnchor(ref)} className="ms-cite" title={`${s.text}${s.origin ? ` · ${s.origin}` : ""}`}>{label(ref)}</CardLink>);
     last = (m.index ?? 0) + m[0].length;
   }
@@ -109,13 +110,13 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   // warning on a fragment or passage that states something no longer true. The answer cites them by the same labels either way.
   const all = sources ?? [];
   const groups: [string, Source[]][] = [
-    [t("Hechos vigentes ({{n}})", { n: all.filter((s) => s.kind === "fact" && s.status !== "invalidated").length }), all.filter((s) => s.kind === "fact" && s.status !== "invalidated")],
-    [t("Hechos que dejaron de ser ciertos ({{n}})", { n: all.filter((s) => s.kind === "fact" && s.status === "invalidated").length }), all.filter((s) => s.kind === "fact" && s.status === "invalidated")],
-    [t("Fragmentos de episodios ({{n}})", { n: all.filter((s) => s.kind === "episode").length }), all.filter((s) => s.kind === "episode")],
-    [t("Pasajes de documentos ({{n}})", { n: all.filter((s) => s.kind === "document").length }), all.filter((s) => s.kind === "document")],
+    [t("Hechos vigentes"), all.filter((s) => s.kind === "fact" && s.status !== "invalidated")],
+    [t("Hechos que dejaron de ser ciertos"), all.filter((s) => s.kind === "fact" && s.status === "invalidated")],
+    [t("Fragmentos de episodios"), all.filter((s) => s.kind === "episode")],
+    [t("Pasajes de documentos"), all.filter((s) => s.kind === "document")],
   ];
   const notice = (sup?: Superseded) => (sup?.length ? <>
-    <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill>
+    <Pill tone="warn">{t("Puede estar superado")}</Pill>
     {sup.map((x, i) => (
       <div key={i}>
         <div>{t("Dejó de ser cierto el {{date}}:", { date: fmtDay(x.invalid_at) })} «{x.fact}»</div>
@@ -124,27 +125,25 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
   </> : undefined);
   const when = (s: Source) => (s.kind !== "fact" ? undefined : s.invalid_at ? `${fmtDay(s.valid_at)} → ${fmtDay(s.invalid_at)}` : s.valid_at ? t("desde {{date}}", { date: fmtDay(s.valid_at) }) : undefined);
   return (
-    <Stack gap="xs">
-      {/* The live region is there from the start and only its text changes, so each answer is announced. */}
-      <div ref={head} tabIndex={-1} className="ms-ask-head"><Group gap="xs">
-        {/* said while writing and again when done: the answer itself is not a live region, so this is what announces it */}
-        <Text size="sm" role="status">{asked === null ? "" : busy ? t("Redactando la respuesta a «{{q}}»…", { q: asked }) : t("Respuesta a «{{q}}» lista.", { q: asked })}</Text>
-        {asked !== null && asked !== query.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}
-        {done?.ms !== undefined && <Text size="xs" c="dimmed">{t("{{ms}} ms", { ms: done.ms })}</Text>}
-        {busy && <Btn size="row" kind="ghost" onClick={() => abort.current?.abort()}>{t("Dejar de redactar")}</Btn>}
-      </Group></div>
-      {/* what this mode does: before the first answer; after it, under the answer, where checking the citations happens */}
-      {asked === null && <Text size="xs" c="dimmed">{help}</Text>}
+    <>
+      {/* The status is a live region there from the start and only its text changes, so each answer is announced: said while writing and
+          again when done (the answer itself is not a live region). The bar takes the focus when it finishes. */}
+      <div ref={head} tabIndex={-1} className="ms-ask-head">
+        <ViewBar title={t("Responder")} help={help}
+          meta={<><span role="status">{asked === null ? "" : busy ? t("Redactando la respuesta a «{{q}}»…", { q: asked }) : t("Respuesta a «{{q}}» lista.", { q: asked })}</span>
+            {done?.ms !== undefined && <span className="ms-data">{` · ${t("{{ms}} ms", { ms: done.ms })}`}</span>}
+            {asked !== null && asked !== query.trim() && <> <Pill tone="warn">{t("De una pregunta anterior")}</Pill></>}</>}
+          actions={busy && <Btn kind="ghost" onClick={() => abort.current?.abort()}>{t("Dejar de redactar")}</Btn>} />
+      </div>
+      {/* before the first answer, what this mode does */}
+      {asked === null && !busy && <EmptyState>{help}</EmptyState>}
       <MutationError error={error} />
-      {sources && (text ? <section aria-label={t("Respuesta")} className="ms-answer"><ListCard title={t("Respuesta")}><span className="ms-answer-prose">{parts}</span></ListCard></section>
-        : busy && <EmptyState>{t("Redactando…")}</EmptyState>)}
-      {text && !busy && <Text size="xs" c="dimmed">{help}</Text>}
-      {!!done?.unknown.length && <Text size="xs" c="dimmed">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Text>}
-      {!!sources?.length && <>
-        <Title order={2} size="h5" mt="xs">{t("Pruebas ({{n}})", { n: sources.length })}</Title>
+      {sources && text ? <section aria-label={t("Respuesta")} className="ms-answer"><ListCard title={t("Respuesta")}><span className="ms-answer-prose">{parts}</span></ListCard></section>
+        : busy && <Loading label={t("Redactando…")} />}
+      {!!done?.unknown.length && <Notice tone="warn">{t("El modelo citó {{refs}}, que no estaban entre las pruebas: esas citas no llevan a ningún sitio.", { refs: done.unknown.join(", ") })}</Notice>}
+      {!!sources?.length && <Block title={t("Pruebas")} count={sources.length}>
         {groups.filter(([, list]) => list.length).map(([head, list]) => (
-          <Fragment key={head}>
-            <Title order={3} size="h6" mt="xs">{head}</Title>
+          <Block key={head} title={head} count={list.length}>
             {list.map((s) => {
               const ends = s.kind === "fact" && !!s.source && !!s.target;  // with its ends, a fact leads to their pages through the chips
               const to = ends ? null : sourceLink(s);
@@ -152,22 +151,22 @@ export default function AskAnswer({ graph, query, facts, chunks, trigger, answer
               const back = isCited && first.has(s.ref);
               return (
                 <ListCard key={s.ref} anchor={evAnchor(s.ref)} invalid={s.status === "invalidated"} notice={notice(s.superseded)} meta={when(s)}
-                  note={s.replaces ? <>{t("Sustituye a")} «{s.replaces}»</> : undefined}
+                  title={ends ? undefined : s.title} note={s.replaces ? <>{t("Sustituye a")} «{s.replaces}»</> : undefined}
                   tags={<>
-                    <Pill size="xs" tone={isCited ? "alt" : undefined}>{isCited ? t("{{ref}} · citado", { ref: label(s.ref) }) : label(s.ref)}</Pill>
-                    {s.origin && <Pill size="xs">{s.origin}</Pill>}
-                    {ends ? <>
+                    <Pill tone={isCited ? "alt" : undefined}>{isCited ? t("{{ref}} · citado", { ref: label(s.ref) }) : label(s.ref)}</Pill>
+                    {s.origin && <Pill>{s.origin}</Pill>}
+                    {ends && <>
                       <EntityChip name={s.source ?? ""} type={s.source_type} to={s.entity ? entityPage(s.entity, s.origin) : undefined} />
-                      {s.name && <Text size="xs" c="dimmed" title={s.name}>{humanRelation(s.name)}</Text>}
+                      {s.name && <RelationWord name={s.name} />}
                       <EntityChip name={s.target ?? ""} type={s.target_type} to={s.target_entity ? entityPage(s.target_entity, s.origin) : undefined} />
-                    </> : s.title && <Text size="xs" c="dimmed">{s.title}</Text>}</>}
+                    </>}</>}
                   actions={(to || back) ? <Group gap="md">
                     {back && <CardLink to={citeAnchor(s.ref)}>{t("Volver a la cita")}</CardLink>}
                     {to && <Link to={to} className="ms-cardlink">{s.kind === "episode" ? t("Abrir el episodio en el Diario") : s.kind === "document" ? t("Abrir el documento en Conocimiento") : t("Abrir la entidad")}</Link>}
                   </Group> : undefined}>{s.text}</ListCard>);
             })}
-          </Fragment>))}
-      </>}
-    </Stack>
+          </Block>))}
+      </Block>}
+    </>
   );
 }

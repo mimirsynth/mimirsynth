@@ -22,7 +22,7 @@ Algunos nombres se apartan como **Dudosas** sin preguntar al decisor: los de cin
 - Un **decisor** configurado ([[Proveedores de IA]]).
 
 ## Cómo usarlo
-1. En **Entidades a analizar** indica cuántas revisar (1–1000) y pulsa **Analizar**. Se lanza un trabajo en segundo plano con barra de progreso (ver [[Trabajos]]); si falla, se muestra el último error.
+1. Pulsa **Analizar…**, indica en el diálogo cuántas entidades revisar (1–1000) y pulsa **Analizar**. Se lanza un trabajo en segundo plano con barra de progreso (ver [[Trabajos]]); si falla, se muestra el último error.
 2. Cuando termine, filtra por **Estado**:
    | Estado | Qué hay |
    |---|---|

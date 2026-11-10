@@ -3,7 +3,7 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { get, send } from "../api";
-import { Btn, Check, ConfirmDialog, CopyBtn, DataState, EmptyState, ListCard, Modal, MutationError, Notice, PasswordField, Pill, SettingsBody, SettingsGroup, TextField } from "../ui";
+import { Btn, Check, ConfirmDialog, CopyBtn, DataState, DialogActions, EmptyState, ListCard, Modal, MutationError, Notice, PasswordField, Pill, SettingsBody, SettingsGroup, TextField } from "../ui";
 
 type Provider = {
   slug: string; name: string; issuer: string; client_id: string; secret_set: boolean; scopes: string; enabled: boolean; trust_unverified_email: boolean; auto_provision: boolean;
@@ -25,7 +25,7 @@ function ProviderForm({ initial, isNew, onClose }: { initial: Draft; isNew: bool
   });
   const ok = d.name.trim() && d.issuer.trim() && d.client_id.trim() && (!isNew || (d.slug.trim() && d.client_secret));
   return (
-    <Stack gap="xs">
+    <Stack gap="sm">
       {isNew && <TextField label={t("Identificador")} description={t("Va en las URLs de inicio de sesión y de retorno. No se puede cambiar después.")} placeholder={"pocketid"} /* i18n-ok: an example identifier */ value={d.slug} onChange={(e) => set("slug", e.currentTarget.value.toLowerCase())} data-autofocus />}
       <TextField label={t("Nombre del botón")} description={t("Aparece en la pantalla de entrada: «Entrar con …».")} value={d.name} onChange={(e) => set("name", e.currentTarget.value)} />
       <TextField label={t("Emisor OIDC (issuer)")} description={t("URL base del proveedor de identidad; debe publicar /.well-known/openid-configuration.")} placeholder={"https://"} value={d.issuer} onChange={(e) => set("issuer", e.currentTarget.value)} />
@@ -41,7 +41,7 @@ function ProviderForm({ initial, isNew, onClose }: { initial: Draft; isNew: bool
       <TextField label={t("Grupo de administradores")} description={t("Los miembros de este grupo son administradores de la instancia. Quien sale del grupo pierde el rol en su siguiente inicio de sesión, salvo que sea el último administrador.")} value={d.admin_group} onChange={(e) => set("admin_group", e.currentTarget.value)} />
       <TextField label={t("Roles por grupo")} description={t("Una regla por grupo, separadas por comas, con el formato grupo=brain:rol (roles: reader, contributor, curator, admin). Ejemplo: curadores=docs:curator, lectores=docs:reader.")} value={d.group_roles} onChange={(e) => set("group_roles", e.currentTarget.value)} />
       <MutationError error={save.error} />
-      <Group justify="flex-end"><Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn><Btn kind="primary" icon="save" disabled={!ok} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></Group>
+      <DialogActions><Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn><Btn kind="primary" icon="save" disabled={!ok} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></DialogActions>
     </Stack>
   );
 }
@@ -57,7 +57,9 @@ function Actions({ p, onEdit, onDelete }: { p: Provider; onEdit: () => void; onD
         <Btn size="row" kind="danger" icon="trash" onClick={onDelete}>{t("Borrar")}</Btn>
       </Group>
       <MutationError error={test.error} />
-      {test.data && <Notice tone={test.data.pkce ? "success" : "warn"}>{t("Proveedor alcanzable:")} {test.data.issuer}. {test.data.pkce ? t("Admite PKCE.") : t("No anuncia PKCE (S256); el inicio de sesión puede fallar.")}</Notice>}
+      {test.data && (test.data.pkce
+        ? <Notice tone="success">{t("Proveedor alcanzable:")} {test.data.issuer}. {t("Admite PKCE.")}</Notice>
+        : <Notice tone="warn">{t("Proveedor alcanzable:")} {test.data.issuer}. {t("No anuncia PKCE (S256); el inicio de sesión puede fallar.")}</Notice>)}
     </Stack>
   );
 }
@@ -72,21 +74,22 @@ export default function AdminProviders() {
   const remove = useMutation({ mutationFn: (slug: string) => send("DELETE", `oidc-providers/${slug}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ["oidc-providers"] }); qc.invalidateQueries({ queryKey: ["auth-options"] }); } });
   const edit = (p: Provider) => setForm({ isNew: false, draft: { ...p, client_secret: "" } });
   return (
-    <SettingsGroup title={t("Proveedores de inicio de sesión")} description={t("Inicio de sesión con proveedores externos (OIDC). Es opcional: por defecto solo entran las personas que ya tienen cuenta. Cada proveedor tiene su propia política de alta automática y de roles según los grupos.")}
+    <SettingsGroup title={t("Proveedores de inicio de sesión")} description={t("Inicio de sesión con proveedores externos (OIDC).")}
+      help={t("Es opcional: por defecto solo entran las personas que ya tienen cuenta. Cada proveedor tiene su propia política de alta automática y de roles según los grupos.")}
       action={<Btn icon="plus" onClick={() => setForm({ isNew: true, draft: EMPTY })}>{t("Añadir proveedor")}</Btn>}>
       <SettingsBody><DataState query={q}>
         {(list) => list.length === 0 ? <EmptyState>{t("No hay proveedores configurados: solo se entra con contraseña.")}</EmptyState> : (
-          <Stack gap="xs">
+          <>
             {list.map((p) => (
               <ListCard key={p.slug} title={p.name} aside={<Pill tone={p.enabled ? "success" : "neutral"}>{p.enabled ? t("Activo") : t("Desactivado")}</Pill>}
                 tags={<>{p.auto_provision && <Pill>{t("Alta automática")}</Pill>}{p.admin_group && <Pill tone="alt">{t("Grupo admin")}: {p.admin_group}</Pill>}</>}
                 meta={<>{p.issuer} · {p.slug}</>}
                 actions={<Actions p={p} onEdit={() => edit(p)} onDelete={() => setDel(p)} />}>
-                <Group gap={6} wrap="nowrap"><Text size="sm" c="dimmed">{t("URL de retorno")}</Text><Text size="sm" className="ms-data ms-breakall ms-grow">{p.redirect_uri}</Text><CopyBtn value={p.redirect_uri} /></Group>
+                <Group gap={6} wrap="nowrap"><Text size="sm">{t("URL de retorno")}</Text><Text size="sm" className="ms-data ms-breakall ms-grow">{p.redirect_uri}</Text><CopyBtn value={p.redirect_uri} /></Group>
               </ListCard>))}
-          </Stack>)}
+          </>)}
       </DataState></SettingsBody>
-      <Modal opened={!!form} onClose={() => setForm(null)} title={form?.isNew ? t("Añadir proveedor") : t("Editar proveedor")} centered size="lg">
+      <Modal opened={!!form} onClose={() => setForm(null)} title={form?.isNew ? t("Añadir proveedor") : t("Editar proveedor")} size="lg">
         {form && <ProviderForm initial={form.draft} isNew={form.isNew} onClose={() => setForm(null)} />}
       </Modal>
       <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Borrar proveedor")} action={t("Borrar proveedor")}

@@ -15,3 +15,8 @@ export function EntityChip({ name, type, to, current }: { name: string; type?: s
   if (to && !current) return <Link to={to} className="ms-entchip" style={style} title={type ?? undefined} aria-label={label}>{body}</Link>;
   return <span className="ms-entchip" data-current={current ? "" : undefined} style={style} title={type ?? undefined} aria-label={label}>{body}</span>;
 }
+
+/** The relation between two entity chips, in words and in the muted style, with the name as written in its tooltip. */
+export function RelationWord({ name }: { name: string }) {
+  return <span className="ms-relword" title={name}>{humanRelation(name)}</span>;
+}

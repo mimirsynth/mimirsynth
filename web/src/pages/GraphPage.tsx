@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
-import { Btn, Check, FillArea, IconButton, Page, PageHeader, NumberField, Panel, Pill, Segments, SelectField, Slider, TextField, HALO_PALETTE, CANVAS, typeColor, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
+import { Group, Text } from "@mantine/core";
+import { Block, Btn, CellText, Check, DataTable, EmptyState, FillArea, IconButton, Page, PageHeader, NumberField, Pill, Segments, SelectField, Slider, TextField, HALO_PALETTE, CANVAS, typeColor, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, ViewBar, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -150,40 +150,45 @@ export default function GraphPage({ graph }: { graph: string }) {
   return (
     <Page fill>
       <PageHeader title={t("Grafo")} description={t("Entidades y hechos del brain como mapa. Elige cuántas semillas y saltos cargar; pulsa un nodo para ver sus hechos y los documentos que lo mencionan.")} />
-      <Group gap="sm" align="flex-end" wrap="wrap">
-        <NumberField label={t("Semillas")} value={seeds} min={5} max={100} onChange={(v) => setSeeds(Number(v) || 15)} w={90} size="xs" />
-        <NumberField label={t("Saltos")} value={depth} min={0} max={2} onChange={(v) => setDepth(Number(v) || 0)} w={70} size="xs" />
-        <NumberField label={t("Grado mín.")} value={minDeg} min={0} max={20} onChange={(v) => setMinDeg(Number(v) || 0)} w={85} size="xs" />
-        <TextField label={t("Buscar nodo")} placeholder={t("Nextcloud…")} value={search} onChange={(e) => doSearch(e.currentTarget.value)} size="xs" w={170} />
-        <Segments size="xs" value={layout} onChange={(v) => setLayout(v as Layout)} data={[{ value: "force", label: t("Fuerza") }, { value: "radial", label: t("Radial") }, { value: "tree", label: t("Árbol") }]} />
-        <Segments size="xs" value={dim} onChange={pickDim} data={["2d", "3d"]} />
-        <SelectField label={t("Agrupar por")} value={groupBy} onChange={(v) => v && setGroupBy(v as Grouping)} allowDeselect={false} w={160}
+      {/* the canvas's controls: what to load and how to draw it on the left, the canvas's own commands on the right */}
+      <ViewBar title={t("Grafo")}
+        help={t("Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Un nodo arrastrado se queda donde lo sueltas; doble clic lo suelta. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.")}
+        meta={<>{t("{{nodes}} nodos · {{links}} hechos", { nodes: nodes.length, links: links.length })}{base.data?.truncated ? t(" · recortado por el tope de nodos") : ""}</>}
+        actions={<>
+          <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} disabled={!force} onClick={() => setPaused(!paused)} />
+          <IconButton icon="undo" label={t("Deshacer última expansión")} disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
+          <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
+          <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const png = gc.current?.toPng(); if (png) { const a = document.createElement("a"); a.href = png; a.download = "grafo.png"; a.click(); } }} />
+          <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => gc.current?.fit(400)} />
+          <IconButton icon="unpin" label={t("Restablecer posiciones")} onClick={() => gc.current?.resetPositions()} />
+        </>}>
+        <NumberField label={t("Semillas")} value={seeds} min={5} max={100} onChange={(v) => setSeeds(Number(v) || 15)} />
+        <NumberField label={t("Saltos")} value={depth} min={0} max={2} onChange={(v) => setDepth(Number(v) || 0)} />
+        <NumberField label={t("Grado mín.")} value={minDeg} min={0} max={20} onChange={(v) => setMinDeg(Number(v) || 0)} />
+        <TextField label={t("Buscar nodo")} placeholder={t("Nextcloud…")} value={search} onChange={(e) => doSearch(e.currentTarget.value)} />
+        <Segments value={layout} onChange={(v) => setLayout(v as Layout)} data={[{ value: "force", label: t("Fuerza") }, { value: "radial", label: t("Radial") }, { value: "tree", label: t("Árbol") }]} />
+        <Segments value={dim} onChange={pickDim} data={["2d", "3d"]} />
+        <SelectField label={t("Agrupar por")} value={groupBy} onChange={(v) => v && setGroupBy(v as Grouping)} allowDeselect={false}
           data={GROUPINGS.map(([v, l]) => ({ value: v, label: t(l) }))} />
-        <SelectField label={t("Efectos gráficos")} value={effects} onChange={(v) => v && pickEffects(v as EffectsMode)} allowDeselect={false} w={190}
+        <SelectField label={t("Efectos gráficos")} value={effects} onChange={(v) => v && pickEffects(v as EffectsMode)} allowDeselect={false}
           data={[{ value: "auto", label: effects === "auto" && effective === "reduced" ? t("Automático (reducido)") : t("Automático") }, { value: "full", label: t("Completo") }, { value: "reduced", label: t("Reducido") }]} />
-        <IconButton icon={paused ? "play" : "pause"} label={paused ? t("Reanudar simulación") : t("Pausar simulación")} disabled={!force} onClick={() => setPaused(!paused)} />
-        <IconButton icon="undo" label={t("Deshacer última expansión")} disabled={!extra.length} onClick={() => setExtra((e) => e.slice(0, -1))} />
-        <IconButton icon="download" label={t("Exportar JSON")} onClick={() => download("grafo.json", "application/json", JSON.stringify({ nodes, links }, null, 2))} />
-        <IconButton icon="image" label={t("Exportar imagen")} onClick={() => { const png = gc.current?.toPng(); if (png) { const a = document.createElement("a"); a.href = png; a.download = "grafo.png"; a.click(); } }} />
-        <IconButton icon="fit" label={t("Ajustar a la vista")} onClick={() => gc.current?.fit(400)} />
-        <IconButton icon="unpin" label={t("Restablecer posiciones")} onClick={() => gc.current?.resetPositions()} />
-        <Check size="xs" label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
-        <Check size="xs" label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
-        <Check size="xs" label={t("Halos por origen")} checked={halosOn && force} disabled={!force} title={force ? undefined : t("Los halos solo se dibujan en la disposición de fuerza.")} onChange={(e) => setHalosOn(e.currentTarget.checked)} />
-        <Check size="xs" label={t("Solo confirmados por 2 o más orígenes")} checked={robust} disabled={!robustness} onChange={(e) => setOnlyRobust(e.currentTarget.checked)}
+        <Check label={t("Invalidados")} checked={withInvalid} onChange={(e) => setWithInvalid(e.currentTarget.checked)} />
+        <Check label={t("Viajar en el tiempo")} checked={useTime} onChange={(e) => setUseTime(e.currentTarget.checked)} />
+        <Check label={t("Halos por origen")} checked={halosOn && force} disabled={!force} title={force ? undefined : t("Los halos solo se dibujan en la disposición de fuerza.")} onChange={(e) => setHalosOn(e.currentTarget.checked)} />
+        <Check label={t("Solo confirmados por 2 o más orígenes")} checked={robust} disabled={!robustness} onChange={(e) => setOnlyRobust(e.currentTarget.checked)}
           title={robustness ? undefined : t("Con «Tipo de entidad» no hay orígenes que contar: elige otra agrupación.")} />
-      </Group>
-      {no3d && <Notice tone="warn" p="xs">{t("Este navegador no tiene WebGL, así que la vista 3D no está disponible. El grafo sigue en 2D.")}</Notice>}
-      {slow3d && dim === "3d" && (
-        <Notice tone="warn" p="xs">
-          <Group gap="sm" justify="space-between">{t("El 3D va lento en este equipo, incluso con los efectos reducidos. La vista 2D muestra lo mismo.")}<Btn size="row" onClick={() => pickDim("2d")}>{t("Volver a 2D")}</Btn></Group>
-        </Notice>)}
+      </ViewBar>
       {useTime && day !== null && (
         <Group gap="md" wrap="nowrap">
-          <Text size="xs" w={190}>{t("Qué sabíamos el {{date}}", { date: fmt(new Date(t0 + day * DAY).toISOString()).split(",")[0] })}</Text>
+          <Text size="sm" w={190}>{t("Qué sabíamos el {{date}}", { date: fmt(new Date(t0 + day * DAY).toISOString()).split(",")[0] })}</Text>{/* ui-ok: the date keeps its width, so the slider does not shift under the pointer while it is dragged */}
           <Slider className="ms-grow" min={0} max={total} value={day} onChange={setDay} />
         </Group>
       )}
+      {no3d && <Notice tone="warn">{t("Este navegador no tiene WebGL, así que la vista 3D no está disponible. El grafo sigue en 2D.")}</Notice>}
+      {slow3d && dim === "3d" && (
+        <Notice tone="warn">
+          <Group gap="sm" justify="space-between">{t("El 3D va lento en este equipo, incluso con los efectos reducidos. La vista 2D muestra lo mismo.")}<Btn size="row" onClick={() => pickDim("2d")}>{t("Volver a 2D")}</Btn></Group>
+        </Notice>)}
       <SplitView main={<>
         <div className="ms-canvas">
           <GraphCanvas ref={gc} nodes={cnodes} links={clinks} halos={halos} dim={dim} layout={layout} root={nodo || undefined} effects={effects} onEffects={setEffective} onSlow={onSlow}
@@ -200,39 +205,45 @@ export default function GraphPage({ graph }: { graph: string }) {
             {legendRels.map(([r, n]) => <LegendItem key={r} label={r} count={n} off={hiddenRels.has(r)} onClick={() => toggle(hiddenRels, setHiddenRels, r)} />)}
           </Legend>
         </div></>} aside={
-        <Panel withBorder p="sm" h="100%">
-          <FillArea>
-            {sel ? (
-              <Stack gap="xs">
-                <Group justify="space-between" gap="xs"><Text fw={600}>{sel.name}</Text>
-                  <Btn size="row" icon="graph" component={Link} to={`/entidad/${sel.uuid}`}>{t("Ver página")}</Btn></Group>
-                <Group gap={4}>{sel.labels.map((l) => <Pill key={l} size="xs">{l}</Pill>)}<Pill size="xs">{t("grado")} {sel.degree}</Pill></Group>
-                <Text size="xs" c="dimmed" className="ms-prose">{sel.summary}</Text>
-                <Sources keys={srcOf(sel)} name={(k) => originName.get(k) ?? k} />
-                <Text size="xs" fw={600}>{t("Hechos ({{count}})", { count: nodeFacts.length })}</Text>
-                {nodeFacts.map((l) => <Text key={l.uuid} size="xs" td={l.status === "invalidated" ? "line-through" : undefined}>• {l.fact}</Text>)}
-                {(mentions.data?.documents.length ?? 0) > 0 && <>
-                  <Text size="xs" fw={600}>{t("Documentos que la mencionan ({{count}})", { count: mentions.data!.documents.length })}</Text>
-                  {mentions.data!.documents.map((d) => (
-                    <Stack key={d.document_id} gap={0}>
-                      <Text size="xs" component={Link} to={`/conocimiento?doc=${d.document_id}`}>{d.title}{d.chunks > 1 ? t(" · {{chunks}} pasajes", { chunks: d.chunks }) : ""}</Text>
-                      <Text size="xs" c="dimmed" lineClamp={2}>…{d.snippet}…</Text>
-                    </Stack>))}</>}
-                <Text size="xs" c="dimmed">{t("Clic derecho en un nodo: expandir vecindad.")}</Text>
-              </Stack>
-            ) : selLink ? (
-              <Stack gap="xs">
-                <Pill>{selLink.name}</Pill>
-                <Text size="sm">{selLink.fact}</Text>
-                <Text size="xs" c="dimmed">{nameOf(selLink.source)} → {nameOf(selLink.target)}</Text>
-                <Text size="xs">{t("Válido desde")} {fmt(selLink.valid_at)}</Text>
-                {selLink.invalid_at && <Text size="xs" c="dimmed">{t("Dejó de ser cierto")} {fmt(selLink.invalid_at)}</Text>}
-                <Sources keys={srcOf(selLink)} name={(k) => originName.get(k) ?? k} />
-              </Stack>
-            ) : <Text size="sm" c="dimmed">{t("Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Un nodo arrastrado se queda donde lo sueltas; doble clic lo suelta. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.")}</Text>}
-          </FillArea>
-        </Panel>} />
-      <Text size="xs" c="dimmed">{t("{{nodes}} nodos · {{links}} hechos", { nodes: nodes.length, links: links.length })}{base.data?.truncated ? t(" · recortado por el tope de nodos") : ""}</Text>
+        // the detail of what is picked on the canvas, in blocks; it scrolls by itself
+        <FillArea>
+          {sel ? (<>
+            <Block title={sel.name} actions={<Btn size="row" icon="graph" component={Link} to={`/entidad/${sel.uuid}`}>{t("Ver página")}</Btn>}>
+              <Group gap={4}>{sel.labels.map((l) => <Pill key={l}>{l}</Pill>)}<Pill>{t("grado")} {sel.degree}</Pill></Group>
+              {sel.summary && <Text size="sm" className="ms-prose">{sel.summary}</Text>}
+            </Block>
+            <Sources keys={srcOf(sel)} name={(k) => originName.get(k) ?? k} />
+            <Block title={t("Hechos")} count={nodeFacts.length}>
+              {nodeFacts.length ? <DataTable aria-label={t("Hechos")}>
+                <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Hecho")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+                <DataTable.Tbody>{nodeFacts.map((l) => (
+                  <DataTable.Tr key={l.uuid}><DataTable.Td>
+                    <CellText sub={l.name}><Text size="sm" td={l.status === "invalidated" ? "line-through" : undefined}>{l.fact}</Text></CellText>
+                  </DataTable.Td></DataTable.Tr>))}
+                </DataTable.Tbody>
+              </DataTable> : <EmptyState>{t("Sin hechos")}</EmptyState>}
+            </Block>
+            {(mentions.data?.documents.length ?? 0) > 0 && <Block title={t("Documentos que la mencionan")} count={mentions.data!.documents.length}>
+              <DataTable aria-label={t("Documentos que la mencionan")}>
+                <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Documento")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+                <DataTable.Tbody>{mentions.data!.documents.map((d) => (
+                  <DataTable.Tr key={d.document_id}><DataTable.Td>
+                    <CellText sub={<Text inherit lineClamp={2}>…{d.snippet}…</Text>}>
+                      <Link to={`/conocimiento?doc=${d.document_id}`}>{d.title}{d.chunks > 1 ? t(" · {{chunks}} pasajes", { chunks: d.chunks }) : ""}</Link>
+                    </CellText>
+                  </DataTable.Td></DataTable.Tr>))}
+                </DataTable.Tbody>
+              </DataTable>
+            </Block>}
+          </>) : selLink ? (<>
+            <Block title={selLink.name}>
+              <CellText sub={<>{nameOf(selLink.source)} → {nameOf(selLink.target)}</>}>{selLink.fact}</CellText>
+              <Text size="sm">{t("Válido desde")} <span className="ms-data">{fmt(selLink.valid_at)}</span></Text>
+              {selLink.invalid_at && <Text size="sm">{t("Dejó de ser cierto")} <span className="ms-data">{fmt(selLink.invalid_at)}</span></Text>}
+            </Block>
+            <Sources keys={srcOf(selLink)} name={(k) => originName.get(k) ?? k} />
+          </>) : <EmptyState>{t("Clic en un nodo o en una arista para ver el detalle.")}</EmptyState>}
+        </FillArea>} />
     </Page>
   );
 }
@@ -241,9 +252,8 @@ export default function GraphPage({ graph }: { graph: string }) {
 function Sources({ keys, name }: { keys: string[]; name: (k: string) => string }) {
   const { t } = useTranslation();
   return (
-    <Stack gap={2}>
-      <Text size="xs" fw={600}>{t("Orígenes ({{count}})", { count: keys.length })}</Text>
-      {keys.length ? <Group gap={4}>{keys.map((k) => <Pill key={k} size="xs">{name(k)}</Pill>)}</Group> : <Text size="xs" c="dimmed">{t("Sin origen conocido")}</Text>}
-    </Stack>
+    <Block title={t("Orígenes")} count={keys.length}>
+      {keys.length ? <Group gap={4}>{keys.map((k) => <Pill key={k}>{name(k)}</Pill>)}</Group> : <EmptyState>{t("Sin origen conocido")}</EmptyState>}
+    </Block>
   );
 }

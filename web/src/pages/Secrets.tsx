@@ -1,10 +1,10 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Brain, get, send } from "../api";
-import { Btn, DataTable, EmptyState, MutationError, Notice, Pill, SelectField, TextArea } from "../ui";
+import { Block, Btn, CellText, DataTable, EmptyState, MutationError, Notice, Pill, SelectField, SettingsBody, SettingsRow, TextArea, SettingsGroup } from "../ui";
 
 type Rule = { rule: string; label: string; certain: boolean; count: number; items: number };
 type Item = { kind: "proposal" | "document"; id: number; title: string; findings: { rule: string; label: string; certain: boolean; context: string }[] };
@@ -44,7 +44,9 @@ export function SecretsNotice({ found, original }: { found?: SecretFinding[]; or
   );
 }
 
-/** Política de secretos del brain: qué hacer con lo que encuentra el detector y análisis en solo lectura de lo ya guardado. */
+/** Política de secretos del brain: qué hacer con lo que encuentra el detector y análisis en solo lectura de lo ya guardado. Its parts are the
+ *  children of the settings group that titles it (Administration → Secrets): the bar with the «i» and «Save», a row per setting, and the
+ *  analysis as a block below. */
 export default function Secrets({ brain }: { brain: Brain }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -57,46 +59,48 @@ export default function Secrets({ brain }: { brain: Brain }) {
   const changed = mode !== (brain.secret_mode ?? "mask") || allow !== (brain.secret_allow ?? "");
   const r = scan.data;
   return (
-    <Stack gap="md">
-      <Notice tone="info">{t("Antes de guardar una propuesta (también las de los agentes por MCP) o de indexar un documento, se buscan credenciales: claves de nube, tokens, claves privadas, JWT, cabeceras Authorization y contraseñas en URLs. Un valor aleatorio asignado a «password», «token» o «secret» se trata como posible y solo se marca. Ni la auditoría ni las notificaciones guardan el valor.")}</Notice>
-      <Stack gap={4}>
-        <SelectField label={t("Qué hacer con un secreto")} w={320} data={MODES.map((m) => ({ ...m, label: t(m.label) }))} value={mode} onChange={(v) => v && setMode(v)} allowDeselect={false} />
-        <Text size="xs" c="dimmed" className="ms-measure">{t(HELP[mode] ?? "")}</Text>
-      </Stack>
-      <TextArea label={t("Excepciones")} autosize minRows={2} maxRows={8} value={allow} onChange={(e) => setAllow(e.currentTarget.value)}
-        description={t("Una por línea. «rule:jwt» desactiva una regla; cualquier otra línea es una expresión regular y lo que encaje con ella no se trata como secreto. Las líneas con # son comentarios.")} />
-      <MutationError error={save.error} />
-      <Group gap="xs">
-        <Btn kind="primary" icon="save" disabled={!changed} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>
-        <Btn icon="search" loading={scan.isPending} onClick={() => scan.mutate()}>{t("Analizar lo ya guardado")}</Btn>
-      </Group>
-      <Text size="xs" c="dimmed" className="ms-measure">{t("El análisis pasa el detector por las propuestas y los documentos indexados del brain, con las excepciones guardadas, sin cambiar nada. Sirve para ver aciertos y falsos positivos antes de cambiar la política. Lo que ya está en el grafo no se analiza.")}</Text>
-      <MutationError error={scan.error} />
-      {r && <Stack gap="xs">
-        <Text size="sm">{t("Propuestas analizadas: {{p}}. Documentos analizados: {{d}}.", { p: r.proposals, d: r.documents })}{r.truncated ? ` ${t("Se ha parado al llegar al máximo de texto: faltan documentos.")}` : ""}</Text>
-        {r.rules.length ? <>
-          <DataTable fz="sm">
-            <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Clase")}</DataTable.Th><DataTable.Th>{t("Apariciones")}</DataTable.Th><DataTable.Th>{t("En")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
-            <DataTable.Tbody>{r.rules.map((x) => (
-              <DataTable.Tr key={x.rule}>
-                <DataTable.Td>{t(x.label)} <Text span size="xs" c="dimmed" className="ms-data">{x.rule}</Text></DataTable.Td>
-                <DataTable.Td>{x.certain ? <Pill size="xs" tone="danger">{t("seguro")}</Pill> : <Pill size="xs" tone="warn">{t("posible")}</Pill>}</DataTable.Td>
-                <DataTable.Td>{x.count}</DataTable.Td>
-                <DataTable.Td>{x.items}</DataTable.Td>
-              </DataTable.Tr>))}</DataTable.Tbody>
-          </DataTable>
-          <DataTable fz="sm">
-            <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Dónde")}</DataTable.Th><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Texto anterior (el valor no se muestra)")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
-            <DataTable.Tbody>{r.items.flatMap((it) => it.findings.map((f, i) => (
-              <DataTable.Tr key={`${it.kind}-${it.id}-${i}`}>
-                <DataTable.Td>{i === 0 ? `${it.kind === "proposal" ? t("Propuesta") : t("Documento")} #${it.id} · ${it.title}` : ""}</DataTable.Td>
-                <DataTable.Td>{t(f.label)}</DataTable.Td>
-                <DataTable.Td><Text size="xs" className="ms-data">…{f.context}</Text></DataTable.Td>
-              </DataTable.Tr>)))}</DataTable.Tbody>
-          </DataTable>
-          {r.items_truncated && <Text size="xs" c="dimmed">{t("Solo se listan los primeros 500 elementos; los recuentos sí son completos.")}</Text>}
-        </> : <EmptyState>{t("No se ha encontrado ningún secreto.")}</EmptyState>}
-      </Stack>}
-    </Stack>
+    <SettingsGroup title={t("Secretos")} description={t("Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave.")}
+      help={t("Antes de guardar una propuesta (también las de los agentes por MCP) o de indexar un documento, se buscan credenciales: claves de nube, tokens, claves privadas, JWT, cabeceras Authorization y contraseñas en URLs. Un valor aleatorio asignado a «password», «token» o «secret» se trata como posible y solo se marca. Ni la auditoría ni las notificaciones guardan el valor.")}
+      action={changed && <Btn kind="primary" icon="save" loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>}>
+      {save.error ? <SettingsBody><MutationError error={save.error} /></SettingsBody> : null}
+      <SettingsRow label={t("Qué hacer con un secreto")} help={t(HELP[mode] ?? "")}>
+        <SelectField aria-label={t("Qué hacer con un secreto")} data={MODES.map((m) => ({ ...m, label: t(m.label) }))} value={mode} onChange={(v) => v && setMode(v)} allowDeselect={false} />
+      </SettingsRow>
+      <SettingsRow label={t("Excepciones")} help={t("Una por línea. «rule:jwt» desactiva una regla; cualquier otra línea es una expresión regular y lo que encaje con ella no se trata como secreto. Las líneas con # son comentarios.")}>
+        <TextArea aria-label={t("Excepciones")} autosize minRows={2} maxRows={8} value={allow} onChange={(e) => setAllow(e.currentTarget.value)} />
+      </SettingsRow>
+      <SettingsBody>
+        <Block title={t("Lo ya guardado")}
+          help={t("El análisis pasa el detector por las propuestas y los documentos indexados del brain, con las excepciones guardadas, sin cambiar nada. Sirve para ver aciertos y falsos positivos antes de cambiar la política. Lo que ya está en el grafo no se analiza.")}
+          actions={<Btn icon="search" loading={scan.isPending} onClick={() => scan.mutate()}>{t("Analizar lo ya guardado")}</Btn>}>
+          <MutationError error={scan.error} />
+          {r && <>
+            <Text size="sm">{t("Propuestas analizadas: {{p}}. Documentos analizados: {{d}}.", { p: r.proposals, d: r.documents })}{r.truncated ? ` ${t("Se ha parado al llegar al máximo de texto: faltan documentos.")}` : ""}
+              {r.items_truncated ? ` ${t("Solo se listan los primeros 500 elementos; los recuentos sí son completos.")}` : ""}</Text>
+            {r.rules.length ? <>
+              <DataTable fz="sm" aria-label={t("Tipo")}>
+                <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Clase")}</DataTable.Th><DataTable.Th>{t("Apariciones")}</DataTable.Th><DataTable.Th>{t("En")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+                <DataTable.Tbody>{r.rules.map((x) => (
+                  <DataTable.Tr key={x.rule}>
+                    <DataTable.Td><CellText data sub={x.rule}>{t(x.label)}</CellText></DataTable.Td>
+                    <DataTable.Td>{x.certain ? <Pill tone="danger">{t("seguro")}</Pill> : <Pill tone="warn">{t("posible")}</Pill>}</DataTable.Td>
+                    <DataTable.Td className="ms-data">{x.count}</DataTable.Td>
+                    <DataTable.Td className="ms-data">{x.items}</DataTable.Td>
+                  </DataTable.Tr>))}</DataTable.Tbody>
+              </DataTable>
+              <DataTable fz="sm" aria-label={t("Dónde")}>
+                <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Dónde")}</DataTable.Th><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Texto anterior (el valor no se muestra)")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+                <DataTable.Tbody>{r.items.flatMap((it) => it.findings.map((f, i) => (
+                  <DataTable.Tr key={`${it.kind}-${it.id}-${i}`}>
+                    <DataTable.Td>{i === 0 ? `${it.kind === "proposal" ? t("Propuesta") : t("Documento")} #${it.id} · ${it.title}` : ""}</DataTable.Td>
+                    <DataTable.Td>{t(f.label)}</DataTable.Td>
+                    <DataTable.Td className="ms-data">…{f.context}</DataTable.Td>
+                  </DataTable.Tr>)))}</DataTable.Tbody>
+              </DataTable>
+            </> : <EmptyState>{t("No se ha encontrado ningún secreto.")}</EmptyState>}
+          </>}
+        </Block>
+      </SettingsBody>
+    </SettingsGroup>
   );
 }

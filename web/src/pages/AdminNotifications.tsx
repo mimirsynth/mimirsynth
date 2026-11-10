@@ -1,10 +1,10 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
+import { Group, Stack } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { fmt, get, send } from "../api";
-import { Btn, Check, ConfirmDialog, DataState, DataTable, EmptyState, ListCard, Modal, MutationError, Notice, PasswordField, Pill, SelectField, SettingsBody, SettingsGroup, TextField } from "../ui";
+import { Block, Btn, CellText, Check, ConfirmDialog, DataState, DataTable, DialogActions, EmptyState, ListCard, Modal, MutationError, Notice, PasswordField, Pill, Segments, SelectField, SettingsBody, SettingsGroup, TextField, ViewBar } from "../ui";
 import { SEVERITY } from "./Notifications";
 import AdminSettings from "./AdminSettings";
 
@@ -50,20 +50,18 @@ function ChannelForm({ initial, id, cat, onClose }: { initial: Draft; id: number
   const needsSecret = d.kind === "telegram" || d.kind === "gotify";
   const ok = d.name.trim() && (d.kind === "email" ? d.config.to?.trim() : d.kind === "telegram" ? d.config.chat_id?.trim() && (id !== null || d.secret) : d.kind === "ntfy" ? d.config.topic?.trim() : d.config.url?.trim()) && (!needsSecret || id !== null || d.secret);
   return (
-    <Stack gap="xs">
+    <Stack gap="sm">
       <TextField label={t("Nombre")} placeholder={t("Telegram del homelab")} value={d.name} onChange={(e) => set("name", e.currentTarget.value)} data-autofocus />
       {id === null && <SelectField label={t("Tipo")} data={KINDS.map((k) => ({ value: k.value, label: t(k.label) }))} value={d.kind} allowDeselect={false} onChange={(v) => v && setD({ ...d, kind: v, config: {}, secret: "" })} />}
       {fields.map((f) => <TextField key={f} label={t(FIELD_LABEL[f]?.label ?? f)} description={FIELD_LABEL[f]?.hint ? t(FIELD_LABEL[f].hint!) : undefined} placeholder={FIELD_LABEL[f]?.ph} value={d.config[f] ?? ""} onChange={(e) => set("config", { ...d.config, [f]: e.currentTarget.value })} />)}
       {cat.kinds[d.kind]?.secret && <PasswordField label={t(SECRET_LABEL[d.kind] ?? "Secreto")} description={id !== null ? t("Vacío = conservar el guardado. Nunca se muestra.") : undefined} autoComplete="off" value={d.secret} onChange={(e) => set("secret", e.currentTarget.value)} />}
       <SelectField label={t("Severidad mínima")} description={t("Por debajo de esta severidad no se envía nada por este canal.")} data={SEVS.map((s) => ({ value: s, label: t(SEVERITY[s].label) }))} value={d.min_severity} allowDeselect={false} onChange={(v) => v && set("min_severity", v)} />
-      <Stack gap={4}>
-        <Text size="sm" fw={600}>{t("Eventos")}</Text>
-        <Text size="xs" c="dimmed">{t("Sin ninguno marcado, el canal recibe todos.")}</Text>
+      <Block title={t("Eventos")} help={t("Sin ninguno marcado, el canal recibe todos.")}>
         {cat.events.map((e) => <Check key={e.key} label={t(e.label)} checked={d.events.includes(e.key)} onChange={(ev) => set("events", ev.currentTarget.checked ? [...d.events, e.key] : d.events.filter((x) => x !== e.key))} />)}
-      </Stack>
+      </Block>
       <Check label={t("Canal activo")} checked={d.enabled} onChange={(e) => set("enabled", e.currentTarget.checked)} />
       <MutationError error={save.error} />
-      <Group justify="flex-end"><Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn><Btn kind="primary" icon="save" disabled={!ok} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></Group>
+      <DialogActions><Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn><Btn kind="primary" icon="save" disabled={!ok} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></DialogActions>
     </Stack>
   );
 }
@@ -81,6 +79,7 @@ function Test({ c }: { c: Channel }) {
   );
 }
 
+/** The delivery history: the state segments in the view's bar, then the table (or its empty state). */
 function Deliveries() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -89,9 +88,11 @@ function Deliveries() {
   const retry = useMutation({ mutationFn: (id: number) => send("POST", `notifications/deliveries/${id}/retry`), onSuccess: () => qc.invalidateQueries({ queryKey: ["notify-deliveries"] }) });
   const tone = (s: string) => (s === "sent" ? "success" : s === "failed" ? "danger" : "warn");
   const label = (s: string) => (s === "sent" ? t("enviado") : s === "failed" ? t("fallido") : t("pendiente"));
-  return (
-    <Stack gap="xs">
-      <SelectField size="xs" w={200} aria-label={t("Estado")} placeholder={t("Todos los estados")} clearable data={[{ value: "pending", label: t("Pendientes") }, { value: "failed", label: t("Fallidos") }, { value: "sent", label: t("Enviados") }]} value={status} onChange={setStatus} />
+  return (<>
+      <ViewBar title={t("Historial de envíos")}>
+        <Segments label={t("Estado")} value={status ?? "all"} onChange={(v) => setStatus(v === "all" ? null : v)}
+          data={[{ value: "all", label: t("Todos") }, { value: "pending", label: t("Pendientes") }, { value: "failed", label: t("Fallidos") }, { value: "sent", label: t("Enviados") }]} />
+      </ViewBar>
       <DataState query={q}>{() => (
         q.data?.items.length ? <DataTable fz="sm">
           <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Aviso")}</DataTable.Th><DataTable.Th>{t("Canal")}</DataTable.Th><DataTable.Th>{t("Estado")}</DataTable.Th><DataTable.Th>{t("Fecha")}</DataTable.Th><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
@@ -99,17 +100,17 @@ function Deliveries() {
             <DataTable.Tr key={d.id}>
               <DataTable.Td>{d.kind === "recovery" ? `${t("Recuperado")}: ` : ""}{d.title}</DataTable.Td>
               <DataTable.Td>{d.channel}</DataTable.Td>
-              <DataTable.Td><Pill size="xs" tone={tone(d.status)}>{label(d.status)}</Pill>{d.error && <Text size="xs" c="dimmed">{d.error}</Text>}</DataTable.Td>
-              <DataTable.Td>{fmt(d.sent_at ?? d.created_at)}</DataTable.Td>
+              <DataTable.Td><CellText sub={d.error || undefined}><Pill tone={tone(d.status)}>{label(d.status)}</Pill></CellText></DataTable.Td>
+              <DataTable.Td className="ms-data">{fmt(d.sent_at ?? d.created_at)}</DataTable.Td>
               <DataTable.Td>{d.status === "failed" && <Btn size="row" icon="refresh" onClick={() => retry.mutate(d.id)}>{t("Reintentar")}</Btn>}</DataTable.Td>
             </DataTable.Tr>))}</DataTable.Tbody>
         </DataTable> : <EmptyState>{t("Aún no se ha enviado nada.")}</EmptyState>
       )}</DataState>
-    </Stack>
-  );
+  </>);
 }
 
-/** Administración → Notificaciones: canales de salida (Telegram, ntfy, Gotify, webhook, correo), historial de envíos y ajustes de agrupación y silencio. */
+/** Administración → Notificaciones: canales de salida (Telegram, ntfy, Gotify, webhook, correo), historial de envíos y ajustes de agrupación y silencio.
+ *  Three sections one under the other: the channels (list cards, «Add channel» in the header), the delivery history and the settings. */
 export default function AdminNotifications() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -120,30 +121,30 @@ export default function AdminNotifications() {
   const remove = useMutation({ mutationFn: (c: Channel) => send("DELETE", `notifications/channels/${c.id}`), onSuccess: () => qc.invalidateQueries({ queryKey: ["notify-channels"] }) });
   const empty: Draft = { name: "", kind: "telegram", config: {}, secret: "", enabled: true, min_severity: "warning", events: [] };
   const evLabel = (k: string) => cat.data?.events.find((e) => e.key === k)?.label ?? k;
-  return (
-    <Stack gap="md">
-      <SettingsGroup title={t("Canales")} description={t("Adónde se envían los avisos del sistema. Los avisos también aparecen siempre en la campana de la interfaz, haya o no canales.")}
-        action={<Btn size="row" kind="primary" icon="plus" disabled={!cat.data} onClick={() => setForm({ draft: empty, id: null })}>{t("Añadir canal")}</Btn>}>
+  return (<>
+      <SettingsGroup title={t("Canales")} description={t("Adónde se envían los avisos del sistema.")}
+        help={t("Los avisos también aparecen siempre en la campana de la interfaz, haya o no canales.")}
+        action={<Btn kind="primary" icon="plus" disabled={!cat.data} onClick={() => setForm({ draft: empty, id: null })}>{t("Añadir canal")}</Btn>}>
         <SettingsBody><DataState query={q}>{() => (
-          <Stack gap="xs">
+          <>
             {q.data?.length === 0 && <EmptyState>{t("Aún no hay canales: los avisos solo salen en la campana.")}</EmptyState>}
             {q.data?.map((c) => (
               <ListCard key={c.id} title={c.name} aside={<Pill tone={c.enabled ? "success" : "neutral"}>{c.enabled ? t("Activo") : t("Desactivado")}</Pill>}
-                tags={<><Pill size="xs">{t(KINDS.find((k) => k.value === c.kind)?.label ?? c.kind)}</Pill><Pill size="xs">{t("desde")} {t(SEVERITY[c.min_severity]?.label ?? c.min_severity)}</Pill>
-                  {c.events.length ? c.events.map((e) => <Pill key={e} size="xs">{t(evLabel(e))}</Pill>) : <Pill size="xs">{t("todos los eventos")}</Pill>}</>}
+                tags={<><Pill>{t(KINDS.find((k) => k.value === c.kind)?.label ?? c.kind)}</Pill><Pill>{t("desde")} {t(SEVERITY[c.min_severity]?.label ?? c.min_severity)}</Pill>
+                  {c.events.length ? c.events.map((e) => <Pill key={e}>{t(evLabel(e))}</Pill>) : <Pill>{t("todos los eventos")}</Pill>}</>}
                 meta={c.last ? `${t("último envío")}: ${c.last.status === "sent" ? t("correcto") : c.last.status === "failed" ? t("fallido") : t("pendiente")} · ${fmt(c.last.at)}${c.last.error ? ` · ${c.last.error}` : ""}` : t("sin envíos todavía")}
                 actions={<Stack gap={6}><Group gap={6}>
                   <Btn size="row" icon="edit" onClick={() => setForm({ id: c.id, draft: { name: c.name, kind: c.kind, config: c.config, secret: "", enabled: c.enabled, min_severity: c.min_severity, events: c.events } })}>{t("Editar")}</Btn>
                   <Btn size="row" kind="danger" icon="trash" onClick={() => setDel(c)}>{t("Borrar")}</Btn></Group><Test c={c} /></Stack>} />))}
-          </Stack>
+          </>
         )}</DataState></SettingsBody>
       </SettingsGroup>
-      <SettingsGroup title={t("Historial de envíos")} description={t("Cada envío con su resultado. Los fallos se reintentan solos con espera creciente; los que agotan los intentos se pueden reintentar a mano.")}><SettingsBody><Deliveries /></SettingsBody></SettingsGroup>
+      <SettingsGroup title={t("Historial de envíos")} description={t("Cada envío con su resultado.")}
+        help={t("Los fallos se reintentan solos con espera creciente; los que agotan los intentos se pueden reintentar a mano.")}><SettingsBody><Deliveries /></SettingsBody></SettingsGroup>
       <AdminSettings group="notifications" />
       <Modal opened={!!form} onClose={() => setForm(null)} title={form?.id === null ? t("Añadir canal") : t("Editar canal")} size="lg">
         {form && cat.data && <ChannelForm initial={form.draft} id={form.id} cat={cat.data} onClose={() => setForm(null)} />}
       </Modal>
       <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Borrar canal")} action={t("Borrar canal")} subject={del?.name} warning={t("Deja de recibir avisos y se borra su historial de envíos.")} onConfirm={() => remove.mutateAsync(del!)} />
-    </Stack>
-  );
+  </>);
 }

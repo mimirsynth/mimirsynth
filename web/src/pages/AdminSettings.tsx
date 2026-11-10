@@ -1,6 +1,6 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Text } from "@mantine/core";
+import { Group } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { get, send } from "../api";
@@ -13,15 +13,20 @@ type Data = { groups: { key: string; label: string }[]; items: Item[]; secrets: 
 const GROUP_HELP: Record<string, string> = {
   general: T("Preferencias generales de la instancia."),
   security: T("Cómo se protegen las cuentas con contraseña: longitud mínima, bloqueo tras intentos fallidos y caducidad de los enlaces."),
-  mail: T("Servidor de correo saliente. Se usa para enviar invitaciones y enlaces de recuperación de contraseña."),
+  mail: T("Servidor de correo saliente."),
   identity: T("Datos comunes a todos los proveedores de inicio de sesión."),
   docs: T("Límites de la memoria documental: qué se acepta al subir o escanear."),
   recall: T("Cómo se buscan y mezclan los pasajes de documentos con los hechos cuando un agente pide contexto."),
   ingest: T("Reintentos de la ingesta y cuánto tiempo se conservan los trabajos."),
   notifications: T("Cómo se agrupan los avisos, cuándo callar y qué comprueba la instancia por sí sola."),
 };
+// What does not fit in a section's one-sentence description, behind the «i» beside its title.
+const GROUP_MORE: Record<string, string> = {
+  mail: T("Se usa para enviar invitaciones y enlaces de recuperación de contraseña."),
+};
 
-/** Un ajuste: el control se guarda con «Guardar» (solo aparece si ha cambiado) y «Restaurar» vuelve al valor por defecto. */
+/** Un ajuste: el control se guarda con «Guardar» (solo aparece si ha cambiado) y «Restaurar» vuelve al valor por defecto; mientras el
+ *  valor guardado no es el de por defecto, la ayuda de la fila dice cuál es. */
 function ItemRow({ it, onDone }: { it: Item; onDone: () => void }) {
   const { t } = useTranslation();
   const [v, setV] = useState<string | number>(it.value);
@@ -30,7 +35,8 @@ function ItemRow({ it, onDone }: { it: Item; onDone: () => void }) {
   const reset = useMutation({ mutationFn: () => send("DELETE", `settings/${it.key}`), onSuccess: () => { onDone(); } });
   const label = it.unit ? `${t(it.label)} (${t(it.unit)})` : t(it.label);
   return (
-    <SettingsRow label={t(it.label)} help={<>{t(it.help)}{it.unit && ` (${t(it.unit)})`}</>}>
+    <SettingsRow label={t(it.label)} help={<>{t(it.help)}{it.unit && ` (${t(it.unit)})`}
+      {!dirty && it.changed && <>{" · "}{t("Por defecto:")} <span className="ms-data">{String(it.default) || t("vacío")}</span></>}</>}>
       {it.type === "choice"
         ? <SelectField aria-label={label} allowDeselect={false} value={String(v)} data={(it.choices ?? []).map((c) => ({ ...c, label: t(c.label) }))} onChange={(x) => setV(x ?? "")} />
         : it.type === "int" || it.type === "float"
@@ -42,7 +48,6 @@ function ItemRow({ it, onDone }: { it: Item; onDone: () => void }) {
           {dirty && <Btn size="row" kind="primary" disabled={v === ""} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>}
           {dirty && <Btn size="row" kind="ghost" onClick={() => setV(it.value)}>{t("Cancelar")}</Btn>}
           {!dirty && it.changed && <Btn size="row" icon="undo" loading={reset.isPending} onClick={() => { reset.mutate(); setV(it.default); }}>{t("Restaurar")}</Btn>}
-          {!dirty && it.changed && <Text size="xs" c="dimmed">{t("Por defecto:")} {String(it.default) || t("vacío")}</Text>}
         </Group>)}
     </SettingsRow>
   );
@@ -94,7 +99,7 @@ export default function AdminSettings({ group }: { group: string }) {
         const g = d.groups.find((x) => x.key === group) ?? d.groups[0];
         return (<>
           {g.key === "identity" && <AdminProviders />}
-          <SettingsGroup key={g.key} title={t(g.label)} description={t(GROUP_HELP[g.key])}>
+          <SettingsGroup key={g.key} title={t(g.label)} description={t(GROUP_HELP[g.key])} help={GROUP_MORE[g.key] && t(GROUP_MORE[g.key])}>
             {d.items.filter((i) => i.group === g.key).map((it) => <ItemRow key={`${it.key}:${String(it.value)}`} it={it} onDone={refresh} />)}
             {g.key === "mail" && <>
               <SecretItem k="smtp_password" label={t("Contraseña SMTP")} help={t("Se guarda cifrada y no se vuelve a mostrar.")} state={d.secrets.smtp_password} onDone={refresh} />

@@ -21,7 +21,7 @@ Current facts with the **same subject** and the **same relation** and **differen
 - Two targets with the same name except for case and spacing count as the same target. That is a duplicate entity, not a contradiction: see [[Merge duplicates]].
 
 ## Reviewing a case
-A short note at the top says what the tab is for and what each action does. The cases are a compact table with one row per group: **Subject**, **Relation**, **Target type** (the entity type of the targets; only targets of the same type are compared), **Facts** and **Suggestion**. **Review** opens a group. The **Suggestion** column says whether there is one:
+The «i» at the start of the bar says what the tab is for and what each action does. The cases are a compact table with one row per group: **Subject**, **Relation**, **Target type** (the entity type of the targets; only targets of the same type are compared), **Facts** and **Suggestion**. **Review** opens a group. The **Suggestion** column says whether there is one:
 
 | Tag | Meaning |
 |---|---|
@@ -50,7 +50,7 @@ A relation such as `MONITORS` can have many targets by nature: a monitoring serv
 - The measurement table shows the same flag next to the relation's name.
 
 ## Measure before marking
-**Measure across all relations** looks at every relation, marked or not, **without changing anything**. The **Candidates by relation** table lists, for each relation with at least one case:
+In the **Relations** selector, **Measure in all** looks at every relation, marked or not, **without changing anything**. The **Candidates by relation** table lists, for each relation with at least one case:
 
 | Column | What it shows |
 |---|---|

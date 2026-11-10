@@ -2,8 +2,8 @@ import { T, locale, tr, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
-import { Btn, ClearFilters, ConfirmDialog, Form, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager, Panel,
-  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Sheet, SheetRow, Steps, EntityChip, ListCard, Step, Tabs, TextArea, TextField, Tone, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
+import { Block, Btn, CellText, ClearFilters, Compare, ConfirmDialog, DialogActions, Form, HelpTip, Icon, IconButton, ColHead, CopyBtn, DataTable, EmptyState, FillArea, InboxLayout, Loading, Modal, MutationError, Notice, NumberField, Page, PageHeader, Pager,
+  Pill, Check, QueueList, RowOpen, focusedQueueItem, Segments, Sheet, SheetRow, Steps, EntityChip, ListCard, Step, Tabs, TextArea, TextField, Tone, ViewBar, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
@@ -38,8 +38,8 @@ type Verb = "approve" | "reject" | "mask-and-approve";
 function KindPill({ kind }: { kind?: string }) {
   const { t } = useTranslation();
   return kind === "correction"
-    ? <Pill size="xs" tone="warn" strong title={t("Invalida un hecho del grafo")}><span className="ms-pill-row"><Icon name="undo" size={12} />{t("Corrige")}</span></Pill>
-    : <Pill size="xs" tone="neutral" title={t("Añade conocimiento al grafo")}><span className="ms-pill-row"><Icon name="plus" size={12} />{t("Añade")}</span></Pill>;
+    ? <Pill tone="warn" strong title={t("Invalida un hecho del grafo")}><span className="ms-pill-row"><Icon name="undo" size={12} />{t("Corrige")}</span></Pill>
+    : <Pill tone="neutral" title={t("Añade conocimiento al grafo")}><span className="ms-pill-row"><Icon name="plus" size={12} />{t("Añade")}</span></Pill>;
 }
 
 /** Marker in the list for a proposal the secret detector touched: masked (already safe) or flagged (a person must look). Text and icon, not only colour. */
@@ -47,7 +47,7 @@ function SecretsPill({ found }: { found?: SecretFinding[] }) {
   const { t } = useTranslation();
   if (!found?.length) return null;
   const isFlagged = found.some((f) => f.action === "flagged");
-  return <Pill size="xs" tone={isFlagged ? "warn" : "neutral"} title={[...new Set(found.map((f) => t(f.label)))].join(", ")}>
+  return <Pill tone={isFlagged ? "warn" : "neutral"} title={[...new Set(found.map((f) => t(f.label)))].join(", ")}>
     <span className="ms-pill-row"><Icon name="lock" size={12} />{isFlagged ? t("Secreto por revisar") : t("Secreto enmascarado")}</span></Pill>;
 }
 
@@ -81,10 +81,11 @@ type View = ReturnType<typeof useProposalsView>;
 const useProposalsView = () => useServerTableView({ q: "", author: "" }, { debounced: ["q"], firstDir: { name: "asc", author: "asc" }, defaultSort: { key: "at", dir: "desc" } });
 
 /** Estado, filtros, orden y página se resuelven en el servidor (#88): con muchas propuestas se llega a todas y los filtros abarcan el conjunto entero.
- *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza. `statuses` are the state segments it offers, the first one being «all of them». */
-function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, kindsFrom, onOpen, emptyAll, label, lead }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
-  /** A selector that goes first on the same row as the state and the kind (the queue's Show). */ lead?: ReactNode;
-  /** The table's name for a screen reader. */ label: string;
+ *  Devuelve hijos directos de la página: así solo la tabla (`FillArea`) se desplaza. `statuses` are the state segments it offers, the first one being «all of them».
+ *  The view's bar carries the state and kind segments and the view's `actions`; the table, or the empty state, follows. */
+function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, kindsFrom, onOpen, emptyAll, label, actions }: { data?: PropList; view: View; status: string; onStatus: (s: string) => void;
+  /** The view's buttons, on the right of its bar (one's own proposals: «New proposal»). */ actions?: ReactNode;
+  /** The table's name for a screen reader, and the view's name for its bar. */ label: string;
   statuses: { value: string; label: string; count?: number }[]; kind: string; onKind: (k: string) => void; onOpen: (id: number) => void;
   /** The counts not filtered by kind, which the kind selector counts from. */ kindsFrom?: Counts;
   /** What to say when nothing at all is there yet (the first state, no filters). */ emptyAll: string }) {
@@ -94,16 +95,18 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
   const mixed = new Set(rows.map((p) => p.kind)).size > 1;  // a Kind column only when the rows differ in it
   const kinds = kindCounts(kindsFrom, status);
   const byKind = kind !== "all" || (!!kinds.memory && !!kinds.correction);  // and a Kind filter only when there is something to tell apart
+  const none = !!data && rows.length === 0;
+  const empty = <EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : status === statuses[0]?.value && kind === "all" ? emptyAll : t("No hay propuestas en este estado.")}</EmptyState>;
   return (<>
-    <div className="ms-filter-row">
-      {lead}
+    <ViewBar title={label} actions={actions}>
       <Segments label={t("Estado")} value={status} onChange={onStatus} data={statuses} />
       {byKind && <Segments label={t("Tipo")} value={kind} onChange={onKind}
         data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },
           { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />}
-    </div>
-    <ClearFilters active={active} onClear={clear} />
-    <FillArea><DataTable fz="sm" aria-label={label}>
+      <ClearFilters active={active} onClear={clear} />
+    </ViewBar>
+    {/* nothing in this state: the empty state instead of the table, unless a column filter emptied it, whose header stays to change it */}
+    {none && !active ? empty : <FillArea><DataTable fz="sm" aria-label={label}>
       <DataTable.Thead><DataTable.Tr>
         <ColHead sort={sortProps("id")}>#</ColHead>
         {mixed && <ColHead>{t("Tipo")}</ColHead>}
@@ -119,12 +122,11 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
             <DataTable.Td className="ms-data">#{p.id}</DataTable.Td>{mixed && <DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>}
             <DataTable.Td><Group gap={4} wrap="wrap"><RowOpen onOpen={() => onOpen(p.id)}>{p.purged_at ? t("(texto purgado)") : p.name}</RowOpen><SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td><span title={p.author}>{who(p)}</span></DataTable.Td><DataTable.Td className="ms-data">{fmtNum(p.confidence)}</DataTable.Td>
-            <DataTable.Td><Pill size="sm" tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td className="ms-data">{fmt(p.created_at)}</DataTable.Td>
-            <DataTable.Td>{p.reviewed_at ? <Stack gap={0}><Text size="sm">{decidedBy(p, t)}</Text><Text size="xs" c="dimmed" className="ms-data">{fmt(p.reviewed_at)}</Text></Stack> : "—"}</DataTable.Td>
+            <DataTable.Td><Pill tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td className="ms-data">{fmt(p.created_at)}</DataTable.Td>
+            <DataTable.Td>{p.reviewed_at ? <CellText sub={fmt(p.reviewed_at)} data>{decidedBy(p, t)}</CellText> : "—"}</DataTable.Td>
           </DataTable.Tr>))}
-        {data && rows.length === 0 && <DataTable.Tr><DataTable.Td colSpan={mixed ? 8 : 7}><EmptyState>{active ? t("Ninguna propuesta coincide con los filtros.") : status === statuses[0]?.value && kind === "all" ? emptyAll : t("No hay propuestas en este estado.")}</EmptyState></DataTable.Td></DataTable.Tr>}
       </DataTable.Tbody>
-    </DataTable></FillArea>
+    </DataTable>{none && empty}</FillArea>}
     <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} />
   </>);
 }
@@ -192,7 +194,10 @@ function useDecisionText(base: string, graph: string, last: Decision | null, llm
   } else {
     step = "entering"; text = t("Propuesta #{{id}} aprobada: entrando en el grafo…", { id });
   }
-  return { tone, text, undo, view, phase: `${last.verb}:${(last.ids ?? [id]).join(",")}:${step}` };
+  // an informative state has a name (DESIGN.md, the Screen Anatomy Rule): a rejection, a decision taken back, or nothing decided
+  const title = tone !== "info" ? undefined : step === "reject" ? (many ? t("Rechazadas") : t("Rechazada"))
+    : step === "undone" ? (many ? t("Decisiones deshechas") : t("Decisión deshecha")) : t("Nada decidido");
+  return { tone, title, text, undo, view, phase: `${last.verb}:${(last.ids ?? [id]).join(",")}:${step}` };
 }
 
 /** The last decision on screen, with its way back. It sits in the review footer, under the buttons it answers, when that footer is in
@@ -217,7 +222,7 @@ function DecisionNotice({ base, graph, last, llm, onUndo, undoing, undoError, on
     <Btn kind="link" onClick={onClose}>{t("Cerrar aviso")}</Btn>,
   ].filter(Boolean);
   const row = links.map((l, i) => <Fragment key={i}>{i > 0 && " · "}{l}</Fragment>);
-  return (<Notice tone={m.tone}>{compact
+  return (<Notice tone={m.tone} title={m.title}>{compact
     ? <Stack gap={2}><Text size="sm">{m.text} {row}</Text><MutationError error={undoError} /></Stack>
     : <Stack gap={4}><Text size="sm">{m.text}</Text><Text size="sm">{row}</Text><MutationError error={undoError} /></Stack>}</Notice>);
 }
@@ -245,23 +250,17 @@ function useShown(ref: RefObject<HTMLElement | null>, mounted: boolean) {
   return shown;
 }
 
-/** What to look at before approving a correction: the affected fact as it was, the reason and the text that replaces it. */
+/** What to look at before approving a correction: the affected fact as it was beside the text that replaces it, then the reason. */
 function CorrectionDetail({ c, replacement }: { c: Correction; replacement: string }) {
   const { t } = useTranslation();
-  return (<Stack gap="xs">
-    <Panel withBorder p="sm"><Stack gap={4}>
-      <Text size="xs" fw={600}>{t("Hecho que se invalida")}</Text>
-      <Text className="ms-prose">{c.fact.fact}</Text>
-      <Text size="xs" c="dimmed" className="ms-measure">{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) })}` : ""} · <code>{c.fact_uuid}</code></Text>
-    </Stack></Panel>
-    <Panel withBorder p="sm"><Stack gap={4}>
-      <Text size="xs" fw={600}>{t("Motivo")}</Text><Text className="ms-prose">{c.reason}</Text>
-    </Stack></Panel>
-    <Panel withBorder p="sm"><Stack gap={4}>
-      <Text size="xs" fw={600}>{t("Lo que lo sustituye")}</Text>
-      {replacement.trim() ? <Text className="ms-prose">{replacement}</Text> : <Text size="xs" c="dimmed">{t("Sin sustituto: solo se invalida el hecho.")}</Text>}
-    </Stack></Panel>
-  </Stack>);
+  return (<>
+    <Compare items={[
+      { label: t("Hecho que se invalida"), children: <CellText sub={<>{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) })}` : ""} · <code>{c.fact_uuid}</code></>}>
+        {c.fact.fact}</CellText> },
+      { label: t("Lo que lo sustituye"), children: replacement.trim() ? replacement : t("Sin sustituto: solo se invalida el hecho.") },
+    ]} />
+    <Block title={t("Motivo")}><Text className="ms-prose">{c.reason}</Text></Block>
+  </>);
 }
 
 const CLAIM_VERDICT: Record<Claim["verdict"], { label: string; tone: Tone; facts?: string }> = {
@@ -275,31 +274,27 @@ const CLAIM_VERDICT: Record<Claim["verdict"], { label: string; tone: Tone; facts
 /** The proposal's structured claims (issue 295): each with what the brain knew when it was sent and what approving it does or did. */
 function ClaimsDetail({ claims }: { claims: Claim[] }) {
   const { t } = useTranslation();
-  return (<Stack gap="xs">
-    <Text size="xs" fw={600}>{t("Afirmaciones")}</Text>
+  return (<Block title={t("Afirmaciones")} count={claims.length}>
     {claims.map((c, i) => {
       const v = CLAIM_VERDICT[c.verdict] ?? CLAIM_VERDICT.new;
-      return (<Panel key={i} withBorder p="sm"><Stack gap={4}>
-        <Group gap="xs"><Text size="sm">{c.subject} → <span title={c.relation}>{humanRelation(c.relation)}</span> → {c.value}</Text><Pill size="xs" tone={v.tone}>{t(v.label)}</Pill></Group>
-        {c.valid_from && <Text size="xs" c="dimmed">{t("vigente desde {{date}}", { date: fmtDay(c.valid_from) })}</Text>}
-        {v.facts && c.facts.length > 0 && <>
-          <Text size="xs" c="dimmed">{c.applied ? t("Aplicada el {{at}}.", { at: fmt(c.applied.at) }) : t(v.facts)}</Text>
-          {c.facts.map((f) => <Text key={f.uuid} size="xs">«{f.fact}» <code>{f.uuid}</code></Text>)}</>}
-      </Stack></Panel>);
+      return (<ListCard key={i} title={<>{c.subject} → <span title={c.relation}>{humanRelation(c.relation)}</span> → {c.value}</>} aside={<Pill tone={v.tone}>{t(v.label)}</Pill>}
+        meta={c.valid_from ? t("vigente desde {{date}}", { date: fmtDay(c.valid_from) }) : undefined}
+        note={v.facts && c.facts.length > 0 ? <>{c.applied ? t("Aplicada el {{at}}.", { at: fmt(c.applied.at) }) : t(v.facts)}
+          {c.facts.map((f) => <div key={f.uuid}>«{f.fact}» <code>{f.uuid}</code></div>)}</> : undefined} />);
     })}
-  </Stack>);
+  </Block>);
 }
 
-/** Whether what was ingested can be found again: each new fact and its control question (issue 296). */
+/** Whether what was ingested can be found again: each new fact and its control question (issue 296). Lines of the ingestion step. */
 function SelfTest({ s }: { s: NonNullable<Prop["selftest"]> }) {
   const { t } = useTranslation();
-  if (s.skipped) return <Text size="xs" c="dimmed">{t("Sin comprobar si se recupera: este brain ya hizo todas las comprobaciones de esta hora.")}</Text>;
-  if (s.error) return <Text size="xs" c="dimmed">{t("No se pudo comprobar si se recupera: {{e}}", { e: s.error })}</Text>;
+  if (s.skipped) return <div>{t("Sin comprobar si se recupera: este brain ya hizo todas las comprobaciones de esta hora.")}</div>;
+  if (s.error) return <div>{t("No se pudo comprobar si se recupera: {{e}}", { e: s.error })}</div>;
   if (s.retrievable === null || s.retrievable === undefined) return null;
-  if (s.retrievable) return <Text size="xs" c="dimmed">{t("Comprobado: cada hecho nuevo sale al preguntar por él.")}</Text>;
+  if (s.retrievable) return <div>{t("Comprobado: cada hecho nuevo sale al preguntar por él.")}</div>;
   return (<Notice tone="warn" title={t("Ingerida, pero no se recupera")}><Stack gap={4}>
-    {(s.results ?? []).filter((r) => !r.found).map((r) => <Text key={r.fact_uuid} size="xs">«{r.fact}» {t("no sale al preguntar «{{q}}».", { q: r.question })}{r.outranked_by.length ? ` ${t("Salen antes: {{v}}.", { v: r.outranked_by.map((x) => `«${x}»`).join(", ") })}` : ""}</Text>)}
-    <Text size="xs" c="dimmed">{t("Para arreglarlo: reescribe el hecho con el nombre con que se pregunta, añade un alias a la entidad o invalida los hechos que lo tapan.")}</Text>
+    {(s.results ?? []).filter((r) => !r.found).map((r) => <Text key={r.fact_uuid} size="sm">«{r.fact}» {t("no sale al preguntar «{{q}}».", { q: r.question })}{r.outranked_by.length ? ` ${t("Salen antes: {{v}}.", { v: r.outranked_by.map((x) => `«${x}»`).join(", ") })}` : ""}</Text>)}
+    <Text size="sm">{t("Para arreglarlo: reescribe el hecho con el nombre con que se pregunta, añade un alias a la entidad o invalida los hechos que lo tapan.")}</Text>
   </Stack></Notice>);
 }
 
@@ -318,22 +313,26 @@ function DistilDetail({ d, ops }: { d: Prop; ops: Ops }) {
     onSuccess: (r) => setTicked(r.delete) });
   const out: DistilOut | undefined = d.ingest_report?.distil;
   const pending = d.status === "pending";
-  return (<Stack gap="xs">
-    <Text size="xs" fw={600}>{t("Episodios que resume ({{n}})", { n: eps.length })}</Text>
-    {pending && <Text size="xs" c="dimmed">{t("Al ingerir la nota se borran los marcados que la nota cubra: los que no digan nada que ella no diga. Los demás se quedan. Borrar no se puede deshacer.")}</Text>}
-    {eps.map((e) => <Panel key={e.uuid} withBorder p="sm"><Stack gap={4}>
-      {pending && ops.isCurator ? <Check checked={ticked.includes(e.uuid)} disabled={save.isPending} label={<>{e.name} <span className="ms-data">({fmtDay(e.valid_at)})</span></>}
-        onChange={(ev) => save.mutate(ev.currentTarget.checked ? [...ticked, e.uuid] : ticked.filter((u) => u !== e.uuid))} />
-        : <Text size="sm">{e.name} <span className="ms-data">({fmtDay(e.valid_at)})</span></Text>}
-      <Text size="xs" c="dimmed">{e.text}</Text>
-    </Stack></Panel>)}
-    <MutationError error={save.error} />
-    {out && <Stack gap={4}>
-      <Text size="xs">{t("Tras ingerirla: {{d}} borrados, {{k}} se quedan.", { d: out.deleted.length, k: out.kept.length })}</Text>
-      {out.kept.map((k) => <Text key={k.uuid} size="xs" c="dimmed">«{k.name}»: {t(DISTIL_KEPT[k.why] ?? DISTIL_KEPT.says_more)}{k.facts?.length ? ` ${k.facts.map((f) => `«${f}»`).join(", ")}` : ""}</Text>)}
-    </Stack>}
+  return (<>
+    <Block title={t("Episodios que resume")} count={eps.length}
+      help={pending ? t("Al ingerir la nota se borran los marcados que la nota cubra: los que no digan nada que ella no diga. Los demás se quedan. Borrar no se puede deshacer.") : undefined}>
+      {eps.map((e) => <ListCard key={e.uuid} meta={fmtDay(e.valid_at)} note={e.text}
+        title={pending && ops.isCurator ? <Check checked={ticked.includes(e.uuid)} disabled={save.isPending} label={e.name}
+          onChange={(ev) => save.mutate(ev.currentTarget.checked ? [...ticked, e.uuid] : ticked.filter((u) => u !== e.uuid))} /> : e.name} />)}
+      <MutationError error={save.error} />
+    </Block>
+    {out && <Block title={t("Tras la ingesta")}>
+      <Text size="sm">{t("Tras ingerirla: {{d}} borrados, {{k}} se quedan.", { d: out.deleted.length, k: out.kept.length })}</Text>
+      {out.kept.length > 0 && <DataTable fz="sm" aria-label={t("Tras la ingesta")}>
+        <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Episodio")}</DataTable.Th><DataTable.Th>{t("Motivo")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+        <DataTable.Tbody>{out.kept.map((k) => <DataTable.Tr key={k.uuid}>
+          <DataTable.Td><CellText sub={k.facts?.length ? k.facts.map((f) => `«${f}»`).join(", ") : undefined}>{k.name}</CellText></DataTable.Td>
+          <DataTable.Td>{t(DISTIL_KEPT[k.why] ?? DISTIL_KEPT.says_more)}</DataTable.Td>
+        </DataTable.Tr>)}</DataTable.Tbody>
+      </DataTable>}
+    </Block>}
     {d.ingest_report?.distil_error && <Notice tone="warn">{t("La nota entró, pero no se pudieron revisar los originales: {{e}}", { e: d.ingest_report.distil_error })}</Notice>}
-  </Stack>);
+  </>);
 }
 
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
@@ -344,12 +343,11 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
   // A pending proposal in the queue: what it says and what the brain knows on the left, its sheet beside them (who, when, from where,
   // the author's confidence, the decider). Elsewhere it keeps its history as steps.
   const sheet = inQueue && d.status === "pending" && !d.correction;
-  const marks = !inQueue || d.kind === "correction" || (d.confidence !== null && !sheet);
+  // its kind and state as marks over the text; the author's confidence goes in the sheet or, without one, in the «Sent» step
+  const marks = !inQueue || d.kind === "correction";
   const text = (<>
-    {marks && <Group gap="xs">{(!inQueue || d.kind === "correction") && <KindPill kind={d.kind} />}{!inQueue && <Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>}
-      {d.confidence !== null ? <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} <span className="ms-data">{fmtNum(d.confidence)}</span></Text>
-        : !inQueue && <Text size="xs" c="dimmed">{t("Confianza declarada por el autor:")} {t("no indicada")}</Text>}</Group>}
-    {d.purged_at ? <Notice tone="info">{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
+    {marks && <Group gap="xs"><KindPill kind={d.kind} />{!inQueue && <Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>}</Group>}
+    {d.purged_at ? <Notice tone="info" title={t("Texto purgado")}>{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
         : paired && !paired.mostly_new ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
     {!!d.claims?.length && <ClaimsDetail claims={d.claims} />}
@@ -365,32 +363,34 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
     {text}
     {context}
     <Steps label={t("Historia de la propuesta")}>
-      <Step title={t("Enviada")} tone="success"><Text size="xs" c="dimmed"><span title={d.author}>{who(d)}</span> · {fmt(d.created_at)}</Text>
-        <Text size="xs" c="dimmed">{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</Text></Step>
+      {/* each step's lines are plain blocks: the step's body sets their small, muted type */}
+      <Step title={t("Enviada")} tone="success"><div><span title={d.author}>{who(d)}</span> · {fmt(d.created_at)}</div>
+        <div>{t("Procedencia:")} {d.source_description || t("no indicada")} · {t(SOURCE[d.source] ?? d.source)}</div>
+        <div>{t("Confianza declarada por el autor:")} {d.confidence !== null ? <span className="ms-data">{fmtNum(d.confidence)}</span> : t("no indicada")}</div></Step>
       <Step title={t("Revisión")} tone={d.status === "rejected" ? "danger" : d.status === "pending" ? "warn" : "success"}>
-        {d.review_kind === "direct" && <Text size="xs" c="dimmed">{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</Text>}
-        {d.review_kind === "webhook" && <Text size="xs" c="dimmed">{t("Aprobada al llegar por un webhook de confianza ·")} {fmt(d.reviewed_at)}</Text>}
-        {d.review_kind === "human" && <Text size="xs" c="dimmed">{d.status === "rejected" ? t("Rechazada") : t("Aprobada")} {d.reviewer ? t("por {{who}} ·", { who: d.reviewer }) : t("por un curador ·")} {fmt(d.reviewed_at)}{d.review_note ? ` · «${d.review_note}»` : ""}</Text>}
+        {d.review_kind === "direct" && <div>{t("Aprobada al enviar (el autor es curador o superior) ·")} {fmt(d.reviewed_at)}</div>}
+        {d.review_kind === "webhook" && <div>{t("Aprobada al llegar por un webhook de confianza ·")} {fmt(d.reviewed_at)}</div>}
+        {d.review_kind === "human" && <div>{d.status === "rejected" ? t("Rechazada") : t("Aprobada")} {d.reviewer ? t("por {{who}} ·", { who: d.reviewer }) : t("por un curador ·")} {fmt(d.reviewed_at)}{d.review_note ? ` · «${d.review_note}»` : ""}</div>}
         <DeciderView d={d} />
-        {!d.review_kind && !d.decision && d.status === "pending" && <Text size="xs" c="dimmed">{t("Pendiente de un curador.")}</Text>}
-        {!d.review_kind && !d.decision && d.status !== "pending" && d.review_note && <Text size="xs" c="dimmed">{d.review_note}</Text>}
+        {!d.review_kind && !d.decision && d.status === "pending" && <div>{t("Pendiente de un curador.")}</div>}
+        {!d.review_kind && !d.decision && d.status !== "pending" && d.review_note && <div>{d.review_note}</div>}
       </Step>
       {d.correction && <Step title={t("Hecho invalidado")} tone={d.correction.reverted_at ? "neutral" : d.correction.applied_at ? "success" : "neutral"}>
-        {d.correction.applied_at ? <Text size="xs" c="dimmed">{t("Invalidado con fecha {{date}} · aplicado {{at}}", { date: fmtDay(d.correction.invalid_at), at: fmt(d.correction.applied_at) })}</Text>
-          : <Text size="xs" c="dimmed">{t("Se invalidará al aprobarla, con fecha {{date}}.", { date: fmtDay(d.correction.invalid_at) })}</Text>}
-        {d.correction.reverted_at && <Text size="xs" c="dimmed">{t("Reactivado después · {{at}}", { at: fmt(d.correction.reverted_at) })}</Text>}
+        {d.correction.applied_at ? <div>{t("Invalidado con fecha {{date}} · aplicado {{at}}", { date: fmtDay(d.correction.invalid_at), at: fmt(d.correction.applied_at) })}</div>
+          : <div>{t("Se invalidará al aprobarla, con fecha {{date}}.", { date: fmtDay(d.correction.invalid_at) })}</div>}
+        {d.correction.reverted_at && <div>{t("Reactivado después · {{at}}", { at: fmt(d.correction.reverted_at) })}</div>}
       </Step>}
       {(!d.correction || d.body.trim()) && <Step title={d.correction ? t("Ingesta del sustituto") : t("Ingesta en el grafo")} tone={d.status === "ingested" ? "success" : d.status === "failed" ? "danger" : "neutral"}>
-        {d.status === "ingested" && <Group gap="xs"><Text size="xs" c="dimmed">{fmt(d.ingested_at)}</Text>
+        {d.status === "ingested" && <Group gap="xs"><span className="ms-data">{fmt(d.ingested_at)}</span>
           {d.episode_uuid && <Btn size="row" kind="link" component={Link} to={`/diario?episodio=${d.episode_uuid}`}>{t("Ver el episodio en Diario")}</Btn>}
           {d.episode_uuid && <CopyBtn value={d.episode_uuid} label={t("Copiar id")} doneLabel={t("Copiado")} />}</Group>}
-        {d.status === "ingested" && d.ingest_report && <Text size="xs" c="dimmed">{d.ingest_report.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: d.ingest_report.entities })}{d.ingest_report.untyped_entities ? ` (${t("{{n}} sin tipo", { n: d.ingest_report.untyped_entities })})` : ""} · {d.ingest_report.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: d.ingest_report.edges })}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</Text>}
+        {d.status === "ingested" && d.ingest_report && <div>{d.ingest_report.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: d.ingest_report.entities })}{d.ingest_report.untyped_entities ? ` (${t("{{n}} sin tipo", { n: d.ingest_report.untyped_entities })})` : ""} · {d.ingest_report.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: d.ingest_report.edges })}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</div>}
         {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error ? translateServer(d.ingest_error) : t("error sin detalle")}{" "}
           <Btn kind="link" component={Link} to="/trabajos">{t("Ver los trabajos")}</Btn> · <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Revisar el modelo LLM")}</Btn></Notice>}
-        {d.status === "approved" && <Text size="xs" c="dimmed">{t("Pendiente de ingestar.")}</Text>}
+        {d.status === "approved" && <div>{t("Pendiente de ingestar.")}</div>}
         {d.status === "ingested" && d.selftest && <SelfTest s={d.selftest} />}
-        {d.status === "pending" && <Text size="xs" c="dimmed">{t("Cuando se apruebe.")}</Text>}
-        {d.status === "rejected" && <Text size="xs" c="dimmed">{t("No entra en el grafo.")}</Text>}
+        {d.status === "pending" && <div>{t("Cuando se apruebe.")}</div>}
+        {d.status === "rejected" && <div>{t("No entra en el grafo.")}</div>}
       </Step>}
     </Steps>
   </Stack>);
@@ -413,25 +413,28 @@ function ProposalSheet({ d }: { d: Prop }) {
     <SheetRow term={t("Confianza del autor")}>{d.confidence !== null ? <span className="ms-data">{fmtNum(d.confidence)}</span> : <Text span c="dimmed" size="sm">{t("no indicada")}</Text>}</SheetRow>
     {dec?.error && <SheetRow wide term={t("Decisor")}><Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: dec.engine, error: dec.error })}</Notice></SheetRow>}
     {answers && <SheetRow wide term={t("Decisor")}><Stack gap={4}>
-      <Group gap={6}><Pill size="xs" tone={dec.verdict === "approve" ? "success" : "warn"}>{dec.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}</Pill></Group>
-      <Text size="sm">{why}</Text>
-      <Text size="xs" c="dimmed">{t("¿Es factual?")} {dec.factual.letter === "A" ? t("sí") : t("no")} · <span className="ms-data">{fmtNum(dec.factual.prob)}</span></Text>
-      <Text size="xs" c="dimmed">{t("Acción:")} {[t("aprobar"), t("revisar"), t("rechazar")][dec.action.index]} · <span className="ms-data">{fmtNum(dec.action.prob)}</span></Text>
-      <Text size="xs" c="dimmed">«{dec.engine}» · {dec.model} · {t("umbral")} <span className="ms-data">{fmtNum(dec.threshold)}</span></Text>
+      <Group gap={6}><Pill tone={dec.verdict === "approve" ? "success" : "warn"}>{dec.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}</Pill></Group>
+      {/* the verdict in words, and under it, as its secondary lines, the decider's two answers and its model */}
+      <CellText sub={<>
+        <div>{t("¿Es factual?")} {dec.factual.letter === "A" ? t("sí") : t("no")} · <span className="ms-data">{fmtNum(dec.factual.prob)}</span></div>
+        <div>{t("Acción:")} {[t("aprobar"), t("revisar"), t("rechazar")][dec.action.index]} · <span className="ms-data">{fmtNum(dec.action.prob)}</span></div>
+        <div>«{dec.engine}» · {dec.model} · {t("umbral")} <span className="ms-data">{fmtNum(dec.threshold)}</span></div>
+      </>}>{why}</CellText>
     </Stack></SheetRow>}
   </Sheet>);
 }
 
-/** What the decider said about a proposal, when it looked at it: its model and threshold, its two answers and its verdict. */
+/** What the decider said about a proposal, when it looked at it: its model and threshold, its two answers and its verdict. Lines of the
+ *  review step. */
 function DeciderView({ d }: { d: Prop }) {
   const { t } = useTranslation();
   if (d.decision?.error) return <Notice tone="warn">{t("Decisor «{{engine}}» no disponible: {{error}}", { engine: d.decision.engine, error: d.decision.error })}</Notice>;
   if (!d.decision?.factual) return null;   // the curator's proposals keep their evidence there too
-  return (<Stack gap={2}>
-    <Text size="xs" c="dimmed">{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: fmtNum(d.decision.threshold) })}</Text>
-    <Text size="xs" c="dimmed">{t("· ¿Es factual? {{answer}} (confianza {{prob}})", { answer: d.decision.factual.letter === "A" ? t("sí") : t("no"), prob: fmtNum(d.decision.factual.prob) })}</Text>
-    <Text size="xs" c="dimmed">{t("· Acción: {{action}} (confianza {{prob}})", { action: [t("aprobar"), t("revisar"), t("rechazar")][d.decision.action.index], prob: fmtNum(d.decision.action.prob) })}</Text>
-    <Text size="xs" fw={600}>{d.decision.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}: {d.decision.note}</Text></Stack>);
+  return (<>
+    <div>{t("Decisor «{{engine}}» ({{model}}), umbral {{threshold}}:", { engine: d.decision.engine, model: d.decision.model, threshold: fmtNum(d.decision.threshold) })}</div>
+    <div>{t("· ¿Es factual? {{answer}} (confianza {{prob}})", { answer: d.decision.factual.letter === "A" ? t("sí") : t("no"), prob: fmtNum(d.decision.factual.prob) })}</div>
+    <div>{t("· Acción: {{action}} (confianza {{prob}})", { action: [t("aprobar"), t("revisar"), t("rechazar")][d.decision.action.index], prob: fmtNum(d.decision.action.prob) })}</div>
+    <div><b>{d.decision.verdict === "approve" ? t("Aprobada automáticamente") : t("Derivada a un curador")}</b>: {d.decision.note}</div></>);
 }
 
 /** Everything a screen of this page needs to decide: shared so the queue, the history and one's own proposals act the same way. */
@@ -442,8 +445,8 @@ type Ops = {
   setLast: (d: Decision) => void; refresh: () => void; openDetail: (id: number) => void;
   /** The last decision, its notice (for the review footer to dock) and the way to take it back from the keyboard. */
   last: Decision | null; notice: (docked?: { openId: number | null }) => ReactNode; setDocked: (on: boolean) => void; undoLast: () => void;
-  /** Bumped by the N key to open the note; whether «Qué pasa al decidir» is unfolded (kept while moving through the queue). */
-  noteKey: number; openNote: () => void; explain: boolean; setExplain: (on: boolean) => void;
+  /** Bumped by the N key to open the note. */
+  noteKey: number; openNote: () => void;
 };
 
 /** What the brain already knows close to a proposal (a recall of its text, facts only), so the curator checks it against something: a
@@ -498,15 +501,15 @@ const isUnchecked = (p: Prop, llm: boolean) => llm && p.status === "pending" && 
  *  true, nearly the same, very similar) at the top right; `label` heads the one the proposal is read against. */
 function FactCard({ f, label }: { f: RelatedFact; label?: string }) {
   const { t } = useTranslation();
-  const mark = f.invalid_at && f.relevance !== "related" ? <Pill size="xs" tone="danger">{t("Ya no es cierto")}</Pill>
-    : f.relevance === "repeats" ? <Pill size="xs" tone="neutral">{t("Casi igual")}</Pill>
-      : f.relevance === "close" && !f.mostly_new ? <Pill size="xs" tone="neutral">{t("Muy parecido")}</Pill> : undefined;
+  const mark = f.invalid_at && f.relevance !== "related" ? <Pill tone="danger">{t("Ya no es cierto")}</Pill>
+    : f.relevance === "repeats" ? <Pill tone="neutral">{t("Casi igual")}</Pill>
+      : f.relevance === "close" && !f.mostly_new ? <Pill tone="neutral">{t("Muy parecido")}</Pill> : undefined;
   const when = f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : f.valid_at ? t("desde {{date}}", { date: fmtDay(f.valid_at) }) : "";
   const data = [f.score != null ? `${t("sim")} ${fmtNum(f.score, 2)}` : "", when].filter(Boolean).join(" · ");
   return (<ListCard title={label} aside={mark} invalid={!!f.invalid_at}
     tags={<>
       <EntityChip name={f.source} type={f.source_type} to={f.source_uuid ? `/entidad/${f.source_uuid}` : undefined} />
-      <Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text>
+      <span className="ms-listcard-meta" title={f.name}>{humanRelation(f.name)}</span>
       <EntityChip name={f.target} type={f.target_type} to={f.target_uuid ? `/entidad/${f.target_uuid}` : undefined} />
       {data && <span className="ms-listcard-meta ms-data ms-fact-data" title={f.invalid_at ? t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) }) : undefined}>{data}</span>}
     </>}>{f.fact}</ListCard>);
@@ -578,18 +581,18 @@ function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const close = facts.filter((f) => (f.relevance === "repeats" || f.relevance === "close") && f.uuid !== paired?.uuid);
   const related = facts.filter((f) => f.relevance === "related");
   // the one line to read first. A contradiction cannot be told from the text alone: the closest facts are there to check it.
-  const verdict = known?.verdict === "duplicate" ? { icon: "alert" as const, text: t("Posible duplicado: el brain ya dice algo casi igual.") }
-    : known?.verdict === "stale" ? { icon: "alert" as const, text: t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.") }
-      : [paired, ...close].some((f) => f && !f.mostly_new) ? { icon: "info" as const, text: t("Muy parecido a algo que el brain ya sabe: comprueba qué añade la propuesta.") }
-        : paired ? { icon: "info" as const, text: t("Mayormente nuevo: comparte el tema con algo que el brain ya sabe, y casi todo lo que dice es nuevo.") }
-        : related.length ? { icon: "info" as const, text: t("Nada casi igual en el brain: sería conocimiento nuevo.") } : null;
+  const verdict = known?.verdict === "duplicate" ? t("Posible duplicado: el brain ya dice algo casi igual.")
+    : known?.verdict === "stale" ? t("Se parece a algo que dejó de ser cierto: comprueba que la propuesta no lo vuelve a dar por bueno.")
+      : [paired, ...close].some((f) => f && !f.mostly_new) ? t("Muy parecido a algo que el brain ya sabe: comprueba qué añade la propuesta.")
+        : paired ? t("Mayormente nuevo: comparte el tema con algo que el brain ya sabe, y casi todo lo que dice es nuevo.")
+        : related.length ? t("Nada casi igual en el brain: sería conocimiento nuevo.") : null;
   return (<section className="ms-related" aria-labelledby={`ms-related-${d.id}`}><Stack gap={8}>
     <Text component="h3" id={`ms-related-${d.id}`} className="ms-section-title">{t("Lo que el brain ya sabe")}</Text>
     <MutationError error={q.error} />
-    {!q.data && !q.error && <EmptyState>{t("Buscando lo relacionado…")}</EmptyState>}
-    {q.data && facts.length === 0 && <Text size="xs" c="dimmed">{t("Nada parecido en el brain: sería conocimiento nuevo.")}</Text>}
-    {verdict && (known ? <Notice tone="warn">{verdict.text}</Notice>
-      : <Group gap={6} wrap="nowrap" align="flex-start"><Icon name={verdict.icon} size={16} /><Text size="sm" fw={600}>{verdict.text}</Text></Group>)}
+    {!q.data && !q.error && <Loading label={t("Buscando lo relacionado…")} />}
+    {q.data && facts.length === 0 && <EmptyState>{t("Nada parecido en el brain: sería conocimiento nuevo.")}</EmptyState>}
+    {/* the one line to read first: a warning when the brain already knows it, otherwise a named state */}
+    {verdict && (known ? <Notice tone="warn">{verdict}</Notice> : <Notice tone="info" title={verdict} />)}
     {/* the fact the proposal is read against first, headed as such; then the other close ones under their own heading; then, folded
         and last, those that only share its subject, with why they are folded */}
     {paired && <FactCard f={paired} label={t("Lo que dice el brain")} />}
@@ -626,8 +629,8 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
   const decide = (verb: Verb, note?: string) => review.mutateAsync({ id: d.id, verb, note }).then(() => onDecided?.());
   const rejectKnown = known && !secret ? () => decide("reject", ops.note || knownNote(known, t)) : null;  // with its reason as the note
   const approve = onApprove ?? (() => { if (!checking) { if (asks) askMask(true); else decide("approve").catch(() => {}); } });
-  // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is one fold
-  // away, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
+  // the note is optional: it opens on «+ Nota» (or N in the queue) and stays open while it has text; what each button does is behind
+  // the «i» beside it, except what must be read before approving (a correction invalidates a fact; flagged secrets get masked)
   const noteId = `ms-note-${d.id}`;
   const [noteOpen, setNoteOpen] = useState(false);
   useEffect(() => setNoteOpen(false), [d.id]);
@@ -644,16 +647,19 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
         if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); e.currentTarget.blur(); document.getElementById(`ms-title-${d.id}`)?.focus(); }
         else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !waiting && !review.isPending) { e.preventDefault(); approve(); }
       }} />}
-    {(secret || d.correction) && <Stack gap={2}>
-      {secret && <Text size="xs" c="dimmed">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
-      {d.correction && <Text size="xs" c="dimmed" className="ms-measure">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: fmtDay(d.correction.invalid_at) })}</Text>}
-    </Stack>}
+    {/* what must be read before approving, in plain sentences over the buttons: the rest of what deciding does is behind the «i» */}
+    {secret && <Text size="sm">{t("Antes de aprobar, lo marcado como secreto ({{kinds}}) se tapa en el título y el texto.", { kinds })}</Text>}
+    {d.correction && <Text size="sm">{t("Al aprobar, el hecho se invalida con fecha {{date}}; se puede reactivar después.", { date: fmtDay(d.correction.invalid_at) })}</Text>}
     <MutationError error={review.error} />
     <Group justify="space-between" gap="xs">
       <Group gap="xs">
         {!showNote && <Btn kind="link" icon="plus" className="ms-hit" onClick={openNote}>{t("Nota")}</Btn>}
-        <Btn kind="link" className="ms-hit" icon={ops.explain ? "chevronDown" : "chevronRight"} aria-expanded={ops.explain} aria-controls={`ms-why-${d.id}`}
-          onClick={() => ops.setExplain(!ops.explain)}>{t("Qué pasa al decidir")}</Btn>
+        <HelpTip title={t("Qué pasa al decidir")}>
+          {!d.correction && <>{ops.llm
+            ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
+            : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}{" "}</>}
+          {t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}
+        </HelpTip>
       </Group>
       <Group gap="xs" className="ms-decide">
         <Btn kind="danger" loading={review.isPending && review.variables?.verb === "reject"} disabled={waiting || (review.isPending && review.variables?.verb !== "reject")}
@@ -664,12 +670,6 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
           onClick={approve} icon={checking ? undefined : secret ? "lock" : "check"} leftSection={checking ? <Loader size={14} color="currentColor" /> : undefined}>{secret ? t("Enmascarar y aprobar") : t("Aprobar")}</Btn>
       </Group>
     </Group>
-    <Stack gap={2} id={`ms-why-${d.id}`} className="ms-fold" hidden={!ops.explain}>
-      {!d.correction && <Text size="xs" c="dimmed">{ops.llm
-        ? t("Al aprobar, el texto entra en el brain como un episodio y el modelo extrae de él entidades y hechos. Tendrás unos segundos para deshacerlo.")
-        : t("Al aprobar, se queda en «Aprobadas» hasta que haya un motor de extracción.")}</Text>}
-      <Text size="xs" c="dimmed">{t("Al rechazar, no entra nada en el grafo y se puede reabrir después.")}</Text>
-    </Stack>
     {!secret && known && <ConfirmDialog opened={onMasking ? !!masking : ownMasking} onClose={() => askMask(false)} tone="primary" warn
       alt={{ label: knownReject(known, t), icon: "close", onConfirm: () => decide("reject", ops.note || knownNote(known, t)) }}
       title={known.verdict === "duplicate" ? t("¿Aprobar un posible duplicado?") : t("¿Aprobar algo parecido a un hecho que ya no es cierto?")}
@@ -687,23 +687,28 @@ function DecisionBlock({ d, ops, onDecided, masking, onMasking, waiting, onAppro
   </Stack>);
 }
 
-/** The actions on a decided proposal: retry or start its ingestion, reopen or undo the approval, reactivate a corrected fact. */
-function AfterActions({ d, ops }: { d: Prop; ops: Ops }) {
+/** The actions on a decided proposal, as the dialog's footer: close it, retry or start its ingestion, reopen or undo the approval,
+ *  reactivate a corrected fact. Their errors go above them. */
+function AfterActions({ d, ops, onClose }: { d: Prop; ops: Ops; onClose: () => void }) {
   const { t } = useTranslation();
   const { retry, undo, reactivate, review } = ops;
   if (!ops.isCurator) return null;
+  const ingest = d.status === "failed" || d.status === "approved";
+  const reopen = (d.status === "rejected" && !d.purged_at) || (d.status === "approved" && d.kind !== "correction");
+  const revive = !!d.correction?.applied_at && !d.correction.reverted_at;
+  if (!ingest && !reopen && !revive) return null;
   return (<>
-    {(d.status === "failed" || d.status === "approved") && <Group justify="flex-end">
-      <MutationError error={retry.error} />
-      {d.status === "failed" && <MutationError error={review.error} />}
+    {ingest && <MutationError error={retry.error} />}
+    {d.status === "failed" && <MutationError error={review.error} />}
+    {reopen && <MutationError error={undo.error} />}
+    {revive && <MutationError error={reactivate.error} />}
+    <DialogActions>
+      <Btn kind="ghost" onClick={onClose}>{t("Cerrar")}</Btn>
+      {revive && <Btn kind="secondary" loading={reactivate.isPending} onClick={() => reactivate.mutate(d.id)} icon="undo">{t("Reactivar el hecho")}</Btn>}
+      {reopen && <Btn kind="secondary" loading={undo.isPending} onClick={() => undo.mutate([d.id])} icon="undo">{d.status === "rejected" ? t("Reabrir") : t("Deshacer la aprobación")}</Btn>}
       {d.status === "failed" && <Btn kind="secondary" loading={review.isPending} disabled={retry.isPending} onClick={() => review.mutate({ id: d.id, verb: "reject" })}>{t("Rechazar")}</Btn>}
-      <Btn kind="primary" disabled={review.isPending} loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn></Group>}
-    {((d.status === "rejected" && !d.purged_at) || (d.status === "approved" && d.kind !== "correction")) && <Group justify="flex-end">
-      <MutationError error={undo.error} />
-      <Btn kind="secondary" loading={undo.isPending} onClick={() => undo.mutate([d.id])} icon="undo">{d.status === "rejected" ? t("Reabrir") : t("Deshacer la aprobación")}</Btn></Group>}
-    {d.correction?.applied_at && !d.correction.reverted_at && <Group justify="flex-end">
-      <MutationError error={reactivate.error} />
-      <Btn kind="secondary" loading={reactivate.isPending} onClick={() => reactivate.mutate(d.id)} icon="undo">{t("Reactivar el hecho")}</Btn></Group>}
+      {ingest && <Btn kind="primary" disabled={review.isPending} loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn>}
+    </DialogActions>
   </>);
 }
 
@@ -713,20 +718,21 @@ function ProposalModal({ open, onClose, ops }: { open: number | null; onClose: (
   const detail = useQuery({ queryKey: ["proposal", ops.graph, open], enabled: open !== null, queryFn: () => get<Prop>(`${ops.base}/${open}`) });
   const d = detail.data;
   return (
-    <Modal opened={open !== null} onClose={onClose} title={d ? `#${d.id} · ${d.purged_at ? t("(texto purgado)") : d.name}` : t("Propuesta")} size="lg" centered>
+    <Modal opened={open !== null} onClose={onClose} title={d ? `#${d.id} · ${d.purged_at ? t("(texto purgado)") : d.name}` : t("Propuesta")} size="lg">
       <MutationError error={detail.error} />
-      {d && <Stack gap="sm">
+      {d ? <Stack gap="sm">
         <ProposalBody d={d} ops={ops} context={ops.isCurator && d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} />
-        <AfterActions d={d} ops={ops} />
+        <AfterActions d={d} ops={ops} onClose={onClose} />
         {ops.isCurator && d.status === "pending" && <DecisionBlock d={d} ops={ops} onDecided={onClose} />}
-      </Stack>}
+      </Stack> : !detail.error && <Loading />}
     </Modal>
   );
 }
 
-/** A server-paged table of proposals with its own filters: the review history («Decididas») or one's own proposals (`mine`). */
-function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind, lead }: { ops: Ops; mine: boolean; statuses: string[]; first: { value: string; label: string; countKey: string };
-  initialStatus?: string; initialKind?: string; /** Goes first on the row of filters. */ lead?: ReactNode }) {
+/** A server-paged table of proposals with its own filters: the review history («Decididas») or one's own proposals (`mine`). A view:
+ *  its bar (the state and kind segments, and `actions` on the right), then the table or the empty state. */
+function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind, actions }: { ops: Ops; mine: boolean; statuses: string[]; first: { value: string; label: string; countKey: string };
+  initialStatus?: string; initialKind?: string; /** The view's buttons, on the right of its bar. */ actions?: ReactNode }) {
   const { t } = useTranslation();
   const view = useProposalsView();
   const [status, setStatusRaw] = useState(initialStatus && statuses.includes(initialStatus) ? initialStatus : first.value);
@@ -745,11 +751,12 @@ function HistoryTable({ ops, mine, statuses, first, initialStatus, initialKind, 
     queryFn: () => get<Counts>(`${ops.base}/counts`, { mine: mine || undefined }) });
   const counts = cnt.data ?? {};
   const emptyAll = mine ? t("Aún no has enviado ninguna propuesta. Lo que envíes aparecerá aquí, con su estado.") : t("Aún no se ha decidido ninguna propuesta.");
+  const label = mine ? t("Mis propuestas") : t("Propuestas decididas");
   if (all.data && all.data.all === 0 && !view.active)  // nothing yet: no filters over an empty table, just say so
-    return <>{lead && <div className="ms-filter-row">{lead}</div>}<EmptyState>{emptyAll}</EmptyState></>;
+    return <><ViewBar title={label} actions={actions} /><EmptyState>{emptyAll}</EmptyState></>;
   return (<>
     <MutationError error={list.error} />
-    <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} kindsFrom={all.data} onOpen={ops.openDetail} emptyAll={emptyAll} label={mine ? t("Mis propuestas") : t("Propuestas decididas")} lead={lead}
+    <ProposalsTable data={list.data} view={view} status={status} onStatus={setStatus} kind={kind} onKind={setKind} kindsFrom={all.data} onOpen={ops.openDetail} emptyAll={emptyAll} label={label} actions={actions}
       statuses={[{ value: first.value, label: first.label, count: cnt.data ? counts[first.countKey] ?? 0 : undefined }, ...statuses.map((k) => ({ value: k, label: t(PLURAL[k]), count: cnt.data ? counts[k] ?? 0 : undefined }))]} />
   </>);
 }
@@ -883,35 +890,39 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const queueItems: QueueItem[] = items.map((p) => ({
     id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
-      {p.related_verdict === "duplicate" && <Pill size="xs" tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
-      {p.related_verdict === "stale" && <Pill size="xs" tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posiblemente ya no es cierto")}</span></Pill>}
-      {p.related_verdict === "similar" && <Pill size="xs" tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}
-      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill size="xs" tone="neutral"><span className="ms-pill-row"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</span></Pill>}
-      {p.decision && !p.decision.error && <Pill size="xs" tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
+      {p.related_verdict === "duplicate" && <Pill tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
+      {p.related_verdict === "stale" && <Pill tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posiblemente ya no es cierto")}</span></Pill>}
+      {p.related_verdict === "similar" && <Pill tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}
+      {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill tone="neutral"><span className="ms-pill-row"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</span></Pill>}
+      {p.decision && !p.decision.error && <Pill tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
     meta: <><span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   const kinds = kindCounts(cnt.data, "pending");
   return (<>
-    {(kind !== "all" || (!!kinds.memory && !!kinds.correction)) && <div className="ms-filter-row ms-review-filter">  {/* only when there is something to tell apart */}
-      <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
-        data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },
-          { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />
-    </div>}
+    {/* the queue's bar: the kind segments, only when there is something to tell apart (it draws nothing otherwise); on a phone the
+        three kinds fit one row (ms-review-filter) */}
+    <ViewBar title={t("Por revisar")}>
+      {(kind !== "all" || (!!kinds.memory && !!kinds.correction)) && <div className="ms-review-filter">
+        <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
+          data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },
+            { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />
+      </div>}
+    </ViewBar>
       {pendingFixes > 0 && kind !== "correction" && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
-        ? <EmptyState>{t("No queda nada por revisar.")}{" "}<Btn kind="link" onClick={onDecided}>{t("Ver las decididas")}</Btn></EmptyState>
+        ? <EmptyState action={<Btn kind="link" onClick={onDecided}>{t("Ver las decididas")}</Btn>}>{t("No queda nada por revisar.")}</EmptyState>
         : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading" scopeRef={inboxRef}
           skip={active !== null ? { label: t("Ir a la propuesta abierta"), onSkip: () => { setShowDetail(true); setFocusTo("title"); } } : undefined}
           list={<>
             <h2 id="ms-queue-heading" className="ms-sr-only">{t("Cola de propuestas pendientes")}</h2>
             <div className="ms-inbox-bar" ref={barRef}>
               {selected.length > 0 ? <>
-                <Text size="sm" fw={600} className="ms-inbox-bar-what" title={selected.some(oneByOne) ? (selected.filter(oneByOne).length === 1 ? t("1 se decide aparte: una corrección, un secreto por revisar, algo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.")
+                <b className="ms-inbox-bar-what" title={selected.some(oneByOne) ? (selected.filter(oneByOne).length === 1 ? t("1 se decide aparte: una corrección, un secreto por revisar, algo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.")
                   : t("{{k}} se deciden una a una: correcciones, secretos por revisar, lo que el brain ya sabe, tiene muy parecido o aún no ha comprobado.", { k: selected.filter(oneByOne).length })) : undefined}>
-                  {selected.length === 1 ? t("1 seleccionada") : t("{{n}} seleccionadas", { n: selected.length })}{selected.some(oneByOne) && <span className="ms-inbox-bar-aside"> · {t("{{k}} aparte", { k: selected.filter(oneByOne).length })}</span>}</Text>
+                  {selected.length === 1 ? t("1 seleccionada") : t("{{n}} seleccionadas", { n: selected.length })}{selected.some(oneByOne) && <span className="ms-inbox-bar-aside"> · {t("{{k}} aparte", { k: selected.filter(oneByOne).length })}</span>}</b>
                 <Btn size="row" onClick={() => ask("approve")}>{t("Aprobar")}</Btn>
                 <Btn size="row" kind="danger" onClick={() => ask("reject")}>{t("Rechazar")}</Btn>
                 <IconButton icon="close" label={t("Quitar la selección")} onClick={() => { setChecked(new Set()); setTimeout(() => barRef.current?.querySelector("button")?.focus()); }} />
@@ -931,14 +942,14 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
               <div className="ms-inbox-nav">
                 <Btn size="row" kind="ghost" icon="back" className="ms-hit" onClick={back}>{t("Volver a la cola")}</Btn>
                 {pos >= 0 && <Group gap={6} wrap="nowrap">
-                  <Text size="xs" c="dimmed" className="ms-data">{t("{{i}} de {{n}}", { i: offset + pos + 1, n: queue.data?.total ?? items.length })}</Text>
+                  <span className="ms-data">{t("{{i}} de {{n}}", { i: offset + pos + 1, n: queue.data?.total ?? items.length })}</span>
                   <IconButton icon="chevronLeft" label={t("Anterior")} onClick={() => move(-1)} disabled={pos <= 0} />
                   <IconButton icon="chevronRight" label={t("Siguiente")} onClick={() => move(1)} disabled={pos >= items.length - 1} />
                 </Group>}
               </div>
               <MutationError error={detail.error} />
               {d ? <><Text component="h2" id={`ms-title-${d.id}`} tabIndex={-1} className="ms-detail-title">#{d.id} · {d.purged_at ? t("(texto purgado)") : d.name}</Text><ProposalBody d={d} ops={ops} inQueue context={d.status === "pending" && !d.correction ? <RelatedFacts d={d} ops={ops} /> : undefined} /></>
-                : <EmptyState>{t("Cargando…")}</EmptyState>}
+                : !detail.error && <Loading />}
             </div>
             {footer && <div className="ms-inbox-actions" ref={actions}>
               {shown && ops.notice({ openId: active })}
@@ -959,18 +970,18 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
           onClick={() => setShowGoes(!showGoes)}>{batch.verb === "approve" ? t("Ver cuáles se aprueban ({{n}})", { n: goes.length }) : t("Ver cuáles se rechazan ({{n}})", { n: goes.length })}</Btn></Group>}
         {goes.length > 0 && <ul className="ms-batch-list" id="ms-batch-goes" hidden={goes.length > 3 && !showGoes} aria-label={batch.verb === "approve" ? t("Se aprueban") : t("Se rechazan")}>
           {goes.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul>}
-        {stays.length > 0 && <><Text size="xs" c="dimmed">{t("Se quedan para decidirlas aparte:")}</Text>
+        {stays.length > 0 && <><Text size="sm">{t("Se quedan para decidirlas aparte:")}</Text>
           <ul className="ms-batch-list" data-muted="">{stays.map((p) => <li key={p.id}><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</li>)}</ul></>}
       </Stack>}
       action={batch.verb === "approve" ? t("Aprobar {{n}}", { n: goes.length }) : t("Rechazar {{n}}", { n: goes.length })}
       disabled={goes.length === 0}
       onConfirm={() => bulk.mutateAsync({ verb: batch.verb, ids: batch.items.map((p) => p.id) })}>
-      <TextArea size="xs" autosize minRows={2} label={t("Nota para todas (opcional)")} value={bulkNote} onChange={(e) => setBulkNote(e.currentTarget.value)} />
+      <TextArea autosize minRows={2} label={t("Nota para todas (opcional)")} value={bulkNote} onChange={(e) => setBulkNote(e.currentTarget.value)} />
     </ConfirmDialog>
   </>);
 }
 
-/** «My proposals»: what one has sent, in every state, and a button that opens the form to propose in a dialog. */
+/** «My proposals»: what one has sent, in every state, and on its bar the button that opens the form to propose in a dialog. */
 function MineTab({ ops, isCurator }: { ops: Ops; isCurator: boolean }) {
   const { t } = useTranslation();
   const [formOpen, setFormOpen] = useState(false);
@@ -986,18 +997,18 @@ function MineTab({ ops, isCurator }: { ops: Ops; isCurator: boolean }) {
       ? t("Propuesta #{{id}} enviada: queda pendiente de un curador.", { id: sentProp.id })
       : t("Propuesta #{{id}} creada y aprobada.", { id: sentProp.id })}</Notice>}
     {sentProp && <SecretsNotice found={sentProp.secrets} />}
-    <HistoryTable ops={ops} mine={true} statuses={["pending", "approved", "ingested", "rejected", "failed"]} first={{ value: "all", label: t("Todas"), countKey: "all" }} lead={add} />
+    <HistoryTable ops={ops} mine={true} statuses={["pending", "approved", "ingested", "rejected", "failed"]} first={{ value: "all", label: t("Todas"), countKey: "all" }} actions={add} />
     <Modal opened={formOpen} onClose={close} title={t("Nueva propuesta")} size="lg">
       <Form onSubmit={() => { if (name && body) submit.mutate(); }}><Stack gap="sm">
         <TextField label={t("Título")} placeholder={t("De qué trata, en pocas palabras")} value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus />
         <TextArea autosize minRows={5} maxRows={14} label={t("Contenido")} placeholder={t("Qué ha pasado o qué hay que recordar, con fecha y nombres exactos.")} value={body} onChange={(e) => setBody(e.currentTarget.value)} />
-        <NumberField label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} w={200} hideControls />
-        {isCurator && <Text size="xs" c="dimmed" className="ms-measure">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
+        <NumberField label={t("Confianza (0–1, opcional)")} min={0} max={1} step={0.1} decimalScale={2} value={conf} onChange={setConf} hideControls />
+        {isCurator && <Text size="sm">{t("Eres curador: lo que crees aquí se aprueba sin pasar por la cola y entra en el grafo. Si el detector marca un secreto, espera a un curador como cualquier otra.")}</Text>}
         <MutationError error={submit.error} />
-        <Group justify="flex-end" gap="xs">
+        <DialogActions>
           <Btn kind="ghost" onClick={close}>{t("Cancelar")}</Btn>
           <Btn kind="primary" type="submit" disabled={!name || !body} loading={submit.isPending} icon="plus">{isCurator ? t("Crear y aprobar") : t("Proponer")}</Btn>
-        </Group>
+        </DialogActions>
       </Stack></Form>
     </Modal>
   </>);
@@ -1021,7 +1032,6 @@ export default function Proposals({ graph, role }: { graph: string; role: string
   const [last, setLast] = useState<Decision | null>(null);
   const [docked, setDocked] = useState(false);
   const [noteKey, setNoteKey] = useState(0);
-  const [explain, setExplain] = useState(false);
   const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((id) => send("POST", `${base}/${id}/undo`))),
     onSuccess: (_, ids) => { setLast((prev) => ({ id: ids[0], ids: ids.length > 1 ? ids : undefined, verb: "undone", until: null, name: ids.length === 1 && prev?.id === ids[0] ? prev.name : undefined })); refresh(); } });
   const review = useMutation({ mutationFn: (a: { id: number; verb: Verb; note?: string }) => send<Prop & { undo_seconds?: number }>("POST", `${base}/${a.id}/${a.verb}`, { note: a.note ?? note }),
@@ -1034,7 +1044,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
     openId={docked?.openId} compact={!!docked}
     undoError={last && last.verb !== "undone" ? undo.error : null} onOpen={(id) => { setOpen(id); setNote(""); }} onClose={() => { setLast(null); undo.reset(); }} />;
   const ops: Ops = { base, graph, isCurator, llm, note, setNote, review, undo, reactivate, retry, setLast, refresh,
-    openDetail: (id) => { setOpen(id); setNote(""); }, last, notice, setDocked, noteKey, openNote: () => setNoteKey((k) => k + 1), explain, setExplain,
+    openDetail: (id) => { setOpen(id); setNote(""); }, last, notice, setDocked, noteKey, openNote: () => setNoteKey((k) => k + 1),
     undoLast: () => { if (last && undoable(last) && !undo.isPending) undo.mutate(last.ids ?? [last.id]); } };
   if (role === "reader") return <Page><PageHeader title={t("Propuestas")} description={<>{t("Con rol de lector no puedes proponer ni ver propuestas. Pide rol de colaborador a un administrador del brain.")}</>} /></Page>;
   return (
@@ -1042,7 +1052,7 @@ export default function Proposals({ graph, role }: { graph: string; role: string
       <PageHeader title={t("Propuestas")} description={<>{t("Lo que envían colaboradores y agentes espera aquí a que un curador lo apruebe.")}</>} />
       {ai.data && !ai.data.llm.configured && <Notice tone="warn" title={t("Sin motor LLM configurado")}>{t("Las propuestas aprobadas no se ingieren al grafo y se quedan en «Aprobadas». Un administrador debe configurarlo en Administración → Proveedores IA.")}{" "}
         <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Ir a Modelo LLM")}</Btn></Notice>}
-      {ai.data && ai.data.llm.configured && !ai.data.decider.configured && <Notice>{t("Sin decisor: las propuestas de colaboradores esperan siempre a un curador.")}</Notice>}
+      {ai.data && ai.data.llm.configured && !ai.data.decider.configured && <Notice title={t("Sin decisor")}>{t("Las propuestas de colaboradores esperan siempre a un curador.")}</Notice>}
       <DecisionLive base={base} graph={graph} last={last} llm={llm} />
       {!docked && notice()}
       {isCurator
@@ -1053,15 +1063,15 @@ export default function Proposals({ graph, role }: { graph: string; role: string
               <Tabs.Tab value="decididas">{t("Decididas")}</Tabs.Tab>
               <Tabs.Tab value="mias">{t("Mis propuestas")}</Tabs.Tab>
             </Tabs.List>
-            <Tabs.Panel value="revisar" pt="sm" className="ms-tabpanel-col">
+            <Tabs.Panel value="revisar">
               <ReviewTab ops={ops} initialKind={sp.get("tipo") ?? undefined} onDecided={() => setTab("decididas")} />
             </Tabs.Panel>
-            <Tabs.Panel value="categorias" pt="sm" className="ms-tabpanel-col"><ProposalCategories graph={graph} isAdmin={["admin", "owner"].includes(role)} /></Tabs.Panel>
-            <Tabs.Panel value="decididas" pt="sm" className="ms-tabpanel-col">
+            <Tabs.Panel value="categorias"><ProposalCategories graph={graph} isAdmin={["admin", "owner"].includes(role)} /></Tabs.Panel>
+            <Tabs.Panel value="decididas">
               <HistoryTable ops={ops} mine={false} statuses={["approved", "ingested", "rejected", "failed"]} initialStatus={estado ?? undefined} initialKind={sp.get("tipo") ?? undefined}
                 first={{ value: "decided", label: t("Todas"), countKey: "decided" }} />
             </Tabs.Panel>
-            <Tabs.Panel value="mias" pt="sm" className="ms-tabpanel-col"><MineTab ops={ops} isCurator={isCurator} /></Tabs.Panel>
+            <Tabs.Panel value="mias"><MineTab ops={ops} isCurator={isCurator} /></Tabs.Panel>
           </Tabs>
         : <MineTab ops={ops} isCurator={isCurator} />}
       <ProposalModal open={open} onClose={() => setOpen(null)} ops={ops} />

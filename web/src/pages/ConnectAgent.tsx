@@ -3,9 +3,9 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { fmt, get, send } from "../api";
-import { Btn, CodeBlock, MutationError, Notice, Pill, Radio, RadioGroup, Segments, SelectField, Step, Steps, TextField } from "../ui";
+import { Block, Btn, CodeBlock, EmptyState, Form, MutationError, Notice, Pill, Radio, RadioGroup, Segments, SelectField, Step, Steps, TextField, ViewBar } from "../ui";
 import { T } from "../i18n";
-import { AGENTS, AGENT_NAME, CONFIG_PATH, connectedSince, snippets, type AgentId, type Block, type BlockKind } from "./connectSnippets";
+import { AGENTS, AGENT_NAME, CONFIG_PATH, connectedSince, snippets, type AgentId, type Block as Snippet, type BlockKind } from "./connectSnippets";
 
 /** A token the panel already has: one it created, or the one a previous step of the setup wizard made (issue 361). Its secret is known only
  *  right after it was created; a token made before is used without it, and the snippets carry a placeholder. */
@@ -34,7 +34,8 @@ const AFTER: Partial<Record<AgentId, string>> = {
 /** «Connect your agent» (issue 362): pick the agent, get its one-line install or its MCP configuration already filled in with this server, the
  *  brain and a token, and see it turn green when the agent makes its first call; then a test recall shows what the agent receives.
  *  It lives on the brain's page (Administration → Brain → Connect an agent); the setup wizard (issue 361) embeds it with the token its previous
- *  step created, through `token`. */
+ *  step created, through `token`. A view inside the settings group (or the wizard's step) that titles it: the bar picks the agent, then the
+ *  token and the steps. */
 export default function ConnectAgent({ brain, token: given, onConnected, untilRecall }: { brain: BrainRef; token?: GivenToken; onConnected?: (tokenId: number) => void;
   /** Turn green with the agent's first recall, not its first call: the setup wizard's step, which that same recall ticks (issue 421). */
   untilRecall?: boolean }) {
@@ -62,54 +63,52 @@ export default function ConnectAgent({ brain, token: given, onConnected, untilRe
   const conn = { url: window.location.origin, brain: brain.slug, token: tok?.secret ?? "" };
   const roleOptions = [{ value: "reader", label: t("Lector: solo consulta") }, ...(writer ? [{ value: "contributor", label: t("Colaborador: consulta y propone (recomendado)") }] : [])];
   return (
-    <Stack gap="md">
-      <Stack gap={6}>
-        <Text size="sm" fw={600}>{t("¿Qué agente usas?")}</Text>
-        <Segments label={t("Agente")} value={agent} onChange={(v) => setAgent(v as AgentId)} data={AGENTS.map((a) => ({ value: a, label: a === "mcp" ? t(OTHER) : AGENT_NAME[a] }))} />
-      </Stack>
+    <>
+      <ViewBar title={t("Conectar un agente")}>
+        <Segments label={t("¿Qué agente usas?")} value={agent} onChange={(v) => setAgent(v as AgentId)} data={AGENTS.map((a) => ({ value: a, label: a === "mcp" ? t(OTHER) : AGENT_NAME[a] }))} />
+      </ViewBar>
       {!given && (
         <Stack gap="xs">
-          <Text size="sm" fw={600}>{t("Token de API")}</Text>
-          <RadioGroup value={mode} onChange={(v) => setMode(v as "new" | "existing")}>
+          <RadioGroup label={t("Token de API")} value={mode} onChange={(v) => setMode(v as "new" | "existing")}>
             <Group gap="md">
               <Radio value="new" label={t("Crear uno para este agente")} />
               <Radio value="existing" label={t("Usar uno que ya tengo")} disabled={!usable.length} />
             </Group>
           </RadioGroup>
           {mode === "new" && !made && (
-            <Group align="flex-end" gap="xs">
-              <SelectField label={t("Rol")} w={320} data={roleOptions} value={role} onChange={setRole} allowDeselect={false} />
-              <Btn kind="primary" icon="plus" loading={create.isPending} disabled={!role} onClick={() => create.mutate()}>{t("Crear token")}</Btn>
-            </Group>)}
+            <>
+              <SelectField label={t("Rol")} data={roleOptions} value={role} onChange={setRole} allowDeselect={false} />
+              <Group><Btn kind="primary" icon="plus" loading={create.isPending} disabled={!role} onClick={() => create.mutate()}>{t("Crear token")}</Btn></Group>
+            </>)}
           {mode === "new" && made && <Notice tone="warn">{t("Token «{{name}}» creado. Ya va en los fragmentos de abajo: cópialos ahora, porque no se vuelve a mostrar.", { name: made.name })}</Notice>}
           {mode === "existing" && <>
-            <SelectField label={t("Token")} w={320} placeholder={t("Elige uno de tus tokens")} value={picked} onChange={setPicked}
+            <SelectField label={t("Token")} placeholder={t("Elige uno de tus tokens")} value={picked} onChange={setPicked}
+              description={t("El secreto de un token solo se muestra al crearlo: los fragmentos llevan «mst_…» donde va el tuyo.")}
               data={usable.map((x) => ({ value: String(x.id), label: `${x.name} · ${x.prefix}…` }))} />
-            {chosen && <Notice>{t("El secreto de un token solo se muestra al crearlo: los fragmentos llevan «mst_…» donde va el tuyo.")}</Notice>}
           </>}
           <MutationError error={create.error} />
         </Stack>)}
       <Steps label={t("Conectar {{agent}}", { agent: agent === "mcp" ? t(OTHER) : AGENT_NAME[agent] })}>
         {snippets(agent, conn).map((b) => <SnippetStep key={b.kind} block={b} />)}
         <Step title={t("Arranca el agente")}>
-          {AFTER[agent] && <Text size="sm" className="ms-measure">{t(AFTER[agent]!)}</Text>}
+          {AFTER[agent] && <Text size="sm">{t(AFTER[agent]!)}</Text>}
           {tok ? <LiveCheck key={tok.id} brain={brain} token={tok} fresh={!!tok.secret || !!given} onConnected={onConnected} untilRecall={untilRecall} />
             : <Text size="sm" c="dimmed">{untilRecall ? t("Crea o elige un token y aquí verás cuándo hace el agente su primer recall.")
               : t("Crea o elige un token y aquí verás cuándo llega la primera llamada del agente.")}</Text>}
         </Step>
       </Steps>
-    </Stack>
+    </>
   );
 }
 
-function SnippetStep({ block }: { block: Block }) {
+function SnippetStep({ block }: { block: Snippet }) {
   const { t } = useTranslation();
   const b = BLOCK[block.kind];
   return (
     <Step title={t(b.title)}>
       <Stack gap={6}>
-        <Text size="sm" className="ms-measure">{t(b.text)}</Text>
-        {block.kind === "config" && <Text size="xs" className="ms-data">{CONFIG_PATH}</Text>}
+        <Text size="sm">{t(b.text)}</Text>
+        {block.kind === "config" && <Text size="sm" className="ms-data">{CONFIG_PATH}</Text>}
         <CodeBlock copy label={t(b.title)}>{block.code}</CodeBlock>
       </Stack>
     </Step>
@@ -162,22 +161,22 @@ function LiveCheck({ brain, token, fresh, onConnected, untilRecall }: { brain: B
             ? t("Primera llamada con «{{name}}» el {{at}}. Recalls hechos con él hasta ahora: {{n}}.", { name, at: fmt(act.data?.last_used_at), n: act.data.recalls })
             : t("Primera llamada con «{{name}}» el {{at}}.", { name, at: fmt(act.data?.last_used_at) })}</Text>
       </Notice>
-      <Text size="sm" fw={600}>{t("Un recall de prueba: lo que recibe el agente")}</Text>
-      <Group align="flex-end" gap="xs">
-        <TextField label={t("Pregunta")} value={query} onChange={(e) => setQuery(e.currentTarget.value)} w={420} />
-        <Btn icon="ask" loading={probe.isPending} disabled={!query.trim()} onClick={() => probe.mutate(query.trim())}>{t("Probar recall")}</Btn>
-      </Group>
-      <MutationError error={probe.error} />
-      {p && <>
-        <Group gap={6}>
-          <Pill size="sm">{t("{{n}} hechos", { n: n(p.facts) })}</Pill>
-          <Pill size="sm">{t("{{n}} fragmentos", { n: n(p.chunks) })}</Pill>
-          <Pill size="sm">{t("{{n}} pasajes", { n: n(p.documents) })}</Pill>
-        </Group>
-        {p.context?.trim() ? <CodeBlock label={t("Contexto del recall de prueba")}>{p.context}</CodeBlock>
-          : <Text size="sm" c="dimmed">{t("El brain ha respondido, pero nada de lo que sabe se parece lo bastante a esta pregunta. En un brain nuevo es lo normal: prueba otra, o vuelve cuando haya memoria.")}</Text>}
-        <Text size="xs" c="dimmed">{t("Una vista previa: no cuenta como un recall del agente ni queda registrada.")}</Text>
-      </>}
+      <Block title={t("Un recall de prueba: lo que recibe el agente")} help={t("Una vista previa: no cuenta como un recall del agente ni queda registrada.")}>
+        <Form onSubmit={() => { if (query.trim()) probe.mutate(query.trim()); }}>
+          <TextField label={t("Pregunta")} value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
+          <Group><Btn type="submit" icon="ask" loading={probe.isPending} disabled={!query.trim()}>{t("Probar recall")}</Btn></Group>
+        </Form>
+        <MutationError error={probe.error} />
+        {p && <>
+          <Group gap={6}>
+            <Pill>{t("{{n}} hechos", { n: n(p.facts) })}</Pill>
+            <Pill>{t("{{n}} fragmentos", { n: n(p.chunks) })}</Pill>
+            <Pill>{t("{{n}} pasajes", { n: n(p.documents) })}</Pill>
+          </Group>
+          {p.context?.trim() ? <CodeBlock label={t("Contexto del recall de prueba")}>{p.context}</CodeBlock>
+            : <EmptyState>{t("El brain ha respondido, pero nada de lo que sabe se parece lo bastante a esta pregunta. En un brain nuevo es lo normal: prueba otra, o vuelve cuando haya memoria.")}</EmptyState>}
+        </>}
+      </Block>
     </Stack>
   );
 }

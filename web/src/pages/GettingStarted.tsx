@@ -3,7 +3,7 @@ import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { fmt, get, send } from "../api";
-import { Btn, MutationError, Section, Step, Steps, type IconName } from "../ui";
+import { Btn, MutationError, Section, Step, Steps, ViewBar, type IconName } from "../ui";
 import { T } from "../i18n";
 import { useState } from "react";
 
@@ -73,13 +73,15 @@ export default function GettingStarted({ role }: { role: string }) {
   const admin = ["admin", "owner"].includes(role);
   const next = d.steps.find((s) => !s.done && STEPS[s.key]);
   return (
-    <Section title={t("Para empezar")} hint={open ? t("Cada paso se marca solo cuando ocurre en cualquiera de tus brains. La lista desaparece al completarla; si la cierras, no vuelve.") : undefined}
-      actions={<Group gap={6}>
-        <Btn size="row" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls="ms-getting-started" onClick={toggle}>{open ? t("Ocultar los pasos") : t("Ver los pasos")}</Btn>
-        <Btn size="row" kind="ghost" icon="close" loading={close.isPending} onClick={() => close.mutate()}>{t("Cerrar la lista")}</Btn>
-      </Group>}>
+    <Section title={t("Para empezar")}>
       <Stack gap="sm">
-        <Text size="sm" c="dimmed">{t("{{done}} de {{total}} pasos hechos", { done: d.done, total: d.total })}{!open && next ? <> · {t("Siguiente:")} {t(STEPS[next.key].title)}</> : null}</Text>
+        <ViewBar title={t("Para empezar")}
+          help={t("Cada paso se marca solo cuando ocurre en cualquiera de tus brains. La lista desaparece al completarla; si la cierras, no vuelve.")}
+          meta={<>{t("{{done}} de {{total}} pasos hechos", { done: d.done, total: d.total })}{!open && next ? <> · {t("Siguiente:")} {t(STEPS[next.key].title)}</> : null}</>}
+          actions={<>
+            <Btn size="row" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls="ms-getting-started" onClick={toggle}>{open ? t("Ocultar los pasos") : t("Ver los pasos")}</Btn>
+            <Btn size="row" kind="ghost" icon="close" loading={close.isPending} onClick={() => close.mutate()}>{t("Cerrar la lista")}</Btn>
+          </>} />
         <MutationError error={close.error} />
         {open && <div id="ms-getting-started"><Steps label={t("Pasos para empezar")}>
           {d.steps.filter((s) => STEPS[s.key]).map((s) => {
@@ -87,7 +89,7 @@ export default function GettingStarted({ role }: { role: string }) {
             return (
               <Step key={s.key} title={t(step.title)} tone={s.done ? "success" : "neutral"}>
                 {s.done ? <Text size="sm" c="dimmed">{t("Hecho · {{date}}", { date: fmt(s.done_at) })}</Text> : <>
-                  <Text size="sm" className="ms-measure">{t(step.text)}</Text>
+                  <Text size="sm">{t(step.text)}</Text>
                   <Group gap={6} mt={6}>
                     {step.links.filter((l) => !l.admins || admin).map((l) => <Btn key={l.to} size="row" icon={l.icon} component={Link} to={l.to}>{t(l.label)}</Btn>)}
                     {wiki && <Btn size="row" icon="docs" component="a" href={`${wiki}/${step.wiki[lang]}`} target="_blank" rel="noopener noreferrer">{t("En la wiki")}</Btn>}

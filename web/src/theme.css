@@ -818,3 +818,53 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-card .ms-statgrid { gap: 0; border-top: 1px solid var(--ms-line); overflow: hidden; }
 .ms-card .ms-stat { border: 0; border-radius: 0; background: transparent; padding: 12px 14px; box-shadow: 1px 0 0 var(--ms-line), 0 1px 0 var(--ms-line); }
 .ms-note-box b { color: var(--ms-ink); font-weight: 600; }
+
+/* ── Anatomía de una vista (DESIGN.md, the Screen Anatomy Rule): ViewBar, contenido, Block. Una sola forma para todas las pantallas. ── */
+.ms-tabpanel { padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+.ms-viewbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; min-height: 36px; }
+.ms-viewbar-main { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; min-width: 0; }
+.ms-viewbar-main > .ms-pagehelp-btn { align-self: center; margin-left: -4px; }  /* the «i» sits on the controls' middle line, where the title's does */
+.ms-viewbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; min-height: 36px; }
+.ms-viewbar-meta { align-self: center; font-size: 13px; color: var(--ms-muted); }
+.ms-viewbar-main > .ms-check, .ms-viewbar-main > .ms-toggle-field, .ms-viewbar-main > .ms-clearfilters { align-self: center; }
+.ms-viewbar .mantine-InputWrapper-label { white-space: nowrap; }
+.ms-viewbar .ms-field { width: 220px; }
+.ms-viewbar .ms-field-num { width: auto; min-width: 140px; }
+.ms-viewbar .ms-search { width: 300px; flex: 0 1 300px !important; }
+.ms-viewbar .ms-searchbar { width: 480px; max-width: 100%; }
+.ms-viewbar .ms-searchbar .ms-search { width: auto; flex: 1 1 auto !important; }
+.ms-block { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ms-block-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 28px; }
+.ms-block-title { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); display: inline-flex; align-items: baseline; gap: 8px; }
+.ms-block-count { font-size: 12px; letter-spacing: 0; text-transform: none; }
+.ms-block-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.ms-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 16px; }
+.ms-compare-col { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ms-compare-label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
+.ms-compare-body { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+.ms-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.ms-empty-action { margin-left: 8px; }
+.ms-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ms-cell-main { font-size: 14px; }
+.ms-cell-sub { font-size: 12px; color: var(--ms-muted); overflow-wrap: anywhere; }
+@media (max-width: 48em) {
+  .ms-compare { grid-template-columns: 1fr; }
+  .ms-viewbar .ms-field, .ms-viewbar .ms-searchbar, .ms-viewbar .ms-search { width: 100%; flex: 1 1 100% !important; }
+  .ms-viewbar-actions { margin-left: 0; }
+}
+.ms-listcard-body:has(> .ms-compare), .ms-listcard-body:has(> .ms-tablewrap) { max-width: none; }  /* a comparison uses the card's width: each column is its own measure */
+.ms-clamp { display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical; overflow: hidden; }
+.ms-struck { text-decoration: line-through; color: var(--ms-muted); }
+.ms-listcard-title .ms-check { display: inline-flex; vertical-align: middle; margin-right: 8px; }
+.ms-setgroup-title { display: flex; align-items: center; gap: 4px; }
+.ms-setgroup-title .ms-pagehelp-btn { text-transform: none; letter-spacing: 0; }
+.ms-relword { font-size: 12px; color: var(--ms-muted); }
+.ms-composer-options .ms-field-num { width: auto; min-width: 120px; }
+.ms-btn[data-kind="link"], .ms-btn[data-kind="link"] .mantine-Button-label { white-space: normal; text-align: left; height: auto; }  /* a link wraps with its sentence */
+.ms-setgroup-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+@media (max-width: 48em) {
+  .ms-setgroup-head { flex-wrap: wrap; }
+  .ms-setgroup-head > div:first-child { flex: 1 1 100%; min-width: 0; }
+  .ms-setgroup-actions { justify-content: flex-start; }
+}
+.ms-btn[data-kind="link"] .mantine-Button-inner { justify-content: flex-start; }

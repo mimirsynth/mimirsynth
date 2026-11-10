@@ -11,7 +11,7 @@ const cx = (a: string, b?: string) => (b ? `${a} ${b}` : a);
 
 /* Campos de formulario: un solo tamaño y una sola forma en toda la aplicación (el tamaño que pida un sitio de uso se ignora). */
 export function TextField(p: TextInputProps) { return <MTextInput {...p} size="sm" className={cx("ms-field", p.className)} />; }
-export function NumberField(p: NumberInputProps) { return <MNumberInput {...p} size="sm" className={cx("ms-field", p.className)} />; }
+export function NumberField(p: NumberInputProps) { return <MNumberInput {...p} size="sm" className={cx("ms-field ms-field-num", p.className)} />; }
 export function PasswordField(p: PasswordInputProps) { return <MPasswordInput {...p} size="sm" className={cx("ms-field", p.className)} />; }
 export function TextArea(p: TextareaProps) { return <MTextarea {...p} size="sm" className={cx("ms-field", p.className)} />; }
 export function SelectField(p: SelectProps) { return <MSelect {...p} size="sm" className={cx("ms-field", p.className)} />; }
@@ -65,9 +65,10 @@ export function MutationError({ error }: { error: unknown }) {
   );
 }
 
-/** Mensaje de «no hay nada que mostrar»: una sola forma para listas, tablas y paneles vacíos. */
-export function EmptyState({ children }: { children: ReactNode }) {
-  return <div className="ms-empty">{children}</div>;
+/** Mensaje de «no hay nada que mostrar»: una sola forma para listas, tablas, paneles vacíos y lo que tu rol no puede ver. `action`: what
+ *  to do next (a link to where things are made), after the sentence. Loading is `Loading`, not this. */
+export function EmptyState({ children, action }: { children: ReactNode; action?: ReactNode }) {
+  return <div className="ms-empty">{children}{action && <span className="ms-empty-action">{action}</span>}</div>;
 }
 
 /** Estado de una consulta sin datos: cargando, o error con «Reintentar». Con datos y `children`, los pinta. */

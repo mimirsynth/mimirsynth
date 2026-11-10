@@ -21,7 +21,7 @@ Hechos vigentes con el **mismo sujeto**, la **misma relación** y **destinos dis
 - Dos destinos con el mismo nombre salvo mayúsculas y espacios cuentan como el mismo. Eso es una entidad duplicada, no una contradicción: ver [[Fusionar duplicados]].
 
 ## Revisar un caso
-Una nota arriba explica para qué sirve la pestaña y qué hace cada acción. Los casos son una tabla compacta con una fila por grupo: **Sujeto**, **Relación**, **Tipo del destino** (el tipo de entidad de los destinos; solo se comparan destinos del mismo tipo), **Hechos** y **Propuesta**. **Revisar** abre un grupo. La columna **Propuesta** dice si la hay:
+La «i» al principio de la barra explica para qué sirve la pestaña y qué hace cada acción. Los casos son una tabla compacta con una fila por grupo: **Sujeto**, **Relación**, **Tipo del destino** (el tipo de entidad de los destinos; solo se comparan destinos del mismo tipo), **Hechos** y **Propuesta**. **Revisar** abre un grupo. La columna **Propuesta** dice si la hay:
 
 | Etiqueta | Significado |
 |---|---|
@@ -50,7 +50,7 @@ Una relación como `MONITORS` puede tener muchos destinos por naturaleza: un ser
 - La tabla de la medición muestra la misma señal junto al nombre de la relación.
 
 ## Medir antes de marcar
-**Medir en todas las relaciones** revisa todas las relaciones, marcadas o no, **sin cambiar nada**. La tabla **Candidatos por relación** muestra, por cada relación con algún caso:
+En el selector **Relaciones**, **Medir en todas** revisa todas las relaciones, marcadas o no, **sin cambiar nada**. La tabla **Candidatos por relación** muestra, por cada relación con algún caso:
 
 | Columna | Qué muestra |
 |---|---|

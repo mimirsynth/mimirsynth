@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
 import { useMediaQuery } from "@mantine/hooks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Btn, CANVAS, GraphCanvas, humanRelation, typeColor, type CanvasLink, type CanvasNode, type GraphCanvasHandle } from "../ui";
+import { Block, Btn, CANVAS, GraphCanvas, humanRelation, typeColor, type CanvasLink, type CanvasNode, type GraphCanvasHandle } from "../ui";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type GroupFacts = { relation: string; direction: "out" | "in"; current: { other: Other }[]; previous: { other: Other }[] };
@@ -12,7 +11,8 @@ const MINI_LABELS = 3;             // edges whose label is always drawn (those w
 
 /** The entity and its neighbours at depth 1 (issue 194), with the Graph's own renderer: the entity in the centre, the neighbours with the
  *  most current facts around it, coloured by type, and one edge per neighbour with its most frequent relation and how many facts join
- *  them. A click on a neighbour opens its page (on a phone the first tap names it, the second opens it); «Expand» opens the Graph. */
+ *  them. A click on a neighbour opens its page (on a phone the first tap names it, the second opens it); «Expand» opens the Graph. A block
+ *  titled «Related» with the count of all the neighbours; its «i» says when only some are drawn. */
 export default function EntityMiniGraph({ entity, groups, neighbors, link, expand }: {
   entity: Other; groups: GroupFacts[]; neighbors: (Other & { facts: number; current: number })[]; link: (o: Other) => string; expand?: string }) {
   const { t } = useTranslation();
@@ -72,18 +72,15 @@ export default function EntityMiniGraph({ entity, groups, neighbors, link, expan
   const pickedNode = shown.find((n) => n.uuid === picked);
   if (!neighbors.length) return null;
   return (
-    <Stack gap={4}>
-      <Group justify="space-between" gap="xs">
-        <Text size="sm" fw={600}>{t("Relacionadas ({{count}})", { count: neighbors.length })}</Text>
-        {expand && <Btn size="row" icon="graph" component={Link} to={expand}>{t("Ampliar")}</Btn>}
-      </Group>
+    <Block title={t("Relacionadas")} count={neighbors.length}
+      help={neighbors.length > shown.length ? t("Se dibujan las {{shown}} con más hechos vigentes, de {{total}}.", { shown: shown.length, total: neighbors.length }) : undefined}
+      actions={expand && <Btn size="row" icon="graph" component={Link} to={expand}>{t("Ampliar")}</Btn>}>
       <div ref={box} className="ms-minigraph" role="img" aria-label={t("Grafo de {{name}} y {{count}} entidades relacionadas", { name: entity.name, count: shown.length })}>
         <GraphCanvas ref={gc} nodes={nodes} links={links} layout="force" effects="reduced" selectedNode={picked} onNodeClick={click} onBackgroundClick={() => setPicked(null)} />
       </div>
-      {pickedNode && <Text size="xs"><Link to={link(pickedNode)}>{t("Abrir {{name}}", { name: pickedNode.name })}</Link></Text>}
-      {neighbors.length > shown.length && <Text size="xs" c="dimmed">{t("y {{count}} más", { count: neighbors.length - shown.length })}</Text>}
+      {pickedNode && <div><Btn kind="link" component={Link} to={link(pickedNode)}>{t("Abrir {{name}}", { name: pickedNode.name })}</Btn></div>}
       {/* the same neighbours as links, for the keyboard and screen readers: the canvas is not reachable without a pointer */}
       <ul className="ms-sr-only">{shown.map((n) => <li key={n.uuid}><Link to={link(n)}>{n.name}</Link></li>)}</ul>
-    </Stack>
+    </Block>
   );
 }

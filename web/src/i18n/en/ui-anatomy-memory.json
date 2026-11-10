@@ -1,0 +1,20 @@
+{
+ "Arrastra aquí ficheros para subirlos: .md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt, .png o .jpg.": "Drop files here to upload them: .md, .txt, .rst, .html, .pdf, .docx, .pptx, .xlsx, .odt, .png or .jpg.",
+ "Aún no hay fuentes.": "No sources yet.",
+ "Empezado": "Started",
+ "Ficha del documento": "Document details",
+ "Ficha del trabajo": "Job details",
+ "Fichero": "File",
+ "Los documentos del brain con su estado de indexación. La búsqueda devuelve los pasajes que mejor responden, por significado o por texto, cada uno con su procedencia.": "The brain's documents and their indexing status. Search returns the passages that answer best, by meaning or by text, each with where it comes from.",
+ "Mensaje": "Message",
+ "Ninguna fuente coincide con los filtros.": "No source matches the filters.",
+ "No se extrajo ningún hecho de este episodio.": "No facts were extracted from this episode.",
+ "Sin carpetas autorizadas": "No authorised folders",
+ "Subidas": "Uploads",
+ "Subido": "Uploaded",
+ "Terminado": "Finished",
+ "a {{date}}": "to {{date}}",
+ "subido": "uploaded",
+ "subiendo": "uploading",
+ "{{done}} de {{total}}": "{{done}} of {{total}}"
+}
