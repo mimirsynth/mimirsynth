@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from "react";
+import { HelpTip } from "./Layout";
 
 /** Pantalla de ajustes: navegación de secciones a la izquierda y, a la derecha, la sección elegida. En pantalla estrecha la navegación pasa arriba. */
 export function SettingsLayout({ nav, children }: { nav: ReactNode; children: ReactNode }) {
@@ -29,11 +30,12 @@ export function SubNav({ value, onChange, items, label }: { value: string; onCha
   );
 }
 
-/** Sección de ajustes: título, descripción y una lista de filas separadas por filetes. */
-export function SettingsGroup({ title, description, action, children }: { title: string; description?: ReactNode; action?: ReactNode; children: ReactNode }) {
+/** Sección de ajustes: título, una frase de descripción y una lista de filas separadas por filetes. `help`: what does not fit in that one
+ *  sentence, behind the «i» beside the title (never a notice or a paragraph in the body). `action`: the section's button (Add, Save). */
+export function SettingsGroup({ title, description, help, action, children }: { title: string; description?: ReactNode; help?: ReactNode; action?: ReactNode; children: ReactNode }) {
   return (
     <section className="ms-setgroup">
-      <header className="ms-setgroup-head"><div><h2>{title}</h2>{description && <p>{description}</p>}</div>{action}</header>
+      <header className="ms-setgroup-head"><div><h2 className="ms-setgroup-title">{title}{help && <HelpTip title={title}>{help}</HelpTip>}</h2>{description && <p>{description}</p>}</div>{action && <div className="ms-setgroup-actions">{action}</div>}</header>
       {children}
     </section>
   );

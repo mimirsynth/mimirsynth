@@ -1,10 +1,10 @@
 import { locale } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, DataTable, EntityChip, FilterBar, humanRelation, Segments, Modal, Notice, Pager, Pill, Tabs, TextArea, TextField, MutationError, ConfirmDialog, EmptyState, PageHeader, useTabParam, ListCard } from "../ui";
+import { Stack, Text } from "@mantine/core";
+import { Block, Btn, DataState, DataTable, DialogActions, EntityChip, FilterBar, RelationWord, Segments, Modal, Notice, Pager, Pill, Tabs, TextArea, TextField, MutationError, ConfirmDialog, EmptyState, PageHeader, useTabParam, ListCard, ViewBar } from "../ui";
 import { useDebouncedValue } from "@mantine/hooks";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Fact, fmt, fmtDay, get, send, TimelineEvent } from "../api";
 import { FillArea, Page } from "../ui";
 
@@ -42,8 +42,9 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
   const setFilter = (p: Partial<typeof f>) => { setF((x) => ({ ...x, ...p })); setPage((x) => ({ ...x, offset: 0 })); };
   const [view, setView] = useTabParam("lista", "vista");
   const rels = useQuery({ queryKey: ["fact-relations", graph], staleTime: 60_000, queryFn: () => get<{ name: string; count: number }[]>("facts/relations", { graph }) });
-  const { data } = useQuery({ queryKey: ["facts", graph, dq, f.status, f.rel, f.since, f.until, f.order, page.offset, page.limit], enabled: view === "lista", placeholderData: keepPreviousData,
+  const facts = useQuery({ queryKey: ["facts", graph, dq, f.status, f.rel, f.since, f.until, f.order, page.offset, page.limit], enabled: view === "lista", placeholderData: keepPreviousData,
     queryFn: () => get<{ total: number; counts: Record<string, number>; items: Fact[] }>("facts", { graph, q: dq, status: f.status, rel: f.rel, since: f.since, until: f.until, order: f.order, limit: page.limit, offset: page.offset }) });
+  const data = facts.data;
   const events = useQuery({ queryKey: ["timeline", graph, dq, f.rel, f.since, f.until], enabled: view === "linea", placeholderData: keepPreviousData,
     queryFn: () => get<TimelineEvent[]>("timeline", { graph, entity: dq, rel: f.rel, since: f.since, until: f.until, limit: 300 }) });
   const filtered = !!(f.q || f.rel || f.since || f.until || (view === "lista" && f.status !== "all"));
@@ -62,7 +63,7 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
         <DataTable.Tr key={x.uuid}>
           <DataTable.Td><span className="ms-fact-text" data-invalid={x.status === "invalidated" ? "" : undefined}>{x.fact}</span></DataTable.Td>
           <DataTable.Td><span className="ms-fact-rel"><EntityChip name={x.source} type={x.source_type} to={`/entidad/${x.source_uuid}`} />
-            <Text span size="xs" c="dimmed" title={x.name}>{humanRelation(x.name)}</Text><EntityChip name={x.target} type={x.target_type} to={`/entidad/${x.target_uuid}`} /></span></DataTable.Td>
+            <RelationWord name={x.name} /><EntityChip name={x.target} type={x.target_type} to={`/entidad/${x.target_uuid}`} /></span></DataTable.Td>
           <DataTable.Td className="ms-data ms-fact-when">{x.invalid_at
             ? <>{fmtDay(x.valid_at)} → <span className="ms-invalid-date">{t("invalidado el {{date}}", { date: fmtDay(x.invalid_at) })}</span></>
             : t("desde {{date}}", { date: fmtDay(x.valid_at) })}</DataTable.Td>
@@ -72,21 +73,19 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
       </DataTable.Tbody>
     </DataTable>
   );
-  const card = (f: Fact) => (
-        <ListCard key={f.uuid} invalid={f.status === "invalidated"}
-          tags={<><EntityChip name={f.source} type={f.source_type} to={`/entidad/${f.source_uuid}`} /><Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text>
+  const card = (f: Fact, lead?: ReactNode, aside?: ReactNode) => (
+        <ListCard key={f.uuid} invalid={f.status === "invalidated"} aside={aside}
+          tags={<>{lead}<EntityChip name={f.source} type={f.source_type} to={`/entidad/${f.source_uuid}`} /><RelationWord name={f.name} />
             <EntityChip name={f.target} type={f.target_type} to={`/entidad/${f.target_uuid}`} /></>}
           meta={<>{t("vigente desde")} {fmt(f.valid_at)}{f.invalid_at && <span className="ms-invalid-date"> {t("· invalidado")} {fmt(f.invalid_at)}</span>}<span> {t("· registrado el")} {fmt(f.created_at)}</span></>}
           actions={actions(f)}>
           {f.fact}
         </ListCard>
   );
-  return (
-    <Page fill>
-      <PageHeader title={t("Hechos")} description={<>{t("El conocimiento ya destilado: afirmaciones concretas entre dos entidades (p. ej. «El servicio de correo corre en el servidor 2») con la fecha desde la que son ciertas y, si dejan de serlo, cuándo. Salen de los episodios del Diario. La «Línea temporal» ordena los mismos hechos por cuándo se aprendieron o se invalidaron.")}</>} />
-      <Tabs value={view} onChange={setView}>
-        <Tabs.List><Tabs.Tab value="lista">{t("Lista")}</Tabs.Tab><Tabs.Tab value="linea">{t("Línea temporal")}</Tabs.Tab></Tabs.List><Tabs.Panel value="lista" keepMounted>{null}</Tabs.Panel><Tabs.Panel value="linea" keepMounted>{null}</Tabs.Panel>
-      </Tabs>
+  // The view under either tab: the tabs only switch between the list and the timeline of the same facts, with the same filters.
+  const body = (<>
+    <ViewBar title={view === "lista" ? t("Lista") : t("Línea temporal")}
+      meta={view === "linea" && (events.data?.length ?? 0) >= 300 ? t("Se muestran los 300 hechos más recientes de los filtros; acota las fechas para ver más atrás.") : undefined}>
       <FilterBar search={{ value: f.q, onChange: (v) => setFilter({ q: v }), placeholder: t("Texto del hecho o nombre de una entidad…") }} active={filtered}
         onClear={() => { setF({ q: "", status: "all", rel: "", since: "", until: "", order: f.order }); setPage((p) => ({ ...p, offset: 0 })); }}
         filters={[
@@ -97,33 +96,43 @@ export default function Facts({ graph, role }: { graph: string; role: string }) 
         ]} />
       {view === "lista" && <Segments label={t("Estado")} value={f.status} onChange={(v) => setFilter({ status: v })}
         data={[{ value: "all", label: t("Todos"), count: (data?.counts.current ?? 0) + (data?.counts.invalidated ?? 0) }, { value: "current", label: t("Vigentes"), count: data?.counts.current ?? 0 }, { value: "invalidated", label: t("Invalidados"), count: data?.counts.invalidated ?? 0 }]} />}
-      {done && <Notice tone="info">{done.summary}. <Btn kind="link" onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn>{undo.error && ` — ${(undo.error as Error).message}`}</Notice>}
-      <FillArea>
-        {view === "lista" ? (data && data.items.length === 0 ? <EmptyState>{filtered ? t("Ningún hecho coincide con los filtros.") : t("Aún no hay hechos.")}</EmptyState> : table(data?.items ?? [])) : (
-          <div className="ms-tl">
-            {events.isLoading && <EmptyState>{t("Cargando…")}</EmptyState>}
-            {(events.data ?? []).length === 0 && !events.isLoading && <EmptyState>{t("Sin eventos.")}</EmptyState>}
-            {groupByDay(events.data ?? []).map(([day, evs]) => (
-              <div key={day} className="ms-tl-day">
-                <Text className="ms-tl-date" size="xs" fw={600}>{day}</Text>
+    </ViewBar>
+    {done && <Notice tone="success">{done.summary}. <Btn kind="link" onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
+    <MutationError error={undo.error} />
+    <FillArea>
+      {view === "lista"
+        ? (!data ? <DataState query={facts} /> : data.items.length === 0 ? <EmptyState>{filtered ? t("Ningún hecho coincide con los filtros.") : t("Aún no hay hechos.")}</EmptyState> : table(data.items))
+        : !events.data ? <DataState query={events} />
+        : events.data.length === 0 ? <EmptyState>{t("Sin eventos.")}</EmptyState>
+        : <div className="ms-tl">
+            {groupByDay(events.data).map(([day, evs]) => (
+              <Block key={day} title={day} count={evs.length}>
                 {evs.map((e) => (
                   <div key={e.uuid + e.event} className="ms-tl-item" data-event={e.event}>
-                    <Group gap={6} mb={4}><Pill size="xs" tone={e.event === "invalidated" ? "warn" : "success"}>{e.event === "invalidated" ? t("dejó de ser cierto") : t("aprendido")}</Pill><Text size="xs" c="dimmed" className="ms-data">{new Date(e.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</Text></Group>
-                    {card(e)}
+                    {card(e, <Pill tone={e.event === "invalidated" ? "warn" : "success"}>{e.event === "invalidated" ? t("dejó de ser cierto") : t("aprendido")}</Pill>,
+                      <span className="ms-data">{new Date(e.at).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit" })}</span>)}
                   </div>))}
-              </div>))}
-          </div>)}
-      </FillArea>
-      {view === "lista" && <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} sizes={[25, 50, 100, 200]} />}
-      {view === "linea" && (events.data?.length ?? 0) >= 300 && <Text size="xs" c="dimmed">{t("Se muestran los 300 hechos más recientes de los filtros; acota las fechas para ver más atrás.")}</Text>}
+              </Block>))}
+          </div>}
+    </FillArea>
+    {view === "lista" && <Pager total={data?.total ?? 0} offset={page.offset} limit={page.limit} onChange={setPage} sizes={[25, 50, 100, 200]} />}
+  </>);
+  return (
+    <Page fill>
+      <PageHeader title={t("Hechos")} description={<>{t("El conocimiento ya destilado: afirmaciones concretas entre dos entidades (p. ej. «El servicio de correo corre en el servidor 2») con la fecha desde la que son ciertas y, si dejan de serlo, cuándo. Salen de los episodios del Diario. La «Línea temporal» ordena los mismos hechos por cuándo se aprendieron o se invalidaron.")}</>} />
+      <Tabs value={view} onChange={setView} className="ms-tabs-fill">
+        <Tabs.List><Tabs.Tab value="lista">{t("Lista")}</Tabs.Tab><Tabs.Tab value="linea">{t("Línea temporal")}</Tabs.Tab></Tabs.List>
+        <Tabs.Panel value="lista">{view === "lista" && body}</Tabs.Panel>
+        <Tabs.Panel value="linea">{view === "linea" && body}</Tabs.Panel>
+      </Tabs>
 
-      <Modal opened={!!edit} onClose={() => setEdit(null)} title={t("Editar hecho")} centered size="lg">
-        <Stack>
-          <Text size="xs" c="dimmed">{edit?.source} → {edit?.target}</Text>
+      <Modal opened={!!edit} onClose={() => setEdit(null)} title={t("Editar hecho")} size="lg">
+        <Stack gap="sm">
+          <Text size="sm">{edit?.source} → {edit?.target}</Text>
           <TextArea label={t("Texto del hecho")} description={t("Al guardar se recalcula su embedding")} minRows={3} autosize value={text} onChange={(e) => setText(e.currentTarget.value)} />
           <TextField label={t("Tipo de relación")} description={t("Se normaliza a MAYÚSCULAS_CON_GUIONES")} value={rel} onChange={(e) => setRel(e.currentTarget.value)} />
           <MutationError error={save.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEdit(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={text.trim().length < 3 || (text.trim() === edit?.fact && rel.trim() === edit?.name)} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setEdit(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={text.trim().length < 3 || (text.trim() === edit?.fact && rel.trim() === edit?.name)} loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn></DialogActions>
         </Stack>
       </Modal>
       <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Borrar hecho")} action={t("Borrar hecho")} subject={<i>{del?.fact}</i>}

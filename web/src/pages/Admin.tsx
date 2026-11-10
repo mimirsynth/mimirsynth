@@ -1,9 +1,9 @@
 import { locale, T, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, Check, ClearFilters, ColHead, ComboField, CopyBtn, DataTable, Modal, Notice, NumberField, Panel, PasswordField, Pill, SelectField, Tabs, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, FillArea, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SubNav } from "../ui";
+import { Group, Stack, Text } from "@mantine/core";
+import { Btn, CellText, Check, ClearFilters, ColHead, ComboField, DataState, DataTable, DialogActions, Loading, Modal, Notice, NumberField, PasswordField, Pill, SelectField, TextArea, TextField, Toggle, useTableView, MutationError, ConfirmDialog, EmptyState, Page, PageHeader, useTabParam, Tone, SettingsBody, SettingsGroup, SettingsLayout, SettingsRow, SubNav, ViewBar } from "../ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Brain, fmt, get, Me, send } from "../api";
 import AdminFolders from "./AdminFolders";
@@ -29,19 +29,17 @@ const AUDIT_COLS = { ts: { get: (a: AuditRow) => a.ts }, action: { get: (a: Audi
 function AuditTable({ rows }: { rows: AuditRow[] }) {
   const { t } = useTranslation();
   const v = useTableView(rows, AUDIT_COLS);
-  return (
-    <Stack gap="xs">
-      {v.active && <Group><Btn size="row" onClick={v.clear}>{t("Quitar todos los filtros (")}{v.rows.length} {t("de")} {v.total})</Btn></Group>}
-      <DataTable fz="xs">
+  return (<>
+    <ViewBar title={t("Auditoría")}>{v.active && <ClearFilters active onClear={v.clear} shown={v.rows.length} total={v.total} />}</ViewBar>
+    {v.rows.length === 0 ? <EmptyState>{t("Sin resultados")}</EmptyState> : <DataTable fz="xs">
         <DataTable.Thead><DataTable.Tr>
           <ColHead sort={v.sortProps("ts")}>{t("Fecha")}</ColHead>
           <ColHead sort={v.sortProps("action")} filter={v.select("action")}>{t("Acción")}</ColHead>
           <ColHead filter={v.text("detail", t("Buscar en el detalle…"))}>{t("Detalle")}</ColHead>
         </DataTable.Tr></DataTable.Thead>
-        <DataTable.Tbody>{v.rows.map((a, i) => <DataTable.Tr key={i}><DataTable.Td>{fmt(a.ts)}</DataTable.Td><DataTable.Td>{a.action}</DataTable.Td><DataTable.Td>{JSON.stringify(a.detail)}</DataTable.Td></DataTable.Tr>)}</DataTable.Tbody>
-      </DataTable>
-    </Stack>
-  );
+        <DataTable.Tbody>{v.rows.map((a, i) => <DataTable.Tr key={i}><DataTable.Td className="ms-data">{fmt(a.ts)}</DataTable.Td><DataTable.Td>{a.action}</DataTable.Td><DataTable.Td>{JSON.stringify(a.detail)}</DataTable.Td></DataTable.Tr>)}</DataTable.Tbody>
+      </DataTable>}
+  </>);
 }
 
 const ROLES = [
@@ -60,31 +58,31 @@ function Members({ brain }: { brain: Brain }) {
   const del = useMutation({ mutationFn: (id: number) => send("DELETE", `brains/${brain.slug}/members/${id}`), onSuccess: refresh });
   const [ask, setAsk] = useState<Member | null>(null);
   const mv = useTableView(data ?? [], { user: { get: (m: Member) => m.email ?? m.name }, role: { get: (m: Member) => (m.implicit ? "owner" : m.role), label: (r: string) => ROLES.find((x) => x.value === r)?.label ?? r, exact: true } });
-  if (error) return <Text c="dimmed" size="sm">{t("Solo los administradores del brain gestionan sus miembros.")}</Text>;
-  return (
-    <Stack gap="xs">
+  if (error) return <EmptyState>{t("Solo los administradores del brain gestionan sus miembros.")}</EmptyState>;
+  if (!data) return <Loading />;
+  const roles = ROLES.map((r) => ({ ...r, label: t(r.label) }));
+  // The add form is the view's bar: who and with which role, then «Add»; the table's filters are cleared from the same bar.
+  return (<>
       <ConfirmDialog opened={!!ask} onClose={() => setAsk(null)} title={t("Quitar miembro")} action={t("Quitar miembro")} subject={ask?.email ?? ask?.name}
         warning={t("Pierde el acceso a este brain. Sus tokens de API siguen existiendo hasta que se revoquen.")} onConfirm={() => del.mutateAsync(ask!.user_id)} />
-      <ClearFilters active={mv.active} onClear={mv.clear} shown={mv.rows.length} total={mv.total} />
-      <DataTable fz="sm">
+      <ViewBar title={t("Miembros")} actions={<Btn kind="primary" disabled={!email} onClick={() => add.mutate({ email, role })} icon="plus">{t("Añadir")}</Btn>}>
+        <TextField label={t("Añadir por email")} placeholder={t("persona@dominio.com")} value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
+        <SelectField label={t("Rol")} data={roles} value={role} onChange={(v) => setRole(v ?? "reader")} allowDeselect={false} />
+        <ClearFilters active={mv.active} onClear={mv.clear} shown={mv.rows.length} total={mv.total} />
+      </ViewBar>
+      <MutationError error={add.error} />
+      {mv.rows.length === 0 ? <EmptyState>{t("Sin resultados")}</EmptyState> : <DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr><ColHead sort={mv.sortProps("user")} filter={mv.text("user")}>{t("Usuario")}</ColHead><ColHead sort={mv.sortProps("role")} filter={mv.select("role")}>{t("Rol")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{mv.rows.map((m) => (
           <DataTable.Tr key={m.user_id}>
             <DataTable.Td>{m.email ?? m.name}</DataTable.Td>
             <DataTable.Td>{m.implicit
-              ? <Group gap={6}><Pill>{t("Propietario")}</Pill><Text size="xs" c="dimmed">{t("administrador de la instancia")}</Text></Group>
-              : <SelectField size="xs" w={150} data={ROLES.map((r) => ({ ...r, label: t(r.label) }))} value={m.role} allowDeselect={false} onChange={(v) => v && m.email && add.mutate({ email: m.email, role: v })} />}</DataTable.Td>
+              ? <CellText sub={t("administrador de la instancia")}><Pill>{t("Propietario")}</Pill></CellText>
+              : <SelectField aria-label={t("Rol")} data={roles} value={m.role} allowDeselect={false} onChange={(v) => v && m.email && add.mutate({ email: m.email, role: v })} />}</DataTable.Td>
             <DataTable.Td>{!m.implicit && <Btn kind="danger" size="row" onClick={() => setAsk(m)} icon="trash">{t("Quitar")}</Btn>}</DataTable.Td>
           </DataTable.Tr>))}</DataTable.Tbody>
-      </DataTable>
-      <Group align="flex-end" gap="xs">
-        <TextField size="xs" label={t("Añadir por email")} placeholder={t("persona@dominio.com")} value={email} onChange={(e) => setEmail(e.currentTarget.value)} w={260} />
-        <SelectField size="xs" label={t("Rol")} data={ROLES.map((r) => ({ ...r, label: t(r.label) }))} value={role} onChange={(v) => setRole(v ?? "reader")} allowDeselect={false} w={150} />
-        <Btn kind="primary" disabled={!email} onClick={() => add.mutate({ email, role })} icon="plus">{t("Añadir")}</Btn>
-      </Group>
-      <MutationError error={add.error} />
-    </Stack>
-  );
+      </DataTable>}
+  </>);
 }
 
 function Tokens({ brain }: { brain: Brain }) {
@@ -99,7 +97,7 @@ type Engine = { threshold?: number; dim?: number; id: number; name: string; base
 type EngineForm = { threshold?: number; id?: number; name: string; base_url: string; model: string; small_model: string; api_key: string; enabled: boolean };
 const EMPTY: EngineForm = { name: "", base_url: "", model: "", small_model: "", api_key: "", enabled: true };
 
-function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "decision"; title: string; description: string }) {
+function Engines({ kind, title, description, help }: { kind: "llm" | "embedding" | "decision"; title: string; description: string; help: ReactNode }) {
   const { t } = useTranslation();
   const emb = kind === "embedding"; const dec = kind === "decision"; const path = emb ? "embedding-engines" : dec ? "decision-engines" : "llm-engines";
   const qc = useQueryClient();
@@ -129,22 +127,24 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
   const open = (f: EngineForm | null) => { setForm(f); setModels([]); setMErr(""); if (f?.id) loadModels.mutate(f); };
   const set = (k: keyof EngineForm, v: string | boolean) => setForm((f) => f && { ...f, [k]: v });
   return (
-    <SettingsGroup title={title} description={description} action={<Btn kind="primary" onClick={() => open({ ...EMPTY })} icon="plus">{t("Añadir motor")}</Btn>}>
-    <SettingsBody><Stack gap="xs">
-      <AiStatus kind={kind} />
+    <SettingsGroup title={title} description={description} help={help} action={<Btn kind="primary" onClick={() => open({ ...EMPTY })} icon="plus">{t("Añadir motor")}</Btn>}>
+    <SettingsBody>
+      <AiStatus kind={kind} title={title}><ClearFilters active={ev.active} onClear={ev.clear} shown={ev.rows.length} total={ev.total} /></AiStatus>
       {emb && <ReindexPanel onDone={refresh} />}
       <MutationError error={mk.error} />
-      <ClearFilters active={ev.active} onClear={ev.clear} shown={ev.rows.length} total={ev.total} />
-      <DataTable fz="sm">
+      {!list.data ? <DataState query={list} />
+        : list.data.length === 0 ? <EmptyState>{dec ? t("Sin decisores: toda propuesta de un colaborador espera a un curador.") : emb ? t("Sin motores: se usan las variables MIMIRSYNTH_EMBEDDING_*. Añade el que ya usas (mismo modelo) para gestionarlo desde aquí.") : t("Sin motores. Mientras no haya ninguno se usan las variables MIMIRSYNTH_LLM_* si existen; si tampoco, la ingesta queda desactivada.")}</EmptyState>
+        : ev.rows.length === 0 ? <EmptyState>{t("Sin resultados")}</EmptyState> : <DataTable fz="sm">
         <DataTable.Thead><DataTable.Tr><ColHead sort={ev.sortProps("name")} filter={ev.text("name")}>{t("Nombre")}</ColHead><ColHead filter={ev.text("url")}>{t("Endpoint")}</ColHead><ColHead sort={ev.sortProps("model")} filter={ev.text("model")}>{t("Modelo")}</ColHead><ColHead filter={ev.select("state")}>{t("Estado")}</ColHead><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>
           {ev.rows.map((e) => (
             <DataTable.Tr key={e.id}>
               <DataTable.Td>{e.name}</DataTable.Td><DataTable.Td><Text size="xs" className="ms-breakall">{e.base_url}</Text></DataTable.Td><DataTable.Td>{e.model}{emb && e.dim ? ` · ${e.dim}d` : ""}{dec && e.threshold ? t(" · umbral {{threshold}}", { threshold: e.threshold }) : ""}</DataTable.Td>
-              <DataTable.Td><Group gap={4}>{e.is_default && <Pill size="sm" tone="success">{t("por defecto")}</Pill>}{!e.enabled && <Pill size="sm">{t("desactivado")}</Pill>}{!e.has_key && <Pill size="sm" tone="warn">{t("sin clave")}</Pill>}</Group>
+              <DataTable.Td><CellText sub={!emb && <FitnessLine fitness={e.fitness} decider={dec} />}>
+                <Group gap={4}>{e.is_default && <Pill tone="success">{t("por defecto")}</Pill>}{!e.enabled && <Pill>{t("desactivado")}</Pill>}{!e.has_key && <Pill tone="warn">{t("sin clave")}</Pill>}</Group>
                 {tests[e.id] && <Text size="xs" className={tests[e.id].ok ? "ms-text-ok" : "ms-text-danger"}>{tests[e.id].text}</Text>}
-                {tests[e.id]?.warning && <Group gap={4} wrap="nowrap" align="flex-start"><Pill size="sm" tone="warn">{t("Aviso")}</Pill><Text size="xs">{tests[e.id].warning}</Text></Group>}
-                {!emb && <FitnessLine fitness={e.fitness} decider={dec} />}</DataTable.Td>
+                {tests[e.id]?.warning && <Group gap={4} wrap="nowrap" align="flex-start"><Pill tone="warn">{t("Aviso")}</Pill><Text size="xs">{tests[e.id].warning}</Text></Group>}
+              </CellText></DataTable.Td>
               <DataTable.Td><Group gap={4} wrap="nowrap">
                 <Btn size="row" loading={test.isPending && test.variables === e.id} onClick={() => test.mutate(e.id)} icon="test">{t("Probar")}</Btn>
                 {!e.is_default && e.enabled && (!otherModel(e) || !def) && <Btn size="row" onClick={() => mk.mutate(e.id)}>{t("Por defecto")}</Btn>}
@@ -152,52 +152,52 @@ function Engines({ kind, title, description }: { kind: "llm" | "embedding" | "de
                 <Btn size="row" onClick={() => open({ ...e, api_key: "" })} icon="edit">{t("Editar")}</Btn>
                 <Btn kind="danger" size="row" onClick={() => setAsk(e)} icon="trash">{t("Borrar")}</Btn></Group></DataTable.Td>
             </DataTable.Tr>))}
-          {list.data?.length === 0 && <DataTable.Tr><DataTable.Td colSpan={5}><Text c="dimmed" size="sm">{dec ? t("Sin decisores: toda propuesta de un colaborador espera a un curador.") : emb ? t("Sin motores: se usan las variables MIMIRSYNTH_EMBEDDING_*. Añade el que ya usas (mismo modelo) para gestionarlo desde aquí.") : t("Sin motores. Mientras no haya ninguno se usan las variables MIMIRSYNTH_LLM_* si existen; si tampoco, la ingesta queda desactivada.")}</Text></DataTable.Td></DataTable.Tr>}
         </DataTable.Tbody>
-      </DataTable>
+      </DataTable>}
       {emb && <StartReindex engine={reindex} onClose={() => setReindex(null)} />}
       <ConfirmDialog opened={!!ask} onClose={() => setAsk(null)} title={t("Borrar motor")} action={t("Borrar motor")} subject={ask?.name}
         warning={t("Los brains que lo usen pasan al motor por defecto, o a las variables de entorno si no hay otro.")} onConfirm={() => del.mutateAsync(ask!.id)} />
-      <Modal opened={!!form} onClose={() => setForm(null)} title={(form?.id ? t("Editar ") : t("Añadir ")) + (emb ? t("motor de embeddings") : dec ? t("decisor") : t("motor LLM"))} centered>
-        {form && <Stack gap="xs">
+      <Modal opened={!!form} onClose={() => setForm(null)} title={(form?.id ? t("Editar ") : t("Añadir ")) + (emb ? t("motor de embeddings") : dec ? t("decisor") : t("motor LLM"))}>
+        {form && <Stack gap="sm">
           <TextField label={t("Endpoint (base URL)")} placeholder={t("http://gateway:4000/v1")} value={form.base_url} onChange={(e) => set("base_url", e.currentTarget.value)} />
           <PasswordField label={t("Clave de API")} description={form.id ? t("Vacío = conservar la actual") : undefined} value={form.api_key} onChange={(e) => set("api_key", e.currentTarget.value)}
             onBlur={() => form.base_url && (form.api_key || form.id) && loadModels.mutate(form)} />
-          <Group gap="xs"><Btn size="row" disabled={!form.base_url} loading={loadModels.isPending} onClick={() => loadModels.mutate(form)} icon="models">{t("Cargar modelos")}</Btn>
-            <Text size="xs" c={mErr ? "orange" : "dimmed"}>{mErr || (models.length ? t("{{length}} modelos disponibles", { length: models.length }) : t("Rellena endpoint y clave para listar los modelos del proveedor"))}</Text></Group>
-          <ComboField label={t("Modelo")} disabled={emb && !!form.id} data={models} limit={50} value={form.model} onChange={(v) => set("model", v)} placeholder={t("Elige uno o escribe el nombre")} />
+          <Group><Btn disabled={!form.base_url} loading={loadModels.isPending} onClick={() => loadModels.mutate(form)} icon="models">{t("Cargar modelos")}</Btn></Group>
+          {mErr && <Notice tone="warn">{mErr}</Notice>}
+          <ComboField label={t("Modelo")} description={models.length ? t("{{length}} modelos disponibles", { length: models.length }) : t("Rellena endpoint y clave para listar los modelos del proveedor")} disabled={emb && !!form.id} data={models} limit={50} value={form.model} onChange={(v) => set("model", v)} placeholder={t("Elige uno o escribe el nombre")} />
           {!emb && !dec && <ComboField label={t("Modelo pequeño (opcional)")} description={t("Para tareas ligeras; por defecto el mismo modelo")} data={models} limit={50} value={form.small_model} onChange={(v) => set("small_model", v)} />}
           {dec && <NumberField label={t("Umbral de confianza")} description={t("Por debajo, la propuesta va a revisión humana")} min={0.5} max={0.99} step={0.05} decimalScale={2} value={form.threshold ?? 0.8} onChange={(v) => set("threshold", Number(v) as unknown as string)} />}
           <TextField label={t("Nombre")} value={form.name} onChange={(e) => set("name", e.currentTarget.value)} />
           <Toggle label={t("Activado")} checked={form.enabled} onChange={(e) => set("enabled", e.currentTarget.checked)} />
           <MutationError error={save.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setForm(null)}>{t("Cancelar")}</Btn>
-            <Btn kind="primary" disabled={!form.name || !form.base_url || !form.model} loading={save.isPending} onClick={() => save.mutate(form)} icon="save">{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setForm(null)}>{t("Cancelar")}</Btn>
+            <Btn kind="primary" disabled={!form.name || !form.base_url || !form.model} loading={save.isPending} onClick={() => save.mutate(form)} icon="save">{t("Guardar")}</Btn></DialogActions>
         </Stack>}
       </Modal>
-    </Stack></SettingsBody>
+    </SettingsBody>
     </SettingsGroup>
   );
 }
 
 // «Structured output: checked 09/11 08:00 ✅»: kept on the engine, so it is there on every visit and after a change of engine (issue 424).
+// It is the second line of the engine's state cell (CellText sub), so it is already in the muted style.
 function FitnessLine({ fitness: f, decider }: { fitness?: Fitness | null; decider: boolean }) {
   const { t } = useTranslation();
-  if (!f) return <Text size="xs" c="dimmed">{decider ? t("Letra y logprobs: sin comprobar todavía") : t("Salida estructurada: sin comprobar todavía")}</Text>;
+  if (!f) return <>{decider ? t("Letra y logprobs: sin comprobar todavía") : t("Salida estructurada: sin comprobar todavía")}</>;
   const at = new Date(f.at).toLocaleString(locale(), { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   const mark = f.fit === null ? "⚠️" : f.ok && !f.warning ? "✅" : f.ok ? "⚠️" : "❌";  // i18n-ok: symbols
   const why = f.fit === null ? t("no respondió; se repite en una hora") : !f.ok || f.warning ? translateServer(f.warning ?? f.text) : "";
-  return (
-    <Text size="xs" c={f.current ? undefined : "dimmed"}>
-      {decider ? t("Letra y logprobs: comprobados el {{at}}", { at }) : t("Salida estructurada: comprobada el {{at}}", { at })} {mark}
-      {!f.current && <>{" "}{t("(antes del último cambio de modelo o endpoint)")}</>}
-      {why && <Text span className={f.ok ? undefined : "ms-text-danger"}>{" · "}{why}</Text>}
-    </Text>
-  );
+  return (<>
+    {decider ? t("Letra y logprobs: comprobados el {{at}}", { at }) : t("Salida estructurada: comprobada el {{at}}", { at })} {mark}
+    {!f.current && <>{" "}{t("(antes del último cambio de modelo o endpoint)")}</>}
+    {why && <span className={f.ok ? undefined : "ms-text-danger"}>{" · "}{why}</span>}
+  </>);
 }
 
 type AiSt = { configured: boolean; source: string | null; name: string | null; healthy?: boolean; error?: string; model?: string; ms?: number };
-function AiStatus({ kind }: { kind: "llm" | "embedding" | "decision" }) {
+/** The bar of an engine section: the state of the engine in force and its last check (`meta`), «Check» on the right, and the table's
+ *  filters (`children`). When the engine comes from the .env, a titled notice says so. */
+function AiStatus({ kind, title, children }: { kind: "llm" | "embedding" | "decision"; title: string; children?: ReactNode }) {
   const { t } = useTranslation();
   const st = useQuery({ queryKey: ["ai-status", "check"], queryFn: () => get<Record<string, AiSt>>("ai-status", { check: true }), refetchOnWindowFocus: false });
   const k = kind === "decision" ? "decider" : kind;
@@ -207,22 +207,17 @@ function AiStatus({ kind }: { kind: "llm" | "embedding" | "decision" }) {
   const text = !e ? t("comprobando…") : !e.configured ? t("sin configurar") : e.healthy === undefined ? (env ? t("por variables de entorno") : t("configurado")) : `${e.healthy ? "OK" : t("caído")} · ${env ? t("variables de entorno") : e.name}`;
   const at = new Date(st.dataUpdatedAt).toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   // El resultado se queda a la vista hasta la siguiente comprobación: un aviso efímero no da tiempo a leerlo (#78).
-  const result = st.isFetching ? <Text size="xs" c="dimmed">{t("Comprobando la conexión con el proveedor…")}</Text>
-    : e?.healthy !== undefined && <Text size="xs"><Text span className={e.healthy ? "ms-text-ok" : "ms-text-danger"}>{e.healthy ? t("Responde · {{model}} · {{ms}} ms", { model: e.model, ms: e.ms }) : t("Error con {{model}}: {{error}}", { model: e.model, error: translateServer(e.error ?? "") })}</Text>
-      <Text span c="dimmed">{" · "}{t("comprobado a las {{at}}", { at })}</Text></Text>;
+  const result = st.isFetching ? t("Comprobando la conexión con el proveedor…")
+    : e?.healthy !== undefined && <><span className={e.healthy ? "ms-text-ok" : "ms-text-danger"}>{e.healthy ? t("Responde · {{model}} · {{ms}} ms", { model: e.model, ms: e.ms }) : t("Error con {{model}}: {{error}}", { model: e.model, error: translateServer(e.error ?? "") })}</span>
+      {" · "}{t("comprobado a las {{at}}", { at })}</>;
   const envHelp = k === "llm" ? t("Se usan las variables MIMIRSYNTH_LLM_* del .env (cambiarlas exige reiniciar la API). Si añades un motor aquí, tiene prioridad sobre ellas.")
     : t("Se usan las variables MIMIRSYNTH_EMBEDDING_* del .env (cambiarlas exige reiniciar la API). Si añades un motor aquí, tiene prioridad sobre ellas.");
-  return (
-    <Stack gap={4}>
-      <Group gap="xs">
-        <Pill tone={tone} size="md">{t("Estado")}: {text}</Pill>
-        <Btn size="row" loading={st.isFetching} onClick={() => st.refetch()} icon="refresh">{t("Comprobar")}</Btn>
-        {result}
-      </Group>
-      {env && <Text size="xs" c="dimmed">{envHelp}</Text>}
-      <MutationError error={st.error} />
-    </Stack>
-  );
+  return (<>
+    <ViewBar title={title} meta={<><Pill tone={tone}>{t("Estado")}: {text}</Pill>{result && <>{" "}{result}</>}</>}
+      actions={<Btn loading={st.isFetching} onClick={() => st.refetch()} icon="refresh">{t("Comprobar")}</Btn>}>{children}</ViewBar>
+    {env && <Notice tone="info" title={t("Viene de las variables de entorno")}>{envHelp}</Notice>}
+    <MutationError error={st.error} />
+  </>);
 }
 
 export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; setBrain: (s: string) => void }) {
@@ -274,19 +269,19 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
       <PageHeader title={t("Administración")} description={t("Acceso a cada brain y, para el administrador de la instancia, usuarios, seguridad, modelos de IA, documentos y el resto de ajustes.")}
         actions={me.is_admin && <Btn icon="play" loading={wizard.isPending} onClick={() => wizard.mutate()}>{t("Asistente de configuración")}</Btn>} />
       {me.is_admin && <SealedNotice />}
-      {me.auth_mode === "off" && <Pill tone="warn" size="md">{t("Modo prototipo: sin autenticación (todos son administradores)")}</Pill>}
-      <Modal opened={open} onClose={() => setOpen(false)} title={t("Crear brain")} centered>
-        <Stack gap="xs">
+      {me.auth_mode === "off" && <Notice tone="warn" title={t("Modo prototipo")}>{t("Sin autenticación: todos son administradores.")}</Notice>}
+      <Modal opened={open} onClose={() => setOpen(false)} title={t("Crear brain")}>
+        <Stack gap="sm">
           <TextField label={t("Slug")} description={t("Identificador permanente (minúsculas, números y guiones)")} placeholder={t("familia")} value={slug} onChange={(e) => setSlug(e.currentTarget.value)} />
           <TextField label={t("Nombre")} placeholder={t("Familia")} value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <TextArea label={t("Descripción")} description={t("De qué trata este brain. El decisor la usa para juzgar si una propuesta encaja en él.")} autosize minRows={2} value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
           <TextField label={t("Grafo existente (opcional)")} description={t("Vacío = grafo nuevo con el nombre del slug")} value={graph} onChange={(e) => setGraph(e.currentTarget.value)} />
           <MutationError error={create.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setOpen(false)}>{t("Cancelar")}</Btn><Btn kind="primary" disabled={!slug || !name} loading={create.isPending} onClick={() => create.mutate()} icon="plus">{t("Crear")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setOpen(false)}>{t("Cancelar")}</Btn><Btn kind="primary" disabled={!slug || !name} loading={create.isPending} onClick={() => create.mutate()} icon="plus">{t("Crear")}</Btn></DialogActions>
         </Stack>
       </Modal>
-      <Modal opened={editing} onClose={() => setEditing(false)} title={t("Editar brain")} centered>
-        <Stack gap="xs">
+      <Modal opened={editing} onClose={() => setEditing(false)} title={t("Editar brain")}>
+        <Stack gap="sm">
           <TextField label={t("Nombre")} value={newName} onChange={(e) => setNewName(e.currentTarget.value)} data-autofocus />
           <TextArea label={t("Descripción")} description={t("De qué trata este brain. El decisor la usa para juzgar si una propuesta encaja en él.")} autosize minRows={2} value={newDesc} onChange={(e) => setNewDesc(e.currentTarget.value)} />
           <TextField label={t("Slug")} description={t("Va en las URLs de la API. Los tokens siguen funcionando; actualiza la URL de tus hooks y plugins.")} value={newSlug} onChange={(e) => setNewSlug(e.currentTarget.value)} />
@@ -294,63 +289,65 @@ export default function Admin({ me, brain, setBrain }: { me: Me; brain: string; 
             description={me.is_admin ? t("Cambiarlo copia el grafo con el nuevo nombre, reescribe el group_id de cada nodo y arista, y verifica los conteos. El original se conserva.") : t("Solo el administrador de la instancia puede cambiar el grafo.")} />
           {newGraph !== cur?.graph_name && <Notice tone="warn">{t("Los agentes que escriban en Graphiti con group_id «")}{cur?.graph_name}{t("» seguirán escribiendo en el grafo antiguo; deberás repuntarlos a «")}{newGraph}».</Notice>}
           <MutationError error={rename.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEditing(false)}>{t("Cancelar")}</Btn><Btn kind="primary" disabled={!newName.trim() || !newSlug || !newGraph} loading={rename.isPending} onClick={() => rename.mutate()} icon="save">{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setEditing(false)}>{t("Cancelar")}</Btn><Btn kind="primary" disabled={!newName.trim() || !newSlug || !newGraph} loading={rename.isPending} onClick={() => rename.mutate()} icon="save">{t("Guardar")}</Btn></DialogActions>
         </Stack>
       </Modal>
-      <Modal opened={!!done} onClose={() => setDone("")} title={t("Grafo migrado")} centered>
-        <Stack><Text size="sm">{t("El brain usa ya el grafo nuevo. El grafo original «")}{done}{t("» se ha conservado como copia de seguridad; bórralo cuando hayas comprobado que todo está bien (y repuntado los agentes).")}</Text><Btn kind="primary" onClick={() => setDone("")}>{t("Entendido")}</Btn></Stack>
+      {/* An acknowledgement, not a choice: its one button closes it, so it has no «Cancel». */}
+      <Modal opened={!!done} onClose={() => setDone("")} title={t("Grafo migrado")}>
+        <Stack gap="sm"><Text size="sm">{t("El brain usa ya el grafo nuevo. El grafo original «")}{done}{t("» se ha conservado como copia de seguridad; bórralo cuando hayas comprobado que todo está bien (y repuntado los agentes).")}</Text>
+          <DialogActions><Btn kind="primary" onClick={() => setDone("")}>{t("Entendido")}</Btn></DialogActions></Stack>
       </Modal>
-      <ConfirmDialog opened={del} onClose={() => setDel(false)} title={t(t("Borrar brain"))} action={delGraph ? t("Borrar brain y grafo") : t("Borrar brain")} requireText={cur?.slug}
+      <ConfirmDialog opened={del} onClose={() => setDel(false)} title={t("Borrar brain")} action={delGraph ? t("Borrar brain y grafo") : t("Borrar brain")} requireText={cur?.slug}
         warning={t("Vas a borrar «{{name}}». Se eliminan sus miembros, tokens de API, propuestas, ontología, correcciones de tipos y el índice de texto. No se puede deshacer.", { name: cur?.name })}
         onConfirm={() => remove.mutateAsync()}>
         <Check checked={delGraph} onChange={(e) => setDelGraph(e.currentTarget.checked)} label={t("Borrar también el grafo «{{graph_name}}» de FalkorDB (episodios, entidades y hechos)", { graph_name: cur?.graph_name })} description={t("Si no lo marcas, el grafo se conserva sin brain asociado y puede volver a asociarse creando un brain con ese grafo.")} />
       </ConfirmDialog>
-      <FillArea>
-        <SettingsLayout nav={<SubNav label={t("Secciones de administración")} value={section} onChange={setSection} items={nav} />}>
-          {section === "brains" && <>
-            <SettingsGroup title={t("Brain activo")} description={t("Cámbialo con el selector de la barra lateral.")}
-              action={me.is_admin && <Btn kind="primary" icon="plus" onClick={() => setOpen(true)}>{t("Crear brain")}</Btn>}>
-              <SettingsBody>
-                {cur ? (
-                  <Group justify="space-between" wrap="nowrap">
-                    <Stack gap={2}>
-                      <Group gap="xs"><Title order={3}>{cur.name}</Title><Pill size="xs">{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill>{cur.read_only && <Pill size="xs" tone="warn">{t("solo lectura")}</Pill>}</Group>
-                      <Text size="xs" c="dimmed" className="ms-data">{cur.slug} {t("· grafo")} {cur.graph_name}</Text>
-                    </Stack>
-                    <Group gap={6}>
-                      {canAdmin && <Btn size="row" icon="edit" onClick={() => { setNewName(cur.name); setNewSlug(cur.slug); setNewGraph(cur.graph_name); setNewDesc(cur.description); rename.reset(); setEditing(true); }}>{t("Editar")}</Btn>}
-                      {cur.role === "owner" && <Btn kind="danger" size="row" icon="trash" onClick={() => { setDelGraph(false); setDel(true); }}>{t("Borrar")}</Btn>}
-                    </Group>
-                  </Group>) : <EmptyState>{t("No hay ningún brain seleccionado.")}</EmptyState>}
-              </SettingsBody>
-            </SettingsGroup>
-            {me.is_admin && <SettingsGroup title={t("Importar un brain")} description={t("Un brain nuevo a partir de un paquete exportado.")}>
-              <SettingsBody><BrainImport onOpen={(s) => { qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(s); }} /></SettingsBody></SettingsGroup>}
-          </>}
-          {cur && <>
-            {section === "connect" && <SettingsGroup title={t("Conectar un agente")} description={t("Elige tu agente y copia lo que necesita, ya con este servidor, este brain y un token. Se pone en verde en cuanto el agente hace su primera llamada.")}><SettingsBody><ConnectAgent brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "members" && <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "tokens" && <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP. Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "federation" && <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe. Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>}
-            {section === "secrets" && <SettingsGroup title={t("Secretos")} description={t("Qué hacer cuando una propuesta o un documento lleva una contraseña, un token o una clave.")}><SettingsBody><Secrets brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "webhooks" && <SettingsGroup title={t("Webhooks de entrada")} description={t("Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain.")}><SettingsBody><BrainWebhooks brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "brain-usage" && <SettingsGroup title={t("Consumo de IA")} description={t("Lo que este brain ha gastado en motores de IA en los últimos 30 días, y su presupuesto mensual.")}><SettingsBody><BrainAiUsage brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "retention" && <SettingsGroup title={t("Retención")} description={t("Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.")}><SettingsBody><BrainRetention brain={cur} /></SettingsBody></SettingsGroup>}
-            {section === "export" && <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}><SettingsBody><BrainExport brain={cur} /></SettingsBody></SettingsGroup>}
-          </>}
-          {section === "users" && <SettingsGroup title={t("Usuarios")} description={t("Cuentas de la instancia: altas por invitación, roles, acceso a brains y estado.")}><SettingsBody><AdminUsers me={me.id} /></SettingsBody></SettingsGroup>}
-          {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas. Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}
-          {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta). Los vectores guardados dependen del modelo: para pasar a un motor con otro modelo usa «Reindexar», que los calcula todos en sombra antes de cambiar.")} />}
-          {section === "usage" && <SettingsGroup title={t("Consumo")} description={t("Llamadas, tokens, ritmo y errores de cada motor de IA, con el coste estimado, por brain.")}><SettingsBody><InstanceAiUsage /></SettingsBody></SettingsGroup>}
-          {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos: solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
-          {section === "folders" && <SettingsGroup title={t("Carpetas")} description={t("Carpetas del servidor que los administradores de un brain pueden usar como fuente de documentos.")}><SettingsBody><AdminFolders /></SettingsBody></SettingsGroup>}
-          {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}><SettingsBody><AuditTable rows={audit.data ?? []} /></SettingsBody></SettingsGroup>}
-          {section === "graph" && <AdminGraph />}
-          {section === "notifications" && <AdminNotifications />}
-          {section === "metrics" && <AdminMetrics />}
-          {["general", "security", "mail", "identity", "docs", "recall", "ingest"].includes(section) && <AdminSettings group={section} />}
-        </SettingsLayout>
-      </FillArea>
+      <SettingsLayout nav={<SubNav label={t("Secciones de administración")} value={section} onChange={setSection} items={nav} />}>
+        {section === "brains" && <>
+          {/* The active brain is one row: its name with its slug and graph under it, then its role and its actions on the right. */}
+          <SettingsGroup title={t("Brain activo")} description={t("Cámbialo con el selector de la barra lateral.")}
+            action={me.is_admin && <Btn kind="primary" icon="plus" onClick={() => setOpen(true)}>{t("Crear brain")}</Btn>}>
+            {cur ? (
+              <SettingsRow label={cur.name} help={<span className="ms-data">{cur.slug} {t("· grafo")} {cur.graph_name}</span>}>
+                <Group gap={6}>
+                  <Pill>{t(ROLES.find((r) => r.value === cur.role)?.label ?? cur.role)}</Pill>{cur.read_only && <Pill tone="warn">{t("solo lectura")}</Pill>}
+                  {canAdmin && <Btn size="row" icon="edit" onClick={() => { setNewName(cur.name); setNewSlug(cur.slug); setNewGraph(cur.graph_name); setNewDesc(cur.description); rename.reset(); setEditing(true); }}>{t("Editar")}</Btn>}
+                  {cur.role === "owner" && <Btn kind="danger" size="row" icon="trash" onClick={() => { setDelGraph(false); setDel(true); }}>{t("Borrar")}</Btn>}
+                </Group>
+              </SettingsRow>) : <SettingsBody><EmptyState>{t("No hay ningún brain seleccionado.")}</EmptyState></SettingsBody>}
+          </SettingsGroup>
+          {me.is_admin && <BrainImport onOpen={(s) => { qc.invalidateQueries({ queryKey: ["brains"] }); setBrain(s); }} />}
+        </>}
+        {cur && <>
+          {section === "connect" && <SettingsGroup title={t("Conectar un agente")} description={t("Elige tu agente y copia lo que necesita, ya con este servidor, este brain y un token.")}
+            help={t("Se pone en verde en cuanto el agente hace su primera llamada.")}><SettingsBody><ConnectAgent brain={cur} /></SettingsBody></SettingsGroup>}
+          {section === "members" && <SettingsGroup title={t("Miembros")} description={t("Quién tiene acceso a este brain y con qué rol.")}><SettingsBody><Members brain={cur} /></SettingsBody></SettingsGroup>}
+          {section === "tokens" && <SettingsGroup title={t("Tokens de API")} description={t("Para plugins y MCP.")}
+            help={t("Acotados a este brain; el rol de un token nunca supera el tuyo y no puede ser administrador.")}><SettingsBody><Tokens brain={cur} /></SettingsBody></SettingsGroup>}
+          {section === "federation" && <SettingsGroup title={t("Federación")} description={t("Prestar la lectura de este brain a otros, o ver de quién recibe.")}
+            help={t("Solo lectura y revocable.")}><SettingsBody><Federation brain={cur} canAdmin={!!canAdmin} /></SettingsBody></SettingsGroup>}
+          {section === "secrets" && <Secrets brain={cur} />}
+          {section === "webhooks" && <BrainWebhooks brain={cur} />}
+          {section === "brain-usage" && <BrainAiUsage brain={cur} />}
+          {section === "retention" && <BrainRetention brain={cur} />}
+          {section === "export" && <BrainExport brain={cur} />}
+        </>}
+        {section === "users" && <AdminUsers me={me.id} />}
+        {section === "llm" && <Engines kind="llm" title={t("Modelo LLM")} description={t("Motores que extraen hechos al ingerir propuestas.")}
+          help={t("Cualquier endpoint compatible con OpenAI; se usa el motor por defecto y las claves se guardan cifradas.")} />}
+        {section === "embedding" && <Engines kind="embedding" title={t("Embeddings")} description={t("Motores de embeddings (recall, índice de texto e ingesta).")}
+          help={t("Los vectores guardados dependen del modelo: para pasar a un motor con otro modelo usa «Reindexar», que los calcula todos en sombra antes de cambiar.")} />}
+        {section === "usage" && <InstanceAiUsage />}
+        {section === "decision" && <Engines kind="decision" title={t("Decisor")} description={t("Modelos de decisión cerrada para el triaje de propuestas y el corrector de tipos.")}
+          help={t("Solo aprueban lo factual con confianza suficiente; lo dudoso va a un curador.")} />}
+        {section === "folders" && <AdminFolders />}
+        {section === "audit" && <SettingsGroup title={t("Auditoría")} description={t("Registro de las acciones de administración y de acceso.")}>
+          <SettingsBody>{audit.data ? <AuditTable rows={audit.data} /> : <DataState query={audit} />}</SettingsBody></SettingsGroup>}
+        {section === "graph" && <AdminGraph />}
+        {section === "notifications" && <AdminNotifications />}
+        {section === "metrics" && <AdminMetrics />}
+        {["general", "security", "mail", "identity", "docs", "recall", "ingest"].includes(section) && <AdminSettings group={section} />}
+      </SettingsLayout>
     </Page>
   );
 }

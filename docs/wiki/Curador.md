@@ -30,13 +30,13 @@ Y, también desactivado por defecto, **destilar**: episodios que repiten la mism
 
 Los tres ajustes van en `PUT …/curator/settings`; si una petición no trae alguno, conserva su valor.
 
-Cada pasada tiene su casilla y su precisión, que dice cuánto fiarse de ella.
+Cada pasada es una fila de **Pasadas**, con su interruptor, su precisión, que dice cuánto fiarse de ella.
 
 ## Se detiene si baja la cobertura
 Antes de proponer nada, el curador mira la [[Salud de la memoria]]. Si la cobertura de las consultas de referencia bajó más de *Salud de la memoria: avisar si la cobertura baja* respecto a la medición anterior, y entre medias se aprobaron propuestas suyas, ese día no propone nada. La ejecución termina **detenida**, con las cifras, y lo avisa la notificación **curator.stopped**.
 
 ## Activarlo
-Está **desactivado por defecto**. Un administrador del brain marca **Activar el curador en este brain**. Desde entonces se ejecuta una vez al día (el día es la clave de la ejecución: un reinicio nunca lo ejecuta dos veces), y **Ejecutar ahora** lo lanza al momento. **Ver qué propondría** lo muestra sin crear nada; en la pasada de ruido agrupa los hallazgos por regla, con cuántos encuentra cada una, para ver qué regla mete ruido antes de activarla.
+Está **desactivado por defecto**. Un administrador del brain enciende **Activar el curador en este brain**, la primera fila de **Pasadas**. Desde entonces se ejecuta una vez al día (el día es la clave de la ejecución: un reinicio nunca lo ejecuta dos veces), y **Ejecutar ahora** lo lanza al momento. **Ver qué propondría** lo muestra sin crear nada; en la pasada de ruido agrupa los hallazgos por regla, con cuántos encuentra cada una, para ver qué regla mete ruido antes de activarla.
 
 ## Una muestra antes de un lote
 Si una ejecución fuera a proponer **más de 5 cambios** a la vez (el lote, ajustable por el API), no propone nada. En su lugar, espera con una muestra de lo que cambiaría y de lo que conserva. Cuando se retira un servicio pueden caer decenas de hechos a la vez, y solo una persona distingue «sigue siendo útil» de «ya no vale». **Crear las propuestas** las crea todas, y cada una se sigue decidiendo aparte; **Descartar** deja la ejecución sin efecto.

@@ -4,8 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Brain, fmt, get, send } from "../api";
 import { T } from "../i18n";
-import { Btn, CodeBlock, ConfirmDialog, DataTable, EmptyState, Modal, MutationError, Notice, NumberField, Pill, SecretReveal, SelectField, TextArea,
-  TextField, Toggle } from "../ui";
+import { Btn, CellText, ConfirmDialog, DataState, DataTable, DialogActions, EmptyState, Modal, MutationError, Notice, NumberField, Pill, SecretReveal, SelectField, TextArea, TextField, Toggle, SettingsGroup, SettingsBody } from "../ui";
 
 type Hook = { id: number; name: string; template: string; config: Record<string, unknown>; enabled: boolean; auto_approve: boolean; daily_cap: number;
   per_minute: number; path: string; received: number; rejected: number; today: number; last_at: string | null; last_error: string; secret?: string };
@@ -21,7 +20,8 @@ const PROBLEM: Record<string, string> = { bad_secret: T("una petición llegó co
   not_json: T("el cuerpo no era JSON"), no_events: T("la plantilla no sacó ningún evento de la última petición") };
 const TEMPLATE: Record<string, string> = { generic: T("Genérica") };   // the others are product names
 
-/** Incoming webhooks of a brain (issue 122): alerts and deployments from other tools become proposals through a template. */
+/** Incoming webhooks of a brain (issue 122): alerts and deployments from other tools become proposals through a template. A view inside the
+ *  settings group that titles it: the bar (the «i» and «Create webhook»), the webhooks as a table, and their dialogs (edit, log). */
 export default function BrainWebhooks({ brain }: { brain: Brain }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -51,24 +51,24 @@ export default function BrainWebhooks({ brain }: { brain: Brain }) {
   const set = (p: Partial<Draft>) => setEdit((e) => e && { ...e, d: { ...e.d, ...p } });
   const open = (h?: Hook) => { preview.reset(); setSample(""); setEdit({ id: h?.id ?? null, d: h ? { ...EMPTY, ...h, ...(h.config as Partial<Draft>) } : { ...EMPTY } }); };
   return (
-    <Stack gap="sm">
-      <Text size="sm" c="dimmed" className="ms-measure">{t("Lo que pasa en la infraestructura (una alerta, un despliegue, un pipeline, una copia fallida) entra como propuesta de memoria episódica: «qué pasó y cuándo». Cada webhook tiene su dirección y su secreto, y una plantilla que lee el JSON de su emisor. Una alerta que se repite no crea una propuesta por aviso: se agrupa y, si se resuelve en {{n}} minutos, queda una sola con su inicio y su fin.", { n: d?.group_minutes ?? 15 })}</Text>
-      <Group><Btn kind="primary" icon="plus" onClick={() => open()}>{t("Crear webhook")}</Btn></Group>
-      <MutationError error={q.error ?? rotate.error ?? remove.error} />
-      {d && (d.items.length ? <DataTable fz="sm">
+    <SettingsGroup title={t("Webhooks de entrada")} description={t("Alertas, despliegues y otros eventos de tus herramientas como memoria episódica del brain.")}
+      help={t("Lo que pasa en la infraestructura (una alerta, un despliegue, un pipeline, una copia fallida) entra como propuesta de memoria episódica: «qué pasó y cuándo». Cada webhook tiene su dirección y su secreto, y una plantilla que lee el JSON de su emisor. Una alerta que se repite no crea una propuesta por aviso: se agrupa y, si se resuelve en {{n}} minutos, queda una sola con su inicio y su fin.", { n: d?.group_minutes ?? 15 })}
+      action={<Btn kind="primary" icon="plus" onClick={() => open()}>{t("Crear webhook")}</Btn>}>
+      <SettingsBody>
+      <MutationError error={rotate.error ?? remove.error} />
+      {!d ? <DataState query={q} /> : d.items.length ? <DataTable fz="sm" aria-label={t("Webhooks de entrada")}>
         <DataTable.Thead><DataTable.Tr>
           <DataTable.Th>{t("Nombre")}</DataTable.Th><DataTable.Th>{t("Plantilla")}</DataTable.Th><DataTable.Th>{t("Recibidos")}</DataTable.Th>
           <DataTable.Th>{t("Hoy")}</DataTable.Th><DataTable.Th>{t("Último")}</DataTable.Th><DataTable.ActionsHead />
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{d.items.map((h) => (
           <DataTable.Tr key={h.id}>
-            <DataTable.Td><Group gap={6}><Text size="sm" fw={600}>{h.name}</Text>{!h.enabled && <Pill size="xs" tone="warn">{t("desactivado")}</Pill>}
-              {h.auto_approve && <Pill size="xs" tone="alt">{t("de confianza")}</Pill>}</Group>
-              <Text size="xs" c="dimmed" className="ms-data">{url(h)}</Text></DataTable.Td>
+            <DataTable.Td><CellText data sub={url(h)}><Group gap={6}>{h.name}{!h.enabled && <Pill tone="warn">{t("desactivado")}</Pill>}
+              {h.auto_approve && <Pill tone="alt">{t("de confianza")}</Pill>}</Group></CellText></DataTable.Td>
             <DataTable.Td>{t(TEMPLATE[h.template] ?? d.templates[h.template] ?? h.template)}</DataTable.Td>
-            <DataTable.Td>{h.received}{h.rejected > 0 && <Text size="xs" c="dimmed">{t("{{n}} rechazados", { n: h.rejected })}</Text>}</DataTable.Td>
-            <DataTable.Td>{t("{{n}} de {{cap}}", { n: h.today, cap: h.daily_cap })}</DataTable.Td>
-            <DataTable.Td>{fmt(h.last_at)}{h.last_error && <Text size="xs" c="dimmed">{t(PROBLEM[h.last_error] ?? h.last_error)}</Text>}</DataTable.Td>
+            <DataTable.Td><CellText sub={h.rejected > 0 ? t("{{n}} rechazados", { n: h.rejected }) : undefined}><span className="ms-data">{h.received}</span></CellText></DataTable.Td>
+            <DataTable.Td className="ms-data">{t("{{n}} de {{cap}}", { n: h.today, cap: h.daily_cap })}</DataTable.Td>
+            <DataTable.Td><CellText sub={h.last_error ? t(PROBLEM[h.last_error] ?? h.last_error) : undefined}><span className="ms-data">{fmt(h.last_at)}</span></CellText></DataTable.Td>
             <DataTable.Td><Group gap={4} wrap="nowrap">
               <Btn size="row" onClick={() => setLog(h)}>{t("Registro")}</Btn>
               <Btn size="row" icon="edit" onClick={() => open(h)}>{t("Editar")}</Btn>
@@ -76,24 +76,24 @@ export default function BrainWebhooks({ brain }: { brain: Brain }) {
               <Btn size="row" kind="danger" icon="trash" onClick={() => setDel(h)}>{t("Borrar")}</Btn>
             </Group></DataTable.Td>
           </DataTable.Tr>))}</DataTable.Tbody>
-      </DataTable> : <EmptyState>{t("Sin webhooks. Crea uno para cada emisor (Alertmanager, CheckMK, un repositorio…).")}</EmptyState>)}
+      </DataTable> : <EmptyState>{t("Sin webhooks. Crea uno para cada emisor (Alertmanager, CheckMK, un repositorio…).")}</EmptyState>}
 
       <Modal opened={!!edit} onClose={() => setEdit(null)} title={edit?.id ? t("Editar webhook") : t("Crear webhook")} size="lg">
-        {edit && <Stack>
+        {edit && <Stack gap="sm">
           <Group grow align="flex-start">
             <TextField label={t("Nombre")} value={edit.d.name} onChange={(e) => set({ name: e.currentTarget.value })} placeholder={t("Alertas de producción")} />
             <SelectField label={t("Plantilla")} data={templates} value={edit.d.template} allowDeselect={false} onChange={(v) => v && set({ template: v })} />
           </Group>
-          {edit.d.template === "generic" && <Stack gap="xs">
-            <Text size="xs" c="dimmed">{t("Escribe el título y el texto con {{ph}} para sacar valores del JSON (las listas, con su número: alerts.0.labels). Con «Estado», los valores resolved, ok, up o recovery cierran la alerta; sin él, cada petición es un evento.", { ph: "{{campo.subcampo}}" })}</Text>
-            <TextField label={t("Título")} value={edit.d.title} onChange={(e) => set({ title: e.currentTarget.value })} placeholder="{{check.name}} · {{check.host}}" />   {/* i18n-ok: JSON paths, not words */}
+          {edit.d.template === "generic" && <>
+            <TextField label={t("Título")} value={edit.d.title} onChange={(e) => set({ title: e.currentTarget.value })} placeholder="{{check.name}} · {{check.host}}"   /* i18n-ok: JSON paths, not words */
+              description={t("Escribe el título y el texto con {{ph}} para sacar valores del JSON (las listas, con su número: alerts.0.labels). Con «Estado», los valores resolved, ok, up o recovery cierran la alerta; sin él, cada petición es un evento.", { ph: "{{campo.subcampo}}" })} />
             <TextField label={t("Texto")} value={edit.d.text} onChange={(e) => set({ text: e.currentTarget.value })} placeholder="{{check.output}}" />   {/* i18n-ok: JSON paths, not words */}
             <Group grow>   {/* i18n-ok: JSON paths, not words */}
               <TextField label={t("Fecha (ruta)")} value={edit.d.at} onChange={(e) => set({ at: e.currentTarget.value })} placeholder="time" />   {/* i18n-ok: JSON paths, not words */}
               <TextField label={t("Estado (ruta)")} value={edit.d.state} onChange={(e) => set({ state: e.currentTarget.value })} placeholder="check.status" />   {/* i18n-ok: JSON paths, not words */}
               <TextField label={t("Huella (ruta)")} value={edit.d.fingerprint} onChange={(e) => set({ fingerprint: e.currentTarget.value })} placeholder="check.id" />   {/* i18n-ok: JSON paths, not words */}
             </Group>
-          </Stack>}
+          </>}
           <Group grow align="flex-start">
             <NumberField label={t("Propuestas al día")} min={1} max={10000} value={edit.d.daily_cap} onChange={(v) => set({ daily_cap: v })}
               description={t("Lo que pase del tope queda en el registro, sin proponerse, y avisa una vez.")} />
@@ -103,21 +103,18 @@ export default function BrainWebhooks({ brain }: { brain: Brain }) {
           <Toggle label={t("De confianza: aprobar sus propuestas sin revisión")} checked={edit.d.auto_approve} onChange={(e) => set({ auto_approve: e.currentTarget.checked })}
             description={t("Solo para emisores fiables. Siguen el tope diario, y una propuesta en la que el detector de secretos marque algo va siempre a revisión.")} />
           {edit.id !== null && <Toggle label={t("Activo")} checked={edit.d.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />}
-          <Stack gap="xs">
-            <Text size="sm" fw={600}>{t("Probar la plantilla")}</Text>
-            <TextArea autosize minRows={3} maxRows={10} value={sample} onChange={(e) => setSample(e.currentTarget.value)} placeholder={t("Pega un JSON de ejemplo del emisor")} />
-            {edit.d.template === "github_actions" && <SelectField label={t("Evento de GitHub (cabecera X-GitHub-Event)")} data={["workflow_run", "deployment_status", "ping"]}
-              value={ghEvent} allowDeselect={false} onChange={(v) => v && setGhEvent(v)} />}
-            <Group><Btn icon="test" disabled={!sample.trim()} loading={preview.isPending} onClick={() => preview.mutate(edit.d)}>{t("Probar")}</Btn></Group>
-            <MutationError error={preview.error} />
-            {preview.data && (preview.data.events.length ? preview.data.events.map((e, i) => (
-              <Notice key={i} tone="info" title={`${e.state === "firing" ? t("Alerta activa") : e.state === "resolved" ? t("Alerta resuelta") : t("Evento")} · ${e.title}`}>
-                <Text size="xs" c="dimmed">{fmt(e.at)}</Text><Text size="sm" className="ms-prose">{e.text}</Text></Notice>))
-              : <Notice tone="warn">{t("La plantilla no saca ningún evento de este cuerpo: no es de este emisor o no anuncia nada terminado.")}</Notice>)}
-          </Stack>
+          <TextArea label={t("Probar la plantilla")} autosize minRows={3} maxRows={10} value={sample} onChange={(e) => setSample(e.currentTarget.value)} placeholder={t("Pega un JSON de ejemplo del emisor")} />
+          {edit.d.template === "github_actions" && <SelectField label={t("Evento de GitHub (cabecera X-GitHub-Event)")} data={["workflow_run", "deployment_status", "ping"]}
+            value={ghEvent} allowDeselect={false} onChange={(v) => v && setGhEvent(v)} />}
+          <Group><Btn icon="test" disabled={!sample.trim()} loading={preview.isPending} onClick={() => preview.mutate(edit.d)}>{t("Probar")}</Btn></Group>
+          <MutationError error={preview.error} />
+          {preview.data && (preview.data.events.length ? preview.data.events.map((e, i) => (
+            <Notice key={i} tone="info" title={`${e.state === "firing" ? t("Alerta activa") : e.state === "resolved" ? t("Alerta resuelta") : t("Evento")} · ${e.title}`}>
+              <Text size="sm" className="ms-data">{fmt(e.at)}</Text><Text size="sm" className="ms-prose">{e.text}</Text></Notice>))
+            : <Notice tone="warn">{t("La plantilla no saca ningún evento de este cuerpo: no es de este emisor o no anuncia nada terminado.")}</Notice>)}
           <MutationError error={save.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setEdit(null)}>{t("Cancelar")}</Btn>
-            <Btn kind="primary" icon="check" disabled={!edit.d.name.trim()} loading={save.isPending} onClick={() => save.mutate(edit)}>{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setEdit(null)}>{t("Cancelar")}</Btn>
+            <Btn kind="primary" icon="check" disabled={!edit.d.name.trim()} loading={save.isPending} onClick={() => save.mutate(edit)}>{t("Guardar")}</Btn></DialogActions>
         </Stack>}
       </Modal>
 
@@ -126,19 +123,22 @@ export default function BrainWebhooks({ brain }: { brain: Brain }) {
       <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Borrar webhook")} action={t("Borrar")} subject={del?.name}
         warning={t("Su dirección deja de funcionar y se borra su registro. Las propuestas que ya creó se quedan.")} onConfirm={() => remove.mutateAsync(del!)} />
       <Modal opened={!!log} onClose={() => setLog(null)} title={t("Registro de «{{name}}»", { name: log?.name ?? "" })} size="xl">
-        {events.data && (events.data.length ? <DataTable fz="sm">
-          <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Qué")}</DataTable.Th><DataTable.Th>{t("Avisos")}</DataTable.Th><DataTable.Th>{t("Desde")}</DataTable.Th>
-            <DataTable.Th>{t("Hasta")}</DataTable.Th><DataTable.Th>{t("Estado")}</DataTable.Th><DataTable.Th>{t("Propuestas")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
-          <DataTable.Tbody>{events.data.map((e) => (
-            <DataTable.Tr key={e.id}>
-              <DataTable.Td><Text size="sm">{e.title}</Text><Text size="xs" c="dimmed">{e.kind === "alert" ? t("alerta") : t("evento")}</Text></DataTable.Td>
-              <DataTable.Td>{e.count}</DataTable.Td><DataTable.Td>{fmt(e.first_at)}</DataTable.Td><DataTable.Td>{fmt(e.resolved_at)}</DataTable.Td>
-              <DataTable.Td><Pill size="xs" tone={e.outcome === "capped" || e.outcome === "blocked" ? "warn" : undefined}>{t(OUTCOME[e.outcome] ?? e.outcome)}</Pill></DataTable.Td>
-              <DataTable.Td>{[e.proposal_id, e.resolution_id].filter(Boolean).map((p) => `#${p}`).join(", ") || "—"}</DataTable.Td>
-            </DataTable.Tr>))}</DataTable.Tbody>
-        </DataTable> : <EmptyState>{t("Este webhook no ha recibido nada todavía.")}</EmptyState>)}
-        <Text size="xs" c="dimmed" mt="xs">{t("Del cuerpo recibido no se guarda nada: solo el título, las fechas, el número de avisos y las propuestas que se crearon. Se olvida a los 90 días.")}</Text>
+        <Stack gap="sm">
+          <Text size="sm">{t("Del cuerpo recibido no se guarda nada: solo el título, las fechas, el número de avisos y las propuestas que se crearon. Se olvida a los 90 días.")}</Text>
+          {!events.data ? <DataState query={events} /> : events.data.length ? <DataTable fz="sm" aria-label={t("Registro")}>
+            <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Qué")}</DataTable.Th><DataTable.Th>{t("Avisos")}</DataTable.Th><DataTable.Th>{t("Desde")}</DataTable.Th>
+              <DataTable.Th>{t("Hasta")}</DataTable.Th><DataTable.Th>{t("Estado")}</DataTable.Th><DataTable.Th>{t("Propuestas")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+            <DataTable.Tbody>{events.data.map((e) => (
+              <DataTable.Tr key={e.id}>
+                <DataTable.Td><CellText sub={e.kind === "alert" ? t("alerta") : t("evento")}>{e.title}</CellText></DataTable.Td>
+                <DataTable.Td className="ms-data">{e.count}</DataTable.Td><DataTable.Td className="ms-data">{fmt(e.first_at)}</DataTable.Td><DataTable.Td className="ms-data">{fmt(e.resolved_at)}</DataTable.Td>
+                <DataTable.Td><Pill tone={e.outcome === "capped" || e.outcome === "blocked" ? "warn" : undefined}>{t(OUTCOME[e.outcome] ?? e.outcome)}</Pill></DataTable.Td>
+                <DataTable.Td className="ms-data">{[e.proposal_id, e.resolution_id].filter(Boolean).map((p) => `#${p}`).join(", ") || "—"}</DataTable.Td>
+              </DataTable.Tr>))}</DataTable.Tbody>
+          </DataTable> : <EmptyState>{t("Este webhook no ha recibido nada todavía.")}</EmptyState>}
+        </Stack>
       </Modal>
-    </Stack>
+    </SettingsBody>
+    </SettingsGroup>
   );
 }

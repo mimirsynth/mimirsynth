@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { get, send } from "../api";
-import { Btn, Check, ClearFilters, ColHead, DataTable, FillArea, Modal, Notice, NumberField, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog } from "../ui";
+import { Block, Btn, Check, ClearFilters, ColHead, DataState, DataTable, DialogActions, EmptyState, Modal, Notice, NumberField, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog, ViewBar } from "../ui";
 
 type T = { name: string; description: string; functional?: boolean; shelf_life_days?: number };
 type Rule = { source: string; target: string; edge_types: string[] };
@@ -17,59 +17,76 @@ const canon = (s: string) => s.trim().replace(/([a-z0-9])([A-Z])/g, "$1_$2").rep
 const isGeneric = (s: string) => GENERIC.has(canon(s));
 type Dlg = { kind: "rel"; item?: T } | { kind: "rel-del"; item: T } | { kind: "rule"; item?: Rule } | { kind: "rule-del"; item: Rule } | { kind: "instr" } | null;
 
-function RelTable({ rows, used, canEdit, onEdit, onDelete }: { rows: T[]; used: (n: string) => number; canEdit: boolean; onEdit: (t: T) => void; onDelete: (t: T) => void }) {
+/** The declared relation types as a block: what their two marks set off in Content quality behind its «i», «Add relation» and clearing
+ *  the column filters on the right, then the table. */
+function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[]; used: (n: string) => number; canEdit: boolean; onAdd: () => void; onEdit: (t: T) => void; onDelete: (t: T) => void }) {
   const { t } = useTranslation();
   const v = useTableView(rows, { name: { get: (t: T) => t.name }, desc: { get: (t: T) => t.description }, used: { get: (t: T) => used(t.name) }, one: { get: (t: T) => (t.functional ? 1 : 0) } });
   return (
-    <Stack gap="xs">
-      <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
-      <DataTable fz="sm">
-        <DataTable.Thead><DataTable.Tr>
-          <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Relación")}</ColHead>
-          <ColHead filter={v.text("desc", t("Buscar en la descripción…"))}>{t("Descripción")}</ColHead>
-          <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
-          <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
-          <ColHead>{t("Vida útil")}</ColHead>
-          {canEdit && <DataTable.ActionsHead />}
-        </DataTable.Tr></DataTable.Thead>
-        <DataTable.Tbody>{v.rows.map((ty) => (
-          <DataTable.Tr key={ty.name}>
-            <DataTable.Td><Text fw={600} size="sm">{ty.name}</Text></DataTable.Td>
-            <DataTable.Td><Text size="sm" c="dimmed" lineClamp={2}>{ty.description}</Text></DataTable.Td>
-            <DataTable.Td>{used(ty.name)}</DataTable.Td>
-            <DataTable.Td>{ty.functional ? <Pill size="xs" tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : <Text size="sm" c="dimmed">—</Text>}</DataTable.Td>
-            <DataTable.Td>{ty.shelf_life_days ? t("{{n}} días", { n: ty.shelf_life_days }) : <Text size="sm" c="dimmed">—</Text>}</DataTable.Td>
-            {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
-          </DataTable.Tr>))}</DataTable.Tbody>
-      </DataTable>
-    </Stack>
+    <Block title={t("Tipos de relación")} count={rows.length}
+      help={<>{t("Dos marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones, y la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar.")}{" "}
+        <Btn kind="link" component={Link} to="/calidad?tab=conflicts">{t("Contradicciones")}</Btn>{" · "}
+        <Btn kind="link" component={Link} to="/calidad?tab=stale">{t("A revisar")}</Btn></>}
+      actions={<>
+        <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
+        {canEdit && <Btn size="row" icon="plus" onClick={onAdd}>{t("Añadir relación")}</Btn>}
+      </>}>
+      {rows.length === 0 ? <EmptyState>{t("Sin tipos de relación.")}</EmptyState> : (
+        <DataTable fz="sm" aria-label={t("Tipos de relación")}>
+          <DataTable.Thead><DataTable.Tr>
+            <ColHead sort={v.sortProps("name")} filter={v.text("name")}>{t("Relación")}</ColHead>
+            <ColHead filter={v.text("desc", t("Buscar en la descripción…"))}>{t("Descripción")}</ColHead>
+            <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
+            <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
+            <ColHead>{t("Vida útil")}</ColHead>
+            {canEdit && <DataTable.ActionsHead />}
+          </DataTable.Tr></DataTable.Thead>
+          <DataTable.Tbody>{v.rows.map((ty) => (
+            <DataTable.Tr key={ty.name}>
+              <DataTable.Td>{ty.name}</DataTable.Td>
+              <DataTable.Td><Text size="sm" lineClamp={2}>{ty.description}</Text></DataTable.Td>
+              <DataTable.Td className="ms-data">{used(ty.name)}</DataTable.Td>
+              <DataTable.Td>{ty.functional ? <Pill tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : "—"}</DataTable.Td>
+              <DataTable.Td className="ms-data">{ty.shelf_life_days ? t("{{n}} días", { n: ty.shelf_life_days }) : "—"}</DataTable.Td>
+              {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
+            </DataTable.Tr>))}</DataTable.Tbody>
+        </DataTable>)}
+    </Block>
   );
 }
 
-function RuleTable({ rows, canEdit, onEdit, onDelete }: { rows: Rule[]; canEdit: boolean; onEdit: (m: Rule) => void; onDelete: (m: Rule) => void }) {
+/** The map rules (which relations a pair of entity types may have) as a block, with «Add rule» and clearing the filters on the right. */
+function RuleBlock({ rows, canEdit, canAdd, onAdd, onEdit, onDelete }: { rows: Rule[]; canEdit: boolean; canAdd: boolean; onAdd: () => void; onEdit: (m: Rule) => void; onDelete: (m: Rule) => void }) {
   const { t } = useTranslation();
   const v = useTableView(rows, { source: { get: (m: Rule) => m.source, exact: true }, target: { get: (m: Rule) => m.target, exact: true }, edges: { get: (m: Rule) => m.edge_types.join(" ") } });
   return (
-    <Stack gap="xs">
-      <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
-      <DataTable fz="sm">
-        <DataTable.Thead><DataTable.Tr>
-          <ColHead sort={v.sortProps("source")} filter={v.select("source")}>{t("Origen")}</ColHead>
-          <ColHead sort={v.sortProps("target")} filter={v.select("target")}>{t("Destino")}</ColHead>
-          <ColHead filter={v.text("edges", t("Relación…"))}>{t("Relaciones permitidas")}</ColHead>
-          {canEdit && <DataTable.ActionsHead />}
-        </DataTable.Tr></DataTable.Thead>
-        <DataTable.Tbody>{v.rows.map((m) => (
-          <DataTable.Tr key={`${m.source}>${m.target}`}>
-            <DataTable.Td>{m.source}</DataTable.Td><DataTable.Td>{m.target}</DataTable.Td>
-            <DataTable.Td><Group gap={4}>{m.edge_types.map((e) => <Pill key={e} size="xs">{e}</Pill>)}</Group></DataTable.Td>
-            {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(m)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(m)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
-          </DataTable.Tr>))}</DataTable.Tbody>
-      </DataTable>
-    </Stack>
+    <Block title={t("Reglas del mapa")} count={rows.length} help={t("Qué relaciones se permiten entre qué tipos.")}
+      actions={<>
+        <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
+        {canEdit && <Btn size="row" icon="plus" disabled={!canAdd} onClick={onAdd}>{t("Añadir regla")}</Btn>}
+      </>}>
+      {rows.length === 0 ? <EmptyState>{t("Sin reglas del mapa.")}</EmptyState> : (
+        <DataTable fz="sm" aria-label={t("Reglas del mapa")}>
+          <DataTable.Thead><DataTable.Tr>
+            <ColHead sort={v.sortProps("source")} filter={v.select("source")}>{t("Origen")}</ColHead>
+            <ColHead sort={v.sortProps("target")} filter={v.select("target")}>{t("Destino")}</ColHead>
+            <ColHead filter={v.text("edges", t("Relación…"))}>{t("Relaciones permitidas")}</ColHead>
+            {canEdit && <DataTable.ActionsHead />}
+          </DataTable.Tr></DataTable.Thead>
+          <DataTable.Tbody>{v.rows.map((m) => (
+            <DataTable.Tr key={`${m.source}>${m.target}`}>
+              <DataTable.Td>{m.source}</DataTable.Td><DataTable.Td>{m.target}</DataTable.Td>
+              <DataTable.Td><Group gap={4}>{m.edge_types.map((e) => <Pill key={e}>{e}</Pill>)}</Group></DataTable.Td>
+              {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(m)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(m)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
+            </DataTable.Tr>))}</DataTable.Tbody>
+        </DataTable>)}
+    </Block>
   );
 }
 
+/** Vocabulary → Ontology: the bar (what the ontology is for; for an administrator, the package to apply and its two actions), the states
+ *  (the last change with its Undo, no ontology yet, a new package version, the chosen package), then three blocks: the relation types,
+ *  the map rules and the extraction instructions. */
 export default function VocabOntology({ graph, role }: { graph: string; role: string }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -122,46 +139,41 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   }, [wanted, o]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <FillArea>
-      <Stack gap="sm">
-        <Text size="sm" c="dimmed">{t("La ontología guía qué tipos de entidad y de relación extrae el ingestor al escribir. Sin ella, el modelo inventa tipos y relaciones libremente. Los tipos de entidad se editan en su pestaña; aquí, las relaciones, las reglas del mapa y las instrucciones. Los cambios guían las ingestas futuras y no modifican lo que ya está en el grafo.")}{" "}
-          {t("Dos marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones, y la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar.")}{" "}
-          <Btn kind="link" component={Link} to="/calidad?tab=conflicts">{t("Contradicciones")}</Btn>{" · "}
-          <Btn kind="link" component={Link} to="/calidad?tab=stale">{t("A revisar")}</Btn></Text>
-        {done && <Notice tone="info">{done.summary}. <Btn kind="link" onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn>{undo.error && ` — ${(undo.error as Error).message}`}</Notice>}
-        {q.data && !q.data.configured && <Notice tone="warn">{t("Este brain no tiene ontología: la extracción es libre. Aplica un paquete o crea tipos para empezar.")}</Notice>}
-        {canEdit && upd && <Notice tone="info" title={t("Hay una versión nueva del paquete «{{name}}»", { name: updInfo?.title ?? upd.name })}>
-          {t("Tienes la versión {{installed}} y está disponible la {{available}}. Actualizar añade lo que falta (tipos, relaciones y reglas) sin tocar nada de lo que ya tienes ni lo que cambiaste a mano.", { installed: upd.installed, available: upd.available })}{" "}
-          <Btn kind="link" loading={apply.isPending} onClick={() => apply.mutate({ name: upd.name, mode: "merge" })}>{t("Actualizar")}</Btn></Notice>}
-        {canEdit && (
-          <Group align="flex-end" gap="xs">
-            <SelectField label={t("Aplicar paquete")} w={300} data={info.map((i) => ({ value: i.name, label: i.title }))} value={preset} onChange={setPreset} placeholder={t("Elige un paquete")} />
-            <Btn kind="primary" disabled={!preset} loading={apply.isPending} onClick={() => preset && (q.data?.configured ? setAskReplace(true) : apply.mutate({ name: preset, mode: "replace" }))} icon="check">{q.data?.configured ? t("Sustituir ontología") : t("Aplicar")}</Btn>
-            {q.data?.configured && preset && <Btn onClick={() => apply.mutate({ name: preset, mode: "merge" })} loading={apply.isPending} icon="plus">{t("Añadir lo que falta")}</Btn>}
-          </Group>)}
-        {canEdit && chosen && <Text size="xs" c="dimmed" className="ms-measure">{chosen.description} {t("{{e}} tipos de entidad y {{r}} de relación, versión {{v}}.", { e: chosen.entity_types, r: chosen.edge_types, v: chosen.version })}{chosen.standards.length > 0 && <> {t("Basado en:")} {chosen.standards.join("; ")}.</>}</Text>}
-        {q.data?.configured && canEdit && <Text size="xs" c="dimmed">{t("Sustituir la ontología reemplaza los tipos, las relaciones, el mapa y las instrucciones actuales, incluidos los cambios hechos a mano. «Añadir lo que falta» solo suma lo que no tienes.")}</Text>}
-        <ConfirmDialog opened={askReplace} onClose={() => setAskReplace(false)} title={t("Sustituir la ontología")} action={t("Sustituir")}
-          warning={t("Se reemplazan los tipos, las relaciones, el mapa y las instrucciones actuales por los del paquete, incluidos los cambios hechos a mano. Las entidades que ya están en el grafo no cambian.")}
-          onConfirm={() => apply.mutateAsync({ name: preset!, mode: "replace" })} />
-        <MutationError error={apply.error} />
-        {o && (
-          <>
-            <Group gap={6}><Pill>{o.entity_types.length} {t("tipos de entidad")}</Pill><Pill>{o.edge_types.length} {t("tipos de relación")}</Pill><Pill>{o.edge_type_map.length} {t("reglas de mapa")}</Pill></Group>
+    <>
+      <ViewBar title={t("Ontología")}
+        help={<>{t("La ontología guía qué tipos de entidad y de relación extrae el ingestor al escribir. Sin ella, el modelo inventa tipos y relaciones libremente. Los tipos de entidad se editan en su pestaña; aquí, las relaciones, las reglas del mapa y las instrucciones. Los cambios guían las ingestas futuras y no modifican lo que ya está en el grafo.")}
+          {q.data?.configured && canEdit && <>{" "}{t("Sustituir la ontología reemplaza los tipos, las relaciones, el mapa y las instrucciones actuales, incluidos los cambios hechos a mano. «Añadir lo que falta» solo suma lo que no tienes.")}</>}</>}
+        meta={o && <>{o.entity_types.length} {t("tipos de entidad")}</>}
+        actions={canEdit && <>
+          {q.data?.configured && preset && <Btn onClick={() => apply.mutate({ name: preset, mode: "merge" })} loading={apply.isPending} icon="plus">{t("Añadir lo que falta")}</Btn>}
+          <Btn kind="primary" disabled={!preset} loading={apply.isPending} onClick={() => preset && (q.data?.configured ? setAskReplace(true) : apply.mutate({ name: preset, mode: "replace" }))} icon="check">{q.data?.configured ? t("Sustituir ontología") : t("Aplicar")}</Btn>
+        </>}>
+        {canEdit && <SelectField label={t("Aplicar paquete")} data={info.map((i) => ({ value: i.name, label: i.title }))} value={preset} onChange={setPreset} placeholder={t("Elige un paquete")} />}
+      </ViewBar>
+      {done && <Notice tone="success">{done.summary}. <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.op)}>{t("Deshacer")}</Btn></Notice>}
+      <MutationError error={undo.error} />
+      {q.data && !q.data.configured && <Notice tone="warn">{t("Este brain no tiene ontología: la extracción es libre. Aplica un paquete o crea tipos para empezar.")}</Notice>}
+      {canEdit && upd && <Notice tone="info" title={t("Hay una versión nueva del paquete «{{name}}»", { name: updInfo?.title ?? upd.name })}>
+        {t("Tienes la versión {{installed}} y está disponible la {{available}}. Actualizar añade lo que falta (tipos, relaciones y reglas) sin tocar nada de lo que ya tienes ni lo que cambiaste a mano.", { installed: upd.installed, available: upd.available })}{" "}
+        <Btn kind="link" loading={apply.isPending} onClick={() => apply.mutate({ name: upd.name, mode: "merge" })}>{t("Actualizar")}</Btn></Notice>}
+      {canEdit && chosen && <Notice tone="info" title={chosen.title}>
+        {chosen.description} {t("{{e}} tipos de entidad y {{r}} de relación, versión {{v}}.", { e: chosen.entity_types, r: chosen.edge_types, v: chosen.version })}{chosen.standards.length > 0 && <> {t("Basado en:")} {chosen.standards.join("; ")}.</>}</Notice>}
+      <MutationError error={apply.error} />
+      {!o ? <DataState query={q} /> : (
+        <>
+          <RelBlock rows={o.edge_types} used={usedBy} canEdit={canEdit} onAdd={() => openRel()} onEdit={(t) => openRel(t)} onDelete={(t) => { reset(); setDlg({ kind: "rel-del", item: t }); }} />
+          <RuleBlock rows={o.edge_type_map} canEdit={canEdit} canAdd={o.edge_types.length > 0} onAdd={() => openRule()} onEdit={(m) => openRule(m)} onDelete={(m) => { reset(); setDlg({ kind: "rule-del", item: m }); }} />
+          <Block title={t("Instrucciones de extracción")} actions={canEdit && <Btn size="row" icon="edit" onClick={openInstr}>{t("Editar")}</Btn>}>
+            {o.instructions ? <Text size="sm" className="ms-prose">{o.instructions}</Text> : <EmptyState>{t("Sin instrucciones.")}</EmptyState>}
+          </Block>
+        </>)}
 
-            <Group justify="space-between"><Text fw={600} size="sm">{t("Tipos de relación")}</Text>{canEdit && <Btn kind="primary" icon="plus" onClick={() => openRel()}>{t("Añadir relación")}</Btn>}</Group>
-            <RelTable rows={o.edge_types} used={usedBy} canEdit={canEdit} onEdit={(t) => openRel(t)} onDelete={(t) => { reset(); setDlg({ kind: "rel-del", item: t }); }} />
-
-            <Group justify="space-between"><Text fw={600} size="sm">{t("Reglas del mapa (qué relaciones se permiten entre qué tipos)")}</Text>{canEdit && <Btn kind="primary" icon="plus" disabled={o.edge_types.length === 0} onClick={() => openRule()}>{t("Añadir regla")}</Btn>}</Group>
-            <RuleTable rows={o.edge_type_map} canEdit={canEdit} onEdit={(m) => openRule(m)} onDelete={(m) => { reset(); setDlg({ kind: "rule-del", item: m }); }} />
-
-            <Group justify="space-between"><Text fw={600} size="sm">{t("Instrucciones de extracción")}</Text>{canEdit && <Btn size="row" icon="edit" onClick={openInstr}>{t("Editar")}</Btn>}</Group>
-            <Text size="sm" c="dimmed" className="ms-prose">{o.instructions || t("Sin instrucciones.")}</Text>
-          </>)}
-      </Stack>
+      <ConfirmDialog opened={askReplace} onClose={() => setAskReplace(false)} title={t("Sustituir la ontología")} action={t("Sustituir")}
+        warning={t("Se reemplazan los tipos, las relaciones, el mapa y las instrucciones actuales por los del paquete, incluidos los cambios hechos a mano. Las entidades que ya están en el grafo no cambian.")}
+        onConfirm={() => apply.mutateAsync({ name: preset!, mode: "replace" })} />
 
       <Modal opened={dlg?.kind === "rel"} onClose={() => setDlg(null)} title={dlg?.kind === "rel" && dlg.item ? t("Editar {{name}}", { name: dlg.item.name }) : t("Añadir tipo de relación")}>
-        <Stack>
+        <Stack gap="sm">
           <TextField label={t("Nombre")} description={t("PascalCase, sin espacios (p. ej. RunsOn)")} value={name} disabled={dlg?.kind === "rel" && !!dlg.item} onChange={(e) => setName(e.currentTarget.value)} />
           <TextArea label={t("Descripción")} description={t("Cuándo se usa esta relación; guía al ingestor")} minRows={3} autosize value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
           <Check label={t("Un solo valor a la vez")} checked={functional && !isGeneric(name)} disabled={isGeneric(name)} onChange={(e) => setFunctional(e.currentTarget.checked)}
@@ -170,7 +182,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
           <NumberField label={t("Vida útil (días)")} min={1} max={3650} value={shelf} onChange={setShelf} disabled={isGeneric(name)} placeholder={t("Sin vida útil")}
             description={isGeneric(name) ? t("Es una relación genérica: no puede tener vida útil.") : t("Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en Calidad del contenido → A revisar. Vacío: nunca.")} />
           <MutationError error={saveRel.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></DialogActions>
         </Stack>
       </Modal>
 
@@ -179,15 +191,15 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
         onConfirm={() => delRel.mutateAsync()} />
 
       <Modal opened={dlg?.kind === "rule"} onClose={() => setDlg(null)} title={dlg?.kind === "rule" && dlg.item ? t("Editar regla del mapa") : t("Añadir regla del mapa")}>
-        <Stack>
+        <Stack gap="sm">
           <Group grow>
             <SelectField label={t("Origen")} data={entityNames} value={src} disabled={dlg?.kind === "rule" && !!dlg.item} onChange={setSrc} searchable />
             <SelectField label={t("Destino")} data={entityNames} value={tgt} disabled={dlg?.kind === "rule" && !!dlg.item} onChange={setTgt} searchable />
           </Group>
-          <Text size="sm" fw={600}>{t("Relaciones permitidas entre esos dos tipos")}</Text>
-          <Stack gap={6} mah={260} className="ms-scroll">{(o?.edge_types ?? []).map((t) => <Check key={t.name} label={t.name} checked={edges.includes(t.name)} onChange={(e) => toggle(t.name, e.currentTarget.checked)} />)}</Stack>
+          <Text size="sm">{t("Relaciones permitidas entre esos dos tipos")}</Text>
+          <Stack gap={6} role="group" aria-label={t("Relaciones permitidas entre esos dos tipos")}>{(o?.edge_types ?? []).map((t) => <Check key={t.name} label={t.name} checked={edges.includes(t.name)} onChange={(e) => toggle(t.name, e.currentTarget.checked)} />)}</Stack>
           <MutationError error={saveRule.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!src || !tgt || edges.length === 0} loading={saveRule.isPending} onClick={() => saveRule.mutate()}>{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!src || !tgt || edges.length === 0} loading={saveRule.isPending} onClick={() => saveRule.mutate()}>{t("Guardar")}</Btn></DialogActions>
         </Stack>
       </Modal>
 
@@ -196,12 +208,12 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
         onConfirm={() => delRule.mutateAsync()} />
 
       <Modal opened={dlg?.kind === "instr"} onClose={() => setDlg(null)} title={t("Instrucciones de extracción")} size="lg">
-        <Stack>
+        <Stack gap="sm">
           <TextArea label={t("Instrucciones")} description={t("Guía libre para el ingestor (máximo 4.000 caracteres): qué es importante y cómo clasificar")} minRows={8} autosize maxLength={4000} value={desc} onChange={(e) => setDesc(e.currentTarget.value)} />
           <MutationError error={saveInstr.error} />
-          <Group justify="flex-end"><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveInstr.isPending} onClick={() => saveInstr.mutate()}>{t("Guardar")}</Btn></Group>
+          <DialogActions><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" loading={saveInstr.isPending} onClick={() => saveInstr.mutate()}>{t("Guardar")}</Btn></DialogActions>
         </Stack>
       </Modal>
-    </FillArea>
+    </>
   );
 }

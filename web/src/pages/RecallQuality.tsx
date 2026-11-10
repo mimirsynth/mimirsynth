@@ -1,10 +1,9 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { fmt, get, send } from "../api";
-import { Btn, Check, DataTable, EmptyState, MutationError, Notice, StatCard, StatGrid } from "../ui";
+import { Block, Btn, DataState, DataTable, EmptyState, MutationError, SettingsBody, SettingsGroup, SettingsRow, StatCard, StatGrid, Toggle, ViewBar } from "../ui";
 import ReplayRuns from "./ReplayRuns";
 
 type Counts = { useful: number; irrelevant: number; incorrect: number };
@@ -17,7 +16,9 @@ type Replay = { enabled: boolean; max: number; days: number; samples: number };
 export const KIND: Record<string, string> = { fact: T("Hechos"), chunk: T("Fragmentos de episodios"), doc: T("Pasajes de documentos") };
 const pct = (c: Counts) => { const n = c.useful + c.irrelevant + c.incorrect; return n ? Math.round((100 * c.irrelevant) / n) : null; };
 
-/** Calidad del recall según quien lo usa: proporción de irrelevantes por tipo y por tramo de similitud, junto al total de recalls. */
+/** Calidad del recall según quien lo usa: proporción de irrelevantes por tipo y por tramo de similitud, junto al total de recalls.
+ *  The view: a bar with what it measures behind its «i»; the counts; the ratings by kind as the table; then blocks for the ratings by
+ *  similarity, what was rated incorrect, what is kept of the queries (administrators) and the replays of the sample. */
 export default function RecallQuality({ graph, canAdmin }: { graph: string; canAdmin: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -35,44 +36,59 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
     a.href = URL.createObjectURL(new Blob([lines.join("\n") + "\n"], { type: "text/csv" }));
     a.download = `recall-quality-${graph}.csv`; a.click(); URL.revokeObjectURL(a.href);
   };
-  if (!d) return null;
+  const bar = <ViewBar title={t("Calidad")}
+    help={t("Lo que dicen quienes usan el recall (desde Preguntar, la API o la herramienta «rate» del MCP) en los últimos 30 días. Las valoraciones llegan sobre todo cuando algo falla: compáralas con el total de recalls antes de mover un umbral. «Incorrecto» en un hecho, de un colaborador o más, propone su corrección.")} />;
+  if (!d) return <>{bar}<DataState query={q} /></>;
   return (
-    <Stack gap="md">
-      <Notice tone="info">{t("Lo que dicen quienes usan el recall (desde Preguntar, la API o la herramienta «rate» del MCP) en los últimos 30 días. Las valoraciones llegan sobre todo cuando algo falla: compáralas con el total de recalls antes de mover un umbral. «Incorrecto» en un hecho, de un colaborador o más, propone su corrección.")}</Notice>
+    <>
+      {bar}
       <StatGrid>
         <StatCard label={t("Recalls")} value={d.recalls} />
         <StatCard label={t("Recalls valorados")} value={d.rated_recalls} />
         <StatCard label={t("Valoraciones")} value={d.ratings} />
       </StatGrid>
       {d.ratings ? <>
-        <DataTable fz="sm">
+        <DataTable fz="sm" aria-label={t("Valoraciones")}>
           <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Útil")}</DataTable.Th><DataTable.Th>{t("Irrelevante")}</DataTable.Th>
             <DataTable.Th>{t("Incorrecto")}</DataTable.Th><DataTable.Th>{t("% irrelevante")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{Object.entries(d.by_kind).map(([k, c]) => (
-            <DataTable.Tr key={k}><DataTable.Td>{t(KIND[k] ?? k)}</DataTable.Td><DataTable.Td>{c.useful}</DataTable.Td><DataTable.Td>{c.irrelevant}</DataTable.Td>
-              <DataTable.Td>{c.incorrect}</DataTable.Td><DataTable.Td>{pct(c) ?? "—"}{pct(c) !== null ? " %" : ""}</DataTable.Td></DataTable.Tr>))}</DataTable.Tbody>
+            <DataTable.Tr key={k}><DataTable.Td>{t(KIND[k] ?? k)}</DataTable.Td><DataTable.Td className="ms-data">{c.useful}</DataTable.Td><DataTable.Td className="ms-data">{c.irrelevant}</DataTable.Td>
+              <DataTable.Td className="ms-data">{c.incorrect}</DataTable.Td><DataTable.Td className="ms-data">{pct(c) ?? "—"}{pct(c) !== null ? " %" : ""}</DataTable.Td></DataTable.Tr>))}</DataTable.Tbody>
         </DataTable>
-        <Group justify="space-between"><Text size="sm" fw={600}>{t("Por similitud")}</Text><Btn size="row" icon="download" onClick={csv}>{t("Descargar CSV")}</Btn></Group>
-        <DataTable fz="sm">
-          <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Similitud")}</DataTable.Th><DataTable.Th>{t("Útil")}</DataTable.Th>
-            <DataTable.Th>{t("Irrelevante")}</DataTable.Th><DataTable.Th>{t("Incorrecto")}</DataTable.Th><DataTable.Th>{t("% irrelevante")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
-          <DataTable.Tbody>{Object.entries(d.buckets).flatMap(([k, rows]) => rows.map((r) => (
-            <DataTable.Tr key={`${k}-${r.range}`}><DataTable.Td>{t(KIND[k] ?? k)}</DataTable.Td><DataTable.Td>{r.range}</DataTable.Td><DataTable.Td>{r.useful}</DataTable.Td>
-              <DataTable.Td>{r.irrelevant}</DataTable.Td><DataTable.Td>{r.incorrect}</DataTable.Td><DataTable.Td>{pct(r) ?? "—"}{pct(r) !== null ? " %" : ""}</DataTable.Td></DataTable.Tr>)))}</DataTable.Tbody>
-        </DataTable>
-        {d.incorrect.length > 0 && <Stack gap={4}>
-          <Text size="sm" fw={600}>{t("Valorados como incorrectos")}</Text>
-          {d.incorrect.map((i, n) => <Text key={n} size="xs">{fmt(i.created_at)} · {t(KIND[i.kind] ?? i.kind)} · «{i.text}»{i.proposal_id
-            ? <> · <Link to="/propuestas">{t("corrección #{{id}}", { id: i.proposal_id })}</Link></> : ` · ${t("sin corrección")}`}</Text>)}
-        </Stack>}
+        <Block title={t("Por similitud")} actions={<Btn size="row" icon="download" onClick={csv}>{t("Descargar CSV")}</Btn>}>
+          <DataTable fz="sm" aria-label={t("Por similitud")}>
+            <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Similitud")}</DataTable.Th><DataTable.Th>{t("Útil")}</DataTable.Th>
+              <DataTable.Th>{t("Irrelevante")}</DataTable.Th><DataTable.Th>{t("Incorrecto")}</DataTable.Th><DataTable.Th>{t("% irrelevante")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+            <DataTable.Tbody>{Object.entries(d.buckets).flatMap(([k, rows]) => rows.map((r) => (
+              <DataTable.Tr key={`${k}-${r.range}`}><DataTable.Td>{t(KIND[k] ?? k)}</DataTable.Td><DataTable.Td className="ms-data">{r.range}</DataTable.Td><DataTable.Td className="ms-data">{r.useful}</DataTable.Td>
+                <DataTable.Td className="ms-data">{r.irrelevant}</DataTable.Td><DataTable.Td className="ms-data">{r.incorrect}</DataTable.Td><DataTable.Td className="ms-data">{pct(r) ?? "—"}{pct(r) !== null ? " %" : ""}</DataTable.Td></DataTable.Tr>)))}</DataTable.Tbody>
+          </DataTable>
+        </Block>
+        {d.incorrect.length > 0 && <Block title={t("Valorados como incorrectos")} count={d.incorrect.length}>
+          <DataTable fz="sm" aria-label={t("Valorados como incorrectos")}>
+            <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Fecha")}</DataTable.Th><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Texto")}</DataTable.Th><DataTable.Th>{t("Propuesta")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+            <DataTable.Tbody>{d.incorrect.map((i, n) => (
+              <DataTable.Tr key={n}>
+                <DataTable.Td className="ms-data">{fmt(i.created_at)}</DataTable.Td>
+                <DataTable.Td>{t(KIND[i.kind] ?? i.kind)}</DataTable.Td>
+                <DataTable.Td>«{i.text}»</DataTable.Td>
+                <DataTable.Td>{i.proposal_id ? <Link to="/propuestas">{t("corrección #{{id}}", { id: i.proposal_id })}</Link> : t("sin corrección")}</DataTable.Td>
+              </DataTable.Tr>))}</DataTable.Tbody>
+          </DataTable>
+        </Block>}
       </> : <EmptyState>{t("Nadie ha valorado el recall en los últimos 30 días.")}</EmptyState>}
-      {canAdmin && <Check checked={d.keep_query_text} onChange={(e) => keep.mutate(e.currentTarget.checked)} label={t("Guardar el texto de las consultas")}
-        description={t("Por defecto solo se guarda una huella y la longitud de cada consulta, porque llevan los prompts de las personas. Con esto se guarda el texto, que se borra a los {{n}} días; al desmarcarlo se borra ya.", { n: d.query_text_days })} />}
-      <MutationError error={keep.error} />
-      {canAdmin && rp.data && <Check checked={rp.data.enabled} onChange={(e) => sample.mutate(e.currentTarget.checked)} label={t("Guardar una muestra de consultas para repetirlas")}
-        description={t("Guarda las últimas {{max}} consultas reales (con los secretos enmascarados, durante {{days}} días) para repetirlas con otra configuración antes de cambiarla. Llevan los prompts de las personas: actívalo solo si hace falta. Al desmarcarlo se borran. Ahora hay {{n}}.", { max: rp.data.max, days: rp.data.days, n: rp.data.samples })} />}
-      <MutationError error={sample.error} />
+      {canAdmin && <SettingsGroup title={t("Qué se guarda de las consultas")}>
+        <SettingsRow label={t("Guardar el texto de las consultas")}
+          help={t("Por defecto solo se guarda una huella y la longitud de cada consulta, porque llevan los prompts de las personas. Con esto se guarda el texto, que se borra a los {{n}} días; al desmarcarlo se borra ya.", { n: d.query_text_days })}>
+          <Toggle checked={d.keep_query_text} aria-label={t("Guardar el texto de las consultas")} onChange={(e) => keep.mutate(e.currentTarget.checked)} />
+        </SettingsRow>
+        {rp.data && <SettingsRow label={t("Guardar una muestra de consultas para repetirlas")}
+          help={t("Guarda las últimas {{max}} consultas reales (con los secretos enmascarados, durante {{days}} días) para repetirlas con otra configuración antes de cambiarla. Llevan los prompts de las personas: actívalo solo si hace falta. Al desmarcarlo se borran. Ahora hay {{n}}.", { max: rp.data.max, days: rp.data.days, n: rp.data.samples })}>
+          <Toggle checked={rp.data.enabled} aria-label={t("Guardar una muestra de consultas para repetirlas")} onChange={(e) => sample.mutate(e.currentTarget.checked)} />
+        </SettingsRow>}
+        {keep.error || sample.error ? <SettingsBody><MutationError error={keep.error ?? sample.error} /></SettingsBody> : null}
+      </SettingsGroup>}
       {canAdmin && rp.data?.enabled && <ReplayRuns graph={graph} samples={rp.data.samples} />}
-    </Stack>
+    </>
   );
 }

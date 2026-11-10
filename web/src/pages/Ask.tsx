@@ -1,7 +1,7 @@
 
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text, Title } from "@mantine/core";
-import { Btn, NumberField, Pill, QueryComposer, Segments, TextArea, Toggle, MutationError, Page, PageHeader, FillArea, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink } from "../ui";
+import { Group, Stack, Text } from "@mantine/core";
+import { Block, Btn, NumberField, Pill, QueryComposer, Segments, TextArea, Toggle, MutationError, Page, PageHeader, ListCard, CodeBlock, CopyBtn, Tabs, useTabParam, CardLink, Loading, ViewBar } from "../ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
@@ -10,7 +10,7 @@ import RefQueries, { RefQueryForm, type Item, type RefQuery } from "./RefQueries
 import RecallQuality from "./RecallQuality";
 import AskAnswer from "./AskAnswer";
 import AskAllBrains, { type AllBrainsResult } from "./AskAllBrains";
-import { EmptyState, EntityChip, Form, humanRelation, Toolbar } from "../ui";
+import { EmptyState, EntityChip, Form, RelationWord, Toolbar } from "../ui";
 import { askParams, loadAsk, saveAsk } from "./askSession";
 
 type Fact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; name: string; source: string; target: string; source_uuid: string; target_uuid: string; source_type?: string | null; target_type?: string | null; score?: number; similarity?: number | null; origin?: string; replaces?: string };
@@ -148,7 +148,7 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   // Rating feeds Quality and is saved at once; «Incorrecto» also proposes a correction, so it stands apart, in the danger colour. A word
   // before each group says which one it is: the marks for a reference query look the same and do something else.
   const rateBtns = (key: string, kind: string, id: string, canIncorrect = true) => r?.recall_id && <Group gap={4} role="group" aria-label={t("Valorar")}>
-    <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Valorar")}</Text>
+    <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Valorar")}</Text>{/* ui-ok: the word naming a group of row buttons inside a card's toolbar, not a footnote */}
     {(["useful", "irrelevant"] as Rating[]).map((v) => (
       <Btn key={v} size="row" kind="ghost" aria-pressed={rated[key] === v} icon={rated[key] === v ? "check" : undefined}
         title={rated[key] === v ? t("Pulsa otra vez para retirar la valoración") : undefined}
@@ -175,8 +175,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
           <Btn size="row" kind="ghost" onClick={() => { setWrong(null); focusWrong(key); }}>{t("Cancelar")}</Btn>
         </Group>
       </Form></div>}
-      {rated[key] === "incorrect" && notes[key] && <Text size="xs" className="ms-ask-sentnote">{t("Tu nota: «{{note}}»", { note: notes[key] })}</Text>}
-      {r?.recall_id && <Text size="xs" c="dimmed" role="status">{rateNote[key] ?? ""}</Text>}
+      {rated[key] === "incorrect" && notes[key] && <div className="ms-listcard-note ms-ask-sentnote">{t("Tu nota: «{{note}}»", { note: notes[key] })}</div>}
+      {r?.recall_id && <div className="ms-listcard-note" role="status">{rateNote[key] ?? ""}</div>}
     </Stack>);
   const view = scope === "all" ? "contexto" : mode;  // across brains there is no written answer: it needs one brain's recall
   const sync = useMutation({ mutationFn: () => send<any>("POST", `brains/${graph}/index/sync`), onSuccess: () => status.refetch() });
@@ -216,13 +216,12 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   };
   const validity = (f: Fact) => (f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : t("desde {{date}}", { date: fmtDay(f.valid_at) }));
   // Each result's place, as the agent reads them in the injected context: one numbering across the sections, facts first (current,
-  // then no longer true), then fragments, then passages. Under each heading, what decides the order inside it.
+  // then no longer true), then fragments, then passages. Behind each block's «i», what decides the order inside it.
   const rank = (n: number) => t("n.º {{n}}", { n });
   const pulledIn = (list: Fact[]) => list.some((f) => simValue(f) === null);
-  const orderNote = (text: string) => <Text size="xs" c="dimmed" className="ms-ask-order">{text}</Text>;
   // A marked card says so in words at its top, where a list is scanned; its border is left to the focus.
   const markPill = (key: string) => marking && marks[key]
-    ? <Pill size="xs" tone={marks[key].mark === "expect" ? "success" : "warn"}>{marks[key].mark === "expect" ? t("Marcado: debe salir") : t("Marcado: sobra")}</Pill> : undefined;
+    ? <Pill tone={marks[key].mark === "expect" ? "success" : "warn"}>{marks[key].mark === "expect" ? t("Marcado: debe salir") : t("Marcado: sobra")}</Pill> : undefined;
   // a similarity within 0,05 of the threshold: what a small change of threshold would drop
   const edge = (x: { similarity?: number | null; score?: number }) => {
     const v = x.similarity ?? x.score, min = r?.min_similarity;
@@ -231,8 +230,8 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   const factCard = (f: Fact, i: number, list: Fact[]) => (
     <ListCard key={`${f.origin ?? ""}-${f.uuid}`} anchor={factAnchor(f.origin, f.uuid)} invalid={f.status === "invalidated"} note={factNote(f)} aside={markPill(`f:${f.uuid}`)}
       actions={cardActions(f.fact, `f:${f.uuid}`, "fact", f.uuid, { text: f.fact, kind: "fact" }, !f.origin)}
-      tags={<>{f.origin && <Pill size="xs" tone="alt">{f.origin}</Pill>}<EntityChip name={f.source} type={f.source_type} to={entityLink(f.source_uuid, f.origin)} />
-        <Text size="xs" c="dimmed" title={f.name}>{humanRelation(f.name)}</Text><EntityChip name={f.target} type={f.target_type} to={entityLink(f.target_uuid, f.origin)} />
+      tags={<>{f.origin && <Pill tone="alt">{f.origin}</Pill>}<EntityChip name={f.source} type={f.source_type} to={entityLink(f.source_uuid, f.origin)} />
+        <RelationWord name={f.name} /><EntityChip name={f.target} type={f.target_type} to={entityLink(f.target_uuid, f.origin)} />
         <span className="ms-listcard-meta ms-data ms-ask-inlinemeta">{`${rank(i + 1 + (list === gone ? current.length : 0))} · ${sim(f) ?? t("sin similitud")} · ${validity(f)}`}</span></>}>{f.fact}</ListCard>);
   // Marcar un resultado como «debe salir» o «sobra» para guardarla como consulta de referencia. Se guarda el principio del texto.
   const toggle = (key: string, mark: Mark, item: Item) => setMarks((m) => {
@@ -242,14 +241,14 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
   });
   // Marks are kept here until «Guardar como consulta de referencia»; the pressed one shows a check, like a rating.
   const markBtns = (key: string, item: Item) => canSync && marking && <Group gap={4} role="group" aria-label={t("Consulta de referencia")}>
-    <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Consulta de referencia")}</Text>
+    <Text size="xs" c="dimmed" className="ms-ask-actlabel" aria-hidden="true">{t("Consulta de referencia")}</Text>{/* ui-ok: the word naming a group of row buttons inside a card's toolbar, not a footnote */}
     <Btn size="row" kind="ghost" aria-pressed={marks[key]?.mark === "expect"} icon={marks[key]?.mark === "expect" ? "check" : undefined} onClick={() => toggle(key, "expect", item)}>{t("Debe salir")}</Btn>
     <Btn size="row" kind="ghost" aria-pressed={marks[key]?.mark === "avoid"} icon={marks[key]?.mark === "avoid" ? "check" : undefined} onClick={() => toggle(key, "avoid", item)}>{t("Sobra")}</Btn>
   </Group>;
   // A fragment or a passage that states something no longer true (issues 282 and 286): the mark first, then what stopped being true and
   // what is true now, before its text, so it is not read as current.
   const supersededNotice = (origin: string | undefined, sup?: Superseded) => (sup?.length ? <>
-    <Pill size="xs" tone="warn">{t("Puede estar superado")}</Pill>
+    <Pill tone="warn">{t("Puede estar superado")}</Pill>
     {sup.map((s) => (
       <div key={s.uuid}>
         <div>{t("Dejó de ser cierto el {{date}}:", { date: fmtDay(s.invalid_at) })} {factRef(origin, s.uuid, s.fact)}</div>
@@ -276,7 +275,9 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
     docs: null, note: "" });
   const busyNow = view === "contexto" ? run.isPending || searchAll.isPending : answering;
   const ask = (
-    <Stack gap="xs">
+    <>
+      {/* What the last search returned is said in the composer's status line, a live region there from the start: a node replaced on
+          every search is not announced. «Responder» says it in its own bar, with the answer. */}
       <QueryComposer label={t("Pregunta")} placeholder={t("Escríbela como la haría tu agente")} value={q} onChange={setQ} onRun={primary} busy={busyNow}
         runLabel={view === "contexto" ? t("Buscar") : t("Responder")} busyLabel={view === "contexto" ? t("Buscando…") : t("Redactando…")}
         options={<>
@@ -284,104 +285,100 @@ export default function Ask({ graph, role }: { graph: string; role: string }) {
             data={[{ value: "brain", label: t("Este brain") }, { value: "all", label: t("Todos mis brains") }]} />}
           {scope === "brain" && <Segments label={t("Modo")} value={mode} onChange={(v) => setMode(v)}
             data={[{ value: "contexto", label: t("Contexto") }, { value: "responder", label: t("Responder") }]} />}
-          <NumberField label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} w={84} />
-          <NumberField label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} w={104} />
-        </>} />
-      {scope === "all" && <Text size="xs" c="dimmed" className="ms-measure">{t("La misma búsqueda en todos los brains que puedes leer, con tu rol en cada uno y sin federación. La respuesta redactada, las valoraciones y guardar como consulta de referencia solo están en «Este brain»: los resultados mezclan brains distintos.")}</Text>}
-      <Group gap="xs">
+          <NumberField label={t("Hechos")} value={nf} min={0} max={30} onChange={(v) => setNf(Number(v) || 0)} />
+          <NumberField label={t("Fragmentos")} value={nc} min={0} max={15} onChange={(v) => setNc(Number(v) || 0)} />
+        </>}
+        status={view === "responder" ? undefined : scope === "all"
+          ? (searchAll.data ? t("{{n}} brains consultados · {{ms}} ms", { n: searchAll.data.brains.length, ms: searchAll.data.ms }) : "")
+          : (r ? <>{t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 })}
+            {r.query !== q.trim() && <> <Pill tone="warn">{t("De una pregunta anterior")}</Pill></>}</> : "")} />
+      {/* the brain's text index, and reindexing it */}
+      <ViewBar title={t("Preguntar")} meta={sync.data && <>{sync.data.reindexed} {t("episodios reindexados")}</>}
+        actions={canSync && status.data?.enabled && <Btn loading={sync.isPending} onClick={() => sync.mutate()} icon="refresh">{t("Reindexar ahora")}</Btn>}>
         {status.data && <Pill tone={status.data.enabled ? "success" : "warn"}>{status.data.enabled ? t("índice: {{chunks}} fragmentos de {{episodes}} episodios", { chunks: status.data.chunks, episodes: status.data.episodes }) : t("índice de texto desactivado (requiere PostgreSQL)")}</Pill>}
-        {canSync && status.data?.enabled && <Btn size="row" loading={sync.isPending} onClick={() => sync.mutate()} icon="refresh">{t("Reindexar ahora")}</Btn>}
-        {sync.data && <Text size="xs" c="dimmed">{sync.data.reindexed} {t("episodios reindexados")}</Text>}
-      </Group>
+      </ViewBar>
       {view === "responder" && <AskAnswer graph={graph} query={q} facts={nf} chunks={nc} trigger={answerTrigger} answered={answered} onBusy={setAnswering} />}
-      {scope === "all" && <MutationError error={searchAll.error} />}
-      {scope === "all" && searchAll.data && <AskAllBrains r={searchAll.data} />}
-      {view === "contexto" && scope === "brain" && <MutationError error={run.error ?? rate.error ?? unrate.error} />}
-      {/* The live region is there before the first search and only its text changes: a node replaced on every search is not announced. */}
-      {view === "contexto" && scope === "brain" && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">
-        <Group gap="xs"><Text size="sm" role="status">{r ? t("Recall de «{{q}}»: hechos {{f}} · fragmentos {{c}} · pasajes {{d}}", { q: r.query, f: r.facts.length, c: r.chunks.length, d: r.documents?.length ?? 0 }) : ""}</Text>
-          {r && r.query !== q.trim() && <Pill size="xs" tone="warn">{t("De una pregunta anterior")}</Pill>}</Group>
-        {r && <Text size="xs" c="dimmed" className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms en total: embedding {{e}} ms · hechos {{f}} ms · fragmentos {{c}} ms", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</Text>}
-        {r && canSync && <Group gap="md" mt={6} className="ms-ask-marking">
-          <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />
-        </Group>}
-      </div>}
-      {view === "contexto" && scope === "brain" && !r && !run.isPending && !run.error && <EmptyState>{t("Escribe una pregunta como la haría tu agente y pulsa Buscar: verás qué hechos, fragmentos y pasajes recibiría, en el orden en que los lee, y el contexto exacto que se le inyecta.")}</EmptyState>}
-      {view === "contexto" && scope === "brain" && r && (
-        <div className="ms-ask-wrap"><div className="ms-ask-cols">
-          <Stack className="ms-ask-main" gap="xs">
-            {/* In one column the context comes after every card: on a phone that is thousands of pixels down. */}
-            {(r.facts.length + r.chunks.length + (r.documents?.length ?? 0)) > 1 && <Text size="xs" c="dimmed">{t("Numerados en el orden en que el agente los lee en el contexto inyectado.")}</Text>}
-            {r.recall_id && (r.chunks.length > 0 || !!r.documents?.length || r.facts.some((f) => f.origin)) && <Text size="xs" c="dimmed">{t("«Incorrecto» solo está en los hechos de este brain: un fragmento o un pasaje es lo que se escribió, y lo prestado por otro brain se corrige allí.")}</Text>}
-            {r.context && <Text size="sm" className="ms-ask-jump"><CardLink to="ask-context">{t("Ir al contexto inyectado")}</CardLink></Text>}
-            {!r.facts.length && !r.chunks.length && !!r.min_similarity && (
-              <Text size="xs" c="dimmed">{t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: fmtNum(r.min_similarity) })}</Text>)}
-            {!r.facts.length && !r.chunks.length && !r.documents?.length && <EmptyState>{t("El recall no ha traído nada para esta pregunta: ni hechos, ni fragmentos, ni pasajes.")}</EmptyState>}
-            {current.length > 0 && <>
-              <Title order={2} size="h5">{t("Hechos vigentes ({{n}})", { n: current.length })}</Title>
+      {scope === "all" && <AskAllBrains r={searchAll.data} error={searchAll.error} />}
+      {view === "contexto" && scope === "brain" && <>
+        {r && <div ref={resultsHead} tabIndex={-1} className="ms-ask-head">
+          <ViewBar title={t("Contexto")}
+            help={<>{t("Numerados en el orden en que el agente los lee en el contexto inyectado.")}{r.recall_id && <> {t("«Incorrecto» solo está en los hechos de este brain: un fragmento o un pasaje es lo que se escribió, y lo prestado por otro brain se corrige allí.")}</>}</>}
+            meta={<span className="ms-data">{r.min_similarity ? `${t("umbral {{v}}", { v: fmtNum(r.min_similarity) })} · ` : ""}{t("{{ms}} ms en total: embedding {{e}} ms · hechos {{f}} ms · fragmentos {{c}} ms", { ms: r.ms.total, e: r.ms.embed, f: r.ms.facts, c: r.ms.chunks })}</span>}>
+            {canSync && <Toggle label={t("Marcar para una consulta de referencia")} checked={marking} onChange={(e) => setMarking(e.currentTarget.checked)} />}
+          </ViewBar>
+        </div>}
+        <MutationError error={run.error ?? rate.error ?? unrate.error} />
+        {!r && run.isPending && <Loading label={t("Buscando…")} />}
+        {!r && !run.isPending && !run.error && <EmptyState>{t("Escribe una pregunta como la haría tu agente y pulsa Buscar: verás qué hechos, fragmentos y pasajes recibiría, en el orden en que los lee, y el contexto exacto que se le inyecta.")}</EmptyState>}
+        {r && (
+          <div className="ms-ask-wrap"><div className="ms-ask-cols">
+            <Stack className="ms-ask-main" gap="xs">
+              {/* In one column the context comes after every card: on a phone that is thousands of pixels down. */}
+              {r.context && <Text size="sm" className="ms-ask-jump"><CardLink to="ask-context">{t("Ir al contexto inyectado")}</CardLink></Text>}
+              {/* nothing came, or no fact nor fragment reached the threshold (the passages, if any, follow) */}
+              {!r.facts.length && !r.chunks.length && (!r.documents?.length || !!r.min_similarity) && <EmptyState>
+                {!r.documents?.length && t("El recall no ha traído nada para esta pregunta: ni hechos, ni fragmentos, ni pasajes.")}
+                {!r.documents?.length && !!r.min_similarity && " "}
+                {!!r.min_similarity && t("Ningún hecho ni fragmento llega a la similitud mínima ({{v}}, en Administración → Recuerdo).", { v: fmtNum(r.min_similarity) })}
+              </EmptyState>}
               {/* the graph's order: closeness, weighed down by shelf life and the source's trust where those apply */}
-              {orderNote(pulledIn(current)
+              {current.length > 0 && <Block title={t("Hechos vigentes")} count={current.length} help={pulledIn(current)
                 ? t("Primero, los que sustituyen a algo de este resultado; después, por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable.")
-                : t("Por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable."))}
-            </>}
-            {current.map(factCard)}
-            {gone.length > 0 && <>
-              <Title order={2} size="h5" mt="xs">{t("Hechos que dejaron de ser ciertos ({{n}})", { n: gone.length })}</Title>
-              {orderNote(pulledIn(gone) ? t("Por parecido a la pregunta; al final, los que afirma un fragmento o pasaje de este resultado.") : t("Por parecido a la pregunta."))}
-              {gone.map(factCard)}
-            </>}
-            {r.chunks.length > 0 && <>
-              <Title order={2} size="h5" mt="xs">{t("Fragmentos de episodios ({{n}})", { n: r.chunks.length })}</Title>
-              {orderNote(t("Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta, con algo más de peso para lo reciente: por eso la similitud no siempre baja. Lo que puede estar superado va al final."))}
-            </>}
-            {r.chunks.map((c, i) => (
-              <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(current.length + gone.length + i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ") + edge(c)}
-                aside={markPill(`c:${c.origin ?? ""}:${c.id}`)}
-                actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
-                notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
-            {!!r.documents?.length && <>
-              <Title order={2} size="h5" mt="xs">{t("Pasajes de documentos ({{n}})", { n: r.documents.length })}</Title>
-              {orderNote(t("Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta. Lo que puede estar superado va al final."))}
-              {r.documents.map((p, i) => (
-                <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} aside={markPill(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
-                  meta={[rank(current.length + gone.length + r.chunks.length + i + 1), sim(p) ?? t("sin similitud"), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) })].join(" · ")}
-                  notice={supersededNotice(p.origin, p.superseded)}
-                  actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
-            </>}
-            {/* while marking, how many and «Guardar» at the foot of the results, in reach of the marks however far down they are */}
-            {canSync && marking && <div className="ms-ask-markbar" role="region" aria-label={t("Consulta de referencia")}>
-              <Text size="sm">{!marked.length ? t("Ninguno marcado todavía") : marked.length === 1 ? t("1 marcado") : t("{{n}} marcados", { n: marked.length })}</Text>
-              <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{t("Guardar como consulta de referencia")}</Btn>
-            </div>}
-          </Stack>
-          {/* Beside the cards it stays in view while they scroll, and scrolls inside its own box. «Copiar» sits in its header, not over the text. */}
-          <Stack gap="xs" className="ms-ask-side" id="ask-context" tabIndex={-1}>
-            <div className="ms-ask-side-head">
-              <Title order={2} size="h6">{t("Contexto inyectado")}</Title>
-              {r.context && <CopyBtn value={r.context} />}
-            </div>
-            {r.context ? <CodeBlock label={t("Contexto inyectado")}>{r.context}</CodeBlock>
-              : <Text size="sm" c="dimmed">{t("Vacío: con este recall el agente no recibiría nada.")}</Text>}
-          </Stack>
-        </div></div>)}
+                : t("Por parecido a la pregunta, con menos peso para lo que pasó su vida útil o viene de una fuente menos fiable.")}>
+                {current.map(factCard)}
+              </Block>}
+              {gone.length > 0 && <Block title={t("Hechos que dejaron de ser ciertos")} count={gone.length}
+                help={pulledIn(gone) ? t("Por parecido a la pregunta; al final, los que afirma un fragmento o pasaje de este resultado.") : t("Por parecido a la pregunta.")}>
+                {gone.map(factCard)}
+              </Block>}
+              {r.chunks.length > 0 && <Block title={t("Fragmentos de episodios")} count={r.chunks.length}
+                help={t("Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta, con algo más de peso para lo reciente: por eso la similitud no siempre baja. Lo que puede estar superado va al final.")}>
+                {r.chunks.map((c, i) => (
+                  <ListCard key={`${c.origin ?? ""}-${c.id}`} anchor={chunkAnchor(c)} title={c.origin ? `${c.name} · ${c.origin}` : c.name} meta={[rank(current.length + gone.length + i + 1), sim(c) ?? t("sin similitud"), fmtDay(c.valid_at)].join(" · ") + edge(c)}
+                    aside={markPill(`c:${c.origin ?? ""}:${c.id}`)}
+                    actions={cardActions(c.name, `c:${c.origin ?? ""}:${c.id}`, "chunk", `${c.origin ?? ""}:${c.id}`, { text: c.text, kind: "chunk" }, false)}
+                    notice={supersededNotice(c.origin, c.superseded)}>{c.text}</ListCard>))}
+              </Block>}
+              {!!r.documents?.length && <Block title={t("Pasajes de documentos")} count={r.documents.length}
+                help={t("Por la fusión de dos búsquedas, por parecido y por las palabras de la pregunta. Lo que puede estar superado va al final.")}>
+                {r.documents.map((p, i) => (
+                  <ListCard key={`${p.origin ?? ""}-${p.document_id}-${p.chunk_idx}`} anchor={passageAnchor(p)} aside={markPill(`d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`)} title={p.origin ? `${passageTitle(p)} · ${p.origin}` : passageTitle(p)}
+                    meta={[rank(current.length + gone.length + r.chunks.length + i + 1), sim(p) ?? t("sin similitud"), t("actualizado el {{date}}", { date: fmtDay(p.source_updated_at ?? p.last_seen_at) })].join(" · ")}
+                    notice={supersededNotice(p.origin, p.superseded)}
+                    actions={cardActions(p.title, `d:${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, "doc", `${p.origin ?? ""}:${p.document_id}:${p.chunk_idx}`, { text: p.text, kind: "doc" }, false)}>{p.text}</ListCard>))}
+              </Block>}
+              {/* while marking, how many and «Guardar» at the foot of the results, in reach of the marks however far down they are */}
+              {canSync && marking && <div className="ms-ask-markbar" role="region" aria-label={t("Consulta de referencia")}>
+                <Text size="sm">{!marked.length ? t("Ninguno marcado todavía") : marked.length === 1 ? t("1 marcado") : t("{{n}} marcados", { n: marked.length })}</Text>
+                <Btn size="row" icon="save" onClick={() => setSave(toRef())}>{t("Guardar como consulta de referencia")}</Btn>
+              </div>}
+            </Stack>
+            {/* Beside the cards it stays in view while they scroll, and scrolls inside its own box. «Copiar» sits in its heading, not over
+                the text. The heading is a Block of its own and the text its sibling: inside the Block the text could not take the height
+                left in this column and scroll there. */}
+            <Stack gap="xs" className="ms-ask-side" id="ask-context" tabIndex={-1}>
+              <Block title={t("Contexto inyectado")} actions={r.context ? <CopyBtn value={r.context} /> : undefined}>{null}</Block>
+              {r.context ? <CodeBlock label={t("Contexto inyectado")}>{r.context}</CodeBlock>
+                : <EmptyState>{t("Vacío: con este recall el agente no recibiría nada.")}</EmptyState>}
+            </Stack>
+          </div></div>)}
+      </>}
       {save && <RefQueryForm graph={graph} initial={save} onClose={() => setSave(null)} />}
-    </Stack>
+    </>
   );
   return (
     <Page>
       <PageHeader title={t("Preguntar")} description={<>{t("Recall híbrido: hechos del grafo (vigentes e invalidados) más fragmentos de los episodios originales. Es el contexto que se inyecta al agente.")} {t("«Responder» redacta con ese mismo recall una respuesta que cita de dónde sale cada afirmación.")}</>} />
-      <FillArea>
-        {canSync ? <Tabs value={tab} onChange={(v) => setTab(v)}>
-          <Tabs.List>
-            <Tabs.Tab value="preguntar">{t("Preguntar")}</Tabs.Tab>
-            <Tabs.Tab value="referencia">{t("Consultas de referencia")}</Tabs.Tab>
-            <Tabs.Tab value="calidad">{t("Calidad")}</Tabs.Tab>
-          </Tabs.List>
-          <Tabs.Panel value="preguntar" pt="sm">{ask}</Tabs.Panel>
-          <Tabs.Panel value="referencia" pt="sm"><RefQueries graph={graph} /></Tabs.Panel>
-          <Tabs.Panel value="calidad" pt="sm"><RecallQuality graph={graph} canAdmin={["admin", "owner"].includes(role)} /></Tabs.Panel>
-        </Tabs> : ask}
-      </FillArea>
+      {canSync ? <Tabs value={tab} onChange={(v) => setTab(v)}>
+        <Tabs.List>
+          <Tabs.Tab value="preguntar">{t("Preguntar")}</Tabs.Tab>
+          <Tabs.Tab value="referencia">{t("Consultas de referencia")}</Tabs.Tab>
+          <Tabs.Tab value="calidad">{t("Calidad")}</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="preguntar">{ask}</Tabs.Panel>
+        <Tabs.Panel value="referencia"><RefQueries graph={graph} /></Tabs.Panel>
+        <Tabs.Panel value="calidad"><RecallQuality graph={graph} canAdmin={["admin", "owner"].includes(role)} /></Tabs.Panel>
+      </Tabs> : ask}
     </Page>
   );
 }

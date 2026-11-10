@@ -22,7 +22,7 @@ Some names are set aside as **Doubtful** without asking the decider: names of fi
 - A **decider** configured ([[AI providers]]).
 
 ## How to use it
-1. Under **Entities to analyse** say how many to review (1–1000) and press **Analyse**. A background job is launched with a progress bar (see [[Jobs]]); if it fails, the last error is shown.
+1. Press **Analyse…**, say in the dialog how many entities to review (1–1000) and press **Analyse**. A background job is launched with a progress bar (see [[Jobs]]); if it fails, the last error is shown.
 2. When it finishes, filter by **State**:
    | State | What is there |
    |---|---|

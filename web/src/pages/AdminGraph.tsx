@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { fmt, fmtNum, get, send } from "../api";
 import ExistingGraphs from "./AdminGraphAdopt";
-import { Btn, DataState, DataTable, Modal, MutationError, Notice, NumberField, PasswordField, Pill, Radio, RadioGroup, SettingsBody, SettingsGroup, Sheet, SheetRow, Step, Steps, TextField, Toggle, type Tone } from "../ui";
+import { Block, Btn, DataState, DataTable, DialogActions, EmptyState, Modal, MutationError, Notice, NumberField, PasswordField, Pill, Radio, RadioGroup, SettingsBody, SettingsGroup, Sheet, SheetRow, Step, Steps, TextField, Toggle, type Tone } from "../ui";
 
 type Backend = "falkordb" | "neo4j";
 type Conn = {
@@ -40,7 +40,7 @@ function formOf(c: Conn): Form {
   return { kind: bundled ? "bundled" : c.backend, host: bundled ? "" : c.host, port: bundled ? "" : c.port, user: c.user, password: "", tls: c.tls, database: c.database };
 }
 
-/** What a test found, step by step, then what the database holds. */
+/** What a test found, step by step, then what the database holds (a block with the graphs, or the empty state). */
 export function GraphTestResult({ r }: { r: TestResult }) {
   const { t } = useTranslation();
   const tone = (ok: boolean): Tone => (ok ? "success" : "danger");
@@ -53,22 +53,21 @@ export function GraphTestResult({ r }: { r: TestResult }) {
       <Steps label={t("Prueba de la conexión")}>
         {r.steps.map((s) => (
           <Step key={s.step} title={`${t(STEP[s.step] ?? s.step)} · ${s.ok ? t("pasa") : t("falla")}`} tone={tone(s.ok)}>
-            <Text size="xs" c="dimmed">{s.step === "version" && s.ok && v ? `${v.server} ${v.version ?? t("(versión no disponible)")}${v.edition ? ` · ${v.edition}` : ""}${v.database ? ` · ${v.home ? t("base de datos «{{database}}», la predeterminada del usuario", { database: v.database }) : t("base de datos «{{database}}»", { database: v.database })}` : ""} · ` : ""}{t("{{ms}} ms", { ms: s.ms })}</Text>
+            <span>{s.step === "version" && s.ok && v ? `${v.server} ${v.version ?? t("(versión no disponible)")}${v.edition ? ` · ${v.edition}` : ""}${v.database ? ` · ${v.home ? t("base de datos «{{database}}», la predeterminada del usuario", { database: v.database }) : t("base de datos «{{database}}»", { database: v.database })}` : ""} · ` : ""}{t("{{ms}} ms", { ms: s.ms })}</span>
           </Step>))}
       </Steps>
       {r.ok && (r.graphs.length === 0
-        ? <Text size="sm" c="dimmed" className="ms-measure">{t("La base de datos no tiene grafos todavía: cada brain nuevo creará el suyo.")}</Text>
-        : <Stack gap={4}>
-            <Text size="sm" className="ms-measure">{t("Lo que ya hay en la base de datos. MimirSynth no toca lo que no sea de un brain.")}</Text>
+        ? <EmptyState>{t("La base de datos no tiene grafos todavía: cada brain nuevo creará el suyo.")}</EmptyState>
+        : <Block title={t("Contenido")} count={r.graphs.length} help={t("Lo que ya hay en la base de datos. MimirSynth no toca lo que no sea de un brain.")}>
             <DataTable fz="sm">
               <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Grafo")}</DataTable.Th><DataTable.Th>{t("Nodos")}</DataTable.Th><DataTable.Th>{t("Brain")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
               <DataTable.Tbody>{r.graphs.map((g) => (
-                <DataTable.Tr key={g.name}><DataTable.Td><Text size="sm" className="ms-data">{g.name}</Text></DataTable.Td><DataTable.Td>{fmtNum(g.nodes)}</DataTable.Td>
-                  <DataTable.Td>{g.brain ? <Pill size="sm" tone="success">{g.brain}</Pill> : <Text size="xs" c="dimmed">{t("ninguno")}</Text>}</DataTable.Td></DataTable.Tr>))}
+                <DataTable.Tr key={g.name}><DataTable.Td className="ms-data">{g.name}</DataTable.Td><DataTable.Td className="ms-data">{fmtNum(g.nodes)}</DataTable.Td>
+                  <DataTable.Td>{g.brain ? <Pill tone="success">{g.brain}</Pill> : t("ninguno")}</DataTable.Td></DataTable.Tr>))}
               </DataTable.Tbody>
             </DataTable>
-            {r.truncated && <Text size="xs" c="dimmed">{t("Hay más grafos de los que se listan aquí.")}</Text>}
-          </Stack>)}
+            {r.truncated && <Text size="sm">{t("Hay más grafos de los que se listan aquí.")}</Text>}
+          </Block>)}
     </Stack>
   );
 }
@@ -87,7 +86,7 @@ function EditConnection({ cur, onClose, onSaved }: { cur: Conn; onClose: () => v
   const moves = (f.kind === "bundled" ? "falkordb" : f.kind) !== cur.backend || address !== `${cur.host}:${cur.port}` || (f.kind === "neo4j" && f.database.trim() !== cur.database);
   const sameServer = f.kind !== "bundled" && f.kind === cur.backend && f.host.trim() === cur.host && (f.port || PORT[f.kind]) === cur.port;
   return (
-    <Modal opened onClose={onClose} title={t("Cambiar la base de datos del grafo")} centered>
+    <Modal opened onClose={onClose} title={t("Cambiar la base de datos del grafo")}>
       <Stack gap="sm">
         <RadioGroup label={t("Base de datos")} value={f.kind} onChange={(v) => { set("kind", v as Kind); if (v !== "bundled" && !f.port) set("port", PORT[v as Backend]); if (v === "neo4j" && !f.user) set("user", "neo4j"); }}>
           <Stack gap="xs" mt={4}>
@@ -112,19 +111,20 @@ function EditConnection({ cur, onClose, onSaved }: { cur: Conn; onClose: () => v
         {moves && <Notice tone="warn" title={t("Los datos no se mueven")}>{t("La instancia pasará a usar esta base de datos, pero lo que hay en la actual se queda allí. Un brain cuyo grafo no esté en la nueva se verá vacío hasta que vuelvas a la anterior.")}</Notice>}
         {current && <GraphTestResult r={current} />}
         <MutationError error={test.error ?? save.error} />
-        <Text size="xs" c="dimmed" className="ms-measure">{current?.ok ? t("La prueba ha pasado: ya se puede guardar.") : t("Para guardar, la prueba tiene que pasar con estos datos.")}</Text>
-        <Group justify="flex-end" gap="xs">
+        <Text size="sm">{current?.ok ? t("La prueba ha pasado: ya se puede guardar.") : t("Para guardar, la prueba tiene que pasar con estos datos.")}</Text>
+        <DialogActions>
           <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>
           <Btn icon="test" loading={test.isPending} disabled={f.kind !== "bundled" && !f.host.trim()} onClick={() => test.mutate()}>{t("Probar")}</Btn>
           <Btn kind="primary" icon="save" loading={save.isPending} disabled={!current?.ok} onClick={() => save.mutate()}>{t("Guardar")}</Btn>
-        </Group>
+        </DialogActions>
       </Stack>
     </Modal>
   );
 }
 
 /** Administration → Graph database (issue 358): the connection in force, where it comes from, a test of it and, when it does not come from
- *  the environment, changing it. Saving needs a test that passes, and the instance switches without a restart. */
+ *  the environment, changing it. Saving needs a test that passes, and the instance switches without a restart. «Test the connection» and
+ *  «Change» are the section's buttons; below it, the section with the graphs the database holds. */
 export default function AdminGraph() {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -137,11 +137,12 @@ export default function AdminGraph() {
   return (<>
     <SettingsGroup title={t("Base de datos del grafo")}
       description={t("Dónde guardan los brains sus entidades, hechos y episodios: el FalkorDB incluido, o un FalkorDB o Neo4j que ya tengas.")}
-      action={c?.editable && <Btn kind="primary" icon="edit" onClick={() => { setSaved(null); setEditing(true); }}>{t("Cambiar")}</Btn>}>
+      action={c && <Group gap="xs"><Btn icon="test" loading={check.isPending} onClick={() => check.mutate()}>{t("Probar la conexión")}</Btn>
+        {c.editable && <Btn kind="primary" icon="edit" onClick={() => { setSaved(null); setEditing(true); }}>{t("Cambiar")}</Btn>}</Group>}>
       <SettingsBody>
-        {!c ? <DataState query={q} /> : <Stack gap="sm">
+        {!c ? <DataState query={q} /> : <>
           <Sheet label={t("Conexión en uso")}>
-            <SheetRow term={t("Base de datos")}><Group gap={6}><Text size="sm">{c.label}</Text><Pill size="sm" tone={sourceTone}>{t(SOURCE[c.source])}</Pill></Group></SheetRow>
+            <SheetRow term={t("Base de datos")}><Group gap={6}><Text size="sm">{c.label}</Text><Pill tone={sourceTone}>{t(SOURCE[c.source])}</Pill></Group></SheetRow>
             <SheetRow term={t("Dirección")}><Text size="sm" className="ms-data ms-breakall">{c.address}</Text></SheetRow>
             {c.user && <SheetRow term={t("Usuario")}><Text size="sm" className="ms-data">{c.user}</Text></SheetRow>}
             <SheetRow term={t("Contraseña")}><Text size="sm">{c.has_password ? t("guardada") : t("sin contraseña")}</Text></SheetRow>
@@ -152,14 +153,13 @@ export default function AdminGraph() {
           {c.source === "env" && <Notice tone="info" title={t("Viene de las variables de entorno")}>
             {t("La eligen MIMIRSYNTH_GRAPH_BACKEND, MIMIRSYNTH_FALKOR_HOST o MIMIRSYNTH_NEO4J_URI en el .env, y mandan sobre lo que se guarde aquí: se cambia editando el .env y reiniciando. Para gestionarla desde esta página, quita esas variables del .env y reinicia.")}
           </Notice>}
-          {c.source === "default" && <Text size="sm" c="dimmed" className="ms-measure">{t("Nadie ha elegido otra, así que se usa el FalkorDB que se instala junto a MimirSynth.")}</Text>}
+          {c.source === "default" && <Notice tone="info" title={t("FalkorDB incluido")}>{t("Nadie ha elegido otra, así que se usa el FalkorDB que se instala junto a MimirSynth.")}</Notice>}
           {saved && <Notice tone="success" title={t("Conexión guardada")}>{saved.changed
             ? t("La instancia usa ya la base de datos nueva, sin reiniciar. Los datos de la anterior siguen allí.")
             : t("La instancia sigue en la misma base de datos, con los datos de conexión nuevos.")}</Notice>}
-          <Group gap="xs"><Btn icon="test" loading={check.isPending} onClick={() => check.mutate()}>{t("Probar la conexión")}</Btn></Group>
           {check.data && <GraphTestResult r={check.data} />}
           <MutationError error={check.error} />
-        </Stack>}
+        </>}
         {editing && c && <EditConnection cur={c} onClose={() => setEditing(false)}
           onSaved={(s) => { setEditing(false); setSaved(s); check.reset(); qc.setQueryData(["admin-graph"], s); qc.invalidateQueries({ queryKey: ["ai-status"] }); if (s.changed) qc.invalidateQueries(); }} />}
       </SettingsBody>

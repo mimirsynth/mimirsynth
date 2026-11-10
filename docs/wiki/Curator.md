@@ -30,13 +30,13 @@ And, also off by default, **distil**: episodes that repeat the same lesson in sl
 
 The three settings are part of `PUT …/curator/settings`; a request that leaves one out keeps its value.
 
-Each pass has its own checkbox and its own precision, which says how far to trust it.
+Each pass is a row of **Passes**, with its own switch, its own precision, which says how far to trust it.
 
 ## It stops if coverage falls
 Before proposing anything, the curator looks at [[Memory health]]. If the reference queries' coverage fell more than *Memory health: notify when coverage falls* since the previous measurement, and some of its proposals were approved in between, it proposes nothing that day. The run ends **stopped**, with the numbers, and the **curator.stopped** notification says so.
 
 ## Turning it on
-It is **off by default**. A brain administrator ticks **Turn on the curator in this brain**. From then on it runs once a day (the day is the run's key: a restart never runs it twice), and **Run now** runs it at once. **See what it would propose** shows it without creating anything; for the noise pass it groups the findings by rule, with how many each rule finds, so a noisy rule shows before the pass is turned on.
+It is **off by default**. A brain administrator switches on **Turn on the curator in this brain**, the first row of **Passes**. From then on it runs once a day (the day is the run's key: a restart never runs it twice), and **Run now** runs it at once. **See what it would propose** shows it without creating anything; for the noise pass it groups the findings by rule, with how many each rule finds, so a noisy rule shows before the pass is turned on.
 
 ## A sample before a batch
 If a run would propose **more than 5 changes** at once (the batch, adjustable through the API), it proposes nothing. Instead it waits with a sample of what it would change and what it keeps. When a service is decommissioned, dozens of facts can go at once, and only a person tells «still useful» from «now stale». **Create the proposals** creates them all, and each one is still decided on its own; **Discard** drops the run.

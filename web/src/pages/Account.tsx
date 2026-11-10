@@ -4,13 +4,13 @@ import { tr, setLanguage } from "../i18n";
 import { TwoFactor } from "./TwoFactor";
 import { Passkeys } from "./Passkeys";
 import { DigestSettings } from "./DigestSettings";
-import { Group, Stack, Text, Title } from "@mantine/core";
+import { Group } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { fmt, get, langHeaders, Me, send } from "../api";
 import { Missing, usePasswordMin, usePasswordPair } from "./AuthPages";
 import TokensPanel, { ROLE } from "./TokensPanel";
-import { Avatar, Btn, ClearFilters, ColHead, CopyBtn, DataTable, FillArea, Modal, Notice, Page, Panel, Pill, SelectField, TextField, useTableView, MutationError, ConfirmDialog, DataState, PageHeader, FilePicker, Form, LanguageSelect, PasswordField, SettingsBody, SettingsGroup, SettingsLayout, SettingsRow, SubNav, useTabParam } from "../ui";
+import { Avatar, Btn, ClearFilters, ColHead, DataTable, DialogActions, EmptyState, Modal, Notice, Page, Pill, TextField, useTableView, MutationError, ConfirmDialog, DataState, PageHeader, FilePicker, Form, LanguageSelect, PasswordField, SettingsBody, SettingsGroup, SettingsLayout, SettingsRow, SubNav, useTabParam, ViewBar } from "../ui";
 
 type Profile = {
   id: number; name: string; idp_name: string; display_name: string; email: string | null; is_admin: boolean; auth_mode: string;
@@ -32,30 +32,33 @@ const ACTION: Record<string, string> = {
 };
 const what = (a: Act) => { const s = typeof a.detail?.summary === "string" ? a.detail.summary : ""; return (tr(ACTION[a.action] ?? a.action)) + (s ? ` — ${s}` : ""); };
 
-/** Cambio (o primera definición) de la contraseña propia. */
 type Ident = { identities: { id: number; provider: string; name: string; email: string; created_at: string }[]; can_unlink: boolean; available: { slug: string; name: string }[] };
+type Msg = { tone: "success" | "danger"; text: string };
 
-/** Identidades externas vinculadas a la cuenta: otras formas de entrar. Vincular abre el proveedor y vuelve aquí. */
-function Identities({ onMsg }: { onMsg: (m: { tone: "info" | "danger"; text: string }) => void }) {
+/** Identidades externas vinculadas a la cuenta: otras formas de entrar, en una tabla. Vincular (la acción del grupo) abre el proveedor y vuelve aquí. */
+function Identities({ onMsg }: { onMsg: (m: Msg) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["my-identities"], queryFn: () => get<Ident>("me/identities") });
   const [del, setDel] = useState<{ id: number; name: string } | null>(null);
-  const unlink = useMutation({ mutationFn: (id: number) => send("DELETE", `me/identities/${id}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-identities"] }); onMsg({ tone: "info", text: t("Identidad desvinculada.") }); } });
+  const unlink = useMutation({ mutationFn: (id: number) => send("DELETE", `me/identities/${id}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ["my-identities"] }); onMsg({ tone: "success", text: t("Identidad desvinculada.") }); } });
+  const d = q.data;
   return (
-    <SettingsGroup title={t("Identidades vinculadas")} description={t("Proveedores externos con los que puedes entrar a esta cuenta. Vincula otro para tener más de una forma de acceso.")}>
+    <SettingsGroup title={t("Identidades vinculadas")} description={t("Proveedores externos con los que puedes entrar a esta cuenta. Vincula otro para tener más de una forma de acceso.")}
+      action={d && d.available.length > 0 && <Group gap="xs">{d.available.map((a) => <Btn key={a.slug} component="a" href={`/api/me/identities/link/${a.slug}`} icon="plus">{t("Vincular {{name}}", { name: a.name })}</Btn>)}</Group>}>
       <SettingsBody>
-        <DataState query={q}>
-          {(d) => <Stack gap="xs">
-            {d.identities.length === 0 && <Text size="sm" c="dimmed">{t("Todavía no has vinculado ningún proveedor.")}</Text>}
-            {d.identities.map((i) => (
-              <Group key={i.id} justify="space-between" wrap="nowrap">
-                <Group gap={8}><Pill>{i.name}</Pill><Text size="sm" className="ms-breakall">{i.email || "—"}</Text><Text size="xs" c="dimmed">{fmt(i.created_at)}</Text></Group>
-                <Btn size="row" kind="danger" icon="trash" disabled={!d.can_unlink} title={d.can_unlink ? undefined : t("Es tu única forma de entrar: pon una contraseña antes.")} onClick={() => setDel({ id: i.id, name: i.name })}>{t("Desvincular")}</Btn>
-              </Group>))}
-            {d.available.length > 0 && <Group gap={6}>{d.available.map((a) => <Btn key={a.slug} size="row" component="a" href={`/api/me/identities/link/${a.slug}`} icon="plus">{t("Vincular {{name}}", { name: a.name })}</Btn>)}</Group>}
-          </Stack>}
-        </DataState>
+        {!d ? <DataState query={q} /> : d.identities.length ? <DataTable fz="sm" aria-label={t("Identidades vinculadas")}>
+          <DataTable.Thead><DataTable.Tr>
+            <DataTable.Th>{t("Proveedor")}</DataTable.Th><DataTable.Th>{t("Correo")}</DataTable.Th><DataTable.Th>{t("Vinculada")}</DataTable.Th><DataTable.ActionsHead />
+          </DataTable.Tr></DataTable.Thead>
+          <DataTable.Tbody>{d.identities.map((i) => (
+            <DataTable.Tr key={i.id}>
+              <DataTable.Td><Pill>{i.name}</Pill></DataTable.Td>
+              <DataTable.Td className="ms-breakall">{i.email || "—"}</DataTable.Td>
+              <DataTable.Td className="ms-data">{fmt(i.created_at)}</DataTable.Td>
+              <DataTable.Td><Btn size="row" kind="danger" icon="trash" disabled={!d.can_unlink} title={d.can_unlink ? undefined : t("Es tu única forma de entrar: pon una contraseña antes.")} onClick={() => setDel({ id: i.id, name: i.name })}>{t("Desvincular")}</Btn></DataTable.Td>
+            </DataTable.Tr>))}</DataTable.Tbody>
+        </DataTable> : <EmptyState>{t("Todavía no has vinculado ningún proveedor.")}</EmptyState>}
         <MutationError error={unlink.error} />
       </SettingsBody>
       <ConfirmDialog opened={!!del} onClose={() => setDel(null)} title={t("Desvincular identidad")} action={t("Desvincular")}
@@ -64,59 +67,68 @@ function Identities({ onMsg }: { onMsg: (m: { tone: "info" | "danger"; text: str
   );
 }
 
-function PasswordForm({ has, onDone }: { has: boolean; onDone: () => void }) {
+/** Cambio (o primera definición) de la contraseña propia, en un diálogo. */
+function PasswordDialog({ has, opened, onClose, onDone }: { has: boolean; opened: boolean; onClose: () => void; onDone: () => void }) {
   const { t } = useTranslation();
   const [current, setCurrent] = useState("");
   const me = useQuery({ queryKey: ["me"], queryFn: () => get<Me>("me"), retry: false });
   const pair = usePasswordPair(usePasswordMin(), { email: me.data?.email, name: me.data?.name });
-  const m = useMutation({ mutationFn: () => send("POST", "me/password", { current, new: pair.pw }), onSuccess: () => { setCurrent(""); pair.reset(); onDone(); } });
+  const close = () => { setCurrent(""); pair.reset(); m.reset(); onClose(); };
+  const m = useMutation({ mutationFn: () => send("POST", "me/password", { current, new: pair.pw }), onSuccess: () => { setCurrent(""); pair.reset(); onClose(); onDone(); } });
+  const label = has ? t("Cambiar contraseña") : t("Definir contraseña");
   return (
-    <Form onSubmit={() => m.mutate()}>
-      {has && <PasswordField label={t("Contraseña actual")} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.currentTarget.value)} />}
-      {pair.fields(t("Contraseña nueva"))}
-      <MutationError error={m.error} />
-      <Group><Btn size="row" type="submit" kind="primary" loading={m.isPending} disabled={!pair.ok || (has && !current)}>{has ? t("Cambiar contraseña") : t("Definir contraseña")}</Btn>
-        <Missing items={[has && !current && t("la contraseña actual"), pair.missing]} /></Group>
-    </Form>
+    <Modal opened={opened} onClose={close} title={label}>
+      <Form onSubmit={() => m.mutate()}>
+        {has && <PasswordField label={t("Contraseña actual")} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.currentTarget.value)} data-autofocus />}
+        {pair.fields(t("Contraseña nueva"))}
+        <MutationError error={m.error} />
+        <Missing items={[has && !current && t("la contraseña actual"), pair.missing]} />
+        <DialogActions><Btn kind="ghost" onClick={close}>{t("Cancelar")}</Btn>
+          <Btn type="submit" kind="primary" loading={m.isPending} disabled={!pair.ok || (has && !current)}>{label}</Btn></DialogActions>
+      </Form>
+    </Modal>
   );
 }
 
+/** Lo último que ha hecho la persona con su cuenta: la barra con los filtros activos y la tabla, con orden y filtro en la cabecera. */
 function ActivityTable({ rows }: { rows: Act[] }) {
   const { t } = useTranslation();
   const v = useTableView(rows, { ts: { get: (a: Act) => a.ts }, what: { get: (a: Act) => what(a) } });
+  if (!rows.length) return <EmptyState>{t("Aún no hay actividad.")}</EmptyState>;
   return (
-    <Stack gap="xs">
-      <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
-      <DataTable fz="sm">
+    <>
+      <ViewBar title={t("Actividad reciente")}><ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} /></ViewBar>
+      <DataTable fz="sm" aria-label={t("Actividad reciente")}>
         <DataTable.Thead><DataTable.Tr><ColHead width={170} sort={v.sortProps("ts")}>{t("Cuándo")}</ColHead><ColHead filter={v.text("what", t("Buscar en la actividad…"))}>{t("Qué")}</ColHead></DataTable.Tr></DataTable.Thead>
-        <DataTable.Tbody>{v.rows.map((a, i) => <DataTable.Tr key={i}><DataTable.Td>{fmt(a.ts)}</DataTable.Td><DataTable.Td>{what(a)}</DataTable.Td></DataTable.Tr>)}</DataTable.Tbody>
+        <DataTable.Tbody>{v.rows.map((a, i) => <DataTable.Tr key={i}><DataTable.Td className="ms-data">{fmt(a.ts)}</DataTable.Td><DataTable.Td>{what(a)}</DataTable.Td></DataTable.Tr>)}</DataTable.Tbody>
       </DataTable>
-    </Stack>
+    </>
   );
 }
 
+/** Mi cuenta: una pantalla de ajustes (documento), con una sección por tema y, en cada una, sus grupos de ajustes con una fila por ajuste. */
 export default function Account() {
   const { t, i18n } = useTranslation();
   const qc = useQueryClient();
-  const file = useRef<HTMLInputElement>(null);
   const prof = useQuery({ queryKey: ["profile"], queryFn: () => get<Profile>("me/profile") });
   const act = useQuery({ queryKey: ["my-activity"], queryFn: () => get<Act[]>("me/activity") });
   const [name, setName] = useState<string | null>(null);
-  const [msg, setMsg] = useState<{ tone: "info" | "danger"; text: string } | null>(null);
+  const [msg, setMsg] = useState<Msg | null>(null);
+  const [pwOpen, setPwOpen] = useState(false);
   const refreshMe = () => { qc.invalidateQueries({ queryKey: ["profile"] }); qc.invalidateQueries({ queryKey: ["me"] }); qc.invalidateQueries({ queryKey: ["my-activity"] }); };
-  const saveName = useMutation({ mutationFn: (n: string) => send("PATCH", "me/profile", { display_name: n }), onSuccess: () => { setName(null); setMsg({ tone: "info", text: t("Nombre actualizado.") }); refreshMe(); } });
+  const saveName = useMutation({ mutationFn: (n: string) => send("PATCH", "me/profile", { display_name: n }), onSuccess: () => { setName(null); setMsg({ tone: "success", text: t("Nombre actualizado.") }); refreshMe(); } });
   const upload = useMutation({
     mutationFn: async (f: File) => { const r = await fetch("/api/me/avatar", { method: "POST", credentials: "include", headers: langHeaders(), body: f }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail ?? r.statusText); },
-    onSuccess: () => { setMsg({ tone: "info", text: t("Avatar actualizado.") }); refreshMe(); }, onError: (e) => setMsg({ tone: "danger", text: (e as Error).message }) });
+    onSuccess: () => { setMsg({ tone: "success", text: t("Avatar actualizado.") }); refreshMe(); }, onError: (e) => setMsg({ tone: "danger", text: (e as Error).message }) });
   const saveLocale = useMutation({ mutationFn: (l: string) => send("PATCH", "me/profile", { locale: l }), onSuccess: refreshMe });
   const removeAvatar = useMutation({ mutationFn: () => send("DELETE", "me/avatar"), onSuccess: refreshMe });
   const [askAvatar, setAskAvatar] = useState(false);
   const logout = useMutation({ mutationFn: () => send("POST", "auth/logout"), onSuccess: () => { qc.clear(); window.location.href = "/"; } });
-  const others = useMutation({ mutationFn: () => send("POST", "me/sessions/revoke-others"), onSuccess: () => { setMsg({ tone: "info", text: t("Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); } });
+  const others = useMutation({ mutationFn: () => send("POST", "me/sessions/revoke-others"), onSuccess: () => { setMsg({ tone: "success", text: t("Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); } });
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
-    if (q.get("linked")) setMsg({ tone: "info", text: t("Identidad vinculada.") });
+    if (q.get("linked")) setMsg({ tone: "success", text: t("Identidad vinculada.") });
     else if (q.get("link_error")) setMsg({ tone: "danger", text: q.get("link_error") === "taken" ? t("Esa identidad ya pertenece a otra cuenta.") : t("No se pudo vincular: vuelve a intentarlo.") });
     if (q.has("linked") || q.has("link_error")) window.history.replaceState(null, "", window.location.pathname + "?seccion=seguridad");
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,66 +141,67 @@ export default function Account() {
     <Page>
       <ConfirmDialog opened={askAvatar} onClose={() => setAskAvatar(false)} title={t("Quitar avatar")} action={t("Quitar avatar")}
         warning={t("Se vuelve a usar la imagen de tu proveedor de identidad, o las iniciales.")} onConfirm={() => removeAvatar.mutateAsync()} />
+      <PasswordDialog has={p.has_password} opened={pwOpen} onClose={() => setPwOpen(false)}
+        onDone={() => { setMsg({ tone: "success", text: t("Contraseña actualizada. Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); }} />
       <PageHeader title={t("Mi cuenta")} description={t("Tu perfil, tus tokens de API en todos los brains, tus sesiones y tu actividad reciente.")} />
-      {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
-      <FillArea>
-        <SettingsLayout nav={<><SubNav label={t("Secciones de Mi cuenta")} value={section} onChange={setSection} items={nav} />
-          {p.auth_mode !== "off" && <div className="ms-subnav-exit"><Btn fullWidth icon="logout" loading={logout.isPending} onClick={() => logout.mutate()}>{t("Cerrar sesión")}</Btn></div>}</>}>
-          {section === "perfil" && <>
-            <SettingsGroup title={t("Perfil")} description={t("Cómo te ven el resto de personas en la aplicación.")}>
-              <SettingsBody><Stack gap="sm">
-                <Group wrap="nowrap" gap="md" align="center">
-                  <Avatar src={p.avatar} name={p.name} size={72} />
-                  <Stack gap={6}>
-                    <Group gap={6}>
-                      <FilePicker size="row" label={t("Cambiar avatar")} accept="image/png,image/jpeg,image/webp" loading={upload.isPending} onFiles={(fl) => upload.mutate(fl[0])} />
-                      {p.has_custom_avatar && <Btn kind="danger" size="row" icon="trash" onClick={() => setAskAvatar(true)}>{t("Quitar")}</Btn>}
-                    </Group>
-                    <Text size="xs" c="dimmed">{t("PNG, JPEG o WebP, hasta 1 MB.")}{!p.has_custom_avatar && p.avatar ? t(" Ahora usas la imagen de tu proveedor de identidad.") : ""}</Text>
-                  </Stack>
+      {msg && (msg.tone === "success" ? <Notice tone="success">{msg.text}</Notice> : <Notice tone="danger">{msg.text}</Notice>)}
+      <SettingsLayout nav={<><SubNav label={t("Secciones de Mi cuenta")} value={section} onChange={setSection} items={nav} />
+        {p.auth_mode !== "off" && <div className="ms-subnav-exit"><Btn fullWidth icon="logout" loading={logout.isPending} onClick={() => logout.mutate()}>{t("Cerrar sesión")}</Btn></div>}</>}>
+        {section === "perfil" && <>
+          <SettingsGroup title={t("Perfil")} description={t("Cómo te ven el resto de personas en la aplicación.")}>
+            <SettingsRow label={t("Avatar")} help={<>{t("PNG, JPEG o WebP, hasta 1 MB.")}{!p.has_custom_avatar && p.avatar ? t(" Ahora usas la imagen de tu proveedor de identidad.") : ""}</>}>
+              <Group gap="sm" wrap="nowrap">
+                <Avatar src={p.avatar} name={p.name} size={56} />
+                <Group gap={6}>
+                  <FilePicker label={t("Cambiar avatar")} accept="image/png,image/jpeg,image/webp" loading={upload.isPending} onFiles={(fl) => upload.mutate(fl[0])} />
+                  {p.has_custom_avatar && <Btn kind="danger" icon="trash" onClick={() => setAskAvatar(true)}>{t("Quitar")}</Btn>}
                 </Group>
-                <TextField label={t("Nombre visible")} description={t("Vacío = el de tu proveedor de identidad ({{v}}).", { v: p.idp_name || "—" })} value={editing ? name! : p.display_name}
-                  placeholder={p.idp_name} onChange={(e) => setName(e.currentTarget.value)} maxLength={80} />
-                <LanguageSelect label={t("Idioma")} value={i18n.language} onChange={(l) => { setLanguage(l); saveLocale.mutate(l); }} />
-                {editing && <Group><Btn size="row" icon="check" loading={saveName.isPending} onClick={() => saveName.mutate(name!)}>{t("Guardar")}</Btn><Btn size="row" onClick={() => setName(null)}>{t("Cancelar")}</Btn></Group>}
-              </Stack></SettingsBody>
+              </Group>
+            </SettingsRow>
+            <SettingsRow label={t("Nombre visible")} help={t("Vacío = el de tu proveedor de identidad ({{v}}).", { v: p.idp_name || "—" })}>
+              <TextField aria-label={t("Nombre visible")} value={editing ? name! : p.display_name} placeholder={p.idp_name} onChange={(e) => setName(e.currentTarget.value)} maxLength={80} />
+              {editing && <Group gap="xs"><Btn kind="primary" icon="check" loading={saveName.isPending} onClick={() => saveName.mutate(name!)}>{t("Guardar")}</Btn><Btn kind="ghost" onClick={() => setName(null)}>{t("Cancelar")}</Btn></Group>}
+              <MutationError error={saveName.error} />
+            </SettingsRow>
+            <SettingsRow label={t("Idioma")}>
+              <LanguageSelect value={i18n.language} onChange={(l) => { setLanguage(l); saveLocale.mutate(l); }} />
+            </SettingsRow>
+          </SettingsGroup>
+          <SettingsGroup title={t("Cuenta")} description={t("Datos de tu cuenta y brains a los que tienes acceso.")}>
+            <SettingsRow label={t("Correo")}>{p.email ?? "—"}</SettingsRow>
+            <SettingsRow label={t("Rol en la instancia")}>{p.is_admin ? <Pill tone="alt">{t("administrador de la instancia")}</Pill> : <Pill>{t("usuario")}</Pill>}</SettingsRow>
+            <SettingsRow label={t("Cuenta creada")}><span className="ms-data">{fmt(p.created_at)}</span></SettingsRow>
+            <SettingsRow label={t("Último acceso")}><span className="ms-data">{fmt(p.last_login)}</span></SettingsRow>
+            <SettingsRow label={t("Tus brains")} help={p.brains.length === 0 ? t("Todavía no tienes acceso a ningún brain.") : undefined}>
+              {p.brains.length > 0 && <Group gap={6}>{p.brains.map((b) => <Pill key={b.slug} title={b.slug}>{b.name} · {t(ROLE[b.role] ?? b.role)}</Pill>)}</Group>}
+            </SettingsRow>
+          </SettingsGroup>
+        </>}
+        {section === "seguridad" && (p.auth_mode === "off"
+          ? <SettingsGroup title={t("Seguridad")}><SettingsBody><Notice tone="warn">{t("Esta instancia está en modo prototipo, sin inicio de sesión: no hay contraseña ni sesiones que gestionar.")}</Notice></SettingsBody></SettingsGroup>
+          : <>
+            <SettingsGroup title={t("Contraseña")} description={p.has_password ? t("Cámbiala cuando quieras; se cierra la sesión en el resto de dispositivos.") : t("Para poder entrar también directamente, sin depender del proveedor de identidad.")}
+              action={<Btn kind="primary" icon="lock" onClick={() => setPwOpen(true)}>{p.has_password ? t("Cambiar contraseña") : t("Definir contraseña")}</Btn>}>{null}</SettingsGroup>
+            <Identities onMsg={setMsg} />
+            <SettingsGroup title={t("Llaves de acceso")} description={t("Passkeys: la huella, el rostro o el PIN de tu dispositivo en lugar de la contraseña.")}><SettingsBody><Passkeys hasPassword={p.has_password} onChange={refreshMe} /></SettingsBody></SettingsGroup>
+            {p.has_password && <SettingsGroup title={t("Verificación en dos pasos")} description={t("Además de la contraseña, pide un código de una app de autenticación.")}><SettingsBody><TwoFactor /></SettingsBody></SettingsGroup>}
+            <SettingsGroup title={t("Sesiones")} description={t("Si crees que alguien más tiene abierta tu sesión, ciérrala en todos los demás dispositivos. Esta sesión sigue abierta.")}>
+              <SettingsBody><Group gap="xs">
+                <Btn icon="logout" loading={others.isPending} onClick={() => others.mutate()}>{t("Cerrar sesión en otros dispositivos")}</Btn>
+                <Btn icon="logout" loading={logout.isPending} onClick={() => logout.mutate()}>{t("Salir")}</Btn>
+                {p.account_url && <Btn component="a" href={p.account_url} target="_blank" rel="noopener noreferrer" icon="login">{t("Cuenta en tu proveedor de identidad")}</Btn>}
+              </Group>
+              <MutationError error={others.error} /></SettingsBody>
             </SettingsGroup>
-            <SettingsGroup title={t("Cuenta")} description={t("Datos de tu cuenta y brains a los que tienes acceso.")}>
-              <SettingsRow label={t("Correo")}>{p.email ?? "—"}</SettingsRow>
-              <SettingsRow label={t("Rol en la instancia")}>{p.is_admin ? <Pill tone="alt">{t("administrador de la instancia")}</Pill> : <Pill>{t("usuario")}</Pill>}</SettingsRow>
-              <SettingsRow label={t("Cuenta creada")}>{fmt(p.created_at)}</SettingsRow>
-              <SettingsRow label={t("Último acceso")}>{fmt(p.last_login)}</SettingsRow>
-              <SettingsRow label={t("Tus brains")}>
-                <Group gap={6}>{p.brains.length === 0 ? <Text size="sm" c="dimmed">{t("Todavía no tienes acceso a ningún brain.")}</Text> : p.brains.map((b) => <Pill key={b.slug} title={b.slug}>{b.name} · {t(ROLE[b.role] ?? b.role)}</Pill>)}</Group>
-              </SettingsRow>
-            </SettingsGroup>
-          </>}
-          {section === "seguridad" && (p.auth_mode === "off"
-            ? <SettingsGroup title={t("Seguridad")}><SettingsBody><Notice tone="warn">{t("Esta instancia está en modo prototipo, sin inicio de sesión: no hay contraseña ni sesiones que gestionar.")}</Notice></SettingsBody></SettingsGroup>
-            : <>
-              <SettingsGroup title={t("Contraseña")} description={p.has_password ? t("Cámbiala cuando quieras; se cierra la sesión en el resto de dispositivos.") : t("Para poder entrar también directamente, sin depender del proveedor de identidad.")}>
-                <SettingsBody><PasswordForm has={p.has_password} onDone={() => { setMsg({ tone: "info", text: t("Contraseña actualizada. Se cerró la sesión en el resto de dispositivos.") }); refreshMe(); }} /></SettingsBody>
-              </SettingsGroup>
-              <Identities onMsg={setMsg} />
-              <SettingsGroup title={t("Llaves de acceso")} description={t("Passkeys: la huella, el rostro o el PIN de tu dispositivo en lugar de la contraseña.")}><SettingsBody><Passkeys hasPassword={p.has_password} onChange={refreshMe} /></SettingsBody></SettingsGroup>
-              {p.has_password && <SettingsGroup title={t("Verificación en dos pasos")} description={t("Además de la contraseña, pide un código de una app de autenticación.")}><SettingsBody><TwoFactor /></SettingsBody></SettingsGroup>}
-              <SettingsGroup title={t("Sesiones")} description={t("Si crees que alguien más tiene abierta tu sesión, ciérrala en todos los demás dispositivos. Esta sesión sigue abierta.")}>
-                <SettingsBody><Group gap="xs">
-                  <Btn size="row" icon="logout" loading={others.isPending} onClick={() => others.mutate()}>{t("Cerrar sesión en otros dispositivos")}</Btn>
-                  <Btn size="row" icon="logout" loading={logout.isPending} onClick={() => logout.mutate()}>{t("Salir")}</Btn>
-                  {p.account_url && <Btn size="row" component="a" href={p.account_url} target="_blank" rel="noopener noreferrer" icon="login">{t("Cuenta en tu proveedor de identidad")}</Btn>}
-                </Group></SettingsBody>
-              </SettingsGroup>
-            </>)}
-          {section === "resumen" && <DigestSettings />}
-          {section === "tokens" && (
-            <SettingsGroup title={t("Mis tokens de API")} description={t("Para plugins y agentes. Cada token vale para un solo brain y nunca tiene más rol que el tuyo. Se muestra una única vez al crearlo.")}>
-              <SettingsBody><TokensPanel brains={p.brains} /></SettingsBody>
-            </SettingsGroup>)}
-          {section === "actividad" && <SettingsGroup title={t("Actividad reciente")} description={t("Lo último que has hecho con tu cuenta.")}><SettingsBody><ActivityTable rows={act.data ?? []} /></SettingsBody></SettingsGroup>}
-        </SettingsLayout>
-      </FillArea>
-
+          </>)}
+        {section === "resumen" && <DigestSettings />}
+        {section === "tokens" && (
+          <SettingsGroup title={t("Mis tokens de API")} description={t("Para plugins y agentes. Cada token vale para un solo brain y nunca tiene más rol que el tuyo. Se muestra una única vez al crearlo.")}>
+            <SettingsBody><TokensPanel brains={p.brains} /></SettingsBody>
+          </SettingsGroup>)}
+        {section === "actividad" && <SettingsGroup title={t("Actividad reciente")} description={t("Lo último que has hecho con tu cuenta.")}>
+          <SettingsBody>{act.data ? <ActivityTable rows={act.data} /> : <DataState query={act} />}</SettingsBody></SettingsGroup>}
+      </SettingsLayout>
     </Page>
   );
 }

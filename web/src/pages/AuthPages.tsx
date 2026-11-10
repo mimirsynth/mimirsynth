@@ -10,21 +10,23 @@ import Logo from "../Logo";
 import { TwoFactor } from "./TwoFactor";
 import { Passkeys } from "./Passkeys";
 import { getPasskey, passkeyError, passkeysSupported } from "../webauthn";
-import { Btn, EmptyState, Form, LanguageSelect, MutationError, Notice, Panel, PasswordField, RuleList, TextField } from "../ui";
+import { Btn, Form, LanguageSelect, Loading, MutationError, Notice, PasswordField, RuleList, TextField } from "../ui";
 
 type Options = { local: boolean; passkeys?: boolean; oidc: boolean; providers?: { slug: string; name: string }[]; setup: boolean; password_min_length?: number };
 const ERRORS: Record<string, string> = { not_invited: T("Tu cuenta no está dada de alta en esta instancia. Pide a un administrador que te invite."), disabled: T("Tu cuenta está deshabilitada. Contacta con un administrador."),
   link_required: T("Ya tienes una cuenta con ese email. Entra como siempre y vincula este proveedor desde Mi cuenta → Seguridad.") };
 
+/** The card of a sign-in flow, centred on the window: the logo, what the step is, its form and the language. The kit has no card for a flow
+ *  outside the application's frame, so it is a column with the panel's surface (`ms-panel`), not a `Panel`. */
 function Card({ name, subtitle, children }: { name: string; subtitle?: string; children: React.ReactNode }) {
   const { i18n } = useTranslation();
   return (
-    <Center component="main" className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack align="center" gap="md">
+    <Center component="main" className="ms-fullh"><Stack component="section" p="xl" gap="md" className="ms-panel ms-authcard">
       <h1 className="ms-sr">{subtitle ? `${name} · ${subtitle}` : name}</h1>
-      <Logo size={56} name={name} />{subtitle && <Text c="dimmed" size="sm" ta="center">{subtitle}</Text>}
-      <Stack w="100%" gap="sm">{children}</Stack>
-      <LanguageSelect size="xs" value={i18n.language} onChange={setLanguage} />
-    </Stack></Panel></Center>
+      <Center><Logo size={56} name={name} /></Center>{subtitle && <Text c="dimmed" size="sm" ta="center">{subtitle}</Text>}
+      <Stack gap="sm">{children}</Stack>
+      <Center><LanguageSelect size="xs" value={i18n.language} onChange={setLanguage} /></Center>
+    </Stack></Center>
   );
 }
 
@@ -53,7 +55,7 @@ export function usePasswordPair(min: number, who: { email?: string | null; name?
 /** Por qué el botón de enviar está deshabilitado: la lista de lo que falta, o nada si no falta nada. */
 export function Missing({ items }: { items: (string | false | null | undefined)[] }) {
   const list = items.filter(Boolean);
-  return list.length ? <Text size="xs" c="dimmed" ta="center">{tr("Para continuar falta: {{list}}.", { list: list.join(", ") })}</Text> : null;
+  return list.length ? <Text size="sm" ta="center">{tr("Para continuar falta: {{list}}.", { list: list.join(", ") })}</Text> : null;
 }
 
 /** Pantalla de entrada: asistente de primer arranque, o email y contraseña (más OIDC si el administrador lo ha configurado). */
@@ -79,14 +81,14 @@ export function AuthScreen({ name }: { name: string }) {
   const setup = useMutation({ mutationFn: () => send("POST", "auth/setup", { code, email, name: uname, password: pair.pw }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["auth-options"] }); done(); } });
   const forgot = useMutation({ mutationFn: () => send("POST", "auth/forgot", { email }) });
   const authError = t(ERRORS[new URLSearchParams(window.location.search).get("auth_error") ?? ""]);
-  if (!opts.data) return <Center component="main" className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
+  if (!opts.data) return <Center component="main" className="ms-fullh"><Loading /></Center>;
 
   if (opts.data.setup) {
     return (
       <Card name={name} subtitle={t("Primer arranque: crea la cuenta de administrador")}>
         <Form onSubmit={() => setup.mutate()}>
-          <Notice tone="info">{t("Escribe el código de inicio: el instalador lo mostró al terminar («Código de inicio: …»). Si no usaste el instalador, está en el registro del contenedor:")} <code>{"docker compose logs mimirsynth"}</code></Notice>  {/* i18n-ok: a command */}
-          <TextField label={t("Código de inicio")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off" />
+          <TextField label={t("Código de inicio")} value={code} onChange={(e) => setCode(e.currentTarget.value)} autoComplete="off"
+            description={<>{t("Escribe el código de inicio: el instalador lo mostró al terminar («Código de inicio: …»). Si no usaste el instalador, está en el registro del contenedor:")} <code>{"docker compose logs mimirsynth"}</code></>} />  {/* i18n-ok: a command */}
           <TextField label={t("Tu nombre")} value={uname} onChange={(e) => setUname(e.currentTarget.value)} autoComplete="name" />
           <TextField label={t("Email")} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} autoComplete="username" />
           {pair.fields()}
@@ -158,7 +160,7 @@ export function AcceptScreen({ token, name }: { token: string; name: string }) {
   const [uname, setUname] = useState<string | null>(null);
   const pair = usePasswordPair(usePasswordMin(), { email: info.data?.email, name: uname ?? info.data?.name });
   const accept = useMutation({ mutationFn: () => send("POST", "auth/accept", { token, password: pair.pw, name: uname ?? undefined }), onSuccess: () => window.location.replace("/") });
-  if (info.isLoading) return <Center component="main" className="ms-fullh"><EmptyState>{t("Comprobando el enlace…")}</EmptyState></Center>;
+  if (info.isLoading) return <Center component="main" className="ms-fullh"><Loading label={t("Comprobando el enlace…")} /></Center>;
   if (info.error) return <Card name={name}><Notice tone="danger" title={t("Enlace no válido")}>{(info.error as Error).message}{t(". Pide a un administrador que te envíe uno nuevo.")}</Notice><Btn component="a" href="/">{t("Ir al inicio")}</Btn></Card>;
   const d = info.data!;
   return (

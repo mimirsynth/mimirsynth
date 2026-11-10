@@ -2,7 +2,7 @@ import { applyInstanceDefault, setLanguage, type Lang } from "./i18n";
 import { T } from "./i18n";
 import { useTranslation } from "react-i18next";
 import { AppShell, Burger, Center, Group, Stack, Text, Title } from "@mantine/core";
-import { Avatar, Btn, HelpMenu, Icon, NavItem, Notice, Panel, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, EmptyState, ErrorBoundary, shouldAutoStart } from "./ui";
+import { Avatar, Btn, HelpMenu, Icon, NavItem, Notice, Pill, RoundButton, RoundLink, SelectField, UserCard, ThemeButton, Loading, ErrorBoundary, shouldAutoStart } from "./ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Navigate, NavLink as RouterLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -54,7 +54,7 @@ const NAV = [
 
 /** What went wrong when the session could not be loaded, said so that someone can act on it: the browser could not reach the server,
  *  the proxy reached it but MimirSynth did not answer (starting, updating or down), or the server explained the problem itself.
- *  The HTTP status stays underneath, small, for whoever administers the instance. */
+ *  The HTTP status stays underneath, folded under «Technical detail», for whoever administers the instance. */
 const GENERIC_STATUS = new Set(["", "Bad Gateway", "Service Unavailable", "Gateway Timeout", "Internal Server Error"]);
 function sessionProblem(error: unknown, t: (k: string) => string) {
   if (!(error instanceof ApiError)) return <Text size="sm">{t("No se puede contactar con el servidor de MimirSynth. Comprueba la conexión y vuelve a intentarlo.")}</Text>;
@@ -62,7 +62,7 @@ function sessionProblem(error: unknown, t: (k: string) => string) {
   const text = gateway ? t("El servidor de MimirSynth no responde: puede estar arrancando o actualizándose. Vuelve a intentarlo en un momento y, si sigue igual, avisa a quien administra la instancia.")
     : GENERIC_STATUS.has(error.message) ? t("El servidor de MimirSynth ha fallado al cargar tu sesión. Vuelve a intentarlo y, si sigue igual, avisa a quien administra la instancia.")
     : error.message;
-  return <><Text size="sm">{text}</Text><Text size="xs" c="dimmed" className="ms-data">{`HTTP ${error.status}`}</Text></>;  // i18n-ok: protocol status code
+  return <><Text size="sm">{text}</Text><details className="ms-errdetail"><summary>{t("Detalle técnico")}</summary><code>{`HTTP ${error.status}`}</code></details></>;  // i18n-ok: protocol status code
 }
 
 export default function App() {
@@ -136,16 +136,16 @@ export default function App() {
   if (me.data?.must_setup_2fa) return <TwoFactorSetupScreen name={name} />;
   if (me.error) {
     return (
-      <Center component="main" className="ms-fullh"><Panel withBorder p="xl" className="ms-authcard"><Stack>
+      <Center component="main" className="ms-fullh"><Stack className="ms-authcard">
         <h1 className="ms-sr">{`${cfg.data?.name ?? "MimirSynth"} · ${t("No se pudo cargar tu sesión")}`}</h1>  {/* i18n-ok: product name */}
         <Notice tone="danger" title={t("No se pudo cargar tu sesión")}>
           <Stack gap={4}>{sessionProblem(me.error, t)}</Stack>
         </Notice>
         <Btn onClick={() => void me.refetch()} loading={me.isFetching}>{t("Reintentar")}</Btn>
-      </Stack></Panel></Center>
+      </Stack></Center>
     );
   }
-  if (!me.data) return <Center component="main" className="ms-fullh"><EmptyState>{t("Cargando…")}</EmptyState></Center>;
+  if (!me.data) return <Center component="main" className="ms-fullh"><Loading /></Center>;
   const cur = brains.data?.find((b) => b.slug === brain);
 
   return (
@@ -195,7 +195,7 @@ export default function App() {
       </AppShell.Navbar>
       <AppShell.Main>
         <ErrorBoundary resetKey={`${loc.pathname}|${brain}`}>
-        <Suspense fallback={<EmptyState>{t("Cargando…")}</EmptyState>}>
+        <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/admin" element={<Admin me={me.data} brain={brain} setBrain={setBrain} />} />
           <Route path="/cuenta" element={<Account />} />
@@ -218,7 +218,7 @@ export default function App() {
               <Route path="/consulta" element={<Query graph={brain} />} />
               <Route path="/entidad/:uuid" element={<EntityPage graph={brain} role={cur?.role ?? "reader"} />} />
             </>
-          ) : <Route path="*" element={brains.isPending || (!!brain && brains.isFetching) ? <EmptyState>{t("Cargando…")}</EmptyState>
+          ) : <Route path="*" element={brains.isPending || (!!brain && brains.isFetching) ? <Loading />
             // El administrador ve todos los brains: si la lista está vacía es que no existe ninguno, y nadie más puede crearlo.
             : me.data.is_admin && brains.data?.length === 0 ? (me.data.setup_pending ? <Navigate to="/configuracion" replace /> : <FirstSteps docs={cfg.data?.links?.docs} />)
             : <Text c="dimmed">{t("No tienes acceso a ningún brain todavía. Pide a un administrador que te añada.")}</Text>} />}

@@ -1,16 +1,17 @@
+import { Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Brain, fmt, get, send } from "../api";
-import { Btn, MutationError, Notice, NumberField } from "../ui";
+import { Btn, MutationError, NumberField, SettingsBody, SettingsRow, SettingsGroup } from "../ui";
 
 type Kinds = { rejected_days: number; jobs_days: number; ratings_days: number };
 type Retention = { rejected_days: number | null; jobs_days: number | null; ratings_days: number | null; defaults: Kinds; effective: Kinds;
   last_run: { status: string; finished_at: string | null; result: { proposals: number; jobs: number } | null; error: string } | null };
 
 /** Plazos de retención del brain: cuánto conserva el texto de las propuestas rechazadas y sus trabajos terminados. Vacío = el de la
- *  instancia; 0 = sin plazo. Una tarea diaria purga lo que lo supera. */
+ *  instancia; 0 = sin plazo. Una tarea diaria purga lo que lo supera. Its parts are the children of the settings group that titles it
+ *  (Administration → Retention): the bar (the «i», the last purge, «Save» and «Purge now») and a row per period, with the one in force. */
 export default function BrainRetention({ brain }: { brain: Brain }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -25,26 +26,30 @@ export default function BrainRetention({ brain }: { brain: Brain }) {
   const d = q.data;
   const inst = (n: number) => (n ? t("{{n}} días", { n }) : t("sin plazo"));
   const last = d?.last_run;
+  const rows: { label: string; value: number | string; set: (v: number | string) => void; kind: keyof Kinds }[] = [
+    { label: t("Texto de las propuestas rechazadas"), value: rejected, set: setRejected, kind: "rejected_days" },
+    { label: t("Trabajos terminados"), value: jobsDays, set: setJobsDays, kind: "jobs_days" },
+    { label: t("Valoraciones del recall"), value: ratingsDays, set: setRatingsDays, kind: "ratings_days" },
+  ];
   return (
-    <Stack gap="sm">
-      <Notice tone="info">{t("Una tarea diaria purga lo que supera estos plazos y deja un resumen. Las propuestas rechazadas pierden su texto, pero conservan su estado, sus autores y sus fechas; los trabajos terminados se borran. Vacío usa el plazo de la instancia; 0 conserva para siempre. La auditoría no se purga.")}</Notice>
-      <Group grow align="flex-start">
-        <NumberField label={t("Texto de las propuestas rechazadas")} min={0} max={3650} suffix={` ${t("días")}`} value={rejected} onChange={setRejected}
-          placeholder={d ? t("El de la instancia: {{v}}", { v: inst(d.defaults.rejected_days) }) : ""} />
-        <NumberField label={t("Trabajos terminados")} min={0} max={3650} suffix={` ${t("días")}`} value={jobsDays} onChange={setJobsDays}
-          placeholder={d ? t("El de la instancia: {{v}}", { v: inst(d.defaults.jobs_days) }) : ""} />
-        <NumberField label={t("Valoraciones del recall")} min={0} max={3650} suffix={` ${t("días")}`} value={ratingsDays} onChange={setRatingsDays}
-          placeholder={d ? t("El de la instancia: {{v}}", { v: inst(d.defaults.ratings_days) }) : ""} />
-      </Group>
-      {d && <Text size="xs" c="dimmed" className="ms-measure">{t("En vigor: propuestas rechazadas, {{p}}; trabajos terminados, {{j}}; valoraciones del recall, {{r}}.", { p: inst(d.effective.rejected_days), j: inst(d.effective.jobs_days), r: inst(d.effective.ratings_days) })}</Text>}
-      <MutationError error={save.error ?? run.error} />
-      <Group gap="xs">
-        <Btn kind="primary" icon="save" loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>
-        <Btn icon="play" disabled={!d || !(d.effective.rejected_days || d.effective.jobs_days || d.effective.ratings_days)} loading={run.isPending} onClick={() => run.mutate()}>{t("Purgar ahora")}</Btn>
-      </Group>
-      {last && <Text size="xs" c="dimmed">{last.status === "done" && last.result
-        ? t("Última purga, {{d}}: {{p}} propuestas y {{j}} trabajos.", { d: fmt(last.finished_at!), p: last.result.proposals, j: last.result.jobs })
-        : last.status === "failed" ? t("La última purga falló: {{e}}", { e: last.error }) : t("Purga en marcha…")}</Text>}
-    </Stack>
+    <SettingsGroup title={t("Retención")} description={t("Cuánto se conserva lo que ya no sirve: el texto de las propuestas rechazadas y los trabajos terminados.")}
+      help={t("Una tarea diaria purga lo que supera estos plazos y deja un resumen. Las propuestas rechazadas pierden su texto, pero conservan su estado, sus autores y sus fechas; los trabajos terminados se borran. Vacío usa el plazo de la instancia; 0 conserva para siempre. La auditoría no se purga.")}
+      action={<>
+            <Btn icon="play" disabled={!d || !(d.effective.rejected_days || d.effective.jobs_days || d.effective.ratings_days)} loading={run.isPending} onClick={() => run.mutate()}>{t("Purgar ahora")}</Btn>
+            <Btn kind="primary" icon="save" loading={save.isPending} onClick={() => save.mutate()}>{t("Guardar")}</Btn>
+          </>}>
+      {(last && (last.status === "done" && last.result
+            ? t("Última purga, {{d}}: {{p}} propuestas y {{j}} trabajos.", { d: fmt(last.finished_at!), p: last.result.proposals, j: last.result.jobs })
+            : last.status === "failed" ? t("La última purga falló: {{e}}", { e: last.error }) : t("Purga en marcha…"))) && <SettingsBody><Text size="sm">{last && (last.status === "done" && last.result
+            ? t("Última purga, {{d}}: {{p}} propuestas y {{j}} trabajos.", { d: fmt(last.finished_at!), p: last.result.proposals, j: last.result.jobs })
+            : last.status === "failed" ? t("La última purga falló: {{e}}", { e: last.error }) : t("Purga en marcha…"))}</Text></SettingsBody>}
+      {/* errors of the section's own actions */}
+      <SettingsBody><MutationError error={save.error ?? run.error} /></SettingsBody>
+      {rows.map((r) => (
+        <SettingsRow key={r.kind} label={r.label} help={d ? t("En vigor: {{v}}.", { v: inst(d.effective[r.kind]) }) : undefined}>
+          <NumberField aria-label={r.label} min={0} max={3650} suffix={` ${t("días")}`} value={r.value} onChange={r.set}
+            placeholder={d ? t("El de la instancia: {{v}}", { v: inst(d.defaults[r.kind]) }) : ""} />
+        </SettingsRow>))}
+    </SettingsGroup>
   );
 }

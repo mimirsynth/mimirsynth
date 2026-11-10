@@ -1,10 +1,9 @@
 import { T } from "../i18n";
 import { useTranslation } from "react-i18next";
-import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Brain, fmt, get, send } from "../api";
-import { Btn, Check, EmptyState, ListCard, MutationError, Notice, PasswordField, Pill, ProgressBar } from "../ui";
+import { Block, Btn, CellText, DataState, DataTable, EmptyState, MutationError, PasswordField, Pill, ProgressBar, SettingsBody, SettingsRow, Toggle, SettingsGroup } from "../ui";
 
 type State = "queued" | "running" | "failed" | "cancelled" | "ready" | "downloaded" | "expired";
 type Item = {
@@ -25,24 +24,28 @@ const MIN_PASSWORD = 12;
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const sum = (o?: Record<string, number>) => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
 
-/** Lo que lleva un paquete terminado y lo que se ha quedado fuera por los secretos. */
+/** Lo que lleva un paquete terminado y, en su segunda línea, lo que se ha quedado fuera por los secretos. */
 function Contents({ it }: { it: Item }) {
   const { t } = useTranslation();
   if (!it.graph || !it.counts) return null;
   const masked = sum(it.secrets?.masked), omitted = sum(it.counts.originals_omitted);
+  const notes = [
+    masked > 0 && t("Secretos enmascarados: {{n}}.", { n: masked }),
+    it.graph.dump_omitted === "secrets" && t("El grafo lleva un secreto: va solo como JSON enmascarado, sin la copia exacta."),
+    it.graph.dump_omitted === "backend" && t("Esta base de datos de grafos no hace copias exactas: el grafo va solo como JSON."),
+    omitted > 0 && t("Originales que no van, por secretos o por no haberse podido revisar: {{n}}.", { n: omitted }),
+  ].filter(Boolean);
   return (
-    <Stack gap={2}>
-      <Text size="xs">{t("Nodos: {{n}} · aristas: {{e}} · propuestas: {{p}} · documentos: {{d}}", { n: it.graph.nodes, e: it.graph.edges, p: it.counts.proposals, d: it.counts.documents })}
-        {it.vectors ? ` · ${t("con vectores")}` : ""}{it.encrypted ? ` · ${t("cifrado")}` : ""}</Text>
-      {masked > 0 && <Text size="xs" c="dimmed">{t("Secretos enmascarados: {{n}}.", { n: masked })}</Text>}
-      {it.graph.dump_omitted === "secrets" && <Text size="xs" c="dimmed">{t("El grafo lleva un secreto: va solo como JSON enmascarado, sin la copia exacta.")}</Text>}
-      {it.graph.dump_omitted === "backend" && <Text size="xs" c="dimmed">{t("Esta base de datos de grafos no hace copias exactas: el grafo va solo como JSON.")}</Text>}
-      {omitted > 0 && <Text size="xs" c="dimmed">{t("Originales que no van, por secretos o por no haberse podido revisar: {{n}}.", { n: omitted })}</Text>}
-    </Stack>
+    <CellText sub={notes.length ? notes.join(" ") : undefined}>
+      {t("Nodos: {{n}} · aristas: {{e}} · propuestas: {{p}} · documentos: {{d}}", { n: it.graph.nodes, e: it.graph.edges, p: it.counts.proposals, d: it.counts.documents })}
+      {it.vectors ? ` · ${t("con vectores")}` : ""}{it.encrypted ? ` · ${t("cifrado")}` : ""}
+    </CellText>
   );
 }
 
-/** Exportar el brain a un paquete: grafo, curación, propuestas, documentos y consultas de referencia; sin miembros ni secretos. */
+/** Exportar el brain a un paquete: grafo, curación, propuestas, documentos y consultas de referencia; sin miembros ni secretos. Its parts are
+ *  the children of the settings group that titles it (Administration → Export): the bar (the «i» and «Export»), a row per option, and the
+ *  packages made as a table below. */
 export default function BrainExport({ brain }: { brain: Brain }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
@@ -58,33 +61,42 @@ export default function BrainExport({ brain }: { brain: Brain }) {
   const pwOk = !encrypt || (pw.length >= MIN_PASSWORD && pw === pw2);
   const items = list.data?.items ?? [];
   return (
-    <Stack gap="md">
-      <Notice tone="info">{t("El paquete lleva el grafo, la ontología y el vocabulario con su historial, las propuestas, los documentos y las consultas de referencia. No lleva miembros, tokens, motores de IA ni canales de aviso, que solo sirven en esta instancia. Todo pasa antes por el detector de secretos: lo que detecta con seguridad se enmascara.")}</Notice>
-      <Check checked={vectors} onChange={(e) => setVectors(e.currentTarget.checked)} label={t("Incluir los vectores")}
-        description={t("Los embeddings del índice de búsqueda y los del grafo en su copia JSON. Evitan recalcularlos al importar con el mismo modelo, pero el paquete crece mucho.")} />
-      <Check checked={encrypt} onChange={(e) => setEncrypt(e.currentTarget.checked)} label={t("Cifrar con una contraseña")}
-        description={t("Sin la contraseña no se puede abrir el paquete. No se guarda en ningún sitio: si la pierdes, el paquete no se puede recuperar.")} />
-      {encrypt && <Group grow align="flex-start">
-        <PasswordField label={t("Contraseña")} description={t("Al menos 12 caracteres.")} value={pw} onChange={(e) => setPw(e.currentTarget.value)} autoComplete="new-password" />
-        <PasswordField label={t("Repite la contraseña")} value={pw2} onChange={(e) => setPw2(e.currentTarget.value)} autoComplete="new-password"
-          error={pw2 && pw2 !== pw ? t("No coincide") : undefined} />
-      </Group>}
-      <MutationError error={start.error} />
-      <Group gap="xs">
-        <Btn kind="primary" icon="download" disabled={!pwOk || busy} loading={start.isPending} onClick={() => start.mutate()}>{t("Exportar")}</Btn>
-      </Group>
-      <Text size="xs" c="dimmed" className="ms-measure">{t("Se prepara como un trabajo. El paquete se descarga una sola vez y se borra al descargarlo; si nadie lo descarga, caduca a las {{h}} horas.", { h: list.data?.ttl_hours ?? 24 })}</Text>
-      {items.length ? (
-        <Stack gap="xs">{items.map((it) => (
-          <ListCard key={it.id} title={fmt(it.created_at)} aside={<Pill tone={STATES[it.state].tone}>{t(STATES[it.state].label)}</Pill>}
-            meta={[it.user, it.size != null ? human(it.size) : "", it.state === "ready" && it.expires_at ? t("Hasta {{d}}", { d: fmt(it.expires_at) }) : ""].filter(Boolean).join(" · ")}
-            actions={it.state === "ready" && <Btn size="row" icon="download" component="a" href={`/api/brains/${brain.slug}/exports/${it.id}/download`}
-              onClick={() => setTimeout(() => qc.invalidateQueries({ queryKey: key }), 1500)}>{t("Descargar")}</Btn>}>
-            {it.state === "running" || it.state === "queued" ? <ProgressBar done={it.done} total={it.total} text={it.message || t("En cola")} />
-              : it.state === "failed" ? <Text size="xs" c="dimmed">{it.error}</Text> : <Contents it={it} />}
-          </ListCard>))}
-        </Stack>
-      ) : list.isSuccess && <EmptyState>{t("Este brain no se ha exportado todavía.")}</EmptyState>}
-    </Stack>
+    <SettingsGroup title={t("Exportar")} description={t("Una copia de este brain en un paquete, para guardarla aparte o llevarla a otra instancia.")}
+      help={t("El paquete lleva el grafo, la ontología y el vocabulario con su historial, las propuestas, los documentos y las consultas de referencia. No lleva miembros, tokens, motores de IA ni canales de aviso, que solo sirven en esta instancia. Todo pasa antes por el detector de secretos: lo que detecta con seguridad se enmascara.")}
+      action={<Btn kind="primary" icon="download" disabled={!pwOk || busy} loading={start.isPending} onClick={() => start.mutate()}>{t("Exportar")}</Btn>}>
+      {start.error ? <SettingsBody><MutationError error={start.error} /></SettingsBody> : null}
+      <SettingsRow label={t("Incluir los vectores")} help={t("Los embeddings del índice de búsqueda y los del grafo en su copia JSON. Evitan recalcularlos al importar con el mismo modelo, pero el paquete crece mucho.")}>
+        <Toggle aria-label={t("Incluir los vectores")} checked={vectors} onChange={(e) => setVectors(e.currentTarget.checked)} />
+      </SettingsRow>
+      <SettingsRow label={t("Cifrar con una contraseña")} help={t("Sin la contraseña no se puede abrir el paquete. No se guarda en ningún sitio: si la pierdes, el paquete no se puede recuperar.")}>
+        <Toggle aria-label={t("Cifrar con una contraseña")} checked={encrypt} onChange={(e) => setEncrypt(e.currentTarget.checked)} />
+        {encrypt && <>
+          <PasswordField aria-label={t("Contraseña")} placeholder={t("Contraseña")} description={t("Al menos 12 caracteres.")} value={pw} onChange={(e) => setPw(e.currentTarget.value)} autoComplete="new-password" />
+          <PasswordField aria-label={t("Repite la contraseña")} placeholder={t("Repite la contraseña")} value={pw2} onChange={(e) => setPw2(e.currentTarget.value)} autoComplete="new-password"
+            error={pw2 && pw2 !== pw ? t("No coincide") : undefined} />
+        </>}
+      </SettingsRow>
+      <SettingsBody>
+        <Block title={t("Paquetes")} count={list.data ? items.length : undefined}
+          help={t("Se prepara como un trabajo. El paquete se descarga una sola vez y se borra al descargarlo; si nadie lo descarga, caduca a las {{h}} horas.", { h: list.data?.ttl_hours ?? 24 })}>
+          {!list.data ? <DataState query={list} /> : items.length ? <DataTable fz="sm" aria-label={t("Paquetes")}>
+            <DataTable.Thead><DataTable.Tr>
+              <DataTable.Th>{t("Creada")}</DataTable.Th><DataTable.Th>{t("Estado")}</DataTable.Th><DataTable.Th>{t("Contenido")}</DataTable.Th><DataTable.Th>{t("Tamaño")}</DataTable.Th><DataTable.ActionsHead />
+            </DataTable.Tr></DataTable.Thead>
+            <DataTable.Tbody>{items.map((it) => (
+              <DataTable.Tr key={it.id}>
+                <DataTable.Td><CellText sub={it.user}><span className="ms-data">{fmt(it.created_at)}</span></CellText></DataTable.Td>
+                <DataTable.Td><CellText data sub={it.state === "ready" && it.expires_at ? t("Hasta {{d}}", { d: fmt(it.expires_at) }) : undefined}>
+                  <Pill tone={STATES[it.state].tone}>{t(STATES[it.state].label)}</Pill></CellText></DataTable.Td>
+                <DataTable.Td>{it.state === "running" || it.state === "queued" ? <ProgressBar done={it.done} total={it.total} text={it.message || t("En cola")} />
+                  : it.state === "failed" ? it.error : <Contents it={it} />}</DataTable.Td>
+                <DataTable.Td className="ms-data">{it.size != null ? human(it.size) : "—"}</DataTable.Td>
+                <DataTable.Td>{it.state === "ready" && <Btn size="row" icon="download" component="a" href={`/api/brains/${brain.slug}/exports/${it.id}/download`}
+                  onClick={() => setTimeout(() => qc.invalidateQueries({ queryKey: key }), 1500)}>{t("Descargar")}</Btn>}</DataTable.Td>
+              </DataTable.Tr>))}</DataTable.Tbody>
+          </DataTable> : <EmptyState>{t("Este brain no se ha exportado todavía.")}</EmptyState>}
+        </Block>
+      </SettingsBody>
+    </SettingsGroup>
   );
 }

@@ -1,0 +1,11 @@
+{
+ "Capa": "Layer",
+ "Clic en un nodo o en una arista para ver el detalle.": "Click a node or an edge to see its detail.",
+ "Cuántos": "How many",
+ "Otras relaciones": "Other relations",
+ "Qué se tocaría": "What would be touched",
+ "Relacionadas": "Related",
+ "Resumen de la entidad": "Entity summary",
+ "Se dibujan las {{shown}} con más hechos vigentes, de {{total}}.": "The {{shown}} with the most current facts are drawn, out of {{total}}.",
+ "Sin hechos": "No facts"
+}

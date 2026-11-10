@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fmtDay, fmtNum, get, send, Overview as O } from "../api";
-import { AreaChart, BarList, Btn, ColGrid, DataState, EmptyState, EntityChip, FillArea, HIDROMIEL, Meter, Page, PageHeader, Pill, PIZARRA, Section, Segments, SERIES, StatCard, StatGrid, TrendStat } from "../ui";
+import { AreaChart, BarList, Block, Btn, ColGrid, DataState, EmptyState, EntityChip, HIDROMIEL, Loading, Meter, Notice, Page, PageHeader, Pill, PIZARRA, Section, Segments, SERIES, StatCard, StatGrid, TrendStat, ViewBar } from "../ui";
 import { T, locale } from "../i18n";
 import type { Attention } from "./Quality";
 import { PURPOSE } from "./AiUsage";
@@ -44,20 +44,21 @@ function ToReview({ graph }: { graph: string }) {
   const lines = REVIEW.filter((l) => count(l.key) > 0);
   const total = lines.reduce((a, l) => a + count(l.key), 0);
   return (
-    <Section title={t("Por revisar")} actions={total > 0 && <Text size="sm" c="dimmed">{t("{{n}} decisiones pendientes", { n: fmtNum(total) })}</Text>}>
+    <Section title={t("Por revisar")}><Stack gap="sm">
+      <ViewBar title={t("Por revisar")} meta={total > 0 ? t("{{n}} decisiones pendientes", { n: fmtNum(total) }) : undefined} />
       {!q.data ? <DataState query={q} /> : lines.length ? (
         <div className="ms-review">{lines.map((l, i) => {
           const oldest = l.key === "proposals" ? q.data?.proposals_oldest : null;
           const hint = oldest ? t("{{hint}} · la más antigua, del {{day}}", { hint: t(l.hint), day: fmtDay(oldest) }) : t(l.hint);
           return (
             <div key={l.key} className="ms-review-row">
-              <span><Pill size="sm" tone={i === 0 ? "warn" : undefined}>{fmtNum(count(l.key))}</Pill></span>
+              <span><Pill tone={i === 0 ? "warn" : undefined}>{fmtNum(count(l.key))}</Pill></span>
               <span className="ms-review-text"><span className="ms-review-label">{t(l.label)}</span><span className="ms-review-hint">{hint}</span></span>
               <Btn size="row" component={Link} to={l.to}>{t(l.action)}</Btn>
             </div>);
         })}</div>
       ) : <EmptyState>{t("Nada necesita tu atención.")}</EmptyState>}
-    </Section>
+    </Stack></Section>
   );
 }
 
@@ -83,8 +84,11 @@ function Movement({ graph }: { graph: string }) {
   const q = useQuery({ queryKey: ["changes", graph, days], queryFn: () => get<Changes>(`brains/${graph}/changes`, { days }), staleTime: 60000 });
   const d = q.data;
   return (
-    <Section title={t("Movimiento")} actions={<Segments label={t("Periodo")} value={days} onChange={setDays}
-      data={[{ value: "1", label: t("24 h") }, { value: "7", label: t("7 días") }, { value: "30", label: t("30 días") }]} />}>
+    <Section title={t("Movimiento")}><Stack gap="sm">
+      <ViewBar title={t("Movimiento")}>
+        <Segments label={t("Periodo")} value={days} onChange={setDays}
+          data={[{ value: "1", label: t("24 h") }, { value: "7", label: t("7 días") }, { value: "30", label: t("30 días") }]} />
+      </ViewBar>
       {!d ? <DataState query={q} /> : (
         <div className="ms-trends">
           <TrendStat label={t("Hechos nuevos")} to="/hechos" value={fmtNum(d.facts_new)} values={d.series.facts_new} color={SERIES[0]}
@@ -96,7 +100,7 @@ function Movement({ graph }: { graph: string }) {
           <TrendStat label={t("Documentos")} to="/conocimiento" value={fmtNum(d.docs_new)} values={d.series.docs_new} color={PIZARRA}
             note={vsBefore(d.docs_new, d.previous.docs_new, days, t)} />
         </div>)}
-    </Section>
+    </Stack></Section>
   );
 }
 
@@ -118,43 +122,34 @@ function Knowledge({ graph, data }: { graph: string; data: O }) {
     ...(a ? [{ value: a.documents.total, label: t("documentos"), to: "/conocimiento" }] : []),
   ];
   return (
-    <Section title={t("Qué sabe el brain")} actions={data.first_episode_at && <Text size="xs" c="dimmed">{t("desde el {{day}}", { day: fmtDay(data.first_episode_at) })}</Text>}>
-      <Stack gap="md">
-        <div className="ms-totals">{totals.map((x) => (
-          <Link key={x.label} to={x.to} className="ms-total"><span className="ms-total-value">{fmtNum(x.value)}</span><span className="ms-total-label">{x.label}</span></Link>))}</div>
-        <Stack gap={6} className="ms-rule-top">
-          <Group justify="space-between" gap="xs">
-            <span className="ms-subhead">{t("Actividad semanal")}</span>
-            <Segments label={t("Intervalo")} value={weeks} onChange={setWeeks}
-              data={[{ value: "12", label: t("12 semanas") }, { value: "26", label: t("26 semanas") }, { value: "52", label: t("1 año") }]} />
-          </Group>
-          {a ? <AreaChart labels={a.weeks} series={[{ name: t("Hechos aprendidos"), values: a.facts_learned }, { name: t("Episodios"), values: a.episodes, color: HIDROMIEL },
-            { name: t("Hechos invalidados"), values: a.facts_invalidated, color: "var(--ms-invalidado)" }]} /> : <DataState query={q} />}
-        </Stack>
-        <ColGrid min={260}>
-          <Stack gap={8} className="ms-rule-top">
-            <span className="ms-subhead">{t("Entidades más conectadas")}</span>
-            {!a ? <EmptyState>{t("Cargando…")}</EmptyState> : a.top_entities.length ? <div className="ms-chips">{a.top_entities.map((e) => (
-              <EntityChip key={e.uuid ?? e.name} name={`${e.name} · ${e.degree}`} type={e.labels[0]} to={e.uuid ? `/entidad/${e.uuid}` : undefined} />))}</div>
-              : <EmptyState>{t("Sin entidades")}</EmptyState>}
-          </Stack>
-          <Stack gap={8} className="ms-rule-top">
-            <span className="ms-subhead">{t("Entidades por tipo")}</span>
-            <BarList items={data.by_label.slice(0, 6).map((l) => ({ label: l.label, value: l.count }))} />
-          </Stack>
-          <Stack gap={8} className="ms-rule-top">
-            <span className="ms-subhead">{t("Documentos")}</span>
-            {a ? <>
-              <Group gap={8} align="baseline"><span className="ms-figure">{fmtNum(a.documents.by_status.active ?? 0)}</span>
-                <Text size="sm" c="dimmed">{t("indexados · {{n}} trozos", { n: fmtNum(a.documents.chunks) })}</Text></Group>
-              <Group gap={6}>{Object.entries(a.documents.by_status).filter(([k, v]) => k !== "active" && v > 0).map(([k, v]) => (
-                <Pill key={k} size="xs" tone={k === "error" ? "danger" : "warn"}>{v} {t(DOC_STATUS[k] ?? k)}</Pill>))}</Group>
-              <div><Btn kind="link" component={Link} to="/conocimiento">{t("Ir a Conocimiento")}</Btn></div>
-            </> : <EmptyState>{t("Cargando…")}</EmptyState>}
-          </Stack>
-        </ColGrid>
-      </Stack>
-    </Section>
+    <Section title={t("Qué sabe el brain")}><Stack gap="sm">
+      <ViewBar title={t("Qué sabe el brain")} meta={data.first_episode_at ? t("desde el {{day}}", { day: fmtDay(data.first_episode_at) }) : undefined} />
+      <div className="ms-totals">{totals.map((x) => (
+        <Link key={x.label} to={x.to} className="ms-total"><span className="ms-total-value">{fmtNum(x.value)}</span><span className="ms-total-label">{x.label}</span></Link>))}</div>
+      <Block title={t("Actividad semanal")} actions={<Segments label={t("Intervalo")} value={weeks} onChange={setWeeks}
+        data={[{ value: "12", label: t("12 semanas") }, { value: "26", label: t("26 semanas") }, { value: "52", label: t("1 año") }]} />}>
+        {a ? <AreaChart labels={a.weeks} series={[{ name: t("Hechos aprendidos"), values: a.facts_learned }, { name: t("Episodios"), values: a.episodes, color: HIDROMIEL },
+          { name: t("Hechos invalidados"), values: a.facts_invalidated, color: "var(--ms-invalidado)" }]} /> : <DataState query={q} />}
+      </Block>
+      <ColGrid min={260}>
+        <Block title={t("Entidades más conectadas")}>
+          {!a ? <Loading /> : a.top_entities.length ? <div className="ms-chips">{a.top_entities.map((e) => (
+            <EntityChip key={e.uuid ?? e.name} name={`${e.name} · ${e.degree}`} type={e.labels[0]} to={e.uuid ? `/entidad/${e.uuid}` : undefined} />))}</div>
+            : <EmptyState>{t("Sin entidades")}</EmptyState>}
+        </Block>
+        <Block title={t("Entidades por tipo")}>
+          <BarList items={data.by_label.slice(0, 6).map((l) => ({ label: l.label, value: l.count }))} />
+        </Block>
+        <Block title={t("Documentos")} actions={<Btn kind="link" component={Link} to="/conocimiento">{t("Ir a Conocimiento")}</Btn>}>
+          {a ? <>
+            <Group gap={8} align="baseline"><span className="ms-figure">{fmtNum(a.documents.by_status.active ?? 0)}</span>
+              <Text size="sm" c="dimmed">{t("indexados · {{n}} trozos", { n: fmtNum(a.documents.chunks) })}</Text></Group>
+            <Group gap={6}>{Object.entries(a.documents.by_status).filter(([k, v]) => k !== "active" && v > 0).map(([k, v]) => (
+              <Pill key={k} tone={k === "error" ? "danger" : "warn"}>{v} {t(DOC_STATUS[k] ?? k)}</Pill>))}</Group>
+          </> : <Loading />}
+        </Block>
+      </ColGrid>
+    </Stack></Section>
   );
 }
 
@@ -209,19 +204,20 @@ function MemoryHealth({ graph }: { graph: string }) {
     else cards.push({ label: t("Hechos a revisar"), value: fmtNum(m.stale_facts), hint: before ? ago(fmtNum(before.stale_facts)) : undefined });
   }
   return (
-    <Section title={t("Salud de la memoria")} hint={t("Se mide sola una vez al día. Las cifras se explican en la wiki, en «Salud de la memoria».")}
-      actions={<>
-        {last && <Text size="xs" c="dimmed">{t("Medida el {{day}}", { day: fmtDay(last.day) })}</Text>}
-        <Btn size="row" icon="refresh" loading={measuring} disabled={measuring} onClick={() => run.mutate()}>{measuring ? t("Midiendo…") : t("Medir ahora")}</Btn>
-      </>}>
+    <Section title={t("Salud de la memoria")}><Stack gap="sm">
+      {/* what could not be measured, and why, explains the figures that are missing: it goes with the rest of the explanation */}
+      <ViewBar title={t("Salud de la memoria")}
+        help={<>{t("Se mide sola una vez al día. Las cifras se explican en la wiki, en «Salud de la memoria».")}
+          {missing.length > 0 && <>{" "}{t("Sin medir: {{parts}}.", { parts: missing.join("; ") })}</>}</>}
+        meta={last ? t("Medida el {{day}}", { day: fmtDay(last.day) }) : undefined}
+        actions={<Btn size="row" icon="refresh" loading={measuring} disabled={measuring} onClick={() => run.mutate()}>{measuring ? t("Midiendo…") : t("Medir ahora")}</Btn>} />
       {!q.data ? <DataState query={q} /> : !m ? <EmptyState>{t("Todavía no hay ninguna medición.")}</EmptyState> : (
         <Stack gap="sm">
           {cards.length > 0 && <StatGrid>{cards.map((c) => <StatCard key={c.label} label={c.label} value={c.value} hint={c.hint} />)}</StatGrid>}
-          {missing.length > 0 && <div className="ms-note-box">{t("Sin medir: {{parts}}.", { parts: missing.join("; ") })}</div>}
-          {m.probes_paused && <Text size="sm" c="dimmed">{t("Las preguntas de prueba no se hicieron: el brain ha llegado a su presupuesto de IA.")}</Text>}
-          {!!m.failed.length && <Text size="sm" c="dimmed">{t("No se pudo medir: {{parts}}.", { parts: m.failed.map((p) => t(HEALTH_PARTS[p] ?? p)).join(", ") })}</Text>}
+          {m.probes_paused && <Notice tone="warn">{t("Las preguntas de prueba no se hicieron: el brain ha llegado a su presupuesto de IA.")}</Notice>}
+          {!!m.failed.length && <Notice tone="warn">{t("No se pudo medir: {{parts}}.", { parts: m.failed.map((p) => t(HEALTH_PARTS[p] ?? p)).join(", ") })}</Notice>}
         </Stack>)}
-    </Section>
+    </Stack></Section>
   );
 }
 
@@ -252,7 +248,9 @@ function AiSpend({ graph }: { graph: string }) {
   for (const r of rows) byPurpose.set(r.purpose, (byPurpose.get(r.purpose) ?? 0) + r.prompt_tokens + r.completion_tokens);
   const errors429 = rows.reduce((a, r) => a + r.errors_429, 0);
   return (
-    <Section title={t("Uso de IA")} actions={<Text size="xs" c="dimmed">{today.toLocaleDateString(locale(), { month: "long", year: "numeric" })}</Text>}>
+    <Section title={t("Uso de IA")}><Stack gap="sm">
+      <ViewBar title={t("Uso de IA")} meta={today.toLocaleDateString(locale(), { month: "long", year: "numeric" })}
+        actions={<Btn kind="link" component={Link} to="/admin?seccion=brain-usage">{t("Ver el detalle")}</Btn>} />
       {!d || !b ? <DataState query={q} /> : (
         <Stack gap="sm">
           <Stack gap={6}>
@@ -263,22 +261,18 @@ function AiSpend({ graph }: { graph: string }) {
               {b.limit ? <Text size="sm" className="ms-data">{pct(used / b.limit)}</Text> : null}
             </Group>
             {b.limit ? <Meter value={used / b.limit} mark={0.8} label={t("Presupuesto del mes usado")} tone={b.paused || used >= b.limit ? "danger" : used >= 0.8 * b.limit ? "warn" : undefined} /> : null}
-            <Text size="xs" c="dimmed">{b.paused ? t("Presupuesto agotado: la ingesta está en pausa.")
-              : b.limit ? t("A este ritmo, unos {{n}} a fin de mes · aviso al 80 %", { n: show(projected) })
-              : t("A este ritmo, unos {{n}} tokens a fin de mes", { n: compact(projected) })}</Text>
+            {b.paused ? <Notice tone="danger">{t("Presupuesto agotado: la ingesta está en pausa.")}</Notice>
+              : <Text size="sm">{b.limit ? t("A este ritmo, unos {{n}} a fin de mes · aviso al 80 %", { n: show(projected) })
+                : t("A este ritmo, unos {{n}} tokens a fin de mes", { n: compact(projected) })}</Text>}
           </Stack>
-          <Stack gap={8} className="ms-rule-top">
-            <span className="ms-subhead">{t("En qué se va (% de los tokens)")}</span>
+          <Block title={t("En qué se va (% de los tokens)")}>
             {tokens > 0 ? <BarList items={[...byPurpose.entries()].sort((x, y) => y[1] - x[1]).slice(0, 5)
               .map(([p, n]) => ({ label: t(PURPOSE[p] ?? p), value: Math.round((100 * n) / tokens), hint: t("{{n}} tokens", { n: compact(n) }) }))} />
               : <EmptyState>{t("Sin llamadas a motores de IA este mes.")}</EmptyState>}
-          </Stack>
-          <Group justify="space-between" gap="xs">
-            <Text size="xs" c="dimmed">{errors429 > 0 ? t("{{n}} respuestas 429 este mes: el proveedor limitó el ritmo", { n: errors429 }) : t("Ninguna respuesta 429 este mes")}</Text>
-            <Btn kind="link" component={Link} to="/admin?seccion=brain-usage">{t("Ver el detalle")}</Btn>
-          </Group>
+          </Block>
+          <Text size="sm">{errors429 > 0 ? t("{{n}} respuestas 429 este mes: el proveedor limitó el ritmo", { n: errors429 }) : t("Ninguna respuesta 429 este mes")}</Text>
         </Stack>)}
-    </Section>
+    </Stack></Section>
   );
 }
 
@@ -291,17 +285,15 @@ export default function Overview({ graph, role }: { graph: string; role: string 
   return (
     <Page>
       <PageHeader title={t("Resumen")} />
-      <FillArea><Stack gap="md">
-        <NoLlmNotice role={role} />
-        {curator && <ColGrid min={420}><ToReview graph={graph} /><Movement graph={graph} /></ColGrid>}
-        <GettingStarted role={role} />
-        <Knowledge graph={graph} data={data} />
-        {curator && (
-          <ColGrid min={340}>
-            <div className={admin ? "ms-span2" : undefined}><MemoryHealth graph={graph} /></div>
-            {admin && <AiSpend graph={graph} />}
-          </ColGrid>)}
-      </Stack></FillArea>
+      <NoLlmNotice role={role} />
+      {curator && <ColGrid min={420}><ToReview graph={graph} /><Movement graph={graph} /></ColGrid>}
+      <GettingStarted role={role} />
+      <Knowledge graph={graph} data={data} />
+      {curator && (
+        <ColGrid min={340}>
+          <div className={admin ? "ms-span2" : undefined}><MemoryHealth graph={graph} /></div>
+          {admin && <AiSpend graph={graph} />}
+        </ColGrid>)}
     </Page>
   );
 }

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Fragment, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { fmt, get, send } from "../api";
-import { Btn, Check, ConfirmDialog, DataTable, EmptyState, MutationError, Notice, Pill, Radio, RadioGroup, Segments } from "../ui";
+import { Block, Btn, Check, ConfirmDialog, DataState, DataTable, EmptyState, MutationError, Notice, Pill, Radio, RadioGroup, Segments, ViewBar } from "../ui";
 
 type Fact = { uuid: string; fact: string; target: string; valid_at: string | null; created_at: string | null };
 type Group_ = { source: string; source_uuid: string; relation: string; target_type: string; facts: Fact[]; targets: number; likely_multi: boolean; relation_ratio: number;
@@ -36,11 +36,11 @@ function FactText({ text }: { text: string }) {
 function Suggestion({ g }: { g: Group_ }) {
   const { t } = useTranslation();
   const keep = g.facts.find((f) => f.uuid === g.suggestion.keep);
-  if (g.likely_multi) return <Pill size="xs" tone="warn" title={t("Esta relación tiene muchos destinos vigentes por sujeto: probablemente admite varios valores a la vez.")}>{t("probablemente varios valores")}</Pill>;
-  if (g.suggestion.clear) return <Group gap={6} wrap="nowrap"><Text size="sm">{keep?.target}</Text><Pill size="xs" tone="success">{t("el más reciente")}</Pill></Group>;
+  if (g.likely_multi) return <Pill tone="warn" title={t("Esta relación tiene muchos destinos vigentes por sujeto: probablemente admite varios valores a la vez.")}>{t("probablemente varios valores")}</Pill>;
+  if (g.suggestion.clear) return <Group gap={6} wrap="nowrap"><Text size="sm">{keep?.target}</Text><Pill tone="success">{t("el más reciente")}</Pill></Group>;
   return g.suggestion.dated_by === "created_at"
-    ? <Pill size="xs" tone="warn" title={t("Algún hecho no tiene fecha de validez: la que se ve es cuándo se aprendió, que no dice cuál es más actual.")}>{t("solo fecha de aprendizaje: decide tú")}</Pill>
-    : <Pill size="xs" tone="warn" title={t("Los hechos tienen la misma fecha de validez.")}>{t("misma fecha: decide tú")}</Pill>;
+    ? <Pill tone="warn" title={t("Algún hecho no tiene fecha de validez: la que se ve es cuándo se aprendió, que no dice cuál es más actual.")}>{t("solo fecha de aprendizaje: decide tú")}</Pill>
+    : <Pill tone="warn" title={t("Los hechos tienen la misma fecha de validez.")}>{t("misma fecha: decide tú")}</Pill>;
 }
 
 /** Why a group probably is not a contradiction: the relation holds several values. Offers to unmark it. */
@@ -70,35 +70,34 @@ function GroupDetail({ g, canResolve, busy, onResolve, onDismiss, warning }: { g
     : kept ? g.facts.filter((f) => f.target.toLowerCase().trim() !== kept.target.toLowerCase().trim()).map((f) => f.uuid) : [];
   const allTicked = mode === "some" && ticked.length === g.facts.length;
   const when = (f: Fact) => (f.valid_at ? t("cierto desde {{date}}", { date: fmt(f.valid_at) }) : t("aprendido el {{date}}", { date: fmt(f.created_at) }));
-  const label = (f: Fact) => <>{f.target} <Text span size="xs" c="dimmed" fw={400}>· {when(f)}</Text></>;
+  const label = (f: Fact) => <>{f.target} <span className="ms-data">· {when(f)}</span></>;
   const run = () => onResolve(mode === "one" ? keep : null, drop);
   const go = () => (drop.length > 1 ? setAsking(true) : void run().catch(() => undefined));   // the page shows the error
   const tick = (u: string, on: boolean) => setTicked((cur) => (on ? [...cur, u] : cur.filter((x) => x !== u)));
   return (
     <Stack gap="sm" py="xs">
       {warning}
+      {!canResolve && <Notice title={t("Solo se mide")}>{t("Esta relación no está marcada como de un solo valor: aquí solo se mide. Márcala para poder resolver.")}</Notice>}
       {canResolve && <Segments label={t("Cómo resolver")} value={mode} onChange={setMode}
         data={[{ value: "one", label: t("Quedarse solo con uno") }, { value: "some", label: t("Invalidar los que ya no son ciertos") }]} />}
-      {!canResolve ? <Stack gap="sm" mah={320} className="ms-scroll">
-        {g.facts.map((f) => <Stack key={f.uuid} gap={0}><Text size="sm" fw={600}>{label(f)}</Text><FactText text={f.fact} /></Stack>)}
+      {!canResolve ? <Stack gap="sm">
+        {g.facts.map((f) => <Stack key={f.uuid} gap={0}><Text size="sm"><b>{f.target}</b> <span className="ms-data">· {when(f)}</span></Text><FactText text={f.fact} /></Stack>)}
       </Stack> : mode === "one" ? <RadioGroup value={keep} onChange={setKeep} label={t("¿Qué hecho sigue siendo cierto?")}>
-        <Stack gap="sm" mah={320} className="ms-scroll" pt={6}>
+        <Stack gap="sm" pt={6}>
           {g.facts.map((f) => <Radio key={f.uuid} value={f.uuid} label={label(f)} description={<FactText text={f.fact} />} />)}
         </Stack>
-      </RadioGroup> : <Stack gap={6}>
-        <Text size="sm" fw={600}>{t("¿Qué hechos ya no son ciertos?")}</Text>
-        <Stack gap="sm" mah={320} className="ms-scroll">
-          {g.facts.map((f) => <Check key={f.uuid} checked={ticked.includes(f.uuid)} onChange={(e) => tick(f.uuid, e.currentTarget.checked)}
-            label={label(f)} description={<FactText text={f.fact} />} />)}
-        </Stack>
+      </RadioGroup> : <Stack gap="sm">
+        <Text size="sm">{t("¿Qué hechos ya no son ciertos?")}</Text>
+        {g.facts.map((f) => <Check key={f.uuid} checked={ticked.includes(f.uuid)} onChange={(e) => tick(f.uuid, e.currentTarget.checked)}
+          label={label(f)} description={<FactText text={f.fact} />} />)}
       </Stack>}
-      {canResolve ? <Group gap="xs">
+      {canResolve && <Group gap="xs">
         <Btn kind="primary" icon="check" loading={busy} disabled={!drop.length || allTicked} onClick={go}>
           {mode === "some" ? t("Invalidar los marcados ({{n}})", { n: ticked.length })
             : keep ? t("Resolver: invalidar los otros {{n}}", { n: drop.length }) : t("Elige primero el que se queda")}</Btn>
         <Btn kind="secondary" icon="close" loading={busy} onClick={onDismiss}>{t("No es una contradicción")}</Btn>
-        {allTicked && <Text size="xs" c="dimmed">{t("Deja al menos uno sin marcar: alguno tiene que seguir vigente.")}</Text>}
-      </Group> : <Text size="xs" c="dimmed">{t("Esta relación no está marcada como de un solo valor: aquí solo se mide. Márcala para poder resolver.")}</Text>}
+        {allTicked && <Text size="sm" c="dimmed">{t("Deja al menos uno sin marcar: alguno tiene que seguir vigente.")}</Text>}
+      </Group>}
       <ConfirmDialog opened={asking} onClose={() => setAsking(false)} title={t("Invalidar {{n}} hechos", { n: drop.length })}
         warning={t("Los {{n}} hechos dejarán de estar vigentes. Se puede deshacer desde el historial del vocabulario, uno a uno.", { n: drop.length })}
         action={t("Invalidar {{n}} hechos", { n: drop.length })} onConfirm={run}>
@@ -132,43 +131,22 @@ export default function VocabConflicts({ graph, role }: { graph: string; role: s
   const d = q.data;
   const edge = (rel: string) => onto.data?.ontology.edge_types.find((e) => canon(e.name) === rel);
   return (
-    <Stack gap="md">
-      <Notice tone="info" title={t("Para qué sirve")}>
-        {t("Aquí aparecen hechos vigentes que no pueden ser ciertos a la vez: el mismo sujeto con destinos distintos en una relación de un solo valor, como un equipo en dos salas. Abre cada grupo y quédate solo con el hecho que sigue siendo cierto, o marca los que ya no lo son: se invalidan, siempre queda alguno vigente y se puede deshacer desde el historial del vocabulario. Si no es una contradicción, pulsa «No es una contradicción» y el grupo deja de salir hasta que llegue un hecho nuevo; si la relación admite varios valores, desmárcala en Ontología.")}
-      </Notice>
-      <Group gap="xs">
-        <Btn kind={all ? "primary" : "secondary"} icon="search" onClick={() => { setAll((x) => !x); setOpen(null); }}>{all ? t("Volver a las relaciones de un solo valor") : t("Medir en todas las relaciones")}</Btn>
-        {d && <Text size="xs" c="dimmed">{t("{{n}} hechos vigentes analizados.", { n: d.scanned })}{d.truncated ? ` ${t("Se ha llegado al máximo: faltan hechos.")}` : ""}</Text>}
-      </Group>
+    <>
+      <ViewBar title={t("Contradicciones")}
+        help={<>{t("Aquí aparecen hechos vigentes que no pueden ser ciertos a la vez: el mismo sujeto con destinos distintos en una relación de un solo valor, como un equipo en dos salas. Abre cada grupo y quédate solo con el hecho que sigue siendo cierto, o marca los que ya no lo son: se invalidan, siempre queda alguno vigente y se puede deshacer desde el historial del vocabulario. Si no es una contradicción, pulsa «No es una contradicción» y el grupo deja de salir hasta que llegue un hecho nuevo; si la relación admite varios valores, desmárcala en Ontología.")}{" "}
+          {t("«Tipo del destino» es el tipo de entidad de los destinos: solo se comparan destinos del mismo tipo. «Decide tú» sale cuando las fechas no dicen cuál es el actual: o son iguales, o solo dicen cuándo se aprendió cada hecho.")}{" "}
+          {!!d?.generic_facts && t("{{n}} hechos con relaciones genéricas (RELATES_TO y parecidas) no se comparan: pueden unir cualquier cosa.", { n: d.generic_facts })}</>}
+        meta={d && <>{t("{{n}} hechos vigentes analizados.", { n: d.scanned })}{d.truncated ? ` ${t("Se ha llegado al máximo: faltan hechos.")}` : ""}
+          {d.total > d.groups.length ? ` ${t("Se muestran los primeros {{n}}.", { n: d.groups.length })}` : ""}</>}
+        actions={<Btn kind="link" component={Link} to={ONTOLOGY}>{t("Ir a Ontología")}</Btn>}>
+        <Segments label={t("Relaciones")} value={all ? "all" : "one"} onChange={(v) => { setAll(v === "all"); setOpen(null); }}
+          data={[{ value: "one", label: t("De un solo valor") }, { value: "all", label: t("Medir en todas") }]} />
+      </ViewBar>
       <MutationError error={q.error ?? resolve.error ?? dismiss.error ?? undismiss.error ?? mark.error} />
       {d && !all && !d.functional.length && <Notice tone="warn" title={t("Ninguna relación está marcada como de un solo valor")}>
         {t("Sin esa marca no se buscan contradicciones. Mide primero en todas las relaciones y marca solo las que de verdad admitan un único valor a la vez.")}{" "}
-        <Btn kind="link" onClick={() => setAll(true)}>{t("Medir ahora")}</Btn>{" · "}<Btn kind="link" component={Link} to={ONTOLOGY}>{t("Ir a Ontología")}</Btn></Notice>}
-      {d?.by_relation && <Stack gap="xs">
-        <Text fw={600} size="sm">{t("Candidatos por relación")}</Text>
-        <Text size="xs" c="dimmed">{t("Proporción de sujetos con más de un destino vigente del mismo tipo, de menor a mayor. Las candidatas a un solo valor son las de proporción baja con algún caso; las que salen como «probablemente varios valores» (algún sujeto con 3 destinos o más, o al menos una cuarta parte de los sujetos con varios) no conviene marcarlas. Solo lee: no cambia nada.")}</Text>
-        <DataTable fz="sm">
-          <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Relación")}</DataTable.Th><DataTable.Th>{t("Sujetos")}</DataTable.Th><DataTable.Th>{t("Con varios destinos")}</DataTable.Th><DataTable.Th>{t("Proporción")}</DataTable.Th><DataTable.Th>{t("Un solo valor")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
-          <DataTable.Tbody>{d.by_relation.filter((s) => s.groups > 0).map((s) => {
-            const e = edge(s.relation);
-            return (<DataTable.Tr key={s.relation}>
-              <DataTable.Td><Group gap={6} wrap="nowrap"><Text size="sm" className="ms-data">{s.relation}</Text>
-                {s.likely_multi && <Pill size="xs" tone="warn" title={t("Algún sujeto tiene 3 destinos o más, o al menos una cuarta parte de los sujetos tiene varios: no conviene marcarla como de un solo valor.")}>{t("probablemente varios valores")}</Pill>}</Group></DataTable.Td>
-              <DataTable.Td>{s.sources}</DataTable.Td><DataTable.Td>{s.groups}</DataTable.Td>
-              <DataTable.Td>{`${Math.round(s.ratio * 100)} %`}</DataTable.Td>
-              <DataTable.Td>{s.functional ? <Group gap={6} wrap="nowrap"><Pill size="xs" tone="alt">{t("sí")}</Pill>
-                  {canMark && e && s.likely_multi && <Btn size="row" loading={mark.isPending} onClick={() => mark.mutate({ e, on: false })}>{t("Desmarcar")}</Btn>}</Group>
-                : canMark && e ? <Btn size="row" loading={mark.isPending} onClick={() => mark.mutate({ e, on: true })}>{t("Marcar")}</Btn>
-                : canMark ? <Text size="xs" c="dimmed">{t("no está en la ontología")}</Text> : t("no")}</DataTable.Td>
-            </DataTable.Tr>);
-          })}</DataTable.Tbody>
-        </DataTable>
-      </Stack>}
-      {!!d?.generic_facts && <Text size="xs" c="dimmed" className="ms-measure">{t("{{n}} hechos con relaciones genéricas (RELATES_TO y parecidas) no se comparan: pueden unir cualquier cosa.", { n: d.generic_facts })}</Text>}
-      {d && (d.groups.length ? <Stack gap="xs">
-        <Text fw={600} size="sm">{t("Posibles contradicciones ({{n}})", { n: d.total })}</Text>
-        <Text size="xs" c="dimmed">{t("«Tipo del destino» es el tipo de entidad de los destinos: solo se comparan destinos del mismo tipo. «Decide tú» sale cuando las fechas no dicen cuál es el actual: o son iguales, o solo dicen cuándo se aprendió cada hecho.")}</Text>
-        <DataTable fz="sm">
+        <Btn kind="link" onClick={() => setAll(true)}>{t("Medir ahora")}</Btn></Notice>}
+      {!d ? <DataState query={q} /> : d.groups.length ? <DataTable aria-label={t("Posibles contradicciones")}>
           <DataTable.Thead><DataTable.Tr>
             <DataTable.Th>{t("Sujeto")}</DataTable.Th><DataTable.Th>{t("Relación")}</DataTable.Th><DataTable.Th>{t("Tipo del destino")}</DataTable.Th>
             <DataTable.Th>{t("Hechos")}</DataTable.Th><DataTable.Th>{t("Propuesta")}</DataTable.Th><DataTable.ActionsHead />
@@ -178,7 +156,7 @@ export default function VocabConflicts({ graph, role }: { graph: string; role: s
             return (<Fragment key={k}>
               <DataTable.Tr>
                 <DataTable.Td>{g.source}</DataTable.Td><DataTable.Td className="ms-data">{g.relation}</DataTable.Td>
-                <DataTable.Td>{g.target_type === "Entity" ? t("sin tipo") : g.target_type}</DataTable.Td><DataTable.Td>{g.facts.length}</DataTable.Td>
+                <DataTable.Td>{g.target_type === "Entity" ? t("sin tipo") : g.target_type}</DataTable.Td><DataTable.Td className="ms-data">{g.facts.length}</DataTable.Td>
                 <DataTable.Td><Suggestion g={g} /></DataTable.Td>
                 <DataTable.Td><Btn size="row" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : k)}>{isOpen ? t("Cerrar") : t("Revisar")}</Btn></DataTable.Td>
               </DataTable.Tr>
@@ -191,20 +169,37 @@ export default function VocabConflicts({ graph, role }: { graph: string; role: s
             </Fragment>);
           })}</DataTable.Tbody>
         </DataTable>
-        {d.total > d.groups.length && <Text size="xs" c="dimmed">{t("Se muestran los primeros {{n}}.", { n: d.groups.length })}</Text>}
-      </Stack> : (!all && d.functional.length > 0 && <EmptyState>{t("No hay contradicciones en las relaciones de un solo valor.")}</EmptyState>))}
-      {!!d?.dismissed?.length && <Stack gap="xs">
-        <Group gap="xs"><Text fw={600} size="sm">{t("Marcados como no contradicción ({{n}})", { n: d.dismissed.length })}</Text>
-          <Btn kind="link" onClick={() => setShowDismissed((x) => !x)}>{showDismissed ? t("Ocultar") : t("Ver")}</Btn></Group>
-        {showDismissed && <DataTable fz="sm">
+        : (all || d.functional.length > 0) && <EmptyState>{all ? t("Ningún sujeto tiene varios destinos vigentes en una misma relación.") : t("No hay contradicciones en las relaciones de un solo valor.")}</EmptyState>}
+      {d?.by_relation && <Block title={t("Candidatos por relación")}
+        help={t("Proporción de sujetos con más de un destino vigente del mismo tipo, de menor a mayor. Las candidatas a un solo valor son las de proporción baja con algún caso; las que salen como «probablemente varios valores» (algún sujeto con 3 destinos o más, o al menos una cuarta parte de los sujetos con varios) no conviene marcarlas. Solo lee: no cambia nada.")}>
+        <DataTable aria-label={t("Candidatos por relación")}>
+          <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Relación")}</DataTable.Th><DataTable.Th>{t("Sujetos")}</DataTable.Th><DataTable.Th>{t("Con varios destinos")}</DataTable.Th><DataTable.Th>{t("Proporción")}</DataTable.Th><DataTable.Th>{t("Un solo valor")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+          <DataTable.Tbody>{d.by_relation.filter((s) => s.groups > 0).map((s) => {
+            const e = edge(s.relation);
+            return (<DataTable.Tr key={s.relation}>
+              <DataTable.Td><Group gap={6} wrap="nowrap"><span className="ms-data">{s.relation}</span>
+                {s.likely_multi && <Pill tone="warn" title={t("Algún sujeto tiene 3 destinos o más, o al menos una cuarta parte de los sujetos tiene varios: no conviene marcarla como de un solo valor.")}>{t("probablemente varios valores")}</Pill>}</Group></DataTable.Td>
+              <DataTable.Td className="ms-data">{s.sources}</DataTable.Td><DataTable.Td className="ms-data">{s.groups}</DataTable.Td>
+              <DataTable.Td className="ms-data">{`${Math.round(s.ratio * 100)} %`}</DataTable.Td>
+              <DataTable.Td>{s.functional ? <Group gap={6} wrap="nowrap"><Pill tone="alt">{t("sí")}</Pill>
+                  {canMark && e && s.likely_multi && <Btn size="row" loading={mark.isPending} onClick={() => mark.mutate({ e, on: false })}>{t("Desmarcar")}</Btn>}</Group>
+                : canMark && e ? <Btn size="row" loading={mark.isPending} onClick={() => mark.mutate({ e, on: true })}>{t("Marcar")}</Btn>
+                : canMark ? t("no está en la ontología") : t("no")}</DataTable.Td>
+            </DataTable.Tr>);
+          })}</DataTable.Tbody>
+        </DataTable>
+      </Block>}
+      {!!d?.dismissed?.length && <Block title={t("Marcados como no contradicción")} count={d.dismissed.length}
+        actions={<Btn kind="ghost" size="row" onClick={() => setShowDismissed((x) => !x)}>{showDismissed ? t("Ocultar") : t("Ver")}</Btn>}>
+        {showDismissed && <DataTable aria-label={t("Marcados como no contradicción")}>
           <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Sujeto")}</DataTable.Th><DataTable.Th>{t("Relación")}</DataTable.Th><DataTable.Th>{t("Hechos")}</DataTable.Th><DataTable.Th>{t("Marcado")}</DataTable.Th><DataTable.ActionsHead /></DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{d.dismissed.map((x) => (
             <DataTable.Tr key={x.id}>
-              <DataTable.Td>{x.source}</DataTable.Td><DataTable.Td className="ms-data">{x.relation}</DataTable.Td><DataTable.Td>{x.facts}</DataTable.Td><DataTable.Td>{fmt(x.created_at)}</DataTable.Td>
+              <DataTable.Td>{x.source}</DataTable.Td><DataTable.Td className="ms-data">{x.relation}</DataTable.Td><DataTable.Td className="ms-data">{x.facts}</DataTable.Td><DataTable.Td className="ms-data">{fmt(x.created_at)}</DataTable.Td>
               <DataTable.Td><Btn size="row" icon="undo" loading={undismiss.isPending} onClick={() => undismiss.mutate(x.id)}>{t("Volver a mostrar")}</Btn></DataTable.Td>
             </DataTable.Tr>))}</DataTable.Tbody>
         </DataTable>}
-      </Stack>}
-    </Stack>
+      </Block>}
+    </>
   );
 }
