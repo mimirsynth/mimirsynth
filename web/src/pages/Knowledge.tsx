@@ -179,7 +179,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
 
   const enabled = sources.data?.enabled !== false;
   return (
-    <Page>
+    <Page fill>
       <PageHeader title={t("Conocimiento")} description={<>{t("Documentos del brain: se guardan sus originales, se trocean y se buscan por significado y por texto. Cada pasaje se muestra con su procedencia.")}</>} />
       {!enabled && <Notice tone="warn">{t("El índice documental necesita PostgreSQL con pgvector; esta instancia no lo tiene y no se pueden indexar documentos.")}</Notice>}
         <Tabs value={tab} onChange={(v) => setTab(v)} className="ms-tabs-fill">

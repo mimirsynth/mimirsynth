@@ -15,6 +15,7 @@ export function Segments({ value, onChange, data, label }: { value: string; onCh
     (e.currentTarget.parentElement?.children[(i + step + items.length) % items.length] as HTMLElement | undefined)?.focus();
   };
   const focusable = items.some((i) => i.value === value) ? value : items[0]?.value;
+  if (items.length < 2) return null;  // one option is no choice: a lone «All 0» says nothing the list does not
   return (
     <div className="ms-segments" role="radiogroup" aria-label={label}>
       {label && <span className="ms-segments-label" aria-hidden>{label}</span>}

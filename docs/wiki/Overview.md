@@ -5,7 +5,7 @@
 The home screen. It shows the state of the **active brain** at a glance: how much knowledge it holds, how it has evolved and what matters most in it. Apart from the **Getting started**, **To review** and **Movement** blocks, it is read-only.
 
 ## Getting started
-Until you have tried the main parts of MimirSynth, the home screen starts with a **Getting started** list. Each step ticks itself when it happens in any of your brains (all of them, for an instance administrator), with no need to mark it, and shows the day it did:
+Until you have tried the main parts of MimirSynth, the home screen shows a **Getting started** list, under **To review** and **Movement**: what waits for a decision comes first. The list is folded to one row that says how many steps are done and which comes next; **Show the steps** unfolds it, and this browser remembers it. Each step ticks itself when it happens in any of your brains (all of them, for an instance administrator), with no need to mark it, and shows the day it did:
 
 | Step | Ticks when | Explained in |
 |---|---|---|

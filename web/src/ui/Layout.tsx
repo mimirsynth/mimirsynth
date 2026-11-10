@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { ActionIcon as MActionIcon, Drawer as MDrawer, type DrawerProps, Menu as MMenu, Modal as MModal, NavLink as MNavLink, Tooltip as MTooltip, Tabs as MTabs, type ModalProps, type TabsProps } from "@mantine/core";
-import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import { ActionIcon as MActionIcon, Drawer as MDrawer, type DrawerProps, Menu as MMenu, Modal as MModal, NavLink as MNavLink, Popover as MPopover, Tooltip as MTooltip, Tabs as MTabs, type ModalProps, type TabsProps } from "@mantine/core";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { Btn } from "./Btn";
 import { Icon, type IconName } from "./Icon";
@@ -91,9 +91,24 @@ export function UserCard({ to, label, avatar, name, sub, children }: { to: strin
   );
 }
 
-/** Página que ocupa todo el alto disponible; su zona `FillArea` crece y desplaza por dentro. */
-export function Page({ children }: { children: ReactNode }) {
-  return <div className="ms-page">{children}</div>;
+/** A screen (DESIGN.md, the Page Owns the Height Rule). By default a document: it grows with its content and the window scrolls. `fill`
+ *  is for a screen that is one data surface (a table, the review queue, a canvas): it fills the window and its `FillArea` scrolls inside,
+ *  so the title, tabs and filters stay in view. */
+export function Page({ fill, children }: { fill?: boolean; children: ReactNode }) {
+  useEffect(measureScrollbar, []);
+  return <div className="ms-page" data-fill={fill ? "" : undefined}>{children}</div>;
+}
+let measured = false;
+/** The width of a scrollbar in this browser, as `--ms-sb` (the Scroll Rule, theme.css): 0 where bars overlay the content. Measured once,
+ *  on a probe with the same scrollbar as the data areas. */
+function measureScrollbar() {
+  if (measured) return;
+  measured = true;
+  const probe = document.createElement("div");
+  probe.className = "ms-sb-probe";
+  document.body.appendChild(probe);
+  document.documentElement.style.setProperty("--ms-sb", `${probe.offsetWidth - probe.clientWidth}px`);
+  probe.remove();
 }
 export function FillArea({ children }: { children: ReactNode }) {
   return <div className="ms-fill">{children}</div>;
@@ -150,7 +165,9 @@ export function ConfirmDialog({ opened, onClose, title, warning, subject, action
   );
 }
 
-/** Cabecera de pantalla: título igual a la entrada del menú, una línea de ayuda y, a la derecha, acciones. */
+/** Cabecera de pantalla: título igual a la entrada del menú y, a la derecha, acciones. `description`, what the screen is for, is not
+ *  printed under the title, where it took two to six lines of every screen for something read once: it sits behind the «i» beside the
+ *  title (`PageHelp`). */
 export function PageHeader({ title, description, actions, meta }: { title: string; description?: ReactNode; actions?: ReactNode; meta?: ReactNode }) {
   useEffect(() => {  // the browser tab and its history say which page this is
     document.title = `${title} · MimirSynth`;
@@ -159,10 +176,41 @@ export function PageHeader({ title, description, actions, meta }: { title: strin
   // `meta`: small things that belong to the title (a type, other names), on its line and wrapping under it on a phone
   return (
     <header className="ms-pagehead">
-      <div className="ms-pagehead-row"><div className="ms-pagehead-name"><h1 className="ms-pagehead-title">{title}</h1>{meta && <div className="ms-pagehead-meta">{meta}</div>}</div>
+      <div className="ms-pagehead-row"><div className="ms-pagehead-name"><h1 className="ms-pagehead-title">{title}</h1>
+        {description && <PageHelp title={title}>{description}</PageHelp>}{meta && <div className="ms-pagehead-meta">{meta}</div>}</div>
         {actions && <div className="ms-pagehead-actions">{actions}</div>}</div>
-      {description && <p className="ms-pagehead-help">{description}</p>}
     </header>
+  );
+}
+
+/** The «i» beside a screen's title and, in a popover, what the screen is for. A real button: a click, a tap, Enter or Space open it and
+ *  Escape closes it, giving the focus back; resting the pointer on it opens it too, and it closes when the pointer leaves both. */
+function PageHelp({ title, children }: { title: string; children: ReactNode }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const pinned = useRef(false);  // opened by a click: the pointer leaving does not close it
+  const timer = useRef<number | undefined>(undefined);
+  const hover = (on: boolean) => {
+    window.clearTimeout(timer.current);
+    if (pinned.current) return;
+    timer.current = window.setTimeout(() => setOpen(on), on ? 200 : 150);
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const close = () => { pinned.current = false; setOpen(false); };
+  return (
+    <MPopover opened={open} onChange={(o) => { if (!o) close(); }} onDismiss={close} position="bottom-start" withinPortal closeOnEscape returnFocus
+      trapFocus={false} width="auto" classNames={{ dropdown: "ms-pagehelp" }}>
+      <MPopover.Target>
+        <button type="button" className="ms-pagehelp-btn" aria-label={t("Qué es «{{title}}»", { title })} aria-expanded={open}
+          onClick={() => { window.clearTimeout(timer.current); if (open && pinned.current) close(); else { pinned.current = true; setOpen(true); } }}
+          onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)}>
+          <Icon name="info" size={18} />
+        </button>
+      </MPopover.Target>
+      <MPopover.Dropdown onMouseEnter={() => hover(true)} onMouseLeave={() => hover(false)}>
+        <div className="ms-pagehead-help">{children}</div>
+      </MPopover.Dropdown>
+    </MPopover>
   );
 }
 

@@ -3,7 +3,7 @@ import { locale, translateServer } from "./i18n";
 export type Fact = {
   uuid: string; name: string; fact: string; status: "current" | "invalidated" | "future";
   valid_at: string | null; invalid_at: string | null; expired_at: string | null; created_at: string;
-  source: string; target: string; source_uuid: string; target_uuid: string; episodes: string[];
+  source: string; target: string; source_uuid: string; target_uuid: string; episodes: string[]; source_type?: string | null; target_type?: string | null;
 };
 export type TimelineEvent = Fact & { event: "learned" | "invalidated"; at: string };
 export type Episode = {

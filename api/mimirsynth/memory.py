@@ -13,6 +13,18 @@ from .deps import SCOPES, BrainCtx, audit, aware, brain_access, hash_token, read
 from .i18n import language
 from .models import ApiToken, Brain, now
 from .recall import recall
+
+
+def recall_failed(e: Exception) -> HTTPException:
+    """The error a failed recall answers with. The embedding engine down is said for people, with where to fix it (503); its own message
+    goes to the log. Anything else is unexpected and keeps its text for whoever runs the instance (502)."""
+    from .embed import EmbeddingDown
+    if isinstance(e, EmbeddingDown):
+        import logging
+        logging.getLogger("mimirsynth.recall").warning("embedding engine down: %s", e)
+        return HTTPException(503, "el motor de embeddings no responde y sin él no se puede buscar: revisa su dirección y su clave en "
+                                  "Administración → Modelos de IA → Embeddings")
+    return HTTPException(502, f"recall falló: {e}")
 from .roles import ROLES, rank
 from .store import _factory
 
@@ -49,7 +61,7 @@ def do_recall(body: RecallIn, request: Request, bg: BackgroundTasks, ctx: BrainC
         out = recall(ctx.brain.id, ctx.brain.graph_name, body.query, body.facts, body.chunks, body.max_chars, n_docs=docs_for(request, body),
                      lang=language(request), min_similarity=body.min_similarity, **({"archived": True} if body.archived else {}), **federated_kwargs(ctx, body))
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"recall falló: {e}") from e
+        raise recall_failed(e) from e
     from . import ratings
     return {**out, "recall_id": ratings.log(ctx, body.query, out, bg, body)}  # to rate what it returned (#110), logged after answering
 
@@ -231,7 +243,7 @@ def probe_recall(token_id: int, body: ProbeIn, request: Request, ctx: BrainCtx =
         return recall(ctx.brain.id, ctx.brain.graph_name, body.query, probe.facts, probe.chunks, probe.max_chars,
                       n_docs=None if token_allows(t, "documents") else 0, lang=language(request), **federated_kwargs(ctx, probe))
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"recall falló: {e}") from e
+        raise recall_failed(e) from e
 
 
 WARN_DAYS = 7  # how long before it expires a token is announced

@@ -180,19 +180,41 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 .ms-modal .mantine-Modal-content, .ms-side .mantine-Drawer-content { border-radius: var(--ms-radius-lg); }
 .ms-pill { height: var(--ms-chip-h); font-size: 11px; flex-shrink: 0; }  /* 11px at every size: Mantine's xs and sm (9 and 10px) were too small to read */
 .ms-pill .mantine-Badge-label { overflow: visible; }  /* a pill shows its whole word, never «AÑ…» */
-.ms-page { display: flex; flex-direction: column; gap: 12px; height: calc(100dvh - 32px - var(--app-shell-header-offset, 0px)); min-height: 320px; }
+.ms-page { display: flex; flex-direction: column; gap: 12px; }  /* a document: it grows with its content and the window scrolls */
+/* A page that is one data surface (a table, the review queue, a canvas: `<Page fill>`) fills the window, and only its data area (`FillArea`,
+   the panel of `ms-tabs-fill`) scrolls, so its title, tabs and filters stay in view (DESIGN.md, the Page Owns the Height Rule). */
+.ms-page[data-fill] { height: calc(100dvh - 32px - var(--app-shell-header-offset, 0px)); min-height: 320px; }
 .ms-pagehead { display: flex; flex-direction: column; gap: 4px; }
 .ms-pagehead-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ms-pagehead-title { margin: 0; font-family: var(--ms-display); font-size: 26px; line-height: 1.3; font-weight: 600; color: var(--ms-ink); }
 .ms-pagehead-actions { display: flex; gap: 8px; align-items: center; }
 .ms-pagehead-name { display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; min-width: 0; }
 .ms-pagehead-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.ms-pagehead-help { margin: 0; font-size: 14px; color: var(--ms-muted); }  /* at the measure (the Measure Rule, below) */
-.ms-fill { flex: 1; min-height: 0; overflow: auto; }
+/* What a screen is for, behind the «i» beside its title (`PageHeader`): a popover, opened by a click, a tap or Enter, or by resting the
+   pointer on it. Running text, so at the measure. */
+.ms-pagehelp-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; padding: 0;
+  border: 1px solid transparent; border-radius: var(--ms-radius); background: transparent; color: var(--ms-muted); cursor: pointer; align-self: center; }
+.ms-pagehelp-btn:hover, .ms-pagehelp-btn[aria-expanded="true"] { color: var(--ms-accent); background: var(--ms-hover); border-color: var(--ms-chip-line); }
+@media (pointer: coarse) { .ms-pagehelp-btn { width: 44px; height: 44px; } }
+.ms-pagehelp { background: var(--ms-raised); border: 1px solid var(--ms-line); border-radius: var(--ms-radius); padding: 10px 12px; color: var(--ms-ink); }
+.ms-pagehead-help { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ms-ink); }
+.ms-page[data-fill] .ms-fill { flex: 1; min-height: 0; overflow: auto; }
 /* Dentro de la página solo encogen las zonas que ocupan el alto sobrante; un formulario o una barra encima de una tabla larga no se aplastan (#88). */
-.ms-page > :not(.ms-fill):not(.ms-tabs-fill):not(.ms-split) { flex-shrink: 0; }
-.ms-tabs-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.ms-tabs-fill > .mantine-Tabs-panel { flex: 1; min-height: 0; overflow: auto; }
+.ms-page[data-fill] > :not(.ms-fill):not(.ms-tabs-fill):not(.ms-split) { flex-shrink: 0; }
+.ms-page[data-fill] .ms-tabs-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ms-page[data-fill] .ms-tabs-fill > .mantine-Tabs-panel { flex: 1; min-height: 0; overflow: auto; }
+/* The Scroll Rule (DESIGN.md). Every scrollbar is thin and takes the theme's field line, on no track. A data area that scrolls inside the
+   page reaches into the page's right gutter, so its bar sits at the edge of the window, away from the content, and the content keeps the
+   same right edge as the title and the filters above it: the gutter is the window's 16px minus the bar (`--ms-sb`, measured by the kit;
+   0 where bars overlay the content, as on macOS, phones and Windows 11's overlay scrollbars, so the bar is drawn over the gutter and never
+   over a button). The space is kept whether or not the area overflows (`scrollbar-gutter`), so the content never jumps sideways, and 4px
+   on the left keep a focus ring whole. */
+:root { --ms-sb: 0px; scrollbar-color: var(--ms-field-line) transparent; }
+.ms-page[data-fill] .ms-fill, .ms-page[data-fill] .ms-tabs-fill > .mantine-Tabs-panel, .ms-sb-probe {
+  scrollbar-width: thin; scrollbar-gutter: stable;
+  margin-inline: -4px calc(-1 * var(--mantine-spacing-md)); padding-inline: 4px max(0px, calc(var(--mantine-spacing-md) - var(--ms-sb))); }
+.ms-sb-probe { position: absolute; top: -200px; left: 0; width: 100px; height: 100px; overflow: scroll; visibility: hidden; pointer-events: none; }
+.ms-inbox-scroll, .ms-inbox-body, .ms-drawer-body, .ms-codeblock pre, .ms-ask-side, .ms-batch-list, .ms-colhead-opts, .ms-legend-box, .ms-split { scrollbar-width: thin; }
 .ms-drawer-body { height: calc(100dvh - 110px); overflow: auto; padding-top: var(--mantine-spacing-xs); }
 .ms-stat, .ms-panel, .ms-table, .ms-notice, .ms-iconbtn, .ms-toggle-field .mantine-Switch-track { border-radius: var(--ms-radius); }
 .ms-table { overflow: hidden; }
@@ -260,7 +282,8 @@ circle.ms-chart-grid { stroke-width: 16; opacity: 0.35; }
 /* Barra lateral: logo arriba, navegación con scroll y controles de sesión abajo */
 .ms-navbar { display: flex; flex-direction: column; gap: 8px; }
 .ms-nav-top { padding: 6px 8px 10px; border-bottom: 1px solid var(--ms-line); }
-.ms-nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-top: 6px; }
+.ms-nav-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-top: 6px; scrollbar-width: thin; scrollbar-gutter: stable;  /* its bar at the navbar's edge */
+  margin-right: calc(-1 * var(--mantine-spacing-xs)); padding-right: max(0px, calc(var(--mantine-spacing-xs) - var(--ms-sb))); }
 .ms-nav-bottom { border-top: 1px solid var(--ms-line); padding: 10px 4px 4px; display: flex; flex-direction: column; gap: 10px; }
 
 /* Barra lateral inferior: cuenta y enlaces */
@@ -282,7 +305,7 @@ circle.ms-chart-grid { stroke-width: 16; opacity: 0.35; }
 .ms-subnav-exit { margin: 16px 12px 0; padding-top: 12px; border-top: 1px solid var(--ms-line); }
 .ms-version { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-family: var(--ms-mono); font-size: 11px; color: var(--ms-muted); }
 /* hidromiel only as a fill (never as text on the light surface): on it, the text goes in the brand's dark ink, in both themes */
-.ms-version-tag { font-family: var(--ms-sans); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; line-height: 16px; padding: 0 5px; color: #0d1f26;
+.ms-version-tag { font-family: var(--ms-sans); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; line-height: 16px; padding: 0 5px; color: #0d1f26;
   background: var(--ms-hidromiel); border-radius: var(--ms-radius); cursor: help; }
 /* Barra lateral: el brain activo va arriba, bajo el logo, porque cambia el contexto de todo lo de debajo */
 .ms-nav-brain { padding: 8px 2px 0; }
@@ -396,20 +419,39 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-btn[data-kind="primary"][data-disabled] { opacity: 0.7; filter: grayscale(0.55); }
 .ms-mobilebar { display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--ms-raised); border-bottom: 1px solid var(--ms-line); }
 @media (max-width: 48em) {
-  .ms-page { height: auto; min-height: 0; }
-  .ms-fill { flex: none; overflow: visible; }
+  .ms-page[data-fill] { height: auto; min-height: 0; }
+  .ms-page[data-fill] .ms-fill, .ms-page[data-fill] .ms-tabs-fill > .mantine-Tabs-panel { flex: none; overflow: visible; margin-inline: 0; padding-inline: 0; scrollbar-gutter: auto; }
   .ms-split-main { height: 360px; }
 }
-/* Query: the Cypher box and its actions side by side while the box keeps 420px; measured on the content width, like Ask */
-.ms-querybox-wrap { container-type: inline-size; }
-.ms-querybox { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; align-items: start; }
-.ms-querybox > * { min-width: 0; }
-@container (max-width: 700px) { .ms-querybox { grid-template-columns: minmax(0, 1fr); } }
+/* QueryComposer (Ask, the Cypher query): the field full width under its label; under it one row, the options that shape the run, then
+   the run button with its shortcut as keycaps and the secondary tools; the line that says what came back right under it all. */
+.ms-composer { display: flex; flex-direction: column; gap: 8px; }
+.ms-composer-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; }
+.ms-composer-options { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; }
+.ms-composer-run { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ms-composer-keys { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; color: var(--ms-muted); margin-right: 8px; }
+.ms-composer-keys kbd, .ms-errdetail kbd { display: inline-block; min-width: 18px; padding: 0 4px; border: 1px solid var(--ms-field-line); border-radius: 4px; text-align: center;
+  font-size: 11px; line-height: 16px; color: var(--ms-ink); }
+.ms-composer-status { font-size: 12px; color: var(--ms-muted); min-height: 18px; }
+.ms-composer-status:empty { min-height: 0; }
+.ms-menubtn-item { max-width: 60em; font-family: var(--ms-sans); }
+/* MutationError: the server's own text, folded under «Technical detail» when it is for whoever runs the instance */
+.ms-errdetail { margin-top: 6px; font-size: 12px; color: var(--ms-muted); }
+.ms-errdetail summary { cursor: pointer; color: var(--ms-ink); }
+.ms-errdetail code { display: block; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+/* Facts as a table: the fact, the two entities and the relation between them, when it was true and when it was recorded */
+.ms-fact-text { font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; min-width: 16em; }
+.ms-fact-text[data-invalid] { color: var(--ms-invalidado); text-decoration: line-through; }
+.ms-fact-rel { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.ms-fact-when { white-space: nowrap; }
+.ms-fact-when .ms-invalid-date { color: var(--ms-invalidado); }
+.ms-fact-actions { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: nowrap; }
 @media (max-width: 48em) {
   .ms-table { border: 0; }
   .ms-table, .ms-table .mantine-Table-tbody { display: block; }
   /* La cabecera se queda como barra de orden y filtro sobre las tarjetas: solo las columnas con ColHead. */
   .ms-table .mantine-Table-thead { display: block; margin-bottom: 8px; }
+  .ms-table .mantine-Table-thead:not(:has(.ms-colhead)) { display: none; }  /* nothing to sort or filter: no empty «Sort and filter» strip */
   .ms-table .mantine-Table-thead .mantine-Table-tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
   .ms-table .mantine-Table-thead .mantine-Table-tr::before { content: var(--ms-sortbar-label, "Sort and filter"); flex-basis: 100%; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }
   .ms-table .mantine-Table-th { display: block; width: auto !important; padding: 0; border: 0; }
@@ -644,18 +686,20 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 /* On a phone a row of tabs scrolls sideways instead of wrapping its last tab under the others. */
 @media (max-width: 48em) { .ms-tabs .mantine-Tabs-list { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; } .ms-tabs .mantine-Tabs-tab { flex-shrink: 0; } }
 
-/* The Measure Rule (DESIGN.md): running text (prose, facts, notes) stops at about 72 characters; past that the eye loses the next line.
-   In em, not ch: `ch` is the width of «0», and Instrument Sans draws a wide «0» (0.68em against 0.456em for an average character of
-   running text), so 72ch let a line run to ~107 characters. 33em is 72 average characters at any size, and stays close if the font falls
-   back to system-ui. Resolved in each element's own size: 462px for 14px text, 429px for 13px, 396px for 12px. */
-:root { --ms-measure: 33em; }
-/* The kit's running text keeps to the measure wherever it sits: a page's help, a list card's body and note, an empty state, a section's
-   hint, prose, a settings group's description and a row's help, a field's description and a notice's message. A notice wraps its message
-   instead of stretching its tint across the page. `.ms-measure` does the same for help text a screen writes itself. Tables, code, charts
-   and data grids keep their full width: the rule is for running text. */
-.ms-measure, .ms-pagehead-help, .ms-empty, .ms-card-hint, .ms-prose, .ms-listcard-body, .ms-listcard-note, .ms-listcard-notice > *,
-.ms-setgroup-head p, .ms-setrow-help, .ms-field .mantine-InputWrapper-description, .ms-check .mantine-Checkbox-description,
-.ms-toggle-field .mantine-Switch-description, .ms-notice .mantine-Alert-message { max-width: var(--ms-measure); }
+/* The Measure Rule (DESIGN.md): running text, the kind read line after line (prose, a proposal, facts, notes, a screen's help), stops at
+   about 72 characters; past that the eye loses the next line. In em, not ch: `ch` is the width of «0», and Instrument Sans draws a wide «0»
+   (0.68em against 0.456em for an average character of running text), so 72ch let a line run to ~107 characters. 33em is 72 average
+   characters at any size, and stays close if the font falls back to system-ui: 462px for 14px text, 429px for 13px. The interface's own
+   short texts (an empty state, a section's hint, a field's description, a notice) are not running text: held to the measure they broke
+   after a few words into stacks of short lines. They stop at a wider 60em, so a long one still does not cross a wide screen. All of them
+   wrap evenly (`text-wrap: pretty`) instead of leaving one word alone on the last line. Tables, code, charts and data grids keep their
+   full width. */
+:root { --ms-measure: 33em; --ms-measure-ui: 60em; }
+.ms-measure, .ms-pagehead-help, .ms-prose, .ms-listcard-body, .ms-listcard-note, .ms-listcard-notice > * { max-width: var(--ms-measure); }
+.ms-empty, .ms-card-hint, .ms-setgroup-head p, .ms-setrow-help, .ms-field .mantine-InputWrapper-description, .ms-check .mantine-Checkbox-description,
+.ms-toggle-field .mantine-Switch-description, .ms-notice .mantine-Alert-message { max-width: var(--ms-measure-ui); }
+.ms-measure, .ms-pagehead-help, .ms-listcard-note, .ms-empty, .ms-card-hint, .ms-setgroup-head p, .ms-setrow-help, .ms-field .mantine-InputWrapper-description,
+.ms-check .mantine-Checkbox-description, .ms-toggle-field .mantine-Switch-description, .ms-notice .mantine-Alert-message { text-wrap: pretty; }
 .ms-notice { width: fit-content; max-width: 100%; }
 /* A record's sheet: each value under its label, ruled off from the content beside it. */
 .ms-sheet { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -742,7 +786,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-review-hint { font-size: 12px; color: var(--ms-muted); }
 
 /* TrendStat y Sparkline */
-.ms-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); overflow: hidden; }
+.ms-trends { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border-top: 1px solid var(--ms-line); overflow: hidden; }  /* ruled cells in the card, not a box inside it */
 .ms-trend { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 14px; color: var(--ms-ink); text-decoration: none; box-shadow: 1px 0 0 var(--ms-line), 0 1px 0 var(--ms-line); }
 .ms-trend:hover { background: var(--ms-hover); }
 .ms-trend:focus-visible { outline: 2px solid var(--ms-focus); outline-offset: -2px; }
@@ -769,5 +813,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-rule-top { border-top: 1px solid var(--ms-line); padding-top: 14px; }
 .ms-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ms-figure { font-family: var(--ms-display); font-weight: 600; font-size: 22px; }
-.ms-note-box { padding: 8px 12px; border: 1px dashed var(--ms-line); border-radius: var(--ms-radius); font-size: 12px; color: var(--ms-muted); }
+.ms-note-box { font-size: 12px; color: var(--ms-muted); max-width: var(--ms-measure); text-wrap: pretty; }  /* a note in the card, not a box inside it */
+/* Stat cards inside a card (Overview → memory health) are ruled cells, like the trends beside them, not cards inside a card */
+.ms-card .ms-statgrid { gap: 0; border-top: 1px solid var(--ms-line); overflow: hidden; }
+.ms-card .ms-stat { border: 0; border-radius: 0; background: transparent; padding: 12px 14px; box-shadow: 1px 0 0 var(--ms-line), 0 1px 0 var(--ms-line); }
 .ms-note-box b { color: var(--ms-ink); font-weight: 600; }

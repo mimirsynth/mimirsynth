@@ -1,0 +1,21 @@
+{
+ "Comprueba la conexión y vuelve a intentarlo.": "Check the connection and try again.",
+ "Consulta Cypher": "Cypher query",
+ "Consultas Cypher de solo lectura contra el grafo del brain: las entidades son nodos :Entity y cada hecho es una arista RELATES_TO con su relación en «name». Cualquier escritura se rechaza.": "Read-only Cypher queries against the brain's graph: entities are :Entity nodes and each fact is a RELATES_TO edge with its relation in «name». Any write is rejected.",
+ "Detalle técnico": "Technical detail",
+ "Ejecutando…": "Running…",
+ "El servidor no ha podido hacerlo": "The server could not do it",
+ "Entre": "Between",
+ "Escríbela como la haría tu agente": "Write it as your agent would ask it",
+ "Grafo ({{nodes}} nodos · {{edges}} aristas)": "Graph ({{nodes}} nodes · {{edges}} edges)",
+ "No hay conexión con el servidor": "No connection to the server",
+ "Ocultar los pasos": "Hide the steps",
+ "Qué es «{{title}}»": "What «{{title}}» is",
+ "Registrado": "Recorded",
+ "Siguiente:": "Next:",
+ "Tabla ({{n}})": "Table ({{n}})",
+ "Vecindad de la entidad más conectada": "Neighbourhood of the most connected entity",
+ "Ver los pasos": "Show the steps",
+ "Vuelve a intentarlo. Si se repite, avisa a quien administra la instancia con el detalle técnico.": "Try again. If it happens again, tell whoever runs the instance, with the technical detail.",
+ "invalidado el {{date}}": "invalidated on {{date}}"
+}
