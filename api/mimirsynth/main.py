@@ -264,11 +264,22 @@ def mount_spa(app: FastAPI, static: Path) -> None:
     keeps the answer a cheap 304 while nothing changed (FileResponse alone ignores If-None-Match, so the check is StaticFiles')."""
     assets = HashedAssets(directory=static / "assets")
     app.mount("/assets", assets, name="assets")
+    root = static.resolve()
+
+    def build_file(path: str) -> Path | None:
+        """The file of the web build the path names, or None. Only what resolves inside the build counts: an absolute path or one with
+        `..` (which the server decodes from `%2e%2e`) never leaves it, and a link pointing outside it does not either."""
+        if not path:
+            return None
+        try:
+            f = (root / path).resolve()
+        except (OSError, ValueError):
+            return None
+        return f if f.is_relative_to(root) and f.is_file() and f.name != "index.html" else None
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str, request: Request):
-        f = static / path
-        if path and f.is_file() and f.name != "index.html":
+        if f := build_file(path):
             return FileResponse(f)
         index = static / "index.html"
         response = FileResponse(index, headers={"Cache-Control": "no-cache"}, stat_result=index.stat())

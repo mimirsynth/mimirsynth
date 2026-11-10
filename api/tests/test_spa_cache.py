@@ -54,3 +54,37 @@ def test_unhashed_files_at_the_root_keep_no_long_cache(spa):
     r = spa.get("/favicon.svg")
     assert r.status_code == 200
     assert "immutable" not in r.headers.get("cache-control", "")
+
+
+@pytest.fixture
+def nested_spa(tmp_path):
+    """The build in a folder of its own, with a file next to it that is not part of the build."""
+    web = tmp_path / "web"
+    (web / "assets").mkdir(parents=True)
+    (web / "index.html").write_text(INDEX, encoding="utf-8")
+    (web / "favicon.svg").write_text("<svg/>", encoding="utf-8")
+    (tmp_path / "outside.txt").write_text("not part of the build", encoding="utf-8")
+    app = FastAPI()
+    mount_spa(app, web)
+    return TestClient(app), tmp_path / "outside.txt"
+
+
+@pytest.mark.parametrize("path", ["/%2e%2e/outside.txt", "/%2E%2E/outside.txt", "/assets/%2e%2e/%2e%2e/outside.txt",
+                                  "/favicon.svg/%2e%2e/%2e%2e/outside.txt"])
+def test_the_fallback_serves_only_files_of_the_build(nested_spa, path):
+    client, _ = nested_spa
+    r = client.get(path)
+    assert "not part of the build" not in r.text
+    assert r.status_code in (200, 404) and (r.status_code == 404 or r.text == INDEX)
+
+
+def test_an_absolute_path_is_not_served(nested_spa):
+    client, outside = nested_spa
+    r = client.get("/" + outside.as_posix())
+    assert "not part of the build" not in r.text
+
+
+def test_files_of_the_build_are_still_served(nested_spa):
+    client, _ = nested_spa
+    assert client.get("/favicon.svg").text == "<svg/>"
+    assert client.get("/propuestas").text == INDEX
