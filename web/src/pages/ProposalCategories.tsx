@@ -38,16 +38,23 @@ export default function ProposalCategories({ graph, isAdmin }: { graph: string; 
       {items.map((c) => {
         const p = c.precision;
         const earned = p.decided >= c.auto.min && (p.precision ?? 0) >= c.auto.bar;
-        return (<Panel key={c.category} withBorder p="sm"><Stack gap="xs">
-          <Group justify="space-between" gap="xs">
-            <Group gap="xs"><Text fw={600}>{t(LABEL[c.category] ?? c.category)}</Text><Pill size="sm" tone={c.pending ? "warn" : "neutral"}>{c.pending}</Pill>
-              {c.auto.enabled && <Pill size="sm" tone="success">{t("Se aprueba sola")}</Pill>}</Group>
-            {c.oldest && <Text size="xs" c="dimmed">{t("la más antigua: {{at}}", { at: fmt(c.oldest) })}</Text>}
-          </Group>
+        return (<Panel key={c.category} withBorder p="sm"><Stack gap="sm">
+          <div className="ms-cat-head">
+            <Text fw={600}>{t(LABEL[c.category] ?? c.category)}</Text><Pill size="sm" tone={c.pending ? "warn" : "neutral"}>{c.pending}</Pill>
+            {c.auto.enabled && <Pill size="sm" tone="success">{t("Se aprueba sola")}</Pill>}
+            {c.oldest && <Text size="xs" c="dimmed">· {t("la más antigua: {{at}}", { at: fmt(c.oldest) })}</Text>}
+          </div>
           <Text size="xs" c="dimmed">{p.precision === null ? t("Ninguna decidida todavía por una persona.")
             : t("Precisión: {{pct}} ({{a}} aprobadas de {{d}} decididas por personas).", { pct: `${Math.round(p.precision * 100)} %`, a: p.approved, d: p.decided })}
             {c.flagged ? ` ${t("{{n}} con un secreto por revisar, que no se deciden en bloque.", { n: c.flagged })}` : ""}</Text>
-          {c.sample.map((s) => <Text key={s.id} size="xs" className="ms-measure">#{s.id} · {s.name}{s.body ? ` — ${s.body}` : ""}{s.claims.map((cl, i) => <span key={i}> · {cl.subject} → {cl.relation} → {cl.value}{cl.facts.length ? ` (${cl.facts.join("; ")})` : ""}</span>)}</Text>)}
+          {c.sample.length > 0 && <ul className="ms-cat-samples" aria-label={t("Muestra de la categoría")}>
+            {c.sample.map((s) => <li key={s.id} className="ms-cat-sample">
+              <span className="ms-cat-sample-title"><span className="ms-data">#{s.id}</span> · {s.name}</span>
+              {s.body && <span className="ms-cat-sample-body" title={s.body}>{s.body}</span>}
+              {s.claims.length > 0 && <span className="ms-cat-sample-claims">{s.claims.map((cl) => `${cl.subject} → ${cl.relation} → ${cl.value}${cl.facts.length ? ` (${cl.facts.join("; ")})` : ""}`).join(" · ")}</span>}
+            </li>)}
+          </ul>}
+          {c.pending > c.sample.length && c.sample.length > 0 && <Text size="xs" c="dimmed">{t("Muestra de {{n}} de {{total}}.", { n: c.sample.length, total: c.pending })}</Text>}
           {c.pending > 0 && <Group gap="xs">
             <Btn size="row" icon="check" onClick={() => setAsk({ cat: c, verb: "approve" })}>{t("Aprobar la categoría")}</Btn>
             <Btn size="row" kind="danger" onClick={() => setAsk({ cat: c, verb: "reject" })}>{t("Rechazar la categoría")}</Btn>
