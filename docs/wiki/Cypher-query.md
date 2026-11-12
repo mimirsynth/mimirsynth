@@ -2,7 +2,7 @@
 
 # Cypher query
 
-A console to run **read-only Cypher** queries directly against the brain's graph. It is a tool for advanced users: for when the interface does not offer the view you need.
+The **Cypher** tab of the [[Graph]] screen runs **read-only Cypher** queries directly against the brain's graph and draws what they return on the same canvas. It is a tool for advanced users: for when the interface does not offer the view you need. The old `/consulta` address leads to this tab.
 
 ## How to use it
 1. Write the query in the field (or pick one from **Examples**).
@@ -11,8 +11,9 @@ A console to run **read-only Cypher** queries directly against the brain's graph
 4. **History** keeps your last 20 queries in this browser so you can repeat them. Picking an example or a past query replaces what was written, and **Undo** brings it back.
 
 ## The result
-- **Table:** one column per returned value; each column can be sorted and filtered by text.
-- **Graph:** if the result returns nodes or relations (for example `RETURN a, r, b`), this tab opens on its own and draws them on the same canvas as the [[Graph]] screen, with a force layout in 2D. Hovering a node shows its name and type, clicking it highlights it and its neighbourhood, and invalidated facts are drawn with a **dashed line**. Each edge carries its relation's name (`RUNS_ON`), not the generic `RELATES_TO` type. It follows the **Graphic effects** chosen on the Graph screen for this device. There are no halos or expansion here.
+If the result returns nodes or relations (for example `RETURN a, r, b`), it comes out as a **graph**, and **Show as** switches between **Graph** and **Table**. If it returns only values (a count, a name), it comes out as a table straight away.
+- **Graph:** the same canvas as the **Explore** tab, with the force layout in 2D. Hovering a node shows its name and type, and invalidated facts are drawn with a **dashed line**. Each edge carries the name of its relation (`RUNS_ON`), not the generic `RELATES_TO` type. **Clicking a node or an edge** opens its detail beside the canvas: its labels and all its properties as stored in the graph (without the embedding vectors). An entity node has **View page**. It follows the **Graphic effects** picked under **Explore** for this device. There are no halos or expansion here.
+- **Table:** one column per returned value; each column can be sorted and filtered by text, and an entity links to its [[Entity page]].
 
 ## Limits and safety
 - **Read-only:** any query that tries to write (CREATE, DELETE, SET, MERGE…) is rejected.

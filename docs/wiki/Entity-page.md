@@ -7,7 +7,7 @@ Everything the brain knows about **one entity** (a service, a host, a person…)
 ## How to get there
 - From [[Facts]]: click the source or target entity of a fact.
 - From the [[Graph]]: select a node and click **View page** in the side panel.
-- From [[Cypher query]]: an entity in the result table is a link, and a selected node in the graph tab has **View page**.
+- From the [[Cypher|Cypher query]] tab of the [[Graph]]: an entity in the result table is a link, and a selected node on the canvas has **View page**.
 - From [[Ask]]: click an entity of a returned fact. A lent fact opens its entity in the brain that lends it.
 - From the entity page itself: every related entity is a link.
 

@@ -516,6 +516,11 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-graph-busy { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--ms-canvas) 60%, transparent); color: var(--ms-canvas-ink); font-size: 13px; }
 .ms-canvas-fill { height: 100%; }
 .ms-tabpanel-fill { flex: 1; min-height: 0; }
+/* A tab that is a whole view of a fill page (Graph's «Explorar» and «Cypher»): the panel does not scroll; its bar stays and its data area
+   (FillArea, SplitView) takes the height left and scrolls by itself, as it would right under the page header. */
+.ms-page[data-fill] .ms-tabs-fill > .mantine-Tabs-panel.ms-tabpanel-view { overflow: hidden; margin-inline: 0; padding-inline: 0; scrollbar-gutter: auto; }
+.ms-tabpanel-view > :not(.ms-fill):not(.ms-split) { flex-shrink: 0; }
+@media (max-width: 48em) { .ms-page[data-fill] .ms-tabs-fill > .mantine-Tabs-panel.ms-tabpanel-view { overflow: visible; } }
 .ms-fullh { height: 100dvh; padding: 16px; }  /* full-screen panels (sign-in, setup, session error) keep a 16px gutter on a phone */
 .ms-scroll { overflow-y: auto; }
 .ms-card-hint { margin-top: 8px; font-size: 12px; color: var(--ms-muted); }

@@ -4,6 +4,8 @@
 
 A **map** view of the knowledge: entities are nodes and facts are the edges joining them. Ideal for discovering how everything relates, seeing **where each piece of knowledge came from** and spotting oddities (isolated entities, duplicate nodes, unexpected relations).
 
+It has two tabs: **Explore**, described on this page, loads a sample of the brain with the controls below; **Cypher** draws on the same canvas what a read-only query returns (see [[Cypher query]]).
+
 ## Loading controls
 - **Seeds:** how many starting entities are loaded (the most connected), from 5 to 100.
 - **Hops:** how many neighbourhood "hops" (0–2) are brought in around each seed.
@@ -49,10 +51,10 @@ Loading provenance adds some time in very large brains.
 - Above 60 visible nodes a **minimap** shows the whole graph and the current view; click it to centre the view there.
 
 ## Legend
-Besides **Origins**, the legend lists **Types** (the node colours) and **Relations**, each with its count. A type has the same colour here, in [[Cypher query]] and on the [[Entity page]], whatever order the types appear in. Click an item to **hide or show** it without moving the rest of the graph. The legend can be collapsed.
+Besides **Origins**, the legend lists **Types** (the node colours) and **Relations**, each with its count. A type has the same colour here, in the [[Cypher|Cypher query]] tab and on the [[Entity page]], whatever order the types appear in. Click an item to **hide or show** it without moving the rest of the graph. The legend can be collapsed.
 
 ## Graphic effects
-The **Graphic effects** choice is stored **in this browser, per device** (not in your account), because what matters is the device's graphics card. The [[Cypher query]] screen follows the same choice.
+The **Graphic effects** choice is stored **in this browser, per device** (not in your account), because what matters is the device's graphics card. The [[Cypher|Cypher query]] tab follows the same choice.
 - **Automatic** (the default): full effects, dropping to reduced by itself if the device stays slow (under about 30 frames per second); the selector then reads «Automatic (reduced)».
 - **Full:** entry animations, particles, minimap and up to 120 labels.
 - **Reduced:** keeps the halos but drops the entry animation, the particles and the minimap, shows fewer labels (60), and hovering no longer dims the rest; in 3D it also draws simpler spheres.
