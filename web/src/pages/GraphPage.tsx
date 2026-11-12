@@ -1,11 +1,12 @@
 import { useTranslation } from "react-i18next";
 import { Group, Text } from "@mantine/core";
-import { Block, Btn, CellText, Check, DataTable, EmptyState, FillArea, IconButton, Page, PageHeader, NumberField, Pill, Segments, SelectField, Slider, TextField, HALO_PALETTE, CANVAS, typeColor, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, ViewBar, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
+import { Block, Btn, CellText, Check, DataTable, EmptyState, FillArea, IconButton, Page, PageHeader, NumberField, Pill, Segments, SelectField, Slider, TextField, HALO_PALETTE, CANVAS, typeColor, SplitView, Legend, LegendSection, LegendItem, GraphCanvas, Notice, Tabs, useTabParam, ViewBar, readEffects, saveEffects, type GraphCanvasHandle, type CanvasNode, type CanvasLink, type CanvasHalo, type Effects, type EffectsMode, type Layout } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt, get, GLink, GNode, GraphData, Grouping, Overview } from "../api";
 import { T } from "../i18n";
+import GraphCypher from "./GraphCypher";
 
 const DAY = 86_400_000;
 const download = (name: string, type: string, data: string) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type })); a.download = name; a.click(); };
@@ -17,7 +18,8 @@ const OTHER = "__otros__";
 const nodeSize = (degree: number) => 5 + 7 * Math.sqrt(Math.min(degree, 40) / 40);
 const hasWebGL = () => { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; } };
 
-export default function GraphPage({ graph }: { graph: string }) {
+/** The «Explorar» tab: a sample of the brain loaded from seeds and hops, drawn with halos by origin, with the detail of what is picked. */
+function GraphExplore({ graph }: { graph: string }) {
   const { t } = useTranslation();
   const ov = useQuery({ queryKey: ["overview", graph], queryFn: () => get<Overview>("overview", { graph }) });
   const [params] = useSearchParams();
@@ -148,8 +150,7 @@ export default function GraphPage({ graph }: { graph: string }) {
   const nameOf = (u: any) => nodes.find((n) => n.uuid === id(u))?.name ?? "";
 
   return (
-    <Page fill>
-      <PageHeader title={t("Grafo")} description={t("Entidades y hechos del brain como mapa. Elige cuántas semillas y saltos cargar; pulsa un nodo para ver sus hechos y los documentos que lo mencionan.")} />
+    <>
       {/* the canvas's controls: what to load and how to draw it on the left, the canvas's own commands on the right */}
       <ViewBar title={t("Grafo")}
         help={t("Clic en un nodo o en una arista para ver el detalle. Clic derecho en un nodo para expandirlo. Rueda para zoom, arrastra para mover. Un nodo arrastrado se queda donde lo sueltas; doble clic lo suelta. Las aristas discontinuas son hechos invalidados. Los elementos de la leyenda se pueden ocultar.")}
@@ -244,6 +245,25 @@ export default function GraphPage({ graph }: { graph: string }) {
             <Sources keys={srcOf(selLink)} name={(k) => originName.get(k) ?? k} />
           </>) : <EmptyState>{t("Clic en un nodo o en una arista para ver el detalle.")}</EmptyState>}
         </FillArea>} />
+    </>
+  );
+}
+
+/** Grafo: the brain as a map. «Explorar» loads a sample of it; «Cypher» draws what a read-only query returns, on the same canvas. */
+export default function GraphPage({ graph }: { graph: string }) {
+  const { t } = useTranslation();
+  const [mode, setMode] = useTabParam("explorar", "modo");
+  return (
+    <Page fill>
+      <PageHeader title={t("Grafo")} description={t("Entidades y hechos del brain como mapa. En «Explorar» eliges cuántas semillas y saltos cargar y pulsas un nodo para ver sus hechos y los documentos que lo mencionan. En «Cypher» lanzas una consulta de solo lectura y ves lo que devuelve como grafo o como tabla: las entidades son nodos :Entity y cada hecho es una arista RELATES_TO con su relación en «name». Cualquier escritura se rechaza.")} />
+      <Tabs value={mode} onChange={setMode} className="ms-tabs-fill">
+        <Tabs.List>
+          <Tabs.Tab value="explorar">{t("Explorar")}</Tabs.Tab>
+          <Tabs.Tab value="cypher">{t("Cypher")}</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="explorar" className="ms-tabpanel-view"><GraphExplore graph={graph} /></Tabs.Panel>
+        <Tabs.Panel value="cypher" className="ms-tabpanel-view"><GraphCypher graph={graph} /></Tabs.Panel>
+      </Tabs>
     </Page>
   );
 }

@@ -2,7 +2,7 @@
 
 # Consulta Cypher
 
-Consola para lanzar consultas **Cypher de solo lectura** directamente contra el grafo del brain. Es una herramienta para usuarios avanzados: cuando la interfaz no ofrece la vista que necesitas.
+La pestaña **Cypher** de la pantalla [[Grafo]] lanza consultas **Cypher de solo lectura** directamente contra el grafo del brain y dibuja lo que devuelven en el mismo lienzo. Es una herramienta para usuarios avanzados: cuando la interfaz no ofrece la vista que necesitas. La antigua dirección `/consulta` lleva a esta pestaña.
 
 ## Cómo se usa
 1. Escribe la consulta en el campo (o elige una en **Ejemplos**).
@@ -11,8 +11,9 @@ Consola para lanzar consultas **Cypher de solo lectura** directamente contra el 
 4. **Historial** guarda tus 20 últimas consultas en este navegador para repetirlas. Elegir un ejemplo o una consulta del historial sustituye lo que había escrito, y **Deshacer** lo recupera.
 
 ## El resultado
-- **Tabla:** una columna por cada valor devuelto; cada columna se puede ordenar y filtrar por texto.
-- **Grafo:** si el resultado devuelve nodos o relaciones (por ejemplo `RETURN a, r, b`), esta pestaña se abre sola y los dibuja en el mismo lienzo que la pantalla [[Grafo]], con disposición de fuerza en 2D. Al pasar por encima de un nodo se ven su nombre y su tipo, al pulsarlo se resaltan él y su vecindad, y los hechos invalidados se dibujan con **línea discontinua**. Cada arista lleva el nombre de su relación (`RUNS_ON`), no el tipo genérico `RELATES_TO`. Sigue los **Efectos gráficos** elegidos en la pantalla Grafo para este dispositivo. Aquí no hay halos ni expansión.
+Si el resultado devuelve nodos o relaciones (por ejemplo `RETURN a, r, b`), sale como **grafo**, y **Ver como** cambia entre **Grafo** y **Tabla**. Si solo devuelve valores (un recuento, un nombre), sale directamente como tabla.
+- **Grafo:** el mismo lienzo que la pestaña **Explorar**, con disposición de fuerza en 2D. Al pasar por encima de un nodo se ven su nombre y su tipo, y los hechos invalidados se dibujan con **línea discontinua**. Cada arista lleva el nombre de su relación (`RUNS_ON`), no el tipo genérico `RELATES_TO`. **Clic en un nodo o en una arista** abre al lado su detalle: sus etiquetas y todas sus propiedades tal como están en el grafo (sin los vectores de embedding). Un nodo de entidad tiene **Ver página**. Sigue los **Efectos gráficos** elegidos en **Explorar** para este dispositivo. Aquí no hay halos ni expansión.
+- **Tabla:** una columna por cada valor devuelto; cada columna se puede ordenar y filtrar por texto, y una entidad es un enlace a su [[Página de entidad]].
 
 ## Límites y seguridad
 - **Solo lectura:** cualquier consulta que intente escribir (CREATE, DELETE, SET, MERGE…) se rechaza.

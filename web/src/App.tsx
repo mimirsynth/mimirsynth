@@ -18,7 +18,6 @@ const Overview = lazy(() => import("./pages/Overview"));
 const Journal = lazy(() => import("./pages/Journal"));
 const Facts = lazy(() => import("./pages/Facts"));
 const GraphPage = lazy(() => import("./pages/GraphPage"));
-const Query = lazy(() => import("./pages/Query"));
 const Vocabulary = lazy(() => import("./pages/Vocabulary"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Ask = lazy(() => import("./pages/Ask"));
@@ -42,7 +41,6 @@ const NAV = [
   { section: T("Explorar"), items: [
     { to: "/preguntar", icon: "ask" as const, label: T("Preguntar"), tour: "ask" },
     { to: "/grafo", icon: "graph" as const, label: T("Grafo"), tour: "graph" },
-    { to: "/consulta", icon: "query" as const, label: T("Consulta Cypher") },
   ] },
   { section: T("Curación"), items: [
     { to: "/propuestas", icon: "proposals" as const, label: T("Propuestas"), tour: "proposals" },
@@ -215,7 +213,7 @@ export default function App() {
               <Route path="/tipos" element={<Navigate to="/calidad?tab=corrector" replace />} />
               <Route path="/calidad" element={<Quality graph={brain} role={cur?.role ?? "reader"} />} />
               <Route path="/vocabulario" element={<Vocabulary graph={brain} role={cur?.role ?? "reader"} />} />
-              <Route path="/consulta" element={<Query graph={brain} />} />
+              <Route path="/consulta" element={<Navigate to="/grafo?modo=cypher" replace />} />
               <Route path="/entidad/:uuid" element={<EntityPage graph={brain} role={cur?.role ?? "reader"} />} />
             </>
           ) : <Route path="*" element={brains.isPending || (!!brain && brains.isFetching) ? <Loading />

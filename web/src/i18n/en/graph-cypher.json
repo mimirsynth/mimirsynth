@@ -1,0 +1,9 @@
+{
+  "Cypher": "Cypher",
+  "Entidades y hechos del brain como mapa. En «Explorar» eliges cuántas semillas y saltos cargar y pulsas un nodo para ver sus hechos y los documentos que lo mencionan. En «Cypher» lanzas una consulta de solo lectura y ves lo que devuelve como grafo o como tabla: las entidades son nodos :Entity y cada hecho es una arista RELATES_TO con su relación en «name». Cualquier escritura se rechaza.": "The brain's entities and facts as a map. Under «Explore» you choose how many seeds and hops to load, and click a node to see its facts and the documents that mention it. Under «Cypher» you run a read-only query and see what it returns as a graph or as a table: entities are :Entity nodes and each fact is a RELATES_TO edge with its relation in «name». Any write is rejected.",
+  "Propiedad": "Property",
+  "Propiedades": "Properties",
+  "Valor": "Value",
+  "Ver como": "Show as",
+  "{{nodes}} nodos · {{edges}} aristas": "{{nodes}} nodes · {{edges}} edges"
+}

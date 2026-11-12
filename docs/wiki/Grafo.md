@@ -4,6 +4,8 @@
 
 Una vista de **mapa** del conocimiento: las entidades son nodos y los hechos son las aristas que los unen. Ideal para descubrir cómo se relaciona todo, ver **de dónde salió cada cosa** y detectar rarezas (entidades aisladas, nodos duplicados, relaciones inesperadas).
 
+Tiene dos pestañas: **Explorar**, que se describe en esta página, carga una muestra del brain con los controles de abajo; **Cypher** dibuja en el mismo lienzo lo que devuelve una consulta de solo lectura (ver [[Consulta Cypher]]).
+
 ## Controles de carga
 - **Semillas:** cuántas entidades de partida se cargan (las más conectadas), de 5 a 100.
 - **Saltos:** cuántos «saltos» de vecindad (0–2) se traen alrededor de cada semilla.
@@ -49,10 +51,10 @@ Cargar la procedencia añade algo de tiempo en brains muy grandes.
 - A partir de 60 nodos visibles, un **minimapa** muestra el grafo entero y la vista actual; pulsa en él para centrar la vista ahí.
 
 ## Leyenda
-Además de **Orígenes**, la leyenda enumera los **Tipos** (los colores de los nodos) y las **Relaciones**, cada uno con su recuento. Un tipo tiene el mismo color aquí, en la [[Consulta Cypher]] y en la [[Página de entidad]], sea cual sea el orden en que aparecen los tipos. Pulsa un elemento para **ocultarlo o mostrarlo** sin mover el resto del grafo. La leyenda se puede plegar.
+Además de **Orígenes**, la leyenda enumera los **Tipos** (los colores de los nodos) y las **Relaciones**, cada uno con su recuento. Un tipo tiene el mismo color aquí, en la pestaña [[Cypher|Consulta Cypher]] y en la [[Página de entidad]], sea cual sea el orden en que aparecen los tipos. Pulsa un elemento para **ocultarlo o mostrarlo** sin mover el resto del grafo. La leyenda se puede plegar.
 
 ## Efectos gráficos
-La opción **Efectos gráficos** se guarda **en este navegador, por dispositivo** (no en tu cuenta), porque lo que cuenta es la tarjeta gráfica del equipo. La pantalla [[Consulta Cypher]] sigue la misma opción.
+La opción **Efectos gráficos** se guarda **en este navegador, por dispositivo** (no en tu cuenta), porque lo que cuenta es la tarjeta gráfica del equipo. La pestaña [[Cypher|Consulta Cypher]] sigue la misma opción.
 - **Automático** (el de partida): efectos completos, que bajan solos a reducidos si el equipo sigue lento (por debajo de unos 30 fotogramas por segundo); el selector pasa a decir «Automático (reducido)».
 - **Completo:** animaciones de entrada, partículas, minimapa y hasta 120 rótulos.
 - **Reducido:** mantiene los halos pero quita la animación de entrada, las partículas y el minimapa, muestra menos rótulos (60) y pasar por encima ya no atenúa el resto; en 3D, además, dibuja esferas más sencillas.

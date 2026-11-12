@@ -7,7 +7,7 @@ Todo lo que el brain sabe de **una entidad** (un servicio, un host, una persona�
 ## Cómo se llega
 - Desde [[Hechos]]: clic en la entidad origen o destino de un hecho.
 - Desde el [[Grafo]]: selecciona un nodo y pulsa **Ver página** en el panel lateral.
-- Desde [[Consulta Cypher]]: una entidad de la tabla de resultados es un enlace, y un nodo seleccionado en la pestaña del grafo tiene **Ver página**.
+- Desde la pestaña [[Cypher|Consulta Cypher]] del [[Grafo]]: una entidad de la tabla de resultados es un enlace, y un nodo seleccionado en el lienzo tiene **Ver página**.
 - Desde [[Preguntar]]: clic en una entidad de un hecho devuelto. Un hecho prestado abre su entidad en el brain que lo presta.
 - Desde la propia página: cada entidad relacionada es un enlace.
 
