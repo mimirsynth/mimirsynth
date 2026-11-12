@@ -1,0 +1,14 @@
+{
+  "Deshacer la reactivación": "Undo the reactivation",
+  "Es texto libre: sus entidades y relaciones se extraen al ingerirla, después de aprobarla, así que no se pueden ver antes. No invalida ni reactiva ningún hecho de forma segura: si lo que pide es eso, recházala y usa una corrección (o «Reactivar» en el hecho).": "It is free text: its entities and relations are extracted when it is ingested, after approving it, so they cannot be seen beforehand. It does not reliably invalidate or reactivate any fact: if that is what it asks for, reject it and use a correction (or «Reactivate» on the fact).",
+  "Hecho que se reactiva": "Fact to reactivate",
+  "Invalidado otra vez después · {{at}}": "Invalidated again afterwards · {{at}}",
+  "Qué hará al aprobarla": "What approving it does",
+  "Reactiva": "Reactivates",
+  "Reactivado · {{at}}": "Reactivated · {{at}}",
+  "Se reactivará al aprobarla.": "It will be reactivated on approval.",
+  "Sin texto: solo se reactiva el hecho.": "No text: the fact is only reactivated.",
+  "Texto que la acompaña": "Text that comes with it",
+  "Vuelve a dar por vigente un hecho invalidado": "Makes an invalidated fact current again",
+  "invalidado desde {{date}}": "invalidated since {{date}}"
+}

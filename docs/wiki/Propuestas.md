@@ -58,6 +58,11 @@ Una **corrección** es una propuesta que no añade memoria: pide **invalidar un 
 - Si el hecho dejó de estar vigente mientras la corrección esperaba, aprobarla da un error y la corrección sigue pendiente: recházala.
 - **Reactivar el hecho**, en la propia corrección, lo deja como estaba. El sustituto ya ingerido no se toca.
 
+### Reactivar un hecho invalidado por error
+Una corrección con `action: "reactivate"` pide lo contrario: volver a dar por **vigente** un hecho invalidado, por ejemplo cuando un hecho nuevo lo sustituyó por error. Su título empieza por «Reactivación:», su marca dice **Reactiva** y su detalle enseña el **hecho que se reactiva** (y desde cuándo está invalidado) con el motivo. Se decide como cualquier corrección: una persona, de una en una. Al aprobarla el hecho vuelve a estar vigente (el paso **Hecho reactivado**) y el cambio queda en el historial del vocabulario; **Deshacer la reactivación** lo invalida otra vez como estaba.
+
+Una memoria cuyo texto explique que un hecho sigue siendo cierto **no** lo reactiva: su texto se extrae en hechos nuevos y el antiguo sigue invalidado. Por eso una propuesta de texto libre pendiente dice **Qué hará al aprobarla**: sus entidades y relaciones solo se extraen después de aprobarla, y nunca invalida ni reactiva un hecho de forma segura. Para eso, una corrección, afirmaciones estructuradas o **Reactivar** en el hecho, en [[Hechos]].
+
 ## Afirmaciones estructuradas
 Una propuesta que envía un agente o el API puede llevar **afirmaciones** junto a su texto: sujeto, relación y valor y, opcionalmente, desde cuándo y a qué hecho vigente sustituye. Al enviarla, cada una se compara con lo que sabe el brain, y el detalle las muestra en **Afirmaciones** con su veredicto:
 - **Confirma un hecho vigente:** al aprobarla se registra una confirmación de ese hecho (renueva su vida útil) en vez de un hecho nuevo. Si todas confirman, no se ingiere nada.

@@ -58,14 +58,15 @@ TOOLS = [
                         "supersedes": {"type": "string", "description": "uuid del hecho vigente al que sustituye (el que dan `facts_about` o `recall`)."}},
                         "required": ["subject", "relation", "value"]}}},
          "required": ["name", "body"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}},
-    {"name": "correct", "title": "Proponer una corrección", "description": "Propone invalidar un hecho que ya no es cierto, por su uuid (el que dan `facts_about`, `timeline` o `whats_new`), con el motivo y, si lo sabes, el texto que lo sustituye. Queda siempre en cuarentena hasta que una persona con rol de curador la apruebe, también si este token es de curador; al aprobarla, el hecho se invalida, nunca se borra, y el sustituto se guarda como memoria nueva.",
+    {"name": "correct", "title": "Proponer una corrección", "description": "Propone invalidar un hecho que ya no es cierto, por su uuid (el que dan `facts_about`, `timeline` o `whats_new`), con el motivo y, si lo sabes, el texto que lo sustituye. Con `action: \"reactivate\"` propone lo contrario: volver a dar por vigente un hecho que se invalidó por error (por ejemplo, una sustitución equivocada); es la única forma de hacerlo, porque una memoria de texto que lo explique añade hechos nuevos pero no reactiva el invalidado. Queda siempre en cuarentena hasta que una persona con rol de curador la apruebe, también si este token es de curador; al aprobarla, el hecho se invalida (o se reactiva), nunca se borra, y el sustituto se guarda como memoria nueva.",
      "inputSchema": {"type": "object", "properties": {
          "fact_uuid": {"type": "string", "description": "uuid del hecho que ya no es cierto."},
          "reason": {"type": "string", "maxLength": 2000, "description": "Por qué ya no es cierto, con lo necesario para que un curador lo compruebe."},
          "replacement": {"type": "string", "maxLength": 50000, "description": "Lo que es cierto ahora, si lo sabes (se guarda como memoria nueva)."},
          "invalid_at": {"type": "string", "format": "date-time", "description": "Desde cuándo dejó de ser cierto (ISO 8601); por defecto, ahora."},
          "source_description": {"type": "string", "maxLength": 255, "description": "De dónde viene (por ejemplo, el agente o la sesión)."},
-         "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que la corrección es cierta."}},
+         "confidence": {"type": "number", "minimum": 0, "maximum": 1, "description": "Tu confianza en que la corrección es cierta."},
+         "action": {"type": "string", "enum": ["invalidate", "reactivate"], "default": "invalidate", "description": "«invalidate» (por defecto) para un hecho vigente que ya no es cierto; «reactivate» para un hecho invalidado que sí sigue siendo cierto."}},
          "required": ["fact_uuid", "reason"]}, "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}},
     {"name": "facts_about", "title": "Hechos de una entidad", "description": "Todo lo que la memoria sabe de una entidad (un servicio, un host, una persona…): sus hechos vigentes y los que dejaron de ser ciertos, con fechas, de dónde se aprendieron y el uuid de cada hecho entre corchetes. Úsala para profundizar después de `recall`. Si el nombre es ambiguo devuelve las candidatas para que repitas con su uuid.",
      "inputSchema": {"type": "object", "properties": {
@@ -202,6 +203,8 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
                 return _text(tr("Este token solo puede leer (rol de lector): no puede proponer correcciones.", lang), True)
             from .corrections import CorrectionIn, create as create_correction
             p = create_correction(ctx, request, CorrectionIn(**args), direct=False)   # invalidating is decided by a person, even with a curator token
+            if (p.correction or {}).get("action") == "reactivate":
+                return _text(tr("Reactivación propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
             return _text(tr("Corrección propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
         if name == "facts_about":
             return _text(mcp_tools.facts_about(ctx, mcp_tools.FactsIn(**args), lang))

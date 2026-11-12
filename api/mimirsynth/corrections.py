@@ -1,4 +1,5 @@
-"""Fact corrections from agents (#109): a proposal that points to one fact by its uuid and asks to invalidate it.
+"""Fact corrections from agents (#109): a proposal that points to one fact by its uuid and asks to invalidate it or, with
+`action: "reactivate"`, to make a fact that was invalidated by mistake current again (a wrong supersession, for example).
 
 It goes through the same quarantine as `remember`: a contributor proposes it (also with the MCP tool `correct`) and a curator
 approves it; the decider never approves it on its own, because invalidating is more delicate than adding. Over MCP it always stays
@@ -6,9 +7,13 @@ pending, even with a curator token: only the REST endpoint applies it at once wh
 invalidated as of the correction date (the given one or the proposal's) and, if it carries a replacement text, that text is ingested
 as a normal episode with that same date. The invalidation goes to the vocabulary history like any other (the same operation that
 Facts and Contradictions use, #113), and the proposal keeps the previous state for «Reactivate the fact».
-The proposal stores in `correction` {fact_uuid, fact (the fact as it was), reason, invalid_at, op, applied_at, reverted_at};
-`body` is the replacement text (empty if there is none)."""
+A reactivation goes through the same gate: it is decided by a person, and approving it clears the fact's invalid_at/expired_at
+(recorded as `fact.reactivate` in the vocabulary history); undoing it puts the invalidation back. A free-text proposal never does this:
+its text is extracted into new facts and an invalidated fact stays invalidated.
+The proposal stores in `correction` {action, fact_uuid, fact (the fact as it was), reason, invalid_at, op, applied_at, reverted_at};
+`body` is the replacement text (empty if there is none). A correction without `action` invalidates."""
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -37,6 +42,7 @@ class CorrectionIn(BaseModel):
     invalid_at: datetime | None = None
     source_description: str = Field("", max_length=255)
     confidence: float | None = Field(None, ge=0, le=1)
+    action: Literal["invalidate", "reactivate"] = "invalidate"
 
 
 def _fact(ctx: BrainCtx, uuid: str) -> dict | None:
@@ -44,8 +50,17 @@ def _fact(ctx: BrainCtx, uuid: str) -> dict | None:
     return r[0] if r else None
 
 
-def _check(ctx: BrainCtx, uuid: str, lang: str) -> dict:
-    """The fact must belong to this brain and be current. A fact lent by another brain is read-only."""
+REACTIVATE = "reactivate"
+
+
+def action(c: dict | None) -> str:
+    """What a correction does: «invalidate» (the default, also for the corrections stored before reactivations existed) or «reactivate»."""
+    return (c or {}).get("action") or "invalidate"
+
+
+def _check(ctx: BrainCtx, uuid: str, lang: str, act: str = "invalidate") -> dict:
+    """The fact must belong to this brain and be current (to invalidate it) or invalidated (to reactivate it). A fact lent by another
+    brain is read-only."""
     f = _fact(ctx, uuid)
     if f is None:
         from .db import graph
@@ -54,7 +69,10 @@ def _check(ctx: BrainCtx, uuid: str, lang: str) -> dict:
             if src.scope in ("graph", "both") and rows(graph(src.graph_name).query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() RETURN r.uuid AS u", {"u": uuid})):
                 raise HTTPException(409, tr("El hecho es de «{{origin}}», que lo presta a este brain: es de solo lectura. Corrígelo en ese brain.", lang, origin=src.slug))
         raise HTTPException(404, tr("No hay ningún hecho con el uuid {{uuid}} en este brain.", lang, uuid=uuid))
-    if f["invalid_at"]:
+    if act == REACTIVATE:
+        if not f["invalid_at"]:
+            raise HTTPException(409, tr("El hecho está vigente: no hay nada que reactivar.", lang))
+    elif f["invalid_at"]:
         raise HTTPException(409, tr("El hecho ya está invalidado desde {{date}}: no hay nada que corregir.", lang, date=str(f["invalid_at"])[:10]))
     return f
 
@@ -66,7 +84,7 @@ def _iso(d: datetime) -> str:
 def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = True) -> Proposal:
     """Creates a correction (also used by the MCP tool `correct`). With `direct`, a curator applies it when sending it, as with `remember`."""
     lang = language(request)
-    f = _check(ctx, body.fact_uuid.strip(), lang)
+    f = _check(ctx, body.fact_uuid.strip(), lang, body.action)
     try:
         reason, in_reason = secretguard.guard(ctx.brain, body.reason)
         text, in_body = secretguard.guard(ctx.brain, body.replacement)
@@ -76,13 +94,16 @@ def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = T
     found = [{**x, "field": "reason"} for x in in_reason] + [{**x, "field": "body"} for x in in_body]
     tok = getattr(request.state, "token", None)  # the title stays in memory (it names the replacement's episode): in the instance language
     when = body.invalid_at or datetime.now(timezone.utc)
+    short = (f["fact"] or "")[:200]
+    title = (tr("Reactivación: {{fact}}", secretguard.instance_lang(), fact=short) if body.action == REACTIVATE
+             else tr("Corrección: {{fact}}", secretguard.instance_lang(), fact=short))
     p = Proposal(brain_id=ctx.brain.id, author_id=ctx.user.id, token_id=tok.id if tok else None, kind="correction",
-                 name=tr("Corrección: {{fact}}", secretguard.instance_lang(), fact=(f["fact"] or "")[:200])[:255], body=text, source="text",
+                 name=title[:255], body=text, source="text",
                  source_description=body.source_description, reference_time=when, confidence=body.confidence, status="pending",
                  secret_findings=found or None,
-                 correction={"fact_uuid": f["uuid"], "fact": f, "reason": reason, "invalid_at": _iso(when)})
+                 correction={"action": body.action, "fact_uuid": f["uuid"], "fact": f, "reason": reason, "invalid_at": _iso(when)})
     ctx.db.add(p); ctx.db.commit()
-    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, kind="correction", fact=f["uuid"])
+    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, kind="correction", action=body.action, fact=f["uuid"])
     if direct and allows(ctx.role, "curator") and not secretguard.flagged(found):
         try:
             apply(ctx, p, lang, kind="direct")
@@ -96,24 +117,33 @@ def apply(ctx: BrainCtx, p: Proposal, lang: str = "es", note: str = "", kind: st
     is only written if the fact is still current at that moment, and the proposal becomes approved in the same commit as the history
     operation: if the fact stopped being current between the check and the write, 409 and the proposal stays pending, never half done."""
     c = dict(p.correction or {})
-    f = _check(ctx, c["fact_uuid"], lang)
+    act = action(c)
+    f = _check(ctx, c["fact_uuid"], lang, act)
     now = datetime.now(timezone.utc)
-    done = ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() WHERE r.invalid_at IS NULL SET r.invalid_at = $i, r.expired_at = $n RETURN count(r)",
-                           {"u": f["uuid"], "i": c["invalid_at"], "n": now.isoformat()}).result_set[0][0]
-    if not done:
-        raise HTTPException(409, tr("El hecho dejó de estar vigente mientras se revisaba la corrección: recházala.", lang))
+    if act == REACTIVATE:   # only if it is still invalidated at this moment: never half done
+        done = ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() WHERE r.invalid_at IS NOT NULL SET r.invalid_at = NULL, r.expired_at = NULL RETURN count(r)",
+                               {"u": f["uuid"]}).result_set[0][0]
+        if not done:
+            raise HTTPException(409, tr("El hecho volvió a estar vigente mientras se revisaba la reactivación: recházala.", lang))
+    else:
+        done = ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() WHERE r.invalid_at IS NULL SET r.invalid_at = $i, r.expired_at = $n RETURN count(r)",
+                               {"u": f["uuid"], "i": c["invalid_at"], "n": now.isoformat()}).result_set[0][0]
+        if not done:
+            raise HTTPException(409, tr("El hecho dejó de estar vigente mientras se revisaba la corrección: recházala.", lang))
     c["applied_at"] = now.isoformat()
     p.correction = c
     p.status, p.reviewer_id, p.reviewed_at, p.review_kind, p.review_note = "approved", ctx.user.id, now, kind, note
     if not p.body.strip():  # without a replacement there is nothing to ingest: it is already applied
         p.status, p.ingested_at = "ingested", now
-    op = _record(ctx, "fact.invalidate", f"Invalidado por la corrección #{p.id}: «{(f['fact'] or '')[:60]}»",   # commits proposal and operation together
-                 uuid=f["uuid"], before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]})
+    op = (_record(ctx, "fact.reactivate", f"Reactivado por la corrección #{p.id}: «{(f['fact'] or '')[:60]}»",   # commits proposal and operation together
+                  uuid=f["uuid"], before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]}) if act == REACTIVATE else
+          _record(ctx, "fact.invalidate", f"Invalidado por la corrección #{p.id}: «{(f['fact'] or '')[:60]}»",
+                  uuid=f["uuid"], before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]}))
     p.correction = {**c, "op": op.id}
     ctx.db.commit()
     if kind == "human":
         audit(ctx.db, ctx.user, "proposal.approved", ctx.brain, id=p.id, note=note)
-    audit(ctx.db, ctx.user, "proposal.correction", ctx.brain, id=p.id, fact=f["uuid"], op=op.id)
+    audit(ctx.db, ctx.user, "proposal.correction", ctx.brain, id=p.id, action=act, fact=f["uuid"], op=op.id)
     if p.status == "approved" and ingest.enabled():
         ingest.submit_ingest(p.id, ctx.brain.id, secretguard.safe_name(p), ctx.user.id)
 
@@ -126,24 +156,30 @@ def submit(body: CorrectionIn, request: Request, ctx: BrainCtx = Depends(contrib
 
 @router.post("/{pid}/reactivate")
 def reactivate(pid: int, request: Request, ctx: BrainCtx = Depends(curator)):
-    """Undoes an applied correction: the fact becomes current again with its previous state. An ingested replacement is left alone."""
+    """Undoes an applied correction: the fact goes back to its previous state (current again after an invalidation, invalidated again
+    after a reactivation). An ingested replacement is left alone."""
     lang = language(request)
     p = _get(ctx, pid)
     c = dict(p.correction or {})
     if p.kind != "correction" or not c.get("applied_at"):
         raise HTTPException(409, tr("La propuesta no es una corrección aplicada.", lang))
+    back = action(c) == REACTIVATE   # undoing a reactivation invalidates the fact again, as it was
     if c.get("reverted_at"):
-        raise HTTPException(409, tr("El hecho ya se reactivó.", lang))
+        raise HTTPException(409, tr("La reactivación ya se deshizo.", lang) if back else tr("El hecho ya se reactivó.", lang))
     f = _fact(ctx, c["fact_uuid"])
     if f is None:
         raise HTTPException(404, tr("El hecho ya no existe: se borró después de la corrección.", lang))
-    if not f["invalid_at"]:
+    if back and f["invalid_at"]:
+        raise HTTPException(409, tr("El hecho ya está invalidado.", lang))
+    if not back and not f["invalid_at"]:
         raise HTTPException(409, tr("El hecho ya está vigente.", lang))
     before = c["fact"]
     ctx.graph.query("MATCH ()-[r:RELATES_TO {uuid:$u}]->() SET r.invalid_at = $i, r.expired_at = $e",
                     {"u": f["uuid"], "i": before.get("invalid_at"), "e": before.get("expired_at")})
-    op = _record(ctx, "fact.reactivate", f"Reactivado al deshacer la corrección #{p.id}: «{(f['fact'] or '')[:60]}»",
-                 uuid=f["uuid"], before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]})
+    op = (_record(ctx, "fact.invalidate", f"Invalidado otra vez al deshacer la reactivación #{p.id}: «{(f['fact'] or '')[:60]}»",
+                  uuid=f["uuid"], before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]}) if back else
+          _record(ctx, "fact.reactivate", f"Reactivado al deshacer la corrección #{p.id}: «{(f['fact'] or '')[:60]}»",
+                  uuid=f["uuid"], before={"invalid_at": f["invalid_at"], "expired_at": f["expired_at"]}))
     c.update(reverted_at=datetime.now(timezone.utc).isoformat(), reverted_by=ctx.user.id, revert_op=op.id)
     p.correction = c
     ctx.db.commit()
