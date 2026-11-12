@@ -97,12 +97,14 @@ def test_a_person_takes_back_only_their_own_rating_and_the_correction_stays(clie
     # «incorrect» again: it points to the correction still in the queue instead of opening a second one
     from mimirsynth.models import Proposal
     with _factory()() as db:
-        db.add(Proposal(id=77, brain_id=lg.brain_id, author_id=me, kind="correction", name="x", body="", correction={"fact_uuid": "f1", "reason": "x"}))
+        pending = Proposal(brain_id=lg.brain_id, author_id=me, kind="correction", name="x", body="", correction={"fact_uuid": "f1", "reason": "x"})
+        db.add(pending)
         db.commit()
+        pid = pending.id   # not a fixed id: the tests before this one create proposals too
     r = client.post(base, json={"kind": "fact", "id": "f1", "rating": "incorrect", "note": "otra vez"}).json()
-    assert r["proposal_id"] == 77 and r["existing"] is True
+    assert r["proposal_id"] == pid and r["existing"] is True
     with _factory()() as db:  # the database is shared with other tests, which count corrections
-        db.query(Proposal).filter(Proposal.id == 77).delete()
+        db.query(Proposal).filter(Proposal.id == pid).delete()
         db.commit()
     assert client.delete(base, params={"kind": "fact", "id": "nope"}).status_code == 404
     assert client.delete(base, params={"kind": "fact"}).status_code == 422
