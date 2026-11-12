@@ -166,24 +166,24 @@ def test_reactivation_of_a_fact_invalidated_by_mistake(client, graphs, monkeypat
     from mimirsynth.store import _factory
     monkeypatch.setattr(ingest, "enabled", lambda: True)
     monkeypatch.setattr(ingest, "submit_ingest", lambda pid, brain_id, name, user_id=None: 1)
-    assert client.post("/api/brains", json={"slug": "co", "name": "CO", "graph_name": OWN}).status_code == 201
-    contrib = _tok(client, "co", "contributor")
+    assert client.post("/api/brains", json={"slug": "cor", "name": "COR", "graph_name": OWN}).status_code == 201
+    contrib = _tok(client, "cor", "contributor")
     c = TestClient(app, headers={"Accept-Language": "es"})
 
     # only an invalidated fact can be reactivated; the default action stays «invalidate»
-    err, txt = call(c, "co", contrib, "correct", fact_uuid="f1", reason="Sigue siendo cierto", action="reactivate")
+    err, txt = call(c, "cor", contrib, "correct", fact_uuid="f1", reason="Sigue siendo cierto", action="reactivate")
     assert err and "está vigente" in txt
-    err, txt = call(c, "co", contrib, "correct", fact_uuid="f2", reason="La sustitución fue un error: sigue en Notus", action="reactivate")
+    err, txt = call(c, "cor", contrib, "correct", fact_uuid="f2", reason="La sustitución fue un error: sigue en Notus", action="reactivate")
     assert not err and "Reactivación propuesta" in txt
     with _factory()() as db:
-        p = db.query(Proposal).filter(Proposal.kind == "correction").one()
+        p = db.query(Proposal).filter(Proposal.kind == "correction", Proposal.correction["action"].as_string() == "reactivate").one()
         pid = p.id
         assert p.correction["action"] == "reactivate" and p.name == "Reactivación: Nextcloud corría en Notus" and p.status == "pending"
     assert _state(graphs, "f2")[0]                                                           # nothing changes while it waits
-    assert client.post("/api/brains/co/proposals/bulk", json={"ids": [pid], "verb": "approve"}).json()["skipped"][0]["reason"] == "correction"
+    assert client.post("/api/brains/cor/proposals/bulk", json={"ids": [pid], "verb": "approve"}).json()["skipped"][0]["reason"] == "correction"
 
     # approve: the fact is current again, recorded in the history
-    r = client.post(f"/api/brains/co/proposals/{pid}/approve", json={})
+    r = client.post(f"/api/brains/cor/proposals/{pid}/approve", json={})
     assert r.status_code == 200, r.text
     assert _state(graphs, "f2") == [None, None]
     with _factory()() as db:
@@ -192,16 +192,16 @@ def test_reactivation_of_a_fact_invalidated_by_mistake(client, graphs, monkeypat
         assert db.get(VocabOp, p.correction["op"]).kind == "fact.reactivate"
 
     # undo: invalidated again as it was, only once
-    r = client.post(f"/api/brains/co/proposals/{pid}/reactivate")
+    r = client.post(f"/api/brains/cor/proposals/{pid}/reactivate")
     assert r.status_code == 200 and r.json()["correction"]["reverted_at"]
     assert parse_ts(_state(graphs, "f2")[0]) == parse_ts("2025-01-01T00:00:00Z")
-    assert client.post(f"/api/brains/co/proposals/{pid}/reactivate").status_code == 409
+    assert client.post(f"/api/brains/cor/proposals/{pid}/reactivate").status_code == 409
 
     # a reactivation of a fact that became current while it waited gives 409 and stays pending
-    call(c, "co", contrib, "correct", fact_uuid="f2", reason="Otra vez", action="reactivate")
+    call(c, "cor", contrib, "correct", fact_uuid="f2", reason="Otra vez", action="reactivate")
     with _factory()() as db:
-        p2 = db.query(Proposal).filter(Proposal.kind == "correction", Proposal.status == "pending").one().id
-    assert client.post("/api/brains/co/facts/f2/reactivate").status_code == 200
-    r = client.post(f"/api/brains/co/proposals/{p2}/approve", json={})
+        p2 = db.query(Proposal).filter(Proposal.correction["action"].as_string() == "reactivate", Proposal.status == "pending").one().id
+    assert client.post("/api/brains/cor/facts/f2/reactivate").status_code == 200
+    r = client.post(f"/api/brains/cor/proposals/{p2}/approve", json={})
     assert r.status_code == 409 and "está vigente" in r.json()["detail"]
-    assert client.get(f"/api/brains/co/proposals/{p2}").json()["status"] == "pending"
+    assert client.get(f"/api/brains/cor/proposals/{p2}").json()["status"] == "pending"

@@ -103,7 +103,7 @@ def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = T
                  secret_findings=found or None,
                  correction={"action": body.action, "fact_uuid": f["uuid"], "fact": f, "reason": reason, "invalid_at": _iso(when)})
     ctx.db.add(p); ctx.db.commit()
-    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, kind="correction", action=body.action, fact=f["uuid"])
+    audit(ctx.db, ctx.user, "proposal.submit", ctx.brain, id=p.id, status=p.status, kind="correction", correction=body.action, fact=f["uuid"])
     if direct and allows(ctx.role, "curator") and not secretguard.flagged(found):
         try:
             apply(ctx, p, lang, kind="direct")
@@ -143,7 +143,7 @@ def apply(ctx: BrainCtx, p: Proposal, lang: str = "es", note: str = "", kind: st
     ctx.db.commit()
     if kind == "human":
         audit(ctx.db, ctx.user, "proposal.approved", ctx.brain, id=p.id, note=note)
-    audit(ctx.db, ctx.user, "proposal.correction", ctx.brain, id=p.id, action=act, fact=f["uuid"], op=op.id)
+    audit(ctx.db, ctx.user, "proposal.correction", ctx.brain, id=p.id, correction=act, fact=f["uuid"], op=op.id)
     if p.status == "approved" and ingest.enabled():
         ingest.submit_ingest(p.id, ctx.brain.id, secretguard.safe_name(p), ctx.user.id)
 
