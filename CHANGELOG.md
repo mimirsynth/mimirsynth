@@ -8,6 +8,29 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-12
+### Added
+- `GET /brains/{slug}/changes` returns the counts of the previous period (`previous`) and per-hour or per-day series (`series`); `GET /brains/{slug}/attention` returns the date of the oldest pending proposal (`proposals_oldest`). (#437)
+
+### Changed
+- the Overview is rebuilt: «To review» and «Movement» (24 h, 7 or 30 days, with sparklines and the comparison with the previous period) first, then «What the brain knows» with the weekly activity chart (12 weeks, 26 weeks or 1 year), «Memory health» and, for brain administrators, «AI usage» this month against the budget. The header paragraph, Communities, the facts donut and «Most used relations» are gone. (#437)
+- the sidebar puts the brain switcher under the logo, and its footer is one account line and one row of buttons with the version; Proposals and Content quality show their pending counts. (#437)
+- A screen's description now opens from an «i» beside its title instead of taking several lines under it, and the interface's short texts (notices, empty states, field descriptions) no longer break after a few words. (#439)
+- Documents (Overview, Ask, entity pages, settings) scroll with the window; tables, the review queue and the graph keep their title and filters in view. Scrollbars are thin, themed and never cover a button, overlay scrollbars included. (#439)
+- Ask and the Cypher query share one way of writing and running a question; the Cypher query is now «Consulta Cypher», with examples that work on any brain, Undo after picking an example, and edges named by their relation. (#439)
+- Facts are listed as a table, with entity chips and the relation in words; Overview shows what waits for review before the getting-started list, which is folded to one line. (#439)
+- Every screen and tab is built the same way: a bar with an «i» for what the view is for, its filters and its actions, then one table, list, settings group or comparison, then its secondary parts. The explanatory paragraphs, footnotes and info notices that took the top of each tab are now behind that «i». (#440)
+- Content quality: the curator's passes are switches with their precision, verification and the curator's history are tables, and a summary proposal is shown beside the current one in equal columns; starting an analysis asks how many entities in a dialog. (#440)
+- Administration and My account: each section's explanation is one sentence with the rest behind its «i», its button sits in its header, and inline add forms and lists of rows are a bar and a table. (#440)
+
+### Fixed
+- a final release publishes the OpenCode and OpenClaw plugins to npm under `latest` without failing: release candidates no longer publish them under `next` (they pack them as an artifact of the run instead), so the workflow never needs `npm dist-tag`, which trusted publishing cannot run, and a plugin version already on npm leaves the run green. (#432) (#434)
+- the Proposals screens use the width of the page: a pending proposal shows what the brain already knows and its sheet beside its text, a category's sample is a grid of cards, and the form to propose opens in a dialog from a «New proposal» button instead of staying at the top of «My proposals». (#436)
+- When the embedding engine does not answer, the recall says so and where to fix it, instead of showing a socket error. (#439)
+
+### Security
+- the route that serves the web interface only serves files of the web build. (#438)
+
 ## [0.15.0] - 2026-11-09
 ### Added
 - scanned PDFs and images (`.png`, `.jpg`) are indexed with OCR. Tesseract runs in an optional service apart from the main image (the `ocr` profile of the compose file, `MIMIRSYNTH_OCR_URL`), page by page with progress, at most 50 pages per document and in `spa+eng` by default. A brain can read its scanned pages with the vision model of an LLM engine instead. Without OCR, the error says how to enable it. (#135) (#345)
