@@ -22,8 +22,10 @@ type Claim = { subject: string; relation: string; value: string; valid_from: str
   verdict: "new" | "confirms" | "replaces" | "may_replace" | "archives"; facts: { uuid: string; fact: string; target: string; valid_at: string | null }[];
   applied?: { action: string; facts: (string | { uuid: string; op: number })[]; invalid_at?: string; at: string } };
 /** Correction of a fact: the fact as it was when proposed, the reason and, once applied, when (and whether it was undone). */
-type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null }; reason: string;
-  invalid_at: string; applied_at?: string; reverted_at?: string };
+type Correction = { fact_uuid: string; fact: { fact: string; source: string; target: string; name: string; valid_at: string | null; invalid_at?: string | null }; reason: string;
+  invalid_at: string; applied_at?: string; reverted_at?: string;
+  /** What it does to the fact: invalidate it (also when missing, for the older ones) or make one invalidated by mistake current again. */ action?: "invalidate" | "reactivate" };
+const reactivates = (c?: Correction | null) => c?.action === "reactivate";
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: T("pendiente"), approved: T("aprobada"), rejected: T("rechazada"), ingested: T("ingerida"), failed: T("fallida") };
 const SOURCE: Record<string, string> = { text: T("texto"), message: T("conversación"), json: T("JSON") };
@@ -34,9 +36,11 @@ const flagged = (p: Prop) => !!p.secrets?.some((f) => f.action === "flagged");
 /** How a person decides one proposal. One with secrets flagged for review is never approved as written: «mask-and-approve» masks them first. */
 type Verb = "approve" | "reject" | "mask-and-approve";
 
-/** What a proposal does: adds knowledge or invalidates a fact. A correction is the delicate one, so it differs by icon, text and a filled look, not only by colour. */
-function KindPill({ kind }: { kind?: string }) {
+/** What a proposal does: adds knowledge, invalidates a fact or reactivates one invalidated by mistake. A correction is the delicate one, so it differs by icon, text and a filled look, not only by colour. */
+function KindPill({ kind, correction }: { kind?: string; correction?: Correction | null }) {
   const { t } = useTranslation();
+  if (kind === "correction" && reactivates(correction))
+    return <Pill tone="warn" strong title={t("Vuelve a dar por vigente un hecho invalidado")}><span className="ms-pill-row"><Icon name="refresh" size={12} />{t("Reactiva")}</span></Pill>;
   return kind === "correction"
     ? <Pill tone="warn" strong title={t("Invalida un hecho del grafo")}><span className="ms-pill-row"><Icon name="undo" size={12} />{t("Corrige")}</span></Pill>
     : <Pill tone="neutral" title={t("Añade conocimiento al grafo")}><span className="ms-pill-row"><Icon name="plus" size={12} />{t("Añade")}</span></Pill>;
@@ -120,7 +124,7 @@ function ProposalsTable({ data, view, status, onStatus, statuses, kind, onKind, 
       <DataTable.Tbody>
         {rows.map((p) => (
           <DataTable.Tr key={p.id} {...rowOpen(() => onOpen(p.id))}>
-            <DataTable.Td className="ms-data">#{p.id}</DataTable.Td>{mixed && <DataTable.Td><KindPill kind={p.kind} /></DataTable.Td>}
+            <DataTable.Td className="ms-data">#{p.id}</DataTable.Td>{mixed && <DataTable.Td><KindPill kind={p.kind} correction={p.correction} /></DataTable.Td>}
             <DataTable.Td><Group gap={4} wrap="wrap"><RowOpen onOpen={() => onOpen(p.id)}>{p.purged_at ? t("(texto purgado)") : p.name}</RowOpen><SecretsPill found={p.secrets} /></Group></DataTable.Td><DataTable.Td><span title={p.author}>{who(p)}</span></DataTable.Td><DataTable.Td className="ms-data">{fmtNum(p.confidence)}</DataTable.Td>
             <DataTable.Td><Pill tone={TONE[p.status]}>{t(LABEL[p.status] ?? p.status)}</Pill></DataTable.Td><DataTable.Td className="ms-data">{fmt(p.created_at)}</DataTable.Td>
             <DataTable.Td>{p.reviewed_at ? <CellText sub={fmt(p.reviewed_at)} data>{decidedBy(p, t)}</CellText> : "—"}</DataTable.Td>
@@ -250,14 +254,18 @@ function useShown(ref: RefObject<HTMLElement | null>, mounted: boolean) {
   return shown;
 }
 
-/** What to look at before approving a correction: the affected fact as it was beside the text that replaces it, then the reason. */
+/** What to look at before approving a correction: the affected fact as it was beside the text that replaces (or accompanies) it, then the reason. */
 function CorrectionDetail({ c, replacement }: { c: Correction; replacement: string }) {
   const { t } = useTranslation();
+  const back = reactivates(c);
+  const since = back ? (c.fact.invalid_at ? ` · ${t("invalidado desde {{date}}", { date: fmtDay(c.fact.invalid_at) })}` : "")
+    : c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) })}` : "";
   return (<>
     <Compare items={[
-      { label: t("Hecho que se invalida"), children: <CellText sub={<>{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{c.fact.valid_at ? ` · ${t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) })}` : ""} · <code>{c.fact_uuid}</code></>}>
+      { label: back ? t("Hecho que se reactiva") : t("Hecho que se invalida"), children: <CellText sub={<>{c.fact.source} → <span title={c.fact.name}>{humanRelation(c.fact.name)}</span> → {c.fact.target}{since} · <code>{c.fact_uuid}</code></>}>
         {c.fact.fact}</CellText> },
-      { label: t("Lo que lo sustituye"), children: replacement.trim() ? replacement : t("Sin sustituto: solo se invalida el hecho.") },
+      back ? { label: t("Texto que la acompaña"), children: replacement.trim() ? replacement : t("Sin texto: solo se reactiva el hecho.") }
+        : { label: t("Lo que lo sustituye"), children: replacement.trim() ? replacement : t("Sin sustituto: solo se invalida el hecho.") },
     ]} />
     <Block title={t("Motivo")}><Text className="ms-prose">{c.reason}</Text></Block>
   </>);
@@ -346,11 +354,13 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
   // its kind and state as marks over the text; the author's confidence goes in the sheet or, without one, in the «Sent» step
   const marks = !inQueue || d.kind === "correction";
   const text = (<>
-    {marks && <Group gap="xs"><KindPill kind={d.kind} />{!inQueue && <Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>}</Group>}
+    {marks && <Group gap="xs"><KindPill kind={d.kind} correction={d.correction} />{!inQueue && <Pill tone={TONE[d.status]}>{t(LABEL[d.status] ?? d.status)}</Pill>}</Group>}
     {d.purged_at ? <Notice tone="info" title={t("Texto purgado")}>{t("El texto de esta propuesta rechazada se purgó el {{d}} por el plazo de retención del brain. Quedan su estado, sus autores y sus fechas.", { d: fmt(d.purged_at) })}</Notice>
       : d.correction ? <CorrectionDetail c={d.correction} replacement={d.body} />
         : paired && !paired.mostly_new ? <AddedText d={d} fact={paired} /> : <Text className="ms-prose ms-proposal-text">{d.body}</Text>}
     {!!d.claims?.length && <ClaimsDetail claims={d.claims} />}
+    {d.status === "pending" && !d.correction && !d.claims?.length && !d.purged_at && d.category !== "curator.distil" && <Notice tone="info" title={t("Qué hará al aprobarla")}>
+      {t("Es texto libre: sus entidades y relaciones se extraen al ingerirla, después de aprobarla, así que no se pueden ver antes. No invalida ni reactiva ningún hecho de forma segura: si lo que pide es eso, recházala y usa una corrección (o «Reactivar» en el hecho).")}</Notice>}
     {d.category === "curator.distil" && <DistilDetail d={d} ops={ops} />}
     <SecretsNotice found={d.secrets} />
   </>);
@@ -375,7 +385,11 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
         {!d.review_kind && !d.decision && d.status === "pending" && <div>{t("Pendiente de un curador.")}</div>}
         {!d.review_kind && !d.decision && d.status !== "pending" && d.review_note && <div>{d.review_note}</div>}
       </Step>
-      {d.correction && <Step title={t("Hecho invalidado")} tone={d.correction.reverted_at ? "neutral" : d.correction.applied_at ? "success" : "neutral"}>
+      {d.correction && reactivates(d.correction) && <Step title={t("Hecho reactivado")} tone={d.correction.reverted_at ? "neutral" : d.correction.applied_at ? "success" : "neutral"}>
+        {d.correction.applied_at ? <div>{t("Reactivado · {{at}}", { at: fmt(d.correction.applied_at) })}</div> : <div>{t("Se reactivará al aprobarla.")}</div>}
+        {d.correction.reverted_at && <div>{t("Invalidado otra vez después · {{at}}", { at: fmt(d.correction.reverted_at) })}</div>}
+      </Step>}
+      {d.correction && !reactivates(d.correction) && <Step title={t("Hecho invalidado")} tone={d.correction.reverted_at ? "neutral" : d.correction.applied_at ? "success" : "neutral"}>
         {d.correction.applied_at ? <div>{t("Invalidado con fecha {{date}} · aplicado {{at}}", { date: fmtDay(d.correction.invalid_at), at: fmt(d.correction.applied_at) })}</div>
           : <div>{t("Se invalidará al aprobarla, con fecha {{date}}.", { date: fmtDay(d.correction.invalid_at) })}</div>}
         {d.correction.reverted_at && <div>{t("Reactivado después · {{at}}", { at: fmt(d.correction.reverted_at) })}</div>}
@@ -704,7 +718,7 @@ function AfterActions({ d, ops, onClose }: { d: Prop; ops: Ops; onClose: () => v
     {revive && <MutationError error={reactivate.error} />}
     <DialogActions>
       <Btn kind="ghost" onClick={onClose}>{t("Cerrar")}</Btn>
-      {revive && <Btn kind="secondary" loading={reactivate.isPending} onClick={() => reactivate.mutate(d.id)} icon="undo">{t("Reactivar el hecho")}</Btn>}
+      {revive && <Btn kind="secondary" loading={reactivate.isPending} onClick={() => reactivate.mutate(d.id)} icon="undo">{reactivates(d.correction) ? t("Deshacer la reactivación") : t("Reactivar el hecho")}</Btn>}
       {reopen && <Btn kind="secondary" loading={undo.isPending} onClick={() => undo.mutate([d.id])} icon="undo">{d.status === "rejected" ? t("Reabrir") : t("Deshacer la aprobación")}</Btn>}
       {d.status === "failed" && <Btn kind="secondary" loading={review.isPending} disabled={retry.isPending} onClick={() => review.mutate({ id: d.id, verb: "reject" })}>{t("Rechazar")}</Btn>}
       {ingest && <Btn kind="primary" disabled={review.isPending} loading={retry.isPending} onClick={() => retry.mutate(d.id)}>{d.status === "failed" ? t("Reintentar ingesta") : t("Ingerir ahora")}</Btn>}
@@ -889,7 +903,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
     id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <>{p.purged_at ? t("(texto purgado)") : p.name}</>, preview: p.correction ? p.correction.reason : p.body,
-    tags: <>{p.kind === "correction" && <KindPill kind={p.kind} />}<SecretsPill found={p.secrets} />
+    tags: <>{p.kind === "correction" && <KindPill kind={p.kind} correction={p.correction} />}<SecretsPill found={p.secrets} />
       {p.related_verdict === "duplicate" && <Pill tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
       {p.related_verdict === "stale" && <Pill tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posiblemente ya no es cierto")}</span></Pill>}
       {p.related_verdict === "similar" && <Pill tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}

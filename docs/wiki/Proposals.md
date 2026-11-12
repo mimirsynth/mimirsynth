@@ -58,6 +58,11 @@ A **correction** is a proposal that does not add memory: it asks to **invalidate
 - If the fact stopped being current while the correction waited, approving it gives an error and the correction stays pending: reject it.
 - **Reactivate the fact** in the correction puts the fact back as it was. An ingested replacement is left as it is.
 
+### Reactivating a fact invalidated by mistake
+A correction with `action: "reactivate"` asks the opposite: to make an **invalidated** fact current again, for example when a new fact superseded it wrongly. Its title starts with "Reactivation:", its marker says **Reactivates**, and its detail shows the **fact to reactivate** (and since when it is invalidated) with the reason. It is decided like any correction: by a person, one at a time. On approval the fact is current again (the step **Fact reactivated**), and the change is in the vocabulary history; **Undo the reactivation** invalidates it again as it was.
+
+A memory whose text explains that a fact is still true does **not** reactivate it: its text is extracted into new facts and the old one stays invalidated. That is why a pending free-text proposal says **What approving it does**: its entities and relations are only extracted after it is approved, and it never invalidates or reactivates a fact reliably. To do that, use a correction, structured claims or **Reactivate** on the fact in [[Facts]].
+
 ## Structured claims
 A proposal sent by an agent or over the API may carry **claims** next to its text: subject, relation and value, and optionally since when and which current fact it replaces. When it is sent, each one is compared with what the brain knows, and the detail shows them under **Claims** with their verdict:
 - **Confirms a current fact:** approving it records a confirmation of that fact (it renews its shelf life) instead of a new fact. If every claim confirms, nothing is ingested.
