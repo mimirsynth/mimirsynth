@@ -494,6 +494,7 @@
  "el modelo no se puede cambiar; crea otro motor": "the model cannot be changed; create another engine",
  "el motor LLM no responde: {{ex}}": "the LLM does not answer: {{ex}}",
  "el motor LLM {{ex}}. Prueba con otro modelo, o sáltate este paso": "the LLM {{ex}}. Try another model, or skip this step",
+ "el motor de embeddings no responde y sin él no se puede buscar: revisa su dirección y su clave en Administración → Modelos de IA → Embeddings": "the embedding engine is not answering, and without it nothing can be searched: check its address and key in Administration → AI models → Embeddings",
  "el motor de embeddings no responde: {{detail}}": "the embedding engine does not answer: {{detail}}",
  "el motor de embeddings no responde: {{v}}": "the embedding engine does not respond: {{v}}",
  "el motor está desactivado": "the engine is disabled",

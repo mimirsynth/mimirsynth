@@ -1,8 +1,0 @@
-{
- "Escribe una consulta o elige un ejemplo y pulsa Ejecutar: verás sus filas en una tabla y, si devuelve nodos, también en un grafo.": "Write a query or pick an example and press Run: you will see its rows in a table and, if it returns nodes, in a graph too.",
- "Hechos que dejaron de ser ciertos": "Facts no longer true",
- "Hechos vigentes": "Current facts",
- "La consulta no ha devuelto ninguna fila.": "The query returned no rows.",
- "Pruebas": "Evidence",
- "Qué se guarda de las consultas": "What is kept of the queries"
-}
