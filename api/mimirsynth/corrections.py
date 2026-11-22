@@ -11,12 +11,17 @@ A reactivation goes through the same gate: it is decided by a person, and approv
 (recorded as `fact.reactivate` in the vocabulary history); undoing it puts the invalidation back. A free-text proposal never does this:
 its text is extracted into new facts and an invalidated fact stays invalidated.
 The proposal stores in `correction` {action, fact_uuid, fact (the fact as it was), reason, invalid_at, op, applied_at, reverted_at};
-`body` is the replacement text (empty if there is none). A correction without `action` invalidates."""
+`body` is the replacement text (empty if there is none). A correction without `action` invalidates.
+One pending correction per fact and action (#460): sending one that would wait for a curator while another for the same fact and action is
+pending returns that one (200 over REST, said over MCP) instead of a second. A curator who applies one when sending it is not stopped."""
 from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from . import ingest, secretguard
 from .db import rows
@@ -81,10 +86,26 @@ def _iso(d: datetime) -> str:
     return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat()
 
 
+def pending_for(ctx: BrainCtx, uuid: str, act: str) -> Proposal | None:
+    """The pending correction of this fact that does the same (invalidate or reactivate), if there is one."""
+    for p in ctx.db.scalars(select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction", Proposal.status == "pending")
+                            .order_by(Proposal.id)):
+        if (p.correction or {}).get("fact_uuid") == uuid and action(p.correction) == act:
+            return p
+    return None
+
+
 def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = True) -> Proposal:
-    """Creates a correction (also used by the MCP tool `correct`). With `direct`, a curator applies it when sending it, as with `remember`."""
+    """Creates a correction (also used by the MCP tool `correct`). With `direct`, a curator applies it when sending it, as with `remember`.
+    One that would only wait in the queue, while another for the same fact and action is pending, returns that one (`p.duplicate`)."""
     lang = language(request)
     f = _check(ctx, body.fact_uuid.strip(), lang, body.action)
+    if not (direct and allows(ctx.role, "curator")):
+        same = pending_for(ctx, f["uuid"], body.action)
+        if same is not None:
+            same.duplicate = True
+            audit(ctx.db, ctx.user, "proposal.duplicate", ctx.brain, id=same.id, kind="correction", fact=f["uuid"])
+            return same
     try:
         reason, in_reason = secretguard.guard(ctx.brain, body.reason)
         text, in_body = secretguard.guard(ctx.brain, body.replacement)
@@ -150,8 +171,11 @@ def apply(ctx: BrainCtx, p: Proposal, lang: str = "es", note: str = "", kind: st
 
 @router.post("/corrections", status_code=201)
 def submit(body: CorrectionIn, request: Request, ctx: BrainCtx = Depends(contributor)):
-    """Contributor: it stays in quarantine. Curator or above: it is applied when sent."""
-    return _out(create(ctx, request, body))
+    """Contributor: it stays in quarantine. Curator or above: it is applied when sent. The same correction pending already: that one, 200."""
+    p = create(ctx, request, body)
+    if getattr(p, "duplicate", False):
+        return JSONResponse(jsonable_encoder({**_out(p), "duplicate": True}), status_code=200)
+    return _out(p)
 
 
 @router.post("/{pid}/reactivate")

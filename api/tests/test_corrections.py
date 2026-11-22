@@ -205,3 +205,34 @@ def test_reactivation_of_a_fact_invalidated_by_mistake(client, graphs, monkeypat
     r = client.post(f"/api/brains/cor/proposals/{p2}/approve", json={})
     assert r.status_code == 409 and "está vigente" in r.json()["detail"]
     assert client.get(f"/api/brains/cor/proposals/{p2}").json()["status"] == "pending"
+
+
+@pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_one_pending_correction_per_fact_and_action(client, graphs):  # noqa: F811
+    """#460: sending the same correction twice leaves one pending; a curator who applies one is not stopped by it."""
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "co2", "name": "CO2", "graph_name": OWN}).status_code == 201
+    contrib = _tok(client, "co2", "contributor")
+    c = TestClient(app, headers={"Accept-Language": "es"})
+    err, txt = call(c, "co2", contrib, "correct", fact_uuid="f3", reason="Ahora usa PHP 8.3")
+    assert not err and "cuarentena" in txt
+    err, txt = call(c, "co2", contrib, "correct", fact_uuid="f3", reason="Ahora usa PHP 8.4")
+    assert not err and "Ya hay una corrección pendiente de ese hecho" in txt
+    err, txt = call(c, "co2", contrib, "correct", fact_uuid="f2", reason="Volvió a Notus", action="reactivate")   # another action: its own
+    assert not err and "cuarentena" in txt
+    with _factory()() as db:
+        bid = db.query(Proposal.brain_id).filter(Proposal.kind == "correction").order_by(Proposal.id.desc()).first()[0]
+        fixes = db.query(Proposal).filter(Proposal.brain_id == bid, Proposal.kind == "correction", Proposal.status == "pending").all()
+        assert sorted((p.correction["fact_uuid"], p.correction["action"]) for p in fixes) == [("f2", "reactivate"), ("f3", "invalidate")]
+        first = next(p.id for p in fixes if p.correction["fact_uuid"] == "f3")
+
+    # over REST, a contributor gets the pending one back (200); a curator applies a new one at once
+    from test_control import _as
+    assert client.put("/api/brains/co2/members", json={"email": "cleo@x.com", "role": "contributor"}).status_code == 200
+    _as("cleo@x.com", "Cleo")
+    r = client.post("/api/brains/co2/proposals/corrections", json={"fact_uuid": "f3", "reason": "Otra vez"})
+    assert r.status_code == 200 and r.json()["id"] == first and r.json()["duplicate"] is True
+    app.dependency_overrides.clear()
+    r = client.post("/api/brains/co2/proposals/corrections", json={"fact_uuid": "f3", "reason": "Ahora usa PHP 8.3"})
+    assert r.status_code == 201 and r.json()["status"] == "ingested" and _state(graphs, "f3")[0]

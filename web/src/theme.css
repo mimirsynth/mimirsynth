@@ -637,6 +637,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-preview { font-size: 13px; color: var(--ms-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-queue-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ms-muted); }
 .ms-queue-age { white-space: nowrap; }
+.ms-queue-fact { white-space: nowrap; }  /* which fact a correction is about: two with the same text read apart (#460) */
 
 .ms-wrap-any { overflow-wrap: anywhere; }  /* quoted text that may hold a long URL or hash: it breaks anywhere rather than overflow */
 .ms-nowrap { white-space: nowrap; }  /* a number and its words on one line; the line breaks between such pieces */

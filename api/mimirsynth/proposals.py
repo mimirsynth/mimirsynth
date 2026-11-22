@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import String, case, cast, func, select, update
+from sqlalchemy import String, case, cast, func, or_, select, update
 
 from . import claims as claims_mod, deciders_admin, ingest, secretguard
 from .deps import BrainCtx, audit, brain_access
@@ -173,7 +173,9 @@ def list_proposals(bg: BackgroundTasks, status: str | None = None, kind: str | N
     if author:
         base = base.where(Proposal.author_id == author)
     if q.strip():
-        base = base.where(Proposal.name.ilike("%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\"))
+        like = Proposal.name.ilike("%" + q.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%", escape="\\")
+        num = q.strip().lstrip("#")
+        base = base.where(or_(like, Proposal.id == int(num)) if num.isdigit() and len(num) < 10 else like)   # «#278» or «278» finds that one (#460)
     total = ctx.db.scalar(select(func.count()).select_from(base.subquery()))
     if sort == "risk":  # `order=desc` turns the whole queue around (newest and least risky first)
         keys = (_RISK.asc(), Proposal.created_at.asc(), Proposal.id.asc()) if order == "asc" else (_RISK.desc(), Proposal.created_at.desc(), Proposal.id.desc())
