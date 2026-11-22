@@ -158,6 +158,16 @@ def _documents(db, brain_id: int, m: Matcher) -> dict[int, int]:
     return docs
 
 
+def _proposals(db, brain_id: int, m: Matcher) -> list:
+    """Proposals that name it in their text (narrowed in SQL), plus the ingested ones whose report does: a fact merged or dropped at
+    ingestion can name it when the body only says «she» (#458)."""
+    from .models import Proposal
+    found = _scan(db, Proposal, brain_id, ["name", "body", "review_note"], m, ["name", "body", "review_note"])
+    seen = {p.id for p in found}
+    reports = select(Proposal).where(Proposal.brain_id == brain_id, Proposal.ingest_report.is_not(None))
+    return found + [p for p in db.scalars(reports.limit(MAX_ROWS)) if p.id not in seen and m(p.ingest_report)]
+
+
 def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
     from .models import (Audit, CuratorRun, FactArchive, FactConfirmation, FactProbe, FactRecall, Job, Notification, Proposal, RecallLog,
                          RecallSample, RefQuery, RefRun, ReplayRun, RetypeSuggestion, SummarySuggestion, VocabOp, WebhookEvent)
@@ -167,7 +177,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
             hanging += list(db.scalars(select(model).where(model.brain_id == brain_id, model.fact_uuid.in_(sorted(facts)))))
     hanging += [p for p in _scan(db, FactProbe, brain_id, ["evidence", "value"], m) if p.fact_uuid not in facts]
     return {
-        "proposals": _scan(db, Proposal, brain_id, ["name", "body", "review_note", "ingest_report"], m, ["name", "body", "review_note"]),
+        "proposals": _proposals(db, brain_id, m),
         "recall_samples": _scan(db, RecallSample, brain_id, ["query"], m, ["query"]),
         "recall_logs": _scan(db, RecallLog, brain_id, ["query_text"], m, ["query_text"]),
         "replay_runs": _scan(db, ReplayRun, brain_id, ["results"], m),

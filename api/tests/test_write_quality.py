@@ -42,8 +42,12 @@ def test_a_repeat_of_a_current_fact_is_linked_to_it_and_a_near_one_is_not():
                {"uuid": "x2", "fact": "Vaultwarden is backed up every night", "su": "vw", "tu": "al"}]   # near, not the same: a curator's call
     out = W.decide(found, EP, current, created(found))
     assert out["gone"] == ["e2", "e1"] and out["link"] == ["x1"]
-    assert [(c["fact"], c["kept"], c["with"], c["why"]) for c in out["collapsed"]] == [("Vaultwarden runs on altair", "x1", "episode", W.SAME_EPISODE),
+    assert [(c["fact"], c["kept"], c["with"], c["why"]) for c in out["collapsed"]] == [("Vaultwarden runs on altair", "x1", "current", W.SAME_CURRENT),
                                                                                      ("Vaultwarden runs on altair", "x1", "current", W.SAME_CURRENT)]
+
+
+def test_only_one_closing_full_stop_is_ignored():
+    assert W.same_text(" Runs  on altair. ") == "runs on altair" and W.same_text("Runs v1...") == "runs v1..."
 
 
 def test_an_invalidated_new_fact_is_never_linked_to_a_current_one():

@@ -33,7 +33,8 @@ _PRONOUNS = frozenset("it this that these those them they something someone esto
 
 def same_text(text) -> str:
     """A fact's text as compared here: case, spacing and a closing full stop do not count."""
-    return " ".join(str(text or "").lower().split()).rstrip(" .")
+    t = " ".join(str(text or "").lower().split())
+    return t[:-1].rstrip() if t.endswith(".") and not t.endswith("..") else t
 
 
 def write_rule(f: dict) -> str | None:
@@ -100,8 +101,8 @@ def decide(found: list[dict], episode: str, current: list[dict], created: set[st
             fact = next(f["fact"] for f in new if f["uuid"] == uuid)
             collapsed.append({"uuid": uuid, "fact": fact, "kept": match["uuid"], "with": "current", "why": SAME_CURRENT})
             for e in collapsed:
-                if e["kept"] == uuid:
-                    e["kept"] = match["uuid"]
+                if e["kept"] == uuid:   # its repeats end in the brain's fact too
+                    e["kept"], e["with"], e["why"] = match["uuid"], "current", SAME_CURRENT
     return {"gone": gone, "link": sorted(set(link)), "collapsed": collapsed, "dropped": dropped}
 
 
