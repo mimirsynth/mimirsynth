@@ -16,7 +16,7 @@ Una línea debajo apunta a lo que sigue en otro sitio:
 ## Pestañas
 | Pestaña | Para qué sirve | Quién decide |
 |---|---|---|
-| **Duplicados** ([[Fusionar duplicados]]) | Grupos de entidades con el mismo nombre salvo versión o mayúsculas. Marca cuáles fusionar y cuál es la principal, o di que no son duplicados. La fusión se deshace desde **Fusiones recientes**. | Administrador (los curadores ven los grupos) |
+| **Duplicados** ([[Fusionar duplicados]]) | Grupos de entidades con el mismo nombre salvo mayúsculas, espacios o una versión final. Marca cuáles fusionar y cuál es la principal, o di que no son duplicados. La fusión se deshace desde **Fusiones recientes**. | Administrador (los curadores ven los grupos) |
 | [[Contradicciones]] | Hechos vigentes que no pueden ser ciertos a la vez: el mismo sujeto con dos destinos en una relación de un solo valor. Quédate con el que sigue siendo cierto, o di que no es una contradicción. | Curador y superiores |
 | **Tipos dudosos** ([[Corrector de tipos]]) | Entidades sin tipo o con uno comodín: el decisor propone un tipo de la ontología y un administrador lo aplica o lo descarta. Cada cambio se deshace por separado. | Administrador |
 | **Resúmenes** | Entidades cuyo resumen es una lista de sus propios hechos: el motor propone de una a tres frases, y un curador las corrige si hace falta y las aprueba. Cada aprobación se deshace desde **Cambios recientes**. Ver más abajo. | Curador y superiores (un administrador lanza el análisis) |

@@ -1,6 +1,7 @@
 """Rutas de lectura del grafo de un brain: /api/brains/{slug}/... (requieren rol de lector o superior)."""
 from datetime import datetime, timezone
 import re
+import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
@@ -423,12 +424,22 @@ def graph_view(
 
 # --- Vocabulario: relaciones y entidades ------------------------------------------------------
 GENERIC_RELS = {"RELATES_TO", "MENTIONED_IN", "PARTICIPATES_IN", "ASSOCIATED_WITH", "RELATED_TO"}
-_VERSION = re.compile(r"\s*[\(\[]?\bv?\d+(\.\d+){1,3}[\w.\-]*[\)\]]?\s*$", re.I)
+# A trailing version counts only as a separate word («Web-Vault 2026.4.1», «Nextcloud (v31.0.1)»): glued to the name by «@», «=»,
+# «-» or «/» it is part of what the entity is («ups@10.0.0.4», «min_similarity=0.55»), and stripping it grouped different things.
+# Up to three parts: a four-part number is more often an address («AdGuard 10.0.100.101») than a version.
+_VERSION = re.compile(r"\s+[\(\[]?v?\d+(\.\d+){1,2}(?![.\d])[\w.\-]*[\)\]]?$", re.I)
+_SEPARATORS = re.compile(r"[\s_\-\N{HYPHEN}-\N{HORIZONTAL BAR}]+")
 
 
 def _entity_key(name: str) -> str:
-    s = _VERSION.sub("", name or "").strip().lower()
-    return re.sub(r"[\s_\-]+", " ", s)
+    """How the duplicates tab compares entity names: case, spacing, «_» and «-» and a trailing version do not count, so «VM 201»,
+    «vm201» and «VM-201 1.2» are one group. A name that is only numbers and dots (an address, a bare version) is compared whole:
+    stripping its «version» used to leave it with an empty key, so even two identical addresses never showed up."""
+    s = " ".join(unicodedata.normalize("NFKC", name or "").split()).casefold()
+    base = _VERSION.sub("", s)
+    if not re.search(r"[^\W\d_]", base):
+        return s
+    return _SEPARATORS.sub("", base)
 
 
 def duplicates(G, db, brain_id: int) -> tuple[list[dict], list[dict], set[str]]:
@@ -441,7 +452,8 @@ def duplicates(G, db, brain_id: int) -> tuple[list[dict], list[dict], set[str]]:
     groups: dict[str, list] = {}
     for e in ents:
         groups.setdefault(_entity_key(e["name"]), []).append(e)
-    ignored = {a.alias for a in db.scalars(select(VocabAlias).where(VocabAlias.brain_id == brain_id, VocabAlias.kind == "dup_ignore"))}
+    # keys saved before the key format changed (single spaces, «web vault») still hide their group
+    ignored = {_entity_key(a.alias) for a in db.scalars(select(VocabAlias).where(VocabAlias.brain_id == brain_id, VocabAlias.kind == "dup_ignore"))}
     dups = sorted(
         ({"key": k, "members": sorted(v, key=lambda x: -x["degree"])} for k, v in groups.items() if len(v) > 1 and k and k not in ignored),
         key=lambda g: -sum(m["degree"] for m in g["members"]),
