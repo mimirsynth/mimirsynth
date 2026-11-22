@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { Group, Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -68,7 +69,7 @@ type Counts = { facts_new: number | null; facts_gone: number | null; docs_new: n
 type Changes = Counts & { days: number; bucket: "hour" | "day"; previous: Counts; series: { [K in keyof Counts]: number[] | null } };
 
 /** The figure against the same period before: «+38 % vs the previous 7 days», «the same as…», or the figure before when it was 0. */
-function vsBefore(now: number | null, before: number | null, days: string, t: (k: string, o?: Record<string, unknown>) => string) {
+function vsBefore(now: number | null, before: number | null, days: string, t: TFunction) {
   if (now === null || before === null) return t("no se pudo leer el grafo");
   const period = days === "1" ? t("las 24 h anteriores") : t("los {{n}} días anteriores", { n: days });
   if (now === before) return t("igual que {{period}}", { period });

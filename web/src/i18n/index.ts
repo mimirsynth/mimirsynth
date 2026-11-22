@@ -54,7 +54,7 @@ document.documentElement.lang = i18n.language;
 
 export default i18n;
 /** Traducción fuera de componentes (funciones auxiliares): se evalúa al llamarla, así que respeta el idioma activo. */
-export const tr = (key: string, opts?: Record<string, unknown>): string => i18n.t(key, opts) as string;
+export const tr = (key: string, opts?: Record<string, unknown>): string => i18n.t(key, opts ?? {}) as string;
 /** Marca un texto como traducible sin traducirlo aún (constantes de módulo); se traduce al pintarlo con `t(valor)`. */
 export const T = <S extends string>(s: S): S => s;
 /** Idioma de formato para fechas y números. */
