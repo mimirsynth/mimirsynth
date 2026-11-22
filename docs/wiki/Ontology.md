@@ -60,6 +60,9 @@ A current fact of that relation whose last date (its last confirmation or, faili
 
 A fact without a validity date (imported from another system, for example) never goes stale by date: there is nothing to measure from. Lent facts are not marked here: the shelf life is the lending brain's. A generic relation such as `RELATES_TO` cannot have a shelf life.
 
+## Retirements and topic reviews
+A relation type can **mark a retirement** (in the relation's edit dialog, **Marks a retirement**: the source or the target is retired). A new fact of that relation, for example «Postmark replaced Sendgrid», queues a topic review of the retired entity on its own, so the facts that still describe it as live reach a curator: see [[Content quality]] → Topics. The usual names (`REPLACED_BY`, `SUPERSEDES`, `MIGRATED_TO`…) are recognised without a mark, including the packages' `MigratedTo` and `Supersedes`; the mark is for a brain's own relations, and it wins over the usual reading of a name. A generic relation such as `RELATES_TO` cannot mark one.
+
 ## Writing good descriptions
 The LLM decides by looking at the descriptions. Good ones:
 - Say **when yes** and **when no**, with real examples.

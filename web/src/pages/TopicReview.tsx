@@ -8,7 +8,10 @@ import { T } from "../i18n";
 import { Block, Btn, CellText, Check, Compare, ConfirmDialog, DataState, DataTable, EmptyState, ListCard, MutationError, Notice, Pill, TextArea, ViewBar } from "../ui";
 
 type Row = { id: number; entity_uuid: string; name: string; status: "queued" | "running" | "ready" | "failed"; error: string; error_code: string;
-  created_at: string; finished_at: string | null; job: number | null; calls: number; counts: Record<"pending" | "approved" | "rejected" | "outdated", number> };
+  created_at: string; finished_at: string | null; job: number | null; calls: number; counts: Record<"pending" | "approved" | "rejected" | "outdated", number>;
+  trigger?: "manual" | "retirement" };
+/** A fact that says the entity was retired or replaced (issue 455), as it was when it started the review. */
+type Anchor = { uuid: string; fact: string; relation: string; proposal: number | null };
 type Prec = Record<string, { approved: number; rejected: number; pending: number; precision: number | null }>;
 type Item = { kind: "fact"; uuid: string; fact: string; source: string; target: string; valid_at: string | null; invalid_at: string | null; probe: string | null;
   now: "current" | "invalidated" | "gone" | null } | { kind: "episode"; uuid: string; name: string; valid_at: string | null; source: string; text: string };
@@ -17,7 +20,7 @@ type Act = { i: number; type: string; facts: string[]; keep: string | null; evid
   decision: "pending" | "applying" | "approved" | "rejected" | "outdated"; became: { proposal: number; fact?: string; status: string }[];
   skipped: { fact: string; why: string }[]; secrets: Secret[]; flagged: boolean };
 type Detail = Row & { state: string; state_secrets: Secret[]; state_flagged: boolean; prompt_version: string; actions: Act[]; discarded: Record<string, number>;
-  left_out: Record<string, number>; items: Record<string, Item> };
+  left_out: Record<string, number>; items: Record<string, Item>; anchors: Anchor[] };
 type List = { engine: boolean; items: Row[]; precision: Prec };
 
 /** What each kind of action does, as the curator reads it. */
@@ -25,7 +28,8 @@ const TYPE: Record<string, string> = { invalidate: T("Invalidar"), merge: T("Uni
   gap: T("Falta en la memoria") };
 const DISCARDED: Record<string, string> = { unknown_id: T("citaban algo que no se les envió"), no_evidence: T("no citaban pruebas"),
   not_a_fact: T("actuaban sobre algo que no es un hecho"), not_own: T("cambiaban un hecho de otra entidad"), not_current: T("actuaban sobre un hecho ya invalidado"),
-  too_many: T("cambiaban más de diez hechos a la vez"), rule: T("no cumplían las reglas de su tipo"), secrets: T("llevaban secretos") };
+  too_many: T("cambiaban más de diez hechos a la vez"), rule: T("no cumplían las reglas de su tipo"), secrets: T("llevaban secretos"),
+  anchor: T("invalidaban el hecho que dice que se retiró") };
 const DECISION: Record<string, [string, "success" | "neutral" | "warn" | "alt"]> = { approved: [T("Aprobada"), "success"], rejected: [T("Rechazada"), "neutral"],
   outdated: [T("Ya no aplicaba"), "warn"], applying: [T("Aplicándose…"), "alt"] };
 /** Why a fact of an approved action was left alone. */
@@ -54,7 +58,7 @@ export default function TopicReviews({ graph }: { graph: string }) {
   return (
     <>
       <ViewBar title={t("Revisiones de tema")}
-        help={t("Una revisión de tema lee todo lo que la memoria sabe de una entidad (sus hechos, los episodios que la mencionan y los hechos de sus vecinos) y propone qué invalidar, qué unir, qué reescribir y qué falta, citando en cada caso sus pruebas. Se pide desde la página de la entidad, en Curación. Cada acción la decide un curador: al aprobarla se convierte en una corrección, que se aplica en el momento y se puede deshacer, o, si es algo que falta, en una propuesta de la cola.")} />
+        help={<>{t("Una revisión de tema lee todo lo que la memoria sabe de una entidad (sus hechos, los episodios que la mencionan y los hechos de sus vecinos) y propone qué invalidar, qué unir, qué reescribir y qué falta, citando en cada caso sus pruebas. Se pide desde la página de la entidad, en Curación. Cada acción la decide un curador: al aprobarla se convierte en una corrección, que se aplica en el momento y se puede deshacer, o, si es algo que falta, en una propuesta de la cola.")} {t("Además, cuando se ingiere un hecho que dice que una entidad se retiró o se sustituyó, se pide sola una revisión de esa entidad, marcada «Por una retirada».")}</>} />
       {d && !d.engine && <Notice tone="warn">{t("No hay ningún motor LLM configurado (Administración → Proveedores IA).")}</Notice>}
       {!d ? <DataState query={q} /> : items.length === 0 && <EmptyState>{t("Aún no hay revisiones de tema. Se piden desde la página de una entidad: Curación → Revisar este tema.")}</EmptyState>}
       {items.map((r) => (
@@ -70,10 +74,11 @@ const standing = (r: Row) => (r.counts.pending > 0 ? "pending" : r.counts.approv
 
 function RowState({ r }: { r: Row }) {
   const { t } = useTranslation();
-  if (busy(r)) return <Pill tone="alt">{t("Revisando…")}</Pill>;
-  if (r.status === "failed") return <Pill tone="danger">{t("Falló")}</Pill>;
+  const from = r.trigger === "retirement" && <Pill>{t("Por una retirada")}</Pill>;
+  if (busy(r)) return <>{from}<Pill tone="alt">{t("Revisando…")}</Pill></>;
+  if (r.status === "failed") return <>{from}<Pill tone="danger">{t("Falló")}</Pill></>;
   const s = standing(r);
-  return <>
+  return <>{from}
     {s === "pending" ? <Pill tone="warn">{t("Por decidir: {{n}}", { n: r.counts.pending })}</Pill> : <Pill>{s === "decided" ? t("Decidida") : t("Sin cambios propuestos")}</Pill>}
     {r.counts.approved > 0 && <Pill tone="success">{t("Aprobadas: {{n}}", { n: r.counts.approved })}</Pill>}
   </>;
@@ -120,6 +125,7 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
         {d && <Btn kind="link" component={Link} to={`/entidad/${d.entity_uuid}`}>{t("Ver la entidad «{{name}}»", { name: d.name })}</Btn>}
       </ViewBar>
       {!d ? <DataState query={q} /> : <>
+        {d.anchors.length > 0 && <Anchors anchors={d.anchors} />}
         {busy(d) && <Notice title={t("Revisando el tema «{{name}}»…", { name: d.name })}>{t("El motor está leyendo lo que la memoria sabe de la entidad. Esta página se actualiza sola.")}</Notice>}
         {d.status === "failed" && <Notice tone="danger" title={t("La revisión falló")}><Stack gap={4}>
           <Text inherit>{t(FAILURE[d.error_code] ?? FAILURE.failed)} {t("No se ha guardado nada de ella. Puedes pedirla otra vez desde la página de la entidad.")}</Text>
@@ -153,6 +159,20 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
         </Stack></Notice>}
       </>}
     </div>
+  );
+}
+
+/** The facts that started a review on their own (issue 455): each one says the entity was retired or replaced. */
+function Anchors({ anchors }: { anchors: Anchor[] }) {
+  const { t } = useTranslation();
+  return (
+    <Notice title={anchors.length === 1 ? t("Un hecho nuevo dice que se retiró o se sustituyó") : t("{{n}} hechos nuevos dicen que se retiró o se sustituyó", { n: anchors.length })}>
+      <Stack gap={6}>
+        <Text inherit>{t("La revisión busca los hechos que aún lo describen como vigente. Nada se invalida sin que un curador lo apruebe.")}</Text>
+        {anchors.map((a) => <CellText key={a.uuid} sub={<>{a.relation}{a.proposal ? <> · <Btn kind="link" component={Link} to={`/propuestas?tab=decididas&id=${a.proposal}`}>{t("Propuesta #{{id}}", { id: a.proposal })}</Btn></> : null}</>}>
+          {t("«{{fact}}»", { fact: a.fact })}</CellText>)}
+      </Stack>
+    </Notice>
   );
 }
 

@@ -6,7 +6,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { get, send } from "../api";
 import { Block, Btn, Check, ClearFilters, ColHead, DataState, DataTable, DialogActions, EmptyState, Modal, Notice, NumberField, Pill, SelectField, TextArea, TextField, useTableView, MutationError, ConfirmDialog, ViewBar } from "../ui";
 
-type T = { name: string; description: string; functional?: boolean; shelf_life_days?: number };
+type T = { name: string; description: string; functional?: boolean; shelf_life_days?: number; retires?: "source" | "target" };
 type Rule = { source: string; target: string; edge_types: string[] };
 type Onto = { ontology: { entity_types: T[]; edge_types: T[]; edge_type_map: Rule[]; instructions?: string }; configured: boolean; presets: string[]; presets_info?: { name: string; title: string; description: string; version: number; standards: string[]; entity_types: number; edge_types: number }[]; preset_update?: { name: string; installed: number; available: number } | null };
 type Done = { op: number; summary: string };
@@ -24,9 +24,10 @@ function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[];
   const v = useTableView(rows, { name: { get: (t: T) => t.name }, desc: { get: (t: T) => t.description }, used: { get: (t: T) => used(t.name) }, one: { get: (t: T) => (t.functional ? 1 : 0) } });
   return (
     <Block title={t("Tipos de relación")} count={rows.length}
-      help={<>{t("Dos marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones, y la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar.")}{" "}
+      help={<>{t("Tres marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones; la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar; y «Marca una retirada» (un hecho nuevo suyo dice que algo se retiró o se sustituyó), una revisión del tema de lo retirado.")}{" "}
         <Btn kind="link" component={Link} to="/calidad?tab=conflicts">{t("Contradicciones")}</Btn>{" · "}
-        <Btn kind="link" component={Link} to="/calidad?tab=stale">{t("A revisar")}</Btn></>}
+        <Btn kind="link" component={Link} to="/calidad?tab=stale">{t("A revisar")}</Btn>{" · "}
+        <Btn kind="link" component={Link} to="/calidad?tab=topics">{t("Temas")}</Btn></>}
       actions={<>
         <ClearFilters active={v.active} onClear={v.clear} shown={v.rows.length} total={v.total} />
         {canEdit && <Btn size="row" icon="plus" onClick={onAdd}>{t("Añadir relación")}</Btn>}
@@ -39,6 +40,7 @@ function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[];
             <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
             <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
             <ColHead>{t("Vida útil")}</ColHead>
+            <ColHead>{t("Retirada")}</ColHead>
             {canEdit && <DataTable.ActionsHead />}
           </DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{v.rows.map((ty) => (
@@ -48,6 +50,7 @@ function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[];
               <DataTable.Td className="ms-data">{used(ty.name)}</DataTable.Td>
               <DataTable.Td>{ty.functional ? <Pill tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : "—"}</DataTable.Td>
               <DataTable.Td className="ms-data">{ty.shelf_life_days ? t("{{n}} días", { n: ty.shelf_life_days }) : "—"}</DataTable.Td>
+              <DataTable.Td>{ty.retires ? <Pill tone="alt" title={t("Un hecho nuevo suyo pide una revisión del tema de lo retirado")}>{ty.retires === "source" ? t("el origen") : t("el destino")}</Pill> : "—"}</DataTable.Td>
               {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
             </DataTable.Tr>))}</DataTable.Tbody>
         </DataTable>)}
@@ -99,6 +102,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const [desc, setDesc] = useState("");
   const [functional, setFunctional] = useState(false);
   const [shelf, setShelf] = useState<number | string>("");
+  const [retires, setRetires] = useState<string>("none");
   const [src, setSrc] = useState<string | null>(null);
   const [tgt, setTgt] = useState<string | null>(null);
   const [edges, setEdges] = useState<string[]>([]);
@@ -113,7 +117,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const upd = q.data?.preset_update;
   const updInfo = info.find((i) => i.name === upd?.name);
   const saveRel = useMutation({
-    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional: functional && !isGeneric(name), shelf_life_days: isGeneric(name) || shelf === "" ? 0 : Number(shelf) }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional: functional && !isGeneric(name), shelf_life_days: isGeneric(name) || shelf === "" ? null : Number(shelf) }, { graph })),
+    mutationFn: () => (dlg?.kind === "rel" && dlg.item ? send<Done>("PUT", `vocab/relations/${dlg.item.name}`, { description: desc, functional: functional && !isGeneric(name), shelf_life_days: isGeneric(name) || shelf === "" ? 0 : Number(shelf), retires: isGeneric(name) ? "none" : retires }, { graph }) : send<Done>("POST", "vocab/relations", { name, description: desc, functional: functional && !isGeneric(name), shelf_life_days: isGeneric(name) || shelf === "" ? null : Number(shelf), retires: isGeneric(name) || retires === "none" ? null : retires }, { graph })),
     onSuccess: finished });
   const delRel = useMutation({ mutationFn: () => send<Done>("DELETE", `vocab/relations/${(dlg as { item: T }).item.name}`, undefined, { graph }), onSuccess: finished });
   const saveRule = useMutation({ mutationFn: () => send<Done>("PUT", "vocab/map", { source: src, target: tgt, edge_types: edges }, { graph }), onSuccess: finished });
@@ -122,7 +126,7 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
   const undo = useMutation({ mutationFn: (id: number) => send("POST", `vocab/ops/${id}/revert`, undefined, { graph }), onSuccess: () => { setDone(null); refresh(); } });
 
   const reset = () => { saveRel.reset(); delRel.reset(); saveRule.reset(); delRule.reset(); saveInstr.reset(); };
-  const openRel = (item?: T) => { reset(); setName(item?.name ?? ""); setDesc(item?.description ?? ""); setFunctional(!!item?.functional); setShelf(item?.shelf_life_days ?? ""); setDlg({ kind: "rel", item }); };
+  const openRel = (item?: T) => { reset(); setName(item?.name ?? ""); setDesc(item?.description ?? ""); setFunctional(!!item?.functional); setShelf(item?.shelf_life_days ?? ""); setRetires(item?.retires ?? "none"); setDlg({ kind: "rel", item }); };
   const openRule = (item?: Rule) => { reset(); setSrc(item?.source ?? null); setTgt(item?.target ?? null); setEdges(item?.edge_types ?? []); setDlg({ kind: "rule", item }); };
   const openInstr = () => { reset(); setDesc(o?.instructions ?? ""); setDlg({ kind: "instr" }); };
   const entityNames = ["Entity", ...(o?.entity_types.map((t) => t.name) ?? [])];
@@ -181,6 +185,9 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
               : t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Calidad del contenido → Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes allí, con «Medir en todas las relaciones».")} />
           <NumberField label={t("Vida útil (días)")} min={1} max={3650} value={shelf} onChange={setShelf} disabled={isGeneric(name)} placeholder={t("Sin vida útil")}
             description={isGeneric(name) ? t("Es una relación genérica: no puede tener vida útil.") : t("Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en Calidad del contenido → A revisar. Vacío: nunca.")} />
+          <SelectField label={t("Marca una retirada")} value={isGeneric(name) ? "none" : retires} onChange={(v) => setRetires(v ?? "none")} disabled={isGeneric(name)} allowDeselect={false}
+            data={[{ value: "none", label: t("No") }, { value: "source", label: t("Sí: se retira el origen") }, { value: "target", label: t("Sí: se retira el destino") }]}
+            description={isGeneric(name) ? t("Es una relación genérica: no puede marcar una retirada.") : t("Un hecho nuevo de esta relación dice que una entidad se retiró o se sustituyó (por ejemplo, «X fue sustituido por Y»): se pide sola una revisión del tema de esa entidad, en Calidad del contenido → Temas. Sin marcarla, ya se reconocen los nombres habituales (REPLACED_BY, SUPERSEDES, MIGRATED_TO…).")} />
           <MutationError error={saveRel.error} />
           <DialogActions><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></DialogActions>
         </Stack>

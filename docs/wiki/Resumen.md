@@ -27,6 +27,7 @@ Los curadores y superiores ven primero lo que **espera la decisión de una perso
 | Correcciones pendientes, de agentes o de valoraciones «incorrecto» | Revisar | [[Propuestas]], filtradas a correcciones pendientes |
 | Propuestas cuya ingesta falló | Ver | [[Propuestas]] → Decididas, filtradas a fallidas |
 | Resúmenes de entidades por aprobar | Revisar | [[Calidad del contenido]] → Resúmenes |
+| Revisiones de tema por decidir | Revisar | [[Calidad del contenido]] → Temas |
 | Grupos de posibles duplicados | Fusionar | [[Calidad del contenido]] → Duplicados |
 | Posibles contradicciones | Resolver | [[Calidad del contenido]] → Contradicciones |
 | Hechos a revisar, pasados de su vida útil | Revisar | [[Calidad del contenido]] → A revisar |

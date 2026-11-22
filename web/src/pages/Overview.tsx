@@ -30,6 +30,7 @@ const REVIEW: { key: keyof Attention; label: string; hint: string; action: strin
   { key: "corrections", label: T("Correcciones pendientes"), hint: T("de agentes o de valoraciones «incorrecto»"), action: T("Revisar"), to: "/propuestas?estado=pending&tipo=correction" },
   { key: "failed", label: T("Propuestas cuya ingesta falló"), hint: T("se reintentan o se rechazan"), action: T("Ver"), to: "/propuestas?tab=decididas&estado=failed" },
   { key: "summaries", label: T("Resúmenes de entidades por aprobar"), hint: T("propuestos por el LLM tras la ingesta"), action: T("Revisar"), to: "/calidad?tab=summaries" },
+  { key: "topics", label: T("Revisiones de tema por decidir"), hint: T("pedidas por un curador o por una retirada"), action: T("Revisar"), to: "/calidad?tab=topics" },
   { key: "duplicates", label: T("Grupos de posibles duplicados"), hint: T("entidades que parecen la misma"), action: T("Fusionar"), to: "/calidad?tab=dup" },
   { key: "conflicts", label: T("Posibles contradicciones"), hint: T("dos valores para una relación que admite uno"), action: T("Resolver"), to: "/calidad?tab=conflicts" },
   { key: "stale", label: T("Hechos a revisar"), hint: T("pasados de su vida útil"), action: T("Revisar"), to: "/calidad?tab=stale" },

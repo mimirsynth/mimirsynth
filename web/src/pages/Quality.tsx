@@ -16,7 +16,7 @@ import ProbesPanel from "./Probes";
 
 /** What waits for a person's decision in the brain (`null`: it could not be counted). `retype` only comes to administrators. */
 export type Attention = { proposals: number | null; corrections: number | null; failed?: number | null; duplicates: number | null; conflicts: number | null;
-  stale: number | null; retype?: number | null; summaries?: number | null; refqueries: number | null; proposals_oldest?: string | null };
+  stale: number | null; retype?: number | null; summaries?: number | null; topics?: number | null; refqueries: number | null; proposals_oldest?: string | null };
 type Dup = { key: string; members: { uuid: string; name: string; labels: string[]; degree: number }[] };
 type Vocab = { ignored_duplicates?: string[]; duplicates: Dup[] };
 
@@ -64,7 +64,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
           <Tabs.Tab value="stale">{t("A revisar")}{count(a?.stale)}</Tabs.Tab>
           {isAdmin && <Tabs.Tab value="alias">{t("Alias repetidos")}</Tabs.Tab>}
           <Tabs.Tab value="summaries">{t("Resúmenes")}{count(a?.summaries)}</Tabs.Tab>
-          <Tabs.Tab value="topics">{t("Temas")}</Tabs.Tab>
+          <Tabs.Tab value="topics">{t("Temas")}{count(a?.topics)}</Tabs.Tab>
           <Tabs.Tab value="curator">{t("Curador")}</Tabs.Tab>
           <Tabs.Tab value="verify">{t("Verificación")}</Tabs.Tab>
         </Tabs.List>

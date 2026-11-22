@@ -27,6 +27,7 @@ Curators and above see first what is **waiting for a person's decision** in the 
 | Pending corrections, from agents or from «incorrect» ratings | Review | [[Proposals]], filtered to pending corrections |
 | Proposals whose ingestion failed | See | [[Proposals]] → Decided, filtered to failed |
 | Entity summaries to approve | Review | [[Content quality]] → Summaries |
+| Topic reviews to decide | Review | [[Content quality]] → Topics |
 | Groups of possible duplicates | Merge | [[Content quality]] → Duplicates |
 | Possible contradictions | Resolve | [[Content quality]] → Contradictions |
 | Facts to review, past their shelf life | Review | [[Content quality]] → To review |

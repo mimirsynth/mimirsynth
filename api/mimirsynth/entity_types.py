@@ -1,6 +1,7 @@
 """Tipos de entidad editables: catálogo de la ontología del brain + reetiquetado de los nodos del grafo (renombrar / fusionar).
 Todo cambio se registra en `vocab_ops` con lo necesario para deshacerlo."""
 import copy
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -254,12 +255,14 @@ class RelIn(BaseModel):
     description: str = Field(min_length=3, max_length=1500)
     functional: bool = False
     shelf_life_days: int | None = Field(None, ge=1, le=3650)
+    retires: Literal["source", "target", "none"] | None = None
 
 
 class RelEditIn(BaseModel):
     description: str = Field(min_length=3, max_length=1500)
     functional: bool | None = None
     shelf_life_days: int | None = Field(None, ge=0, le=3650, description="days; 0 removes it; empty leaves it as it is")
+    retires: Literal["source", "target", "none"] | None = Field(None, description="the end a new fact of it retires or replaces (#455); none removes it; empty leaves it as it is")
 
 
 class MapIn(BaseModel):
@@ -291,7 +294,8 @@ def create_relation(body: RelIn, ctx: BrainCtx = Depends(admin_of_brain)):
         raise HTTPException(409, "ese tipo de relación ya existe en la ontología")
     before = copy.deepcopy(onto)
     onto["edge_types"].append({"name": body.name, "description": body.description, **({"functional": True} if body.functional else {}),
-                               **({"shelf_life_days": body.shelf_life_days} if body.shelf_life_days else {})})
+                               **({"shelf_life_days": body.shelf_life_days} if body.shelf_life_days else {}),
+                               **({"retires": body.retires} if body.retires in ("source", "target") else {})})
     _save(ctx, _validated(ctx, onto))
     return _done(_record(ctx, "relation.create", f"Añadido el tipo de relación {body.name}", onto_before=before))
 
@@ -312,6 +316,10 @@ def edit_relation(name: str, body: RelEditIn, ctx: BrainCtx = Depends(admin_of_b
         t.pop("shelf_life_days", None)
         if body.shelf_life_days:
             t["shelf_life_days"] = body.shelf_life_days
+    if body.retires is not None:
+        t.pop("retires", None)
+        if body.retires != "none":
+            t["retires"] = body.retires
     _save(ctx, _validated(ctx, onto))
     return _done(_record(ctx, "relation.edit", f"Editada la relación {name}", onto_before=before))
 

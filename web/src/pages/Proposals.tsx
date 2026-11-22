@@ -15,7 +15,7 @@ import { fmt, fmtDay, fmtNum, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
-  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; collapsed?: Joined[]; dropped?: Dropped[]; quality_error?: boolean; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
+  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; collapsed?: Joined[]; dropped?: Dropped[]; quality_error?: boolean; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string; retirement?: Retired } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
   kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null; category?: string;
   /** Whether its new facts came back to a control question after ingesting (issue 296). */
   selftest?: { checked_at: string; retrievable?: boolean | null; skipped?: string; error?: string; results?: { fact_uuid: string; fact: string; question: string; found: boolean; rank: number | null; outranked_by: string[] }[] } | null };
@@ -358,6 +358,25 @@ function DistilDetail({ d, ops }: { d: Prop; ops: Ops }) {
 
 type Joined = { uuid?: string; fact?: string; kept: string; with?: "episode" | "current"; why: string };
 type Dropped = { uuid?: string; fact?: string; rule: string; why: string };
+/** The topic reviews a fact of the ingestion asked for, saying an entity was retired or replaced (issue 455). */
+type RetiredOne = { entity: string; name?: string; facts: string[]; review?: number; why?: string };
+type Retired = { queued?: RetiredOne[]; joined?: RetiredOne[]; not_queued?: RetiredOne[]; error?: string };
+const NOT_QUEUED: Record<string, string> = { off: T("las revisiones por retirada están desactivadas en los ajustes del curador"), read_only: T("el brain es de solo lectura"),
+  no_engine: T("no hay ningún motor LLM configurado"), paused: T("el brain ha agotado su presupuesto de IA de este mes"),
+  daily: T("ya se pidieron hoy las que permite el brain (ajuste retirement_daily del curador)") };
+
+/** What the ingestion did with a fact saying an entity was retired or replaced: the topic review it asked for, joined or could not ask for. */
+function RetiredLines({ r }: { r: Retired }) {
+  const { t } = useTranslation();
+  const name = (e: RetiredOne) => e.name || t("una entidad");
+  const open = (e: RetiredOne) => e.review ? <> <Btn kind="link" component={Link} to={`/calidad?tab=topics&revision=${e.review}`}>{t("Ver la revisión")}</Btn></> : null;
+  return <>
+    {(r.queued ?? []).map((e) => <div key={`q${e.entity}`}>{t("Dice que «{{name}}» se retiró o se sustituyó: se pidió una revisión de su tema.", { name: name(e) })}{open(e)}</div>)}
+    {(r.joined ?? []).map((e) => <div key={`j${e.entity}`}>{t("Dice que «{{name}}» se retiró o se sustituyó: se sumó a la revisión de su tema que ya esperaba.", { name: name(e) })}{open(e)}</div>)}
+    {(r.not_queued ?? []).map((e) => <div key={`n${e.entity}`}>{t("Dice que «{{name}}» se retiró o se sustituyó, pero no se pidió una revisión de su tema: {{why}}.", { name: name(e), why: t(NOT_QUEUED[e.why ?? ""] ?? e.why ?? "") })}</div>)}
+    {r.error && <div>{t("No se pudo pedir la revisión de una retirada: {{e}}", { e: r.error })}</div>}
+  </>;
+}
 
 /** What an ingestion wrote, and what it tidied as it wrote (issue 458): duplicates merged into one fact and empty facts dropped, each
  * listed with why behind a fold. Their text is gone once an entity is forgotten; the counts stay. */
@@ -373,6 +392,7 @@ function IngestReport({ r, id }: { r: NonNullable<Prop["ingest_report"]>; id: nu
   const total = joined.length + dropped.length;
   return (<Stack gap={4}>
     <div><span className="ms-nowrap">{r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })}</span>{r.untyped_entities ? ` (${t("{{n}} sin tipo", { n: r.untyped_entities })})` : ""} · <span className="ms-nowrap">{r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })}</span>{tidy.length ? <> ({tidy.map((x, i) => <Fragment key={i}>{i ? ", " : ""}<span className="ms-nowrap">{x}</span></Fragment>)})</> : ""}{r.ontology ? (r.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: r.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{r.aliased_edges ? <span className="ms-nowrap">{r.aliased_edges === 1 ? t(" · 1 relación normalizada por alias") : t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: r.aliased_edges })}</span> : ""}{r.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: r.auto_merged.join(", ") }) : ""}{r.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: r.merge_ambiguous.join(", ") }) : ""}</div>
+    {r.retirement && <RetiredLines r={r.retirement} />}
     {total > 0 && <Group><Btn kind="link" className="ms-hit" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls={`ms-tidy-${id}`}
       onClick={() => setOpen(!open)}>{t("Qué se unió o descartó")}</Btn></Group>}
     {total > 0 && <Stack gap={6} id={`ms-tidy-${id}`} className="ms-fold ms-wrap-any" hidden={!open}>
