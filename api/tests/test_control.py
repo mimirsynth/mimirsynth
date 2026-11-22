@@ -339,6 +339,10 @@ def test_proposals_paginated_filtered_and_sorted(client):
     seen = [p["id"] for off in (0, 3, 6) for p in client.get(url, params={"limit": 3, "offset": off}).json()["items"]]
     assert len(seen) == len(set(seen)) == 8  # las páginas no se solapan y llegan a todas
     assert client.get(url, params={"q": "dato"}).json()["total"] == 7
+    one = seen[0]   # #460: «#278» or «278» finds that proposal, as well as titles with the number in them
+    assert one in [p["id"] for p in client.get(url, params={"q": f"#{one}"}).json()["items"]]
+    assert one in [p["id"] for p in client.get(url, params={"q": str(one)}).json()["items"]]
+    assert client.get(url, params={"q": "#99999"}).json()["total"] == 0 and client.get(url, params={"q": "#"}).json()["total"] == 0
     assert [p["confidence"] for p in client.get(url, params={"sort": "conf", "order": "asc", "limit": 3}).json()["items"]] == [0, 0.1, 0.2]
     assert client.get(url, params={"sort": "conf", "order": "desc"}).json()["items"][-1]["confidence"] is None  # sin confianza, al final
     authors = r["authors"]

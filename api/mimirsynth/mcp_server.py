@@ -203,6 +203,8 @@ def _call(ctx: BrainCtx, request: Request, bg: BackgroundTasks, name: str, args:
                 return _text(tr("Este token solo puede leer (rol de lector): no puede proponer correcciones.", lang), True)
             from .corrections import CorrectionIn, create as create_correction
             p = create_correction(ctx, request, CorrectionIn(**args), direct=False)   # invalidating is decided by a person, even with a curator token
+            if getattr(p, "duplicate", False):
+                return _text(tr("Ya hay una corrección pendiente de ese hecho (propuesta #{{id}}): no se crea otra.", lang, id=p.id))
             if (p.correction or {}).get("action") == "reactivate":
                 return _text(tr("Reactivación propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))
             return _text(tr("Corrección propuesta: queda en cuarentena hasta que un curador la apruebe (propuesta #{{id}}).", lang, id=p.id))

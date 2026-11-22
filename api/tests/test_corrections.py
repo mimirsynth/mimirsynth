@@ -205,3 +205,93 @@ def test_reactivation_of_a_fact_invalidated_by_mistake(client, graphs, monkeypat
     r = client.post(f"/api/brains/cor/proposals/{p2}/approve", json={})
     assert r.status_code == 409 and "está vigente" in r.json()["detail"]
     assert client.get(f"/api/brains/cor/proposals/{p2}").json()["status"] == "pending"
+
+
+@pytest.mark.skipif(not FALKOR, reason="necesita un FalkorDB desechable (MIMIRSYNTH_TEST_FALKOR=host)")
+def test_one_pending_correction_per_fact_and_action(client, graphs):  # noqa: F811
+    """#460: sending the same correction twice leaves one pending; a curator who applies one is not stopped by it."""
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    assert client.post("/api/brains", json={"slug": "co2", "name": "CO2", "graph_name": OWN}).status_code == 201
+    contrib = _tok(client, "co2", "contributor")
+    c = TestClient(app, headers={"Accept-Language": "es"})
+    err, txt = call(c, "co2", contrib, "correct", fact_uuid="f3", reason="Ahora usa PHP 8.3")
+    assert not err and "cuarentena" in txt
+    err, txt = call(c, "co2", contrib, "correct", fact_uuid="f3", reason="Ahora usa PHP 8.4")
+    assert not err and "Ya hay una corrección pendiente de ese hecho" in txt
+    err, txt = call(c, "co2", contrib, "correct", fact_uuid="f2", reason="Volvió a Notus", action="reactivate")   # another action: its own
+    assert not err and "cuarentena" in txt
+    with _factory()() as db:
+        bid = db.query(Proposal.brain_id).filter(Proposal.kind == "correction").order_by(Proposal.id.desc()).first()[0]
+        fixes = db.query(Proposal).filter(Proposal.brain_id == bid, Proposal.kind == "correction", Proposal.status == "pending").all()
+        assert sorted((p.correction["fact_uuid"], p.correction["action"]) for p in fixes) == [("f2", "reactivate"), ("f3", "invalidate")]
+        first = next(p.id for p in fixes if p.correction["fact_uuid"] == "f3")
+
+    # over REST, a contributor gets the pending one back (200); a curator applies a new one at once
+    from test_control import _as
+    assert client.put("/api/brains/co2/members", json={"email": "cleo@x.com", "role": "contributor"}).status_code == 200
+    _as("cleo@x.com", "Cleo")
+    r = client.post("/api/brains/co2/proposals/corrections", json={"fact_uuid": "f3", "reason": "Otra vez"})
+    assert r.status_code == 200 and r.json()["id"] == first and r.json()["duplicate"] is True
+    app.dependency_overrides.clear()
+    r = client.post("/api/brains/co2/proposals/corrections", json={"fact_uuid": "f3", "reason": "Ahora usa PHP 8.3"})
+    assert r.status_code == 201 and r.json()["status"] == "ingested" and _state(graphs, "f3")[0]
+
+
+def _fake_fact(monkeypatch):
+    from mimirsynth import corrections
+    monkeypatch.setattr(corrections, "_check", lambda ctx, u, lang, act="invalidate": {
+        "uuid": u, "name": "R", "fact": "Mailer sends through Sendgrid", "valid_at": "2023-01-01", "invalid_at": None, "expired_at": None,
+        "source": "Mailer", "target": "Sendgrid"})
+
+
+def test_a_repeated_correction_never_shows_another_authors_proposal(client, monkeypatch):  # noqa: F811
+    """#460: a contributor who sends a correction someone else already sent gets its number, not its text, author or reason."""
+    from test_control import _as
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    _fake_fact(monkeypatch)
+    assert client.post("/api/brains", json={"slug": "co3", "name": "CO3"}).status_code == 201
+    for email in ("ana@x.com", "bea@x.com"):
+        assert client.put("/api/brains/co3/members", json={"email": email, "role": "contributor"}).status_code == 200
+    url = "/api/brains/co3/proposals/corrections"
+    _as("ana@x.com", "Ana")
+    first = client.post(url, json={"fact_uuid": "fx", "reason": "Moved to Postmark; the old key was 1234", "replacement": "Mailer uses Postmark."})
+    assert first.status_code == 201 and first.json()["status"] == "pending"
+    again = client.post(url, json={"fact_uuid": "fx", "reason": "Still there"})
+    assert again.status_code == 200 and again.json()["id"] == first.json()["id"] and again.json()["correction"]["reason"].startswith("Moved")   # her own: all of it
+    _as("bea@x.com", "Bea")
+    r = client.post(url, json={"fact_uuid": "fx", "reason": "Moved"})
+    assert r.status_code == 200 and r.json() == {"id": first.json()["id"], "status": "pending", "kind": "correction", "duplicate": True, "mine": False}
+    app.dependency_overrides.clear()
+
+    # a curator whose correction would wait (a possible secret to review) gets the pending one too, never a second
+    with _factory()() as db:
+        from mimirsynth.models import Brain
+        db.query(Brain).filter(Brain.slug == "co3").one().secret_mode = "warn"
+        db.commit()
+    r = client.post(url, json={"fact_uuid": "fx", "reason": "token ghp_" + "A1b2C3d4E5f6G7h8J9k0" + "A1b2C3d4E5f6G7h8"})
+    assert r.status_code == 200 and r.json()["id"] == first.json()["id"]
+    with _factory()() as db:
+        bid = db.query(Proposal.brain_id).filter(Proposal.id == first.json()["id"]).scalar()
+        assert db.query(Proposal).filter(Proposal.brain_id == bid, Proposal.kind == "correction").count() == 1
+    assert client.get("/api/brains/co3/proposals", params={"q": "²"}).status_code == 200   # a digit to Python, not a number
+
+
+def test_rating_a_fact_someone_else_is_correcting_says_so(client, monkeypatch):  # noqa: F811
+    """#460: «incorrect» on a fact another person already asked to invalidate points to theirs, as existing, not as a new one."""
+    from test_control import _as
+    from mimirsynth import memory
+    from test_recall_ratings import OUT
+    _fake_fact(monkeypatch)
+    monkeypatch.setattr(memory, "recall", lambda *a, **k: dict(OUT))
+    assert client.post("/api/brains", json={"slug": "co4", "name": "CO4"}).status_code == 201
+    for email in ("ana@x.com", "bea@x.com"):
+        assert client.put("/api/brains/co4/members", json={"email": email, "role": "contributor"}).status_code == 200
+    _as("ana@x.com", "Ana")
+    pid = client.post("/api/brains/co4/proposals/corrections", json={"fact_uuid": "f1", "reason": "Moved"}).json()["id"]
+    _as("bea@x.com", "Bea")
+    rid = client.post("/api/brains/co4/recall", json={"query": "¿Dónde corre Nextcloud?"}).json()["recall_id"]
+    r = client.post(f"/api/brains/co4/recall/{rid}/ratings", json={"kind": "fact", "id": "f1", "rating": "incorrect", "note": "ya no"}).json()
+    assert r["proposal_id"] == pid and r["existing"] is True
+    app.dependency_overrides.clear()

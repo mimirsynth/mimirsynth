@@ -155,10 +155,8 @@ def rate(ctx: BrainCtx, request: Request, rid: str, body: RateIn) -> dict:
         if allows(ctx.role, "contributor"):  # a curator decides; nothing is invalidated from here
             # One correction per person and fact while it waits: rating «incorrect» again, after taking it back or in another recall,
             # points to the one already in the queue instead of opening a second.
-            from .models import Proposal
-            same = next((p for p in ctx.db.scalars(select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction",
-                                                                         Proposal.status == "pending", Proposal.author_id == ctx.user.id))
-                         if (p.correction or {}).get("fact_uuid") == it["id"]), None)
+            from .corrections import pending_for
+            same = pending_for(ctx, it["id"], "invalidate", author=ctx.user.id)
             if same:
                 r.proposal_id = same.id
                 ctx.db.commit()
@@ -170,6 +168,8 @@ def rate(ctx: BrainCtx, request: Request, rid: str, body: RateIn) -> dict:
                 r.proposal_id = p.id
                 ctx.db.commit()
                 out["proposal_id"] = p.id
+                if getattr(p, "duplicate", False):   # someone else's correction of this fact is already waiting: this note was not added to it
+                    out["existing"] = True
             except HTTPException as e:  # already invalidated, lent… the rating stays
                 out["correction_error"] = e.detail
         else:

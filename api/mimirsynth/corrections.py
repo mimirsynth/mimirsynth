@@ -11,12 +11,17 @@ A reactivation goes through the same gate: it is decided by a person, and approv
 (recorded as `fact.reactivate` in the vocabulary history); undoing it puts the invalidation back. A free-text proposal never does this:
 its text is extracted into new facts and an invalidated fact stays invalidated.
 The proposal stores in `correction` {action, fact_uuid, fact (the fact as it was), reason, invalid_at, op, applied_at, reverted_at};
-`body` is the replacement text (empty if there is none). A correction without `action` invalidates."""
+`body` is the replacement text (empty if there is none). A correction without `action` invalidates.
+One pending correction per fact and action (#460): sending one that would wait for a curator while another for the same fact and action is
+pending returns that one (200 over REST, said over MCP) instead of a second. A curator who applies one when sending it is not stopped."""
 from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from . import ingest, secretguard
 from .db import rows
@@ -81,8 +86,26 @@ def _iso(d: datetime) -> str:
     return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat()
 
 
+def pending_for(ctx: BrainCtx, uuid: str, act: str, author: int | None = None) -> Proposal | None:
+    """The pending correction of this fact that does the same (invalidate or reactivate), if there is one; only `author`'s when given.
+    Narrowed by the fact in SQL; the action is told apart here, since older corrections have none (they invalidate)."""
+    q = select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction", Proposal.status == "pending",
+                               Proposal.correction["fact_uuid"].as_string() == uuid)
+    if author is not None:
+        q = q.where(Proposal.author_id == author)
+    return next((p for p in ctx.db.scalars(q.order_by(Proposal.id)) if action(p.correction) == act), None)
+
+
+def brief(p: Proposal, ctx: BrainCtx) -> dict:
+    """What someone who sent the same correction gets back: all of it when it is theirs or they curate; another author's only by its number."""
+    if p.author_id == ctx.user.id or allows(ctx.role, "curator"):
+        return {**_out(p), "duplicate": True}
+    return {"id": p.id, "status": p.status, "kind": "correction", "duplicate": True, "mine": False}
+
+
 def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = True) -> Proposal:
-    """Creates a correction (also used by the MCP tool `correct`). With `direct`, a curator applies it when sending it, as with `remember`."""
+    """Creates a correction (also used by the MCP tool `correct`). With `direct`, a curator applies it when sending it, as with `remember`.
+    One that would only wait in the queue, while another for the same fact and action is pending, returns that one (`p.duplicate`)."""
     lang = language(request)
     f = _check(ctx, body.fact_uuid.strip(), lang, body.action)
     try:
@@ -92,6 +115,12 @@ def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = T
         audit(ctx.db, ctx.user, "proposal.blocked", ctx.brain, reason="secrets", kind="correction")
         raise HTTPException(422, tr("La corrección contiene secretos. Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).", lang))
     found = [{**x, "field": "reason"} for x in in_reason] + [{**x, "field": "body"} for x in in_body]
+    if not (direct and allows(ctx.role, "curator") and not secretguard.flagged(found)):   # it would wait: one per fact and action (#460)
+        same = pending_for(ctx, f["uuid"], body.action)
+        if same is not None:
+            same.duplicate = True
+            audit(ctx.db, ctx.user, "proposal.duplicate", ctx.brain, id=same.id, kind="correction", fact=f["uuid"])
+            return same
     tok = getattr(request.state, "token", None)  # the title stays in memory (it names the replacement's episode): in the instance language
     when = body.invalid_at or datetime.now(timezone.utc)
     short = (f["fact"] or "")[:200]
@@ -150,8 +179,11 @@ def apply(ctx: BrainCtx, p: Proposal, lang: str = "es", note: str = "", kind: st
 
 @router.post("/corrections", status_code=201)
 def submit(body: CorrectionIn, request: Request, ctx: BrainCtx = Depends(contributor)):
-    """Contributor: it stays in quarantine. Curator or above: it is applied when sent."""
-    return _out(create(ctx, request, body))
+    """Contributor: it stays in quarantine. Curator or above: it is applied when sent. The same correction pending already: that one, 200."""
+    p = create(ctx, request, body)
+    if getattr(p, "duplicate", False):
+        return JSONResponse(jsonable_encoder(brief(p, ctx)), status_code=200)
+    return _out(p)
 
 
 @router.post("/{pid}/reactivate")
