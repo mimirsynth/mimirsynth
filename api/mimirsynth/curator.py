@@ -192,15 +192,23 @@ def informs(text: str) -> bool:
     return bool(_INFORMS.search(text or ""))
 
 
-def noise_rule(f: dict, others: list[dict]) -> str | None:
-    """The noise rule a current fact falls under (a key of NOISE_RULES), or None. `others`: the other current facts between
-    the same two entities."""
-    from .conflicts import generic
+def sure_noise(f: dict) -> str | None:
+    """The noise rules that need no person (#458): one end is a placeholder or the memory itself. Ingestion drops these at write time."""
     s, t = _name(f.get("source")), _name(f.get("target"))
     if s in PLACEHOLDERS or t in PLACEHOLDERS or len(s) < 2 or len(t) < 2:
         return "placeholder"
     if s in META or t in META:
         return "meta"
+    return None
+
+
+def noise_rule(f: dict, others: list[dict]) -> str | None:
+    """The noise rule a current fact falls under (a key of NOISE_RULES), or None. `others`: the other current facts between
+    the same two entities."""
+    from .conflicts import generic
+    sure = sure_noise(f)
+    if sure:
+        return sure
     text = f.get("fact") or ""
     names = set(_WORD.findall(f"{f.get('source') or ''} {f.get('target') or ''}".lower()))
     if generic(f.get("name")) and len(_content(text, names)) < 2 and not informs(text):   # the relation says nothing, the text may (#325)

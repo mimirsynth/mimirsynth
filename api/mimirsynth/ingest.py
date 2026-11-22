@@ -159,7 +159,8 @@ def ingest_proposal(pid: int, job=None) -> str:
                     if job:
                         job.retrying(f"error transitorio del LLM (intento {attempt}): reintento en {wait}s")
                     time.sleep(wait)
-            from . import vocab_apply
+            from . import vocab_apply, write_quality
+            write_quality.apply(brain, rep, uuid)   # repeats become one, trivial facts go (#458); never fails the ingestion
             vocab_apply.apply(db, brain, rep)
             p.status, p.episode_uuid, p.ingest_error, p.ingested_at, p.ingest_report = "ingested", uuid, "", datetime.now(timezone.utc), rep or None
             if p.claims:   # after the text is in the graph: an old fact is never invalidated without its replacement (#295)
