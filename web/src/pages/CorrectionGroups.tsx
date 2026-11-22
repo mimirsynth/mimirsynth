@@ -6,7 +6,8 @@ import { fmtDay, get, send } from "../api";
 import { Btn, CellText, Check, DataTable, DialogActions, Icon, Modal, MutationError, Notice, Pill, TextArea } from "../ui";
 
 type Fact = { fact: string; source: string; target: string; valid_at: string | null; invalid_at?: string | null };
-type Row = { id: number; name: string; fact_uuid: string; fact: Fact; reason: string; replacement: string; replacement_cut?: boolean; flagged: boolean; secrets: { label: string }[] };
+type Row = { id: number; name: string; fact_uuid: string; fact: Fact; reason: string; replacement: string; replacement_cut?: boolean; flagged: boolean;
+  apart?: "secret" | "long" | null; secrets: { label: string }[] };
 export type Group = { key: string; author: string; token: boolean; source_description: string; count: number; first_at: string; last_at: string; items: Row[] };
 export type Decided = { approved: number[]; rejected: number[]; skipped: { id: number; reason: string; detail?: string }[] };
 
@@ -24,14 +25,15 @@ export function GroupLines({ groups, ago, onOpen }: { groups: Group[]; ago: (iso
   return <Stack gap={4}>{groups.map((g) => (
     <div key={g.key} className="ms-group-line">
       <span>{t("{{n}} enviadas juntas por {{author}} («{{source}}»):", { n: g.count, author: g.author, source: g.source_description })}{" "}
-        <span className="ms-data">{g.items.map((r) => `#${r.id}`).join(", ")}{g.items.length < g.count ? "…" : ""} · {ago(g.last_at)}</span></span>
-      <Btn size="row" icon="check" onClick={() => onOpen(g)}>{t("Revisar juntas")}</Btn>
+        <span className="ms-data">{g.items.map((r) => `#${r.id}`).join(", ")}{g.items.length < g.count ? "…" : ""}</span> · {ago(g.last_at)}</span>
+      <Btn size="row" onClick={() => onOpen(g)}>{t("Revisar juntas")}</Btn>
     </div>))}</Stack>;
 }
 
 export function DoneNotice({ d, onClose }: { d: Decided; onClose: () => void }) {
   const { t } = useTranslation();
   const why = (s: Decided["skipped"][number]) => (s.reason === "secret" ? t("tiene un posible secreto: decídela aparte")
+    : s.reason === "long" ? t("su sustituto es más largo de lo que muestra la tabla: decídela aparte")
     : s.reason === "not_pending" ? t("otra persona la decidió mientras tanto") : s.reason === "error" ? t("no se pudo aplicar ahora; sigue pendiente")
       : s.detail || t("su hecho cambió mientras tanto"));
   return (
@@ -45,7 +47,8 @@ export function DoneNotice({ d, onClose }: { d: Decided; onClose: () => void }) 
 export function GroupDialog({ graph, g, onClose, onDone }: { graph: string; g: Group; onClose: () => void; onDone: (d: Decided) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const decidable = g.items.filter((r) => !r.flagged);
+  const alone = (r: Row) => r.flagged || !!r.apart;
+  const decidable = g.items.filter((r) => !alone(r));
   const [ticked, setTicked] = useState<Set<number>>(new Set(decidable.map((r) => r.id)));
   const [note, setNote] = useState("");
   const approve = decidable.filter((r) => ticked.has(r.id)).map((r) => r.id);
@@ -70,9 +73,11 @@ export function GroupDialog({ graph, g, onClose, onDone }: { graph: string; g: G
           <DataTable.Tbody>
             {g.items.map((r) => (
               <DataTable.Tr key={r.id}>
-                <DataTable.Td>{r.flagged ? <Pill tone="warn" title={r.secrets.map((s) => s.label).join(", ")}><span className="ms-pill-row"><Icon name="lock" size={12} />{t("Secreto por revisar")}</span></Pill>
+                <DataTable.Td>{alone(r) ? null
                   : <Check aria-label={t("Aprobar #{{id}}", { id: r.id })} checked={ticked.has(r.id)} onChange={(e) => toggle(r.id, e.currentTarget.checked)} />}</DataTable.Td>
-                <DataTable.Td><CellText sub={<>#{r.id} · {r.fact.source} → {r.fact.target} · {when(r.fact)} · <span className="ms-data">{(r.fact_uuid || "").slice(0, 8)}</span>{r.flagged ? ` · ${t("se decide aparte")}` : ""}</>}>
+                <DataTable.Td><CellText sub={<>#{r.id} · {r.fact.source} → {r.fact.target} · {when(r.fact)} · <span className="ms-data">{(r.fact_uuid || "").slice(0, 8)}</span>
+                  {r.flagged && <> <Pill tone="warn" title={r.secrets.map((s) => s.label).join(", ")}><span className="ms-pill-row"><Icon name="lock" size={12} />{t("Secreto por revisar")}</span></Pill> {t("se decide aparte")}</>}
+                  {!r.flagged && r.apart === "long" && <> <Pill tone="warn">{t("Sustituto largo")}</Pill> {t("se decide aparte: la tabla no lo muestra entero")}</>}</>}>
                   {r.fact.fact}</CellText></DataTable.Td>
                 <DataTable.Td><Text inherit className="ms-wrap-any">{r.reason}</Text></DataTable.Td>
                 <DataTable.Td>{r.replacement.trim() ? <Text inherit className="ms-wrap-any">{r.replacement}{r.replacement_cut ? "…" : ""}</Text> : "—"}</DataTable.Td>
@@ -81,7 +86,11 @@ export function GroupDialog({ graph, g, onClose, onDone }: { graph: string; g: G
         </DataTable>
         <TextArea label={t("Nota del grupo")} description={t("Se guarda en todas: en las aprobadas como nota de la decisión y en las rechazadas como motivo.")}
           autosize minRows={2} maxRows={6} maxLength={2000} value={note} onChange={(e) => setNote(e.currentTarget.value)} />
-        <Notice tone="warn" title={t("Qué hará")}>{t("Hechos que se invalidan, cada uno con su propia corrección, que se puede reactivar por separado: {{n}}.", { n: approve.length })}{reject.length ? ` ${t("Se rechazan {{m}}.", { m: reject.length })}` : ""}</Notice>
+        <Notice tone="warn" title={t("Qué hará")}>
+          {approve.length === 1 ? t("Se invalida 1 hecho, con su propia corrección, que se puede reactivar aparte.") : approve.length > 1 ? t("Se invalidan {{n}} hechos, cada uno con su propia corrección, que se puede reactivar aparte.", { n: approve.length }) : ""}{" "}
+          {reject.length === 1 ? t("Se rechaza 1.") : reject.length > 1 ? t("Se rechazan {{m}}.", { m: reject.length }) : ""}{" "}
+          {g.items.some(alone) && t("Se quedan pendientes, para decidirlas aparte: {{ids}}.", { ids: g.items.filter(alone).map((r) => `#${r.id}`).join(", ") })}
+        </Notice>
         <MutationError error={decide.error} />
         <DialogActions>
           <Btn kind="ghost" onClick={onClose}>{t("Cancelar")}</Btn>

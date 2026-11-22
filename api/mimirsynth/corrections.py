@@ -243,10 +243,20 @@ def _group_key(p: Proposal) -> tuple | None:
     return (p.author_id, p.token_id or 0, sd)
 
 
+def _apart(p: Proposal) -> str | None:
+    """Why a row of a group is decided alone: a secret to mask, or a replacement longer than the table shows (it is ingested whole)."""
+    if secretguard.flagged(p.secret_findings):
+        return "secret"
+    if len(p.body or "") > REPLACEMENT_SHOWN:
+        return "long"
+    return None
+
+
 def _group_row(p: Proposal) -> dict:
     c = p.correction or {}
     return {"id": p.id, "name": p.name, "fact_uuid": c.get("fact_uuid"), "fact": c.get("fact") or {}, "reason": c.get("reason") or "",
-            "replacement": p.body[:REPLACEMENT_SHOWN], "replacement_cut": len(p.body) > REPLACEMENT_SHOWN, "invalid_at": c.get("invalid_at"), "created_at": p.created_at,
+            "replacement": p.body[:REPLACEMENT_SHOWN], "replacement_cut": len(p.body) > REPLACEMENT_SHOWN, "apart": _apart(p),
+            "invalid_at": c.get("invalid_at"), "created_at": p.created_at,
             "secrets": secretguard.describe(p.secret_findings), "flagged": secretguard.flagged(p.secret_findings)}
 
 
@@ -272,6 +282,17 @@ def list_groups(ctx: BrainCtx = Depends(curator)):
     return {"groups": groups[:GROUPS_SHOWN]}
 
 
+def _guard_note(ctx: BrainCtx, note: str, lang: str) -> str:
+    """A note written once for many rows: masked, and refused when it carries a possible secret, since nobody reviews it afterwards."""
+    try:
+        out, found = secretguard.guard(ctx.brain, note)
+    except secretguard.Blocked as b:
+        raise HTTPException(422, tr("La nota lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", lang, labels=str(b))) from None
+    if secretguard.flagged(found):
+        raise HTTPException(422, tr("La nota parece llevar un secreto. Quítalo y guarda solo dónde está.", lang))
+    return out
+
+
 class GroupIn(BaseModel):
     approve: list[int] = Field(default_factory=list, max_length=GROUP_MAX)
     reject: list[int] = Field(default_factory=list, max_length=GROUP_MAX)
@@ -286,10 +307,7 @@ def decide_group(body: GroupIn, request: Request, ctx: BrainCtx = Depends(curato
     lang = language(request)
     if ctx.token is not None:   # a batch is a person's decision: an agent's token, even a curator's, decides one at a time
         raise HTTPException(403, tr("Las correcciones en grupo las decide una persona desde la interfaz, no un token.", lang))
-    try:
-        note, _ = secretguard.guard(ctx.brain, body.note)
-    except secretguard.Blocked as b:
-        raise HTTPException(422, tr("La nota lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", lang, labels=str(b))) from None
+    note = _guard_note(ctx, body.note, lang)
     ids = list(dict.fromkeys(body.approve)) + list(dict.fromkeys(body.reject))
     if not ids:
         raise HTTPException(422, tr("No hay ninguna corrección marcada ni desmarcada.", lang))
@@ -320,8 +338,8 @@ def decide_group(body: GroupIn, request: Request, ctx: BrainCtx = Depends(curato
                 p = fresh(pid)
                 if p is None:
                     skipped.append({"id": pid, "reason": "not_pending"})
-                elif secretguard.flagged(p.secret_findings):   # what the detector flagged is masked by a person, one at a time
-                    skipped.append({"id": pid, "reason": "secret"})
+                elif (why := _apart(p)) is not None:   # a secret to mask, or a text longer than the table showed: one at a time
+                    skipped.append({"id": pid, "reason": why})
                 else:
                     apply(ctx, p, lang, note=note)
                     approved.append(pid)
@@ -331,7 +349,10 @@ def decide_group(body: GroupIn, request: Request, ctx: BrainCtx = Depends(curato
             except Exception:  # noqa: BLE001  (a passing failure: this one stays pending, the others go on)
                 log.exception("correction group %s: %s", group, pid)
                 ctx.db.rollback()
-                skipped.append({"id": pid, "reason": "error"})
+                if ctx.db.scalar(select(Proposal.status).where(Proposal.id == pid)) != "pending":   # applied, and what failed came after
+                    approved.append(pid)
+                else:
+                    skipped.append({"id": pid, "reason": "error"})
         for pid in dict.fromkeys(body.reject):
             try:
                 if fresh(pid) is None:

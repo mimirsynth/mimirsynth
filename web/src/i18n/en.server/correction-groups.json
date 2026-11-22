@@ -1,6 +1,7 @@
 {
  "El texto puede tener como mucho {{max}} caracteres.": "The text can be at most {{max}} characters long.",
  "La nota lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.": "The note carries secrets ({{labels}}). Remove them and keep only where they are.",
+ "La nota parece llevar un secreto. Quítalo y guarda solo dónde está.": "The note seems to carry a secret. Remove it and keep only where it is.",
  "La propuesta #{{id}} ya no está pendiente o no va en grupo: decídela aparte.": "Proposal #{{id}} is no longer pending or does not go in a group: decide it alone.",
  "La propuesta ya está decidida.": "The proposal is already decided.",
  "Las acciones en lote las decide una persona desde la interfaz, no un token.": "Actions in a batch are decided by a person in the interface, not by a token.",
@@ -11,5 +12,6 @@
  "No hay ninguna propuesta con el número {{id}} en este brain.": "There is no proposal number {{id}} in this brain.",
  "Solo se envía el texto de las acciones que se aprueban.": "Only the text of the actions being approved is sent.",
  "Una acción no puede aprobarse y rechazarse a la vez.": "An action cannot be approved and rejected at once.",
- "Una corrección no puede aprobarse y rechazarse a la vez.": "A correction cannot be approved and rejected at once."
+ "Una corrección no puede aprobarse y rechazarse a la vez.": "A correction cannot be approved and rejected at once.",
+ "la propuesta acaba de decidirse en otra parte": "the proposal was just decided elsewhere"
 }

@@ -222,7 +222,7 @@ function ActionCard({ graph, d, a, ticked, batchable, onTick, text, onText }: { 
   return (
     <ListCard title={t(TYPE[a.type] ?? a.type)}
       aside={!pending && label ? <Pill tone={tone}>{t(label)}</Pill>
-        : pending && batchable ? <Check label={t("Aprobar")} aria-label={t("Aprobar «{{type}}» al decidir las marcadas; desmarcada, se rechaza", { type: t(TYPE[a.type] ?? a.type) })}
+        : pending && batchable ? <Check label={ticked ? t("Se aprueba") : t("Se rechaza")} aria-label={t("Aprobar «{{type}}» al decidir las marcadas; desmarcada, se rechaza", { type: t(TYPE[a.type] ?? a.type) })}
           checked={ticked} onChange={(e) => onTick(e.currentTarget.checked)} /> : undefined}
       notice={<Text size="sm" className="ms-prose">{a.why}</Text>}
       tags={(a.edited || a.secrets.length > 0) && <>
@@ -252,8 +252,9 @@ function BatchSummary({ acts, rejected }: { acts: Act[]; rejected: number }) {
   // a correction with a possible secret waits in the queue for a person to mask it, as with its own Approve button
   const facts = acts.reduce((n, a) => n + (a.flagged ? 0 : factsOf(a)), 0);
   const gaps = acts.filter((a) => a.type === "gap").length + acts.reduce((n, a) => n + (a.flagged ? factsOf(a) : 0), 0);
-  return <>{t("Se aprueban {{n}}. Hechos que se invalidan, cada uno con su propia corrección, que se deshace aparte: {{facts}}. Propuestas que van a la cola: {{gaps}}.", { n: acts.length, facts, gaps })}{" "}
-    {rejected ? t("Se rechazan {{m}}.", { m: rejected }) : ""}</>;
+  return <>{facts === 1 ? t("Se invalida 1 hecho, con su propia corrección, que se deshace aparte.") : facts > 1 ? t("Se invalidan {{n}} hechos, cada uno con su propia corrección, que se deshace aparte.", { n: facts }) : ""}{" "}
+    {gaps === 1 ? t("1 va a la cola como propuesta.") : gaps > 1 ? t("{{n}} van a la cola como propuestas.", { n: gaps }) : ""}{" "}
+    {rejected === 1 ? t("Se rechaza 1.") : rejected > 1 ? t("Se rechazan {{m}}.", { m: rejected }) : ""}</>;
 }
 
 function BatchNotice({ results, onClose }: { results: BatchResult[]; onClose: () => void }) {

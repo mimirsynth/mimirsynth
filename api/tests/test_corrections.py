@@ -441,3 +441,31 @@ def test_a_group_leaves_a_possible_secret_and_refuses_readers_and_read_only_brai
         db.query(Brain).filter(Brain.slug == "cg4").one().read_only = True
         db.commit()
     assert client.post(dec, json={"approve": [flagged]}).status_code == 409
+
+
+
+def test_a_group_leaves_out_a_replacement_longer_than_it_shows_and_refuses_a_note_with_a_possible_secret(client, monkeypatch):  # noqa: F811
+    from test_control import _as
+    from mimirsynth import corrections
+    from mimirsynth.models import Brain, Proposal
+    from mimirsynth.store import _factory
+    _fake_fact(monkeypatch)
+    assert client.post("/api/brains", json={"slug": "cg5", "name": "CG5"}).status_code == 201
+    assert client.put("/api/brains/cg5/members", json={"email": "ana@x.com", "role": "contributor"}).status_code == 200
+    _as("ana@x.com", "Ana")
+    url = "/api/brains/cg5/proposals/corrections"
+    short = client.post(url, json={"fact_uuid": "m1", "reason": "Old", "source_description": "run"}).json()["id"]
+    long_ = client.post(url, json={"fact_uuid": "m2", "reason": "Old", "source_description": "run", "replacement": "x " * 1500}).json()["id"]
+    app.dependency_overrides.clear()
+    rows = {i["id"]: i for i in client.get("/api/brains/cg5/correction-groups").json()["groups"][0]["items"]}
+    assert rows[long_]["apart"] == "long" and rows[long_]["replacement_cut"] and rows[short]["apart"] is None
+    monkeypatch.setattr(corrections, "apply", lambda ctx, p, lang="es", note="", kind="human": setattr(p, "status", "ingested") or ctx.db.commit())
+    with _factory()() as db:
+        db.query(Brain).filter(Brain.slug == "cg5").one().secret_mode = "warn"
+        db.commit()
+    dec = "/api/brains/cg5/correction-groups/decide"
+    assert client.post(dec, json={"approve": [short], "note": "ghp_" + "A1b2C3d4E5f6G7h8J9k0" + "A1b2C3d4E5f6G7h8"}).status_code == 422
+    r = client.post(dec, json={"approve": [short, long_]}).json()
+    assert r["approved"] == [short] and r["skipped"] == [{"id": long_, "reason": "long"}]
+    with _factory()() as db:
+        assert db.get(Proposal, long_).status == "pending"

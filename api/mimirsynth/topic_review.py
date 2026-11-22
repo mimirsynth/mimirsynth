@@ -703,10 +703,8 @@ def decide(rid: int, body: BatchIn, request: Request, bg: BackgroundTasks, ctx: 
         raise HTTPException(422, tr("Solo se envía el texto de las acciones que se aprueban.", lang))
     if ctx.token is not None:   # a batch is a person's decision
         raise HTTPException(403, tr("Las acciones en lote las decide una persona desde la interfaz, no un token.", lang))
-    try:
-        note, _ = secretguard.guard(ctx.brain, body.note)
-    except secretguard.Blocked as b:
-        raise HTTPException(422, tr("La nota lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", lang, labels=str(b))) from None
+    from .corrections import _guard_note
+    note = _guard_note(ctx, body.note, lang)
     _get(ctx, rid, lang)
     results = []
     for i in dict.fromkeys(body.approve):

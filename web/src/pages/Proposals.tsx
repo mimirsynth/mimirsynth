@@ -821,11 +821,11 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const [kind, setKind] = useState(initialKind ?? "all");
   const [offset, setOffset] = useState(0);
   const [sp, setSp] = useSearchParams();
-  const [search, setSearch] = useState((sp.get("buscar") ?? "").slice(0, 200));
+  const [search, setSearch] = useState((sp.get("buscar") ?? "").slice(0, 200));   // the API takes up to 200 characters
   const groups = useCorrectionGroups(ops.graph);
   const grouped = useMemo(() => new Set(groups.flatMap((g) => g.items.map((r) => r.id))), [groups]);
   const [groupOpen, setGroupOpen] = useState<CorrectionGroup | null>(null);
-  const [groupDone, setGroupDone] = useState<Decided | null>(null);   // the API takes up to 200 characters
+  const [groupDone, setGroupDone] = useState<Decided | null>(null);
   const [q] = useDebouncedValue(search.trim(), 300);
   useEffect(() => {   // the search stays in the address, like the tab: back from another tab, or a reload, keeps it
     const p = new URLSearchParams(sp);
@@ -981,7 +981,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
         <Stack gap={6}>
           <div>{t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
             {kind !== "correction" && <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn>}</div>
-          {groups.length > 0 && <GroupLines groups={groups} ago={waited} onOpen={setGroupOpen} />}
+          {groups.length > 0 && kind !== "memory" && <GroupLines groups={groups} ago={waited} onOpen={setGroupOpen} />}
         </Stack></Notice>}
       {groupOpen && <GroupDialog graph={ops.graph} g={groupOpen} onClose={() => setGroupOpen(null)} onDone={(r) => { setGroupDone(r); setGroupOpen(null); }} />}
       <MutationError error={queue.error} />

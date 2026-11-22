@@ -232,8 +232,13 @@ def _review(ctx: BrainCtx, pid: int, status: str, note: str, also: tuple[str, ..
     p = _get(ctx, pid)
     if p.status != "pending" and p.status not in also:
         raise HTTPException(409, f"la propuesta ya está {p.status}")
-    p.status, p.reviewer_id, p.reviewed_at, p.review_note, p.review_kind = status, ctx.user.id, datetime.now(timezone.utc), note, "human"
+    done = ctx.db.execute(update(Proposal).where(Proposal.id == pid, Proposal.status == p.status)
+                          .values(status=status, reviewer_id=ctx.user.id, reviewed_at=datetime.now(timezone.utc), review_note=note, review_kind="human")).rowcount
+    if not done:   # decided by someone else between the read and the write
+        ctx.db.rollback()
+        raise HTTPException(409, "la propuesta acaba de decidirse en otra parte")
     ctx.db.commit()
+    ctx.db.refresh(p)
     audit(ctx.db, ctx.user, f"proposal.{status}", ctx.brain, id=p.id, note=note)
     return _out(p)
 
