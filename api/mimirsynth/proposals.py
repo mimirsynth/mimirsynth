@@ -104,7 +104,7 @@ def _claims(ctx: BrainCtx, request: Request, body: ProposalIn) -> list[dict] | N
 
 
 def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list, in_body: list, direct: bool, later,
-          token_id: int | None = None, how: str = "direct", claims: list[dict] | None = None, origin: str = "") -> Proposal:
+          token_id: int | None = None, how: str = "direct", claims: list[dict] | None = None, origin: str = "", category: str = "") -> Proposal:
     """Saves a proposal whose name and text already went through the secret detector (`in_name`, `in_body`: its findings). `direct`
     approves it, unless the detector flagged something; otherwise the decider triages it, through `later` (a background task)."""
     if brain.read_only:  # REST, MCP and webhooks all save here (#359)
@@ -114,7 +114,7 @@ def store(db, brain, user, body: ProposalIn, name: str, text: str, in_name: list
     direct = direct and not secretguard.flagged(found)  # con algo marcado, ni el curador que la envía la aprueba sin mirarla
     p = Proposal(brain_id=brain.id, author_id=user.id, token_id=token_id, name=name[:255], body=text, source=body.source,
                  source_description=body.source_description, reference_time=body.reference_time, confidence=body.confidence,
-                 status="approved" if direct else "pending", secret_findings=found or None, claims=claims, origin=origin)
+                 status="approved" if direct else "pending", secret_findings=found or None, claims=claims, origin=origin, category=category)
     if direct:
         p.reviewer_id, p.reviewed_at, p.review_kind = user.id, datetime.now(timezone.utc), how
     db.add(p); db.commit()

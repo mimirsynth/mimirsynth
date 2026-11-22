@@ -504,6 +504,8 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-topic-wrap { container-type: inline-size; display: flex; flex-direction: column; gap: var(--mantine-spacing-md); }
 .ms-topic-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; align-items: start; }
 @container (max-width: 1000px) { .ms-topic-cols { grid-template-columns: minmax(0, 1fr); } }
+/* in an action card, a column narrower than this goes below: the text being edited is never squeezed into a third of a card */
+.ms-topic-wrap .ms-compare { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14em), 1fr)); }
 .ms-fact-old { color: var(--ms-invalidado); text-decoration: line-through; }
 /* one relation inside the Facts card: a tinted block without a border of its own, so the column reads as one card like Episodes */
 .ms-relgroup { background: var(--ms-surface); border-radius: var(--ms-radius); padding: var(--mantine-spacing-sm); }

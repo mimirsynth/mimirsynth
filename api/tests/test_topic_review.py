@@ -2,6 +2,7 @@
 import json
 import os
 import re
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select
@@ -38,6 +39,8 @@ def test_a_reply_must_be_json_that_fits_the_schema():
     r = tr_.parse('```json\n{"state": "Mailer uses Postmark.", "actions": [{"type": "invalidate", "facts": ["F1"], "evidence": ["F2"], "why": "moved"}]}\n```')
     assert r.state == "Mailer uses Postmark." and r.actions[0].type == "invalidate"
     assert tr_.parse('Here you are: {"state": "ok", "actions": []} hope it helps').actions == []
+    r = tr_.parse('{"state": "ok", "actions": [{"type": "drop_trivial", "facts": ["F3"], "why": null, "text": null}]}')
+    assert tr_.check(r.actions[0], ITEMS, SENT)[1] == "rule"                            # a null reason discards the action, not the review
     for bad in ("no json at all", '{"actions": []}', '{"state": "", "actions": []}', '{"state": "x", "actions": [{"type": "delete", "facts": ["F1"]}]}',
                 '{"state": "x", "actions": "none"}', '{"state": "x", "actions": [{"type": "gap", "text": "' + "y" * 3000 + '"}]}', "{not: json}"):
         with pytest.raises(tr_.ReplyError):
@@ -499,3 +502,41 @@ def test_merge_rewrite_and_drop_become_the_right_corrections(client, env):  # no
         assert p.kind == "correction" and p.body == "Mailer sent through Sendgrid until March 2025."   # the replacement, to be ingested
     dr = client.post(f"{base}/2/approve", json={}).json()["action"]
     assert dr["decision"] == "approved" and _invalid(g, "triv")
+
+
+def test_a_passing_failure_or_a_stale_claim_leaves_the_action_decidable(client, monkeypatch):  # noqa: F811
+    from mimirsynth import corrections
+    assert client.post("/api/brains", json={"slug": "topic11", "name": "T11"}).status_code == 201
+    items = {"F1": _fact("Mailer sends through Sendgrid", uuid="old"), "E1": ITEMS["E1"]}
+    rid = _seed("topic11", [{"type": "drop_trivial", "facts": ["F1"], "evidence": [], "text": "", "why": "Empty."},
+                            {"type": "drop_trivial", "facts": ["F1"], "evidence": [], "text": "", "why": "Empty.", "decision": "applying",
+                             "claimed": "2020-01-01T00:00:00+00:00"},
+                            {"type": "drop_trivial", "facts": ["F1"], "evidence": [], "text": "", "why": "Empty.", "decision": "applying",
+                             "claimed": datetime.now(timezone.utc).isoformat()}], items=items)
+    def down(*a, **k):
+        raise ConnectionError("graph down")
+    monkeypatch.setattr(corrections, "create", down)
+    base = f"/api/brains/topic11/topics/{rid}/actions"
+    assert client.post(f"{base}/0/approve", json={}).status_code == 503
+    assert client.post(f"{base}/2/reject").status_code == 409                       # being applied right now
+    assert client.post(f"{base}/1/reject").json()["action"]["decision"] == "rejected"   # left «applying» long ago: decidable again
+    with _factory()() as db:
+        assert [a["decision"] for a in db.get(TopicReview, rid).actions] == ["pending", "rejected", "applying"]
+
+
+def test_what_a_review_cites_must_still_be_in_the_graph_when_it_is_kept():
+    class G:
+        def __init__(self, facts, eps, entity=True):
+            self.facts, self.eps, self.entity = facts, eps, entity
+
+        def query(self, q, p=None):
+            if q == tr_.ENTITY:
+                return _Res(["uuid", "name", "labels"], [["mail", "Mailer", []]] if self.entity else [])
+            have = self.facts if "RELATES_TO" in q else self.eps
+            return _Res(["c"], [[len(set(p["u"]) & have)]])
+    cited = [ITEMS["F1"], ITEMS["E1"]]
+    assert tr_._still_there(G({"Mailer sends through Sendgrid"}, {"e1"}), "mail", cited)
+    assert not tr_._still_there(G(set(), {"e1"}), "mail", cited)                 # a cited fact was forgotten meanwhile
+    assert not tr_._still_there(G({"Mailer sends through Sendgrid"}, set()), "mail", cited)
+    assert not tr_._still_there(G({"Mailer sends through Sendgrid"}, {"e1"}, entity=False), "mail", cited)
+    assert tr_._still_there(G(set(), set()), "mail", [])

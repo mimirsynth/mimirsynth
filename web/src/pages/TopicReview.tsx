@@ -65,13 +65,16 @@ export default function TopicReviews({ graph }: { graph: string }) {
   );
 }
 
+/** Where a ready review stands: what is left to decide, decided, or nothing proposed. */
+const standing = (r: Row) => (r.counts.pending > 0 ? "pending" : r.counts.approved + r.counts.rejected + r.counts.outdated > 0 ? "decided" : "none");
+
 function RowState({ r }: { r: Row }) {
   const { t } = useTranslation();
   if (busy(r)) return <Pill tone="alt">{t("Revisando…")}</Pill>;
   if (r.status === "failed") return <Pill tone="danger">{t("Falló")}</Pill>;
-  const decided = r.counts.approved + r.counts.rejected + r.counts.outdated;
+  const s = standing(r);
   return <>
-    {r.counts.pending > 0 ? <Pill tone="warn">{t("Por decidir: {{n}}", { n: r.counts.pending })}</Pill> : <Pill>{decided ? t("Decidida") : t("Sin cambios propuestos")}</Pill>}
+    {s === "pending" ? <Pill tone="warn">{t("Por decidir: {{n}}", { n: r.counts.pending })}</Pill> : <Pill>{s === "decided" ? t("Decidida") : t("Sin cambios propuestos")}</Pill>}
     {r.counts.approved > 0 && <Pill tone="success">{t("Aprobadas: {{n}}", { n: r.counts.approved })}</Pill>}
   </>;
 }
@@ -85,22 +88,16 @@ function Technical({ text }: { text: string }) {
 
 function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: () => void }) {
   const { t } = useTranslation();
-  const qc = useQueryClient();
   const q = useQuery({ queryKey: ["topic", graph, id], refetchInterval: (c) => (busy(c.state.data) ? 2000 : false),
     queryFn: () => get<Detail>(`brains/${graph}/topics/${id}`) });
-  const [done, setDone] = useState<{ text: string; undo: number[] } | null>(null);
-  const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((p) => send("POST", `brains/${graph}/proposals/${p}/reactivate`))),
-    onSuccess: () => { setDone({ text: t("Deshecho: los hechos vuelven a estar como antes."), undo: [] }); qc.invalidateQueries({ queryKey: ["entity", graph] });
-      qc.invalidateQueries({ queryKey: ["topic", graph, id] }); } });
   const d = q.data;
   const left = d ? Object.entries(d.left_out).filter(([, n]) => n > 0) : [];
   const dropped = d ? Object.entries(d.discarded).filter(([, n]) => n > 0) : [];
   const LEFT: Record<string, string> = { facts: t("hechos de la entidad"), episodes: t("episodios"), neighbour_facts: t("hechos de sus vecinos") };
-  const pending = d?.counts.pending ?? 0;
   return (
     <div className="ms-topic-wrap">
       <ViewBar title={t("Revisión de tema")}
-        meta={d && <>{d.name} · {d.status === "ready" ? (pending ? t("por decidir: {{n}}", { n: pending }) : t("decidida")) : ""}{d.status === "ready" ? " · " : ""}{fmt(d.finished_at ?? d.created_at)}</>}
+        meta={d && <>{d.name} · {d.status === "ready" ? <>{{ pending: t("por decidir: {{n}}", { n: d.counts.pending }), decided: t("decidida"), none: t("sin cambios propuestos") }[standing(d)]} · </> : ""}{fmt(d.finished_at ?? d.created_at)}</>}
         help={<>{t("A la izquierda, cómo está el tema según lo que la memoria sabe ahora; a la derecha, lo que el motor propone cambiar, cada acción con los hechos sobre los que actúa y las pruebas que cita. Un hecho tachado ya no está vigente. Aprobar una invalidación, una unión, un hecho vacío o una reescritura aplica una corrección en el momento (se deshace desde la propuesta, con «Reactivar el hecho»); aprobar lo que falta lo manda a la cola de propuestas.")}
           {d?.status === "ready" ? " " + t("Llamadas al motor: {{n}}. Formato de la respuesta: {{version}}.", { n: d.calls, version: d.prompt_version }) : ""}</>}>
         <Btn kind="link" onClick={back}>{t("← Todas las revisiones")}</Btn>
@@ -111,19 +108,17 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
         {d.status === "failed" && <Notice tone="danger" title={t("La revisión falló")}><Stack gap={4}>
           <Text inherit>{t(FAILURE[d.error_code] ?? FAILURE.failed)} {t("No se ha guardado nada de ella. Puedes pedirla otra vez desde la página de la entidad.")}</Text>
           <Technical text={d.error} /></Stack></Notice>}
-        {done && <Notice tone="success" title={t("Hecho")}>{done.text}{done.undo.length > 0 && <> <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(done.undo)}>{t("Deshacer")}</Btn></>}</Notice>}
-        <MutationError error={undo.error} />
         {d.status === "ready" && <div className="ms-topic-cols">
           <Block title={t("Estado del tema")} meta={d.state_secrets.length > 0 ? (d.state_flagged ? t("posibles secretos: revísalo") : t("secretos tapados")) : undefined}>
             <Text size="sm" className="ms-prose">{d.state}</Text>
           </Block>
           <Block title={t("Acciones propuestas")} count={d.actions.length}>
             {d.actions.length === 0 ? <EmptyState>{t("El motor no propone ningún cambio en este tema.")}</EmptyState>
-              : <Stack gap="sm">{d.actions.map((a) => <ActionCard key={a.i} graph={graph} d={d} a={a} onDone={setDone} />)}</Stack>}
+              : <Stack gap="sm">{d.actions.map((a) => <ActionCard key={a.i} graph={graph} d={d} a={a} />)}</Stack>}
           </Block>
         </div>}
         {(left.length > 0 || dropped.length > 0) && <Notice title={t("Lo que no entró en la revisión")}><Stack gap={4}>
-          {left.length > 0 && <Text inherit>{t("No cupo y no se leyó:")} {left.map(([k, n]) => `${LEFT[k] ?? k}: ${n}`).join(" · ")}. {t("Las revisiones pueden usar más llamadas al motor con el ajuste topic_calls del curador.")}</Text>}
+          {left.length > 0 && <Text inherit>{t("No cupo y no se leyó:")} {left.map(([k, n]) => `${LEFT[k] ?? k}: ${n}`).join(" · ")}. {t("Un administrador del brain puede darles más llamadas al motor con el ajuste topic_calls del curador.")}</Text>}
           {dropped.length > 0 && <Text inherit>{t("Acciones que el motor propuso y no se muestran porque")} {dropped.map(([k, n]) => `${t(DISCARDED[k] ?? k)} (${n})`).join(", ")}.</Text>}
         </Stack></Notice>}
       </>}
@@ -138,15 +133,15 @@ function Precision({ p }: { p: Prec }) {
     <Block title={t("Precisión por tipo")} help={t("De las acciones de cada tipo que los curadores de este brain han decidido, qué parte aprobaron. Las que ya no aplicaban no cuentan.")}>
       <DataTable fz="sm" aria-label={t("Precisión por tipo")}>
         <DataTable.Thead><DataTable.Tr>
-          <DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Precisión")}</DataTable.Th><DataTable.Th>{t("Aprobadas")}</DataTable.Th>
-          <DataTable.Th>{t("Rechazadas")}</DataTable.Th><DataTable.Th>{t("Por decidir")}</DataTable.Th>
+          <DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th ta="right">{t("Precisión")}</DataTable.Th><DataTable.Th ta="right">{t("Aprobadas")}</DataTable.Th>
+          <DataTable.Th ta="right">{t("Rechazadas")}</DataTable.Th><DataTable.Th ta="right">{t("Por decidir")}</DataTable.Th>
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{Object.entries(TYPE).map(([k, label]) => {
           const v = p[k] ?? { approved: 0, rejected: 0, pending: 0, precision: null };
           return <DataTable.Tr key={k}><DataTable.Td>{t(label)}</DataTable.Td>
-            <DataTable.Td className="ms-data">{v.precision == null ? "—" : `${Math.round(v.precision * 100)} %`}</DataTable.Td>
-            <DataTable.Td className="ms-data">{v.approved}</DataTable.Td><DataTable.Td className="ms-data">{v.rejected}</DataTable.Td>
-            <DataTable.Td className="ms-data">{v.pending}</DataTable.Td></DataTable.Tr>;
+            <DataTable.Td ta="right" className="ms-data">{v.precision == null ? "—" : `${Math.round(v.precision * 100)} %`}</DataTable.Td>
+            <DataTable.Td ta="right" className="ms-data">{v.approved}</DataTable.Td><DataTable.Td ta="right" className="ms-data">{v.rejected}</DataTable.Td>
+            <DataTable.Td ta="right" className="ms-data">{v.pending}</DataTable.Td></DataTable.Tr>;
         })}</DataTable.Tbody>
       </DataTable>
     </Block>
@@ -163,26 +158,23 @@ function ItemLine({ it, keep }: { it?: Item; keep?: boolean }) {
   const old = !!it.now && it.now !== "current";
   const gone = it.now === "gone" ? t("ya no existe") : it.now === "invalidated" ? t("ya no está vigente") : "";
   return (
-    <CellText sub={<>{keep ? `${t("se queda")} · ` : ""}{it.source} → {it.target} · {it.invalid_at ? t("válido {{from}} → {{to}}", { from: day(it.valid_at), to: day(it.invalid_at) }) : t("vigente desde {{from}}", { from: day(it.valid_at) })}
+    <CellText sub={<>{it.source} → {it.target} · {it.invalid_at ? t("válido {{from}} → {{to}}", { from: day(it.valid_at), to: day(it.invalid_at) }) : t("vigente desde {{from}}", { from: day(it.valid_at) })}
       {it.probe ? ` · ${t("sonda: {{state}}", { state: it.probe })}` : ""}{gone ? ` · ${gone}` : ""}</>}>
-      <Text inherit className={old ? "ms-fact-old" : undefined}>{it.fact}</Text>
+      <Text inherit className={old ? "ms-fact-old" : undefined}>{keep ? `${t("Se queda:")} ` : ""}{it.fact}</Text>
     </CellText>);
 }
 
-function ActionCard({ graph, d, a, onDone }: { graph: string; d: Detail; a: Act; onDone: (x: { text: string; undo: number[] }) => void }) {
+function ActionCard({ graph, d, a }: { graph: string; d: Detail; a: Act }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [text, setText] = useState(a.text);
+  const [applied, setApplied] = useState<number[]>([]);   // the corrections this card just applied, to undo them from here
   const refresh = () => { qc.invalidateQueries({ queryKey: ["topic", graph, d.id] }); qc.invalidateQueries({ queryKey: ["topics", graph] });
     qc.invalidateQueries({ queryKey: ["entity", graph] }); qc.invalidateQueries({ queryKey: ["proposals", graph] }); };
   const approve = useMutation({ mutationFn: () => send<{ action: Act }>("POST", `brains/${graph}/topics/${d.id}/actions/${a.i}/approve`, { text: text !== a.text ? text : null }),
-    onSuccess: (r) => {
-      refresh();
-      const applied = r.action.became.filter((b) => b.status !== "pending" && a.type !== "gap").map((b) => b.proposal);
-      onDone({ text: a.type === "gap" ? t("«{{type}}» aprobada: está en la cola de propuestas.", { type: t(TYPE[a.type]) })
-        : applied.length ? t("«{{type}}» aprobada: correcciones aplicadas: {{n}}.", { type: t(TYPE[a.type] ?? a.type), n: applied.length })
-        : t("«{{type}}» no se aplicó: los hechos ya no estaban como en la revisión.", { type: t(TYPE[a.type] ?? a.type) }), undo: applied });
-    } });
+    onSuccess: (r) => { refresh(); setApplied(a.type === "gap" || a.type === "rewrite" ? [] : r.action.became.filter((b) => b.status !== "pending").map((b) => b.proposal)); } });
+  const undo = useMutation({ mutationFn: (ids: number[]) => Promise.all(ids.map((p) => send("POST", `brains/${graph}/proposals/${p}/reactivate`))),
+    onSuccess: () => { setApplied([]); refresh(); } });
   const reject = useMutation({ mutationFn: () => send("POST", `brains/${graph}/topics/${d.id}/actions/${a.i}/reject`), onSuccess: refresh });
   const pending = a.decision === "pending";
   const editable = a.type === "rewrite" || a.type === "gap";
@@ -202,7 +194,10 @@ function ActionCard({ graph, d, a, onDone }: { graph: string; d: Detail; a: Act;
       tags={(a.edited || a.secrets.length > 0) && <>
         {a.edited && <Pill>{t("editado por un curador")}</Pill>}
         {a.secrets.length > 0 && <Pill tone={a.flagged ? "warn" : "neutral"} title={a.secrets.map((s) => s.label).join(", ")}>{a.flagged ? t("posibles secretos: revísalo") : t("secretos tapados")}</Pill>}</>}
-      note={(!pending || approve.error || reject.error) && <><Outcome a={a} /><MutationError error={approve.error ?? reject.error} /></>}
+      note={(!pending || approve.error || reject.error) && <><Outcome a={a} />
+        {applied.length > 0 && <> <Btn kind="link" loading={undo.isPending} onClick={() => undo.mutate(applied)}>{t("Deshacer")}</Btn></>}
+        {undo.isSuccess && <> {t("Deshecho: los hechos vuelven a estar como antes.")}</>}
+        <MutationError error={approve.error ?? reject.error ?? undo.error} /></>}
       actions={pending ? <>
         <Btn kind="primary" size="row" icon="check" loading={approve.isPending} disabled={reject.isPending || (editable && !text.trim())} onClick={() => approve.mutate()}>
           {editable && text !== a.text ? t("Aprobar con mis cambios") : t("Aprobar")}</Btn>
@@ -241,7 +236,7 @@ export function TopicReviewStart({ graph, uuid }: { graph: string; uuid: string 
   useEffect(() => { if (mine && r?.id === mine && r.status !== "queued" && r.status !== "running") open(mine); }, [mine, r?.id, r?.status]);   // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <Stack gap={4} align="flex-start">
-      <Btn size="row" icon="search" loading={start.isPending} disabled={busy(r)} onClick={() => { start.reset(); start.mutate(); }}>{t("Revisar este tema")}</Btn>
+      <Btn size="row" icon="refresh" loading={start.isPending} disabled={busy(r)} onClick={() => { start.reset(); start.mutate(); }}>{t("Revisar este tema")}</Btn>
       {busy(r) && <CellText sub={t("El motor lee lo que la memoria sabe de ella; la revisión se abre al terminar.")}>{t("Revisando el tema…")}</CellText>}
       {r && !busy(r) && r.id !== mine && <Btn kind="link" onClick={() => open(r.id)}>{t("Ver la última revisión ({{date}})", { date: fmt(r.created_at) })}</Btn>}
       <MutationError error={start.error} />

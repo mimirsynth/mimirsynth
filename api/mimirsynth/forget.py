@@ -172,7 +172,7 @@ def _proposals(db, brain_id: int, m: Matcher) -> list:
 
 
 def _topic_reviews(db, brain_id: int, entity: str, facts: set[str], m: Matcher) -> list:
-    """Topic reviews of the entity, those that name it, and those that cite one of its facts (#454)."""
+    """Topic reviews of the entity, those that name it, and those that cite one of its facts or of the episodes that mention it (#454)."""
     from .models import TopicReview
     out = []
     for r in db.scalars(select(TopicReview).where(TopicReview.brain_id == brain_id).limit(MAX_ROWS)):
@@ -182,7 +182,7 @@ def _topic_reviews(db, brain_id: int, entity: str, facts: set[str], m: Matcher) 
     return out
 
 
-def _db_targets(db, brain_id: int, facts: set[str], m: Matcher, entity: str = "") -> dict:
+def _db_targets(db, brain_id: int, facts: set[str], m: Matcher, entity: str = "", episodes: set[str] | None = None) -> dict:
     from .models import (Audit, CuratorRun, FactArchive, FactConfirmation, FactProbe, FactRecall, Job, Notification, Proposal, RecallLog,
                          RecallSample, RefQuery, RefRun, ReplayRun, RetypeSuggestion, SummarySuggestion, VocabOp, WebhookEvent)
     hanging = []
@@ -200,7 +200,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher, entity: str = ""
         "summary_suggestions": _scan(db, SummarySuggestion, brain_id, ["name", "current", "proposed", "applied"], m,
                                      ["name", "current", "proposed", "applied"]),
         "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name"], m, ["name"]),
-        "topic_reviews": _topic_reviews(db, brain_id, entity, facts, m),
+        "topic_reviews": _topic_reviews(db, brain_id, entity, set(facts) | set(episodes or ()), m),
         "jobs": _scan(db, Job, brain_id, ["title", "params", "log", "error", "result"], m),
         "notifications": _scan(db, Notification, brain_id, ["title", "body"], m, ["title", "body"]),
         "webhook_events": _scan(db, WebhookEvent, brain_id, ["title"], m, ["title"]),
@@ -232,7 +232,7 @@ def select_all(db, brain, uuid: str, aliases: list[str]) -> tuple[dict, Matcher,
         raise HTTPException(422, "hace falta al menos un nombre o alias de 3 caracteres o más")
     gt = _graph_targets(g, uuid, m)
     docs = _documents(db, brain.id, m) if index.enabled() else {}
-    return {"uuid": uuid, "name": e["name"], "aliases": e["aliases"] or []}, m, gt, _db_targets(db, brain.id, gt["facts"], m, uuid), docs
+    return {"uuid": uuid, "name": e["name"], "aliases": e["aliases"] or []}, m, gt, _db_targets(db, brain.id, gt["facts"], m, uuid, gt["episodes"]), docs
 
 
 def report(db, brain, uuid: str, aliases: list[str]) -> dict:

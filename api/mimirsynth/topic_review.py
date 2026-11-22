@@ -52,6 +52,7 @@ DECIDED = ("approved", "rejected", "outdated")
 MAX_TEXT = 2000
 MAX_ACTED = 10           # facts one action may change: a single approval never invalidates a whole topic
 MAX_ACTIVE = 5           # reviews queued or running per brain
+STALE_CLAIM = 600        # seconds after which an action left «applying» (a restart mid-approval) can be decided again
 REVIEWS_FOR_PRECISION = 500
 
 SYSTEM = (
@@ -81,8 +82,8 @@ class Action(BaseModel):
     facts: list[str | int] = Field(default_factory=list, max_length=50)
     keep: str | int | None = None
     evidence: list[str | int] = Field(default_factory=list, max_length=50)
-    text: str = Field("", max_length=MAX_TEXT)
-    why: str = Field("", max_length=1000)
+    text: str | None = Field("", max_length=MAX_TEXT)   # a null from the model reads as empty
+    why: str | None = Field("", max_length=1000)
 
 
 class Reply(BaseModel):
@@ -127,7 +128,7 @@ def check(a: Action, items: dict[str, dict], sent: set[str]) -> tuple[dict | Non
         keep = None
     if not facts and not evidence:
         return None, "no_evidence"
-    if not a.why.strip():
+    if not (a.why or "").strip():
         return None, "rule"
     if any(x not in sent for x in facts + evidence + ([keep] if keep else [])):
         return None, "unknown_id"
@@ -152,7 +153,7 @@ def check(a: Action, items: dict[str, dict], sent: set[str]) -> tuple[dict | Non
     if a.type == "gap" and (not text or not evidence):
         return None, "rule"
     return {"type": a.type, "facts": facts, "keep": keep, "evidence": [x for x in evidence if x not in facts] or evidence,
-            "text": text, "why": " ".join(a.why.split())}, ""
+            "text": text, "why": " ".join((a.why or "").split())}, ""
 
 
 def review_reply(brain: Brain, reply: Reply, items: dict[str, dict], sent: set[str]) -> tuple[str, list[dict], dict[str, int], list[dict]]:
@@ -318,6 +319,16 @@ def _safe(brain: Brain, raw: str) -> str:
         return "(la respuesta llevaba secretos que el brain bloquea)"
 
 
+def _still_there(g, entity: str, cited: list[dict]) -> bool:
+    """The entity and every fact and episode a review cites are still in the graph."""
+    facts = [x["uuid"] for x in cited if x["kind"] == "fact"]
+    eps = [x["uuid"] for x in cited if x["kind"] == "episode"]
+    n = lambda q, u: g.query(q, {"u": u}).result_set[0][0] if u else 0  # noqa: E731
+    return (bool(rows(g.query(ENTITY, {"u": entity})))
+            and n("MATCH ()-[r:RELATES_TO]->() WHERE r.uuid IN $u RETURN count(r)", facts) == len(set(facts))
+            and n("MATCH (e:Episodic) WHERE e.uuid IN $u RETURN count(e)", eps) == len(set(eps)))
+
+
 def run(rid: int, job=None) -> dict:
     """Gathers the topic, asks the engine and keeps the actions that pass. Any failure leaves the review failed with nothing of it kept."""
     from .curator import config
@@ -370,6 +381,8 @@ def run(rid: int, job=None) -> dict:
             for n, a in enumerate(actions):
                 a.update(i=n, decision="pending", became=[], skipped=[], by=None, at=None, edited=False)
             cited = {x for a in actions for x in a["facts"] + a["evidence"] + ([a["keep"]] if a["keep"] else [])}
+            if not _still_there(graph(brain.graph_name), r.entity_uuid, [items[k] for k in cited]):
+                raise Failed("gone", "algo de lo que cita la revisión se borró mientras se hacía (por ejemplo, con el derecho al olvido)")
             r.state, r.actions, r.discarded, r.left_out, r.calls = "\n\n".join(states), actions, discarded, left, calls
             r.items = {k: v for k, v in items.items() if k in cited}
             r.secret_findings = state_secrets or None
@@ -380,12 +393,14 @@ def run(rid: int, job=None) -> dict:
             db.rollback()
             r = db.get(TopicReview, rid)
             if r is None:   # forgotten meanwhile: nothing of it is written back
-                raise
+                raise Failed(*_failure(e)) from None
             code, detail = _failure(e)
             r.status, r.error_code, r.error, r.finished_at = "failed", code, detail, datetime.now(timezone.utc)
             r.state, r.actions, r.items, r.calls = "", None, None, calls
             db.commit()
-            raise
+            if isinstance(e, jobs.Cancelled):
+                raise
+            raise Failed(code, detail) from None
 
 
 @jobs.register(KIND, "Revisión de un tema", limit=2)
@@ -524,6 +539,13 @@ def _save(ctx: BrainCtx, rid: int, i: int, a: dict, lang: str) -> TopicReview:
     return r
 
 
+def _age(iso: str | None) -> float:
+    try:
+        return (datetime.now(timezone.utc) - datetime.fromisoformat(str(iso))).total_seconds()
+    except (TypeError, ValueError):
+        return float("inf")
+
+
 def _claim(ctx: BrainCtx, rid: int, i: int, lang: str) -> tuple[TopicReview, dict]:
     """Marks a pending action as being decided («applying») under the lock: a second approval of it, at the same time, gets 409."""
     r = _locked(ctx, rid, lang)
@@ -531,11 +553,13 @@ def _claim(ctx: BrainCtx, rid: int, i: int, lang: str) -> tuple[TopicReview, dic
     if r.status != "ready" or not 0 <= i < len(acts):
         ctx.db.rollback()
         raise HTTPException(404, tr("La revisión no tiene esa acción.", lang))
-    if acts[i].get("decision") != "pending":
+    a = dict(acts[i])
+    if a.get("decision") == "applying" and _age(a.get("claimed")) > STALE_CLAIM:   # interrupted mid-approval: what it applied is in Propuestas
+        a["decision"] = "pending"
+    if a.get("decision") != "pending":
         ctx.db.rollback()
         raise HTTPException(409, tr("Esa acción ya está decidida.", lang))
-    a = dict(acts[i])
-    acts[i] = {**a, "decision": "applying"}
+    acts[i] = {**a, "decision": "applying", "claimed": datetime.now(timezone.utc).isoformat()}
     r.actions = acts
     ctx.db.commit()
     return r, a
@@ -573,9 +597,7 @@ def _apply(ctx: BrainCtx, request: Request, bg: BackgroundTasks, r: TopicReview,
         except secretguard.Blocked as b:
             raise HTTPException(422, tr("El texto lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", language(request), labels=str(b))) from None
         body = ProposalIn(name=name[:255], body=body_text, source_description=f"topic review #{r.id}"[:255])
-        p = store(ctx.db, ctx.brain, ctx.user, body, name, body_text, in_name, in_body, False, bg.add_task, origin="")
-        p.category = "topic.gap"
-        ctx.db.commit()
+        p = store(ctx.db, ctx.brain, ctx.user, body, name, body_text, in_name, in_body, False, bg.add_task, origin="", category="topic.gap")
         a["became"].append({"proposal": p.id, "status": p.status})
         return
     targets = [x for x in a["facts"] if not (a["type"] == "merge" and x == a["keep"])]
@@ -618,6 +640,8 @@ def approve(rid: int, i: int, body: DecideIn, request: Request, bg: BackgroundTa
             if not text:
                 raise HTTPException(422, tr("El texto no puede estar vacío.", lang))
         _apply(ctx, request, bg, r, a, text)
+        if not a["became"] and any(s["why"] == "error" for s in a["skipped"]):   # a passing failure: nothing applied, it can be tried again
+            raise HTTPException(503, tr("No se pudo aplicar ahora mismo; la acción sigue pendiente. Inténtalo de nuevo.", lang))
         if not a["became"] and any(s["why"] == "secrets" for s in a["skipped"]):
             raise HTTPException(422, tr("La corrección contiene secretos. Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).", lang))
     except Exception:
