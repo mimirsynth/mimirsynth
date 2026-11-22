@@ -95,10 +95,22 @@ _RICH = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL
          "a.uuid AS source_uuid, b.name AS target, b.uuid AS target_uuid ORDER BY coalesce(r.valid_at, r.created_at) DESC, r.uuid LIMIT $n")
 
 
+def keeper(c: list[dict]) -> tuple[dict, str]:
+    """The fact a cluster of repeats keeps, and why the others go. `c` is newest first. A fact whose words contain every other's and
+    add a name («H is an M 7050 Micro» over «H is an M 7050») is kept whatever its date (#461); otherwise the newest. Only a name counts as
+    precision: «no longer» or «not» added to an older fact must not win over the newer one."""
+    from . import health
+    ws = [health.words(f.get("fact")) for f in c]
+    best = max((i for i in range(len(c)) if all(w <= ws[i] for w in ws)), key=lambda i: (len(ws[i]), -i), default=0)
+    if best and (ws[best] - ws[0]) & health._named(c[best].get("fact")):
+        return c[best], "says less than a more precise current fact between the same entities"
+    return c[0], "says the same as a newer current fact between the same entities"
+
+
 def redundancy(brain_id: int) -> list[dict]:
     """Findings of the redundancy pass (#297's merge): current facts between the same two entities that say the same thing (the same
-    text, or close embeddings with the same numbers and identifiers, as the memory health counts them). The newest one is kept and the
-    others are proposed for invalidation, pointing to it."""
+    text, or close embeddings with the same numbers and identifiers and no name apart, as the memory health counts them). The most
+    precise one (`keeper`) is kept and the others are proposed for invalidation, pointing to it."""
     from . import health
     from .db import graph, rows
     with _factory()() as db:
@@ -119,12 +131,13 @@ def redundancy(brain_id: int) -> list[dict]:
     for grp in groups:
         for c in health.clusters([{**f, "embedding": vectors.get(f["uuid"])} for f in grp]):
             c = sorted(c, key=lambda f: (str(f.get("valid_at") or f.get("created_at") or ""), f["uuid"]), reverse=True)
-            keep, drop = c[0], [f for f in c[1:] if f["uuid"] not in busy]
+            keep, why = keeper(c)
+            drop = [f for f in c if f is not keep and f["uuid"] not in busy]
             if not drop:
                 continue
             short = lambda f: {k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}  # noqa: E731
             out.append({"pass": "redundancy", "subject": keep["source"], "relation": keep["name"], "keep": short(keep),
-                        "replace": [short(f) for f in drop], "why": "says the same as a newer current fact between the same entities"})
+                        "replace": [short(f) for f in drop], "why": why})
             if len(out) >= MAX_FINDINGS:
                 return out
     return out

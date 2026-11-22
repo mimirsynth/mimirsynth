@@ -32,6 +32,36 @@ def test_a_repeat_says_the_same_thing_with_the_same_numbers():
     assert not H.near_duplicate(a, {"fact": "Vaultwarden is hosted on altair", "embedding": None})       # no embedding: only the text
 
 
+def test_facts_that_name_different_things_are_not_repeats():
+    """Issue 461: on a real brain, facts identical except for one node were proposed as repeats."""
+    e = [1.0, 0.0, 0.0]
+    node = "Agent X distributes data by node name; node {} was registered by IP and got no node services, then was renamed"
+    assert not H.near_duplicate({"fact": node.format("A"), "embedding": e}, {"fact": node.format("B"), "embedding": e})
+    assert not H.near_duplicate({"fact": "X distributes data by node name for Alpha", "embedding": e},
+                                {"fact": "X distributes data by node name for Beta", "embedding": e})
+    assert H.near_duplicate({"fact": "H is an M 7050", "embedding": e}, {"fact": "H is an M 7050 Micro", "embedding": e})  # one adds detail
+    assert H.near_duplicate({"fact": "Vaultwarden runs on altair", "embedding": e},
+                            {"fact": "altair hosts Vaultwarden", "embedding": e})          # the same names, one of them first
+    assert H.near_duplicate({"fact": "The wiki runs on altair", "embedding": e},
+                            {"fact": "Wiki is hosted on Altair", "embedding": e})          # capitals alone are no new name
+    art = "Agent X: node {} was registered by IP and got a new name"
+    assert not H.near_duplicate({"fact": art.format("A"), "embedding": e}, {"fact": art.format("B"), "embedding": e})  # «a» is not «A»
+    assert not H.near_duplicate({"fact": "Backup target for Vaultwarden: Altair", "embedding": e},
+                                {"fact": "Backup target for Vaultwarden: Vega", "embedding": e})     # a colon does not open a sentence
+    assert not H.near_duplicate({"fact": "Rafa uses tools, e.g. Docker", "embedding": e},
+                                {"fact": "Rafa uses tools, e.g. Podman", "embedding": e})            # nor does «e.g.»
+    assert not H.near_duplicate({"fact": "The config lives in a/b", "embedding": e}, {"fact": "The config lives in c/d", "embedding": e})
+    assert H.near_duplicate({"fact": "Vaultwarden runs on altair. It is backed up nightly", "embedding": e},
+                            {"fact": "Vaultwarden is hosted on altair. Backups run nightly", "embedding": e})  # a sentence opens
+    assert H.near_duplicate({"fact": "Vaultwarden is self-hosted on altair", "embedding": e},
+                            {"fact": "altair runs Vaultwarden in-house", "embedding": e})   # hyphenated words are not names
+    reg = lambda u, n: {"uuid": u, "fact": f"Agent X registered node{n} by IP", "embedding": e}
+    assert H.clusters([reg("a", " A"), reg("g", ""), reg("b", " B")]) == [[reg("a", " A"), reg("g", "")]]   # no chain through «node»
+    m = lambda u, f: {"uuid": u, "fact": f, "embedding": e}                              
+    assert [[f["uuid"] for f in c] for c in H.clusters([m("n", "H is an M 7050"), m("p", "H is an M 7050 Micro"),
+                                                        m("d", "H is a Dell M 7050")])] == [["n", "p"]]
+
+
 def test_repeats_count_all_but_one_of_each_cluster():
     same = [{"fact": "X runs on Y"}, {"fact": "x runs on y"}, {"fact": "X RUNS ON Y"}, {"fact": "Y backs up X nightly"}]
     assert H.repeats(same) == 2
