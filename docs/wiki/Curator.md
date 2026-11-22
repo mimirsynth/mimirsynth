@@ -22,6 +22,8 @@ And, also off by default, **noise**: current facts that say nothing useful, by f
 
 Two kinds of fact are never noise, whatever their relation: a **retirement or replacement** («X was replaced by Y», «decommissioned», «se dio de baja», or a relation such as `REPLACED_BY`), which is what tells an agent that X no longer exists, and a fact that gives the **reason** for a decision («…to free RAM», «…because…», «…para evitar…», «…por falta de…»), which the fact with the result does not keep. A generic relation whose text says **where something is** («the credentials of K are in the password manager item K», a folder, a document, a URL) is not noise either.
 
+The first two rules need no person, so ingestion already drops the clear cases among new facts ([Proposals](Proposals), ingestion report); this pass finds them among the facts learned before, or kept because their episode replaced another fact.
+
 And, also off by default, **facts never recalled**: current facts that no recall brought in the last 180 days (`archive_days`, adjustable through the API), learned before that, never confirmed by a person or a probe. Approving one **archives** it: it stays in the graph untouched, but the recall leaves it out unless asked (`archived: true` in `POST /recall` or the MCP `recall`). The **Archived** list in this tab restores any of them with one click. Every logged recall notes when its facts came back, and this pass only proposes once the brain has been tracked for the whole period; before that, every old fact would look unused.
 
 And, also off by default, **distil**: episodes that repeat the same lesson in slightly different words.
