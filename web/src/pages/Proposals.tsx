@@ -33,7 +33,8 @@ const fromCurator = (d: Prop) => (d.category ?? "").startsWith("curator.");
 /** Which fact a correction is about, short enough for a list row: two corrections of facts with the same text read apart (issue 460).
  *  Two pieces, each kept whole, so a narrow row breaks between them and never inside a date. */
 function factTag(c: Correction, t: TFunction): ReactNode {
-  const when = c.fact.invalid_at ? t("válido {{from}} → {{to}}", { from: fmtDay(c.fact.valid_at), to: fmtDay(c.fact.invalid_at) })
+  const when = c.applied_at && !c.reverted_at && !reactivates(c) ? t("invalidado {{date}}", { date: fmtDay(c.invalid_at) })   // as it is now, not as it was sent
+    : c.fact.invalid_at ? t("válido {{from}} → {{to}}", { from: fmtDay(c.fact.valid_at), to: fmtDay(c.fact.invalid_at) })
     : c.fact.valid_at ? t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) }) : "";
   return <span className="ms-fact-tag"><span>{t("hecho {{id}}", { id: c.fact_uuid.slice(0, 8) })}</span>{when && <span>{when}</span>}</span>;
 }
@@ -962,7 +963,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
     {/* the queue's bar: the kind segments, only when there is something to tell apart (it draws nothing otherwise); on a phone the
         three kinds fit one row (ms-review-filter) */}
     <ViewBar title={t("Por revisar")} meta={q && queue.data ? t("Coinciden {{n}} de {{all}}", { n: queue.data.total, all: kinds.all ?? 0 }) : undefined}>
-      {(q || (kinds.all ?? 0) > 0) && <SearchBar value={search} onChange={(v) => { setSearch(v); setOffset(0); }} label={t("Buscar en la cola")} placeholder={t("Título o número (#12)…")} />}
+      {(q || (kinds.all ?? 0) > 0) && <SearchBar value={search} onChange={(v) => { setSearch(v.slice(0, 200)); setOffset(0); }} label={t("Buscar en la cola")} placeholder={t("Título o número (#12)…")} />}
       {(kind !== "all" || (!!kinds.memory && !!kinds.correction)) && <div className="ms-review-filter">
         <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
           data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },

@@ -4,5 +4,6 @@
  "Corrección repetida: se queda la pendiente": "Repeated correction: the pending one is kept",
  "Ninguna propuesta pendiente coincide con «{{q}}».": "No pending proposal matches «{{q}}».",
  "Título o número (#12)…": "Title or number (#12)…",
- "hecho {{id}}": "fact {{id}}"
+ "hecho {{id}}": "fact {{id}}",
+ "invalidado {{date}}": "invalidated {{date}}"
 }
