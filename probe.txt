@@ -1,1 +1,0 @@
-A r"\s+[\(\[]?v?\d+" B "\n" C \N{HYPHEN} D "A"
