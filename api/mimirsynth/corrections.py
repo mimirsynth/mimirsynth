@@ -86,13 +86,21 @@ def _iso(d: datetime) -> str:
     return (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).isoformat()
 
 
-def pending_for(ctx: BrainCtx, uuid: str, act: str) -> Proposal | None:
-    """The pending correction of this fact that does the same (invalidate or reactivate), if there is one."""
-    for p in ctx.db.scalars(select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction", Proposal.status == "pending")
-                            .order_by(Proposal.id)):
-        if (p.correction or {}).get("fact_uuid") == uuid and action(p.correction) == act:
-            return p
-    return None
+def pending_for(ctx: BrainCtx, uuid: str, act: str, author: int | None = None) -> Proposal | None:
+    """The pending correction of this fact that does the same (invalidate or reactivate), if there is one; only `author`'s when given.
+    Narrowed by the fact in SQL; the action is told apart here, since older corrections have none (they invalidate)."""
+    q = select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction", Proposal.status == "pending",
+                               Proposal.correction["fact_uuid"].as_string() == uuid)
+    if author is not None:
+        q = q.where(Proposal.author_id == author)
+    return next((p for p in ctx.db.scalars(q.order_by(Proposal.id)) if action(p.correction) == act), None)
+
+
+def brief(p: Proposal, ctx: BrainCtx) -> dict:
+    """What someone who sent the same correction gets back: all of it when it is theirs or they curate; another author's only by its number."""
+    if p.author_id == ctx.user.id or allows(ctx.role, "curator"):
+        return {**_out(p), "duplicate": True}
+    return {"id": p.id, "status": p.status, "kind": "correction", "duplicate": True, "mine": False}
 
 
 def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = True) -> Proposal:
@@ -100,12 +108,6 @@ def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = T
     One that would only wait in the queue, while another for the same fact and action is pending, returns that one (`p.duplicate`)."""
     lang = language(request)
     f = _check(ctx, body.fact_uuid.strip(), lang, body.action)
-    if not (direct and allows(ctx.role, "curator")):
-        same = pending_for(ctx, f["uuid"], body.action)
-        if same is not None:
-            same.duplicate = True
-            audit(ctx.db, ctx.user, "proposal.duplicate", ctx.brain, id=same.id, kind="correction", fact=f["uuid"])
-            return same
     try:
         reason, in_reason = secretguard.guard(ctx.brain, body.reason)
         text, in_body = secretguard.guard(ctx.brain, body.replacement)
@@ -113,6 +115,12 @@ def create(ctx: BrainCtx, request: Request, body: CorrectionIn, direct: bool = T
         audit(ctx.db, ctx.user, "proposal.blocked", ctx.brain, reason="secrets", kind="correction")
         raise HTTPException(422, tr("La corrección contiene secretos. Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).", lang))
     found = [{**x, "field": "reason"} for x in in_reason] + [{**x, "field": "body"} for x in in_body]
+    if not (direct and allows(ctx.role, "curator") and not secretguard.flagged(found)):   # it would wait: one per fact and action (#460)
+        same = pending_for(ctx, f["uuid"], body.action)
+        if same is not None:
+            same.duplicate = True
+            audit(ctx.db, ctx.user, "proposal.duplicate", ctx.brain, id=same.id, kind="correction", fact=f["uuid"])
+            return same
     tok = getattr(request.state, "token", None)  # the title stays in memory (it names the replacement's episode): in the instance language
     when = body.invalid_at or datetime.now(timezone.utc)
     short = (f["fact"] or "")[:200]
@@ -174,7 +182,7 @@ def submit(body: CorrectionIn, request: Request, ctx: BrainCtx = Depends(contrib
     """Contributor: it stays in quarantine. Curator or above: it is applied when sent. The same correction pending already: that one, 200."""
     p = create(ctx, request, body)
     if getattr(p, "duplicate", False):
-        return JSONResponse(jsonable_encoder({**_out(p), "duplicate": True}), status_code=200)
+        return JSONResponse(jsonable_encoder(brief(p, ctx)), status_code=200)
     return _out(p)
 
 

@@ -27,11 +27,15 @@ type Correction = { fact_uuid: string; fact: { fact: string; source: string; tar
   invalid_at: string; applied_at?: string; reverted_at?: string;
   /** What it does to the fact: invalidate it (also when missing, for the older ones) or make one invalidated by mistake current again. */ action?: "invalidate" | "reactivate" };
 const reactivates = (c?: Correction | null) => c?.action === "reactivate";
-/** Which fact a correction is about, short enough for a list row: two corrections of facts with the same text read apart (issue 460). */
-function factTag(c: Correction, t: TFunction): string {
+/** A proposal of the scheduled curator: it carries its own evidence (what it keeps and what it replaces), which a recall of its text would
+ *  only contradict (issue 460). */
+const fromCurator = (d: Prop) => (d.category ?? "").startsWith("curator.");
+/** Which fact a correction is about, short enough for a list row: two corrections of facts with the same text read apart (issue 460).
+ *  Two pieces, each kept whole, so a narrow row breaks between them and never inside a date. */
+function factTag(c: Correction, t: TFunction): ReactNode {
   const when = c.fact.invalid_at ? t("válido {{from}} → {{to}}", { from: fmtDay(c.fact.valid_at), to: fmtDay(c.fact.invalid_at) })
     : c.fact.valid_at ? t("vigente desde {{date}}", { date: fmtDay(c.fact.valid_at) }) : "";
-  return [t("hecho {{id}}", { id: c.fact_uuid.slice(0, 8) }), when].filter(Boolean).join(" · ");
+  return <span className="ms-fact-tag"><span>{t("hecho {{id}}", { id: c.fact_uuid.slice(0, 8) })}</span>{when && <span>{when}</span>}</span>;
 }
 const TONE: Record<string, Tone> = { pending: "warn", approved: "success", rejected: "neutral", ingested: "alt", failed: "danger" };
 const LABEL: Record<string, string> = { pending: T("pendiente"), approved: T("aprobada"), rejected: T("rechazada"), ingested: T("ingerida"), failed: T("fallida") };
@@ -505,7 +509,7 @@ type RelatedFact = { uuid: string; fact: string; name: string; source: string; t
 /** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
  *  A key. Opening it also refreshes the verdict the queue ranks by. */
 function useRelated(ops: Ops, d?: Prop) {
-  const on = ops.isCurator && !!d && d.status === "pending" && !d.correction && !d.purged_at;
+  const on = ops.isCurator && !!d && d.status === "pending" && !d.correction && !d.purged_at && !fromCurator(d);
   return useQuery({ queryKey: ["proposal", ops.graph, d?.id, "related"], enabled: on, staleTime: 60_000,
     queryFn: () => get<{ facts: RelatedFact[] }>(`${ops.base}/${d!.id}/related`) });
 }
@@ -539,7 +543,7 @@ const knownNote = (k: NonNullable<Known>, t: TFunction) => k.verdict === "duplic
   : (k.fact ? t("Ya no es cierto: «{{fact}}» dejó de serlo el {{date}}.", { fact: quoted(k.fact.fact), date: fmtDay(k.fact.invalid_at) }) : t("Se parece a algo que dejó de ser cierto."));
 /** Approving a proposal that adds knowledge waits until the check of what the brain knows answers: before it, nobody can tell a duplicate.
  *  A proposal with a secret to review asks anyway, and a check that failed shows its error instead of holding the decision. */
-const isChecking = (d: Prop | undefined, rel: { isPending: boolean }) => !!d && d.status === "pending" && !d.correction && !d.purged_at && !flagged(d) && rel.isPending;
+const isChecking = (d: Prop | undefined, rel: { isPending: boolean }) => !!d && d.status === "pending" && !d.correction && !d.purged_at && !flagged(d) && !fromCurator(d) && rel.isPending;
 /** A pending addition never checked against what the brain knows (it arrived without an engine, or the check failed): a batch leaves it
  *  aside, as the API does, until the queue has checked it. */
 const isUnchecked = (p: Prop, llm: boolean) => llm && p.status === "pending" && p.kind !== "correction" && !p.purged_at && !p.related_verdict;
@@ -617,10 +621,6 @@ function AddedText({ d, fact }: { d: Prop; fact: RelatedFact }) {
 /** What the brain already knows close to a pending proposal that adds knowledge. When it is a likely duplicate, close to something no
  *  longer true, or very close to a current fact, the proposal and that fact are set side by side, with what the proposal adds marked, to
  *  read one against the other. Other very similar facts follow; facts that are only related stay folded, so they do not read as evidence. */
-/** A proposal of the scheduled curator: it carries its own evidence (what it keeps and what it replaces), which a recall of its text would
- *  only contradict (issue 460). */
-const fromCurator = (d: Prop) => (d.category ?? "").startsWith("curator.");
-
 function RelatedFacts({ d, ops }: { d: Prop; ops: Ops }) {
   const { t } = useTranslation();
   const q = useRelated(ops, d);
@@ -818,8 +818,14 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const { t } = useTranslation();
   const [kind, setKind] = useState(initialKind ?? "all");
   const [offset, setOffset] = useState(0);
-  const [search, setSearch] = useState("");
+  const [sp, setSp] = useSearchParams();
+  const [search, setSearch] = useState(sp.get("buscar") ?? "");
   const [q] = useDebouncedValue(search.trim(), 300);
+  useEffect(() => {   // the search stays in the address, like the tab: back from another tab, or a reload, keeps it
+    const p = new URLSearchParams(sp);
+    if (q) p.set("buscar", q); else p.delete("buscar");
+    if (p.toString() !== sp.toString()) setSp(p, { replace: true });
+  }, [q]);   // eslint-disable-line react-hooks/exhaustive-deps
   const limit = 50;
   const cnt = useQuery({ queryKey: ["proposals", ops.graph, "counts", kind, false], refetchInterval: 15000, queryFn: () => get<Counts>(`${ops.base}/counts`, { kind: kind === "all" ? undefined : kind }) });
   const queue = useQuery({ queryKey: ["proposals", ops.graph, "queue", kind, offset, q], placeholderData: keepPreviousData, refetchInterval: 15000,
@@ -941,7 +947,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const counts = cnt.data ?? {};
   const pendingFixes = counts.corrections_pending ?? 0;
   const queueItems: QueueItem[] = items.map((p) => ({
-    id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <><span className="ms-data">#{p.id}</span> {p.purged_at ? t("(texto purgado)") : p.name}</>,
+    id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <><span className="ms-queue-num">#{p.id} · </span>{p.purged_at ? t("(texto purgado)") : p.name}</>,
     preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} correction={p.correction} />}<SecretsPill found={p.secrets} />
       {p.related_verdict === "duplicate" && <Pill tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
@@ -949,26 +955,27 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
       {p.related_verdict === "similar" && <Pill tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}
       {p.confidence !== null && p.confidence < LOW_CONFIDENCE && <Pill tone="neutral"><span className="ms-pill-row"><Icon name="info" size={12} />{t("confianza {{c}}", { c: fmtNum(p.confidence) })}</span></Pill>}
       {p.decision && !p.decision.error && <Pill tone="alt" title={[p.decision.note, p.decision.action?.prob != null ? t("seguridad del decisor: {{p}}", { p: fmtNum(p.decision.action.prob) }) : ""].filter(Boolean).join(" · ")}>{t("el decisor dudó")}</Pill>}</>,
-    meta: <>{p.correction && !p.purged_at && <span className="ms-queue-fact ms-data">{factTag(p.correction, t)}</span>}<span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
+    meta: <>{p.correction && !p.purged_at && <span className="ms-queue-fact">{factTag(p.correction, t)}</span>}<span className="ms-queue-author" title={p.author}>{who(p)}</span><span className="ms-queue-age" title={fmt(p.created_at)}>{waited(p.created_at)}</span></>,
   }));
   const kinds = kindCounts(cnt.data, "pending");
   return (<>
     {/* the queue's bar: the kind segments, only when there is something to tell apart (it draws nothing otherwise); on a phone the
         three kinds fit one row (ms-review-filter) */}
-    <ViewBar title={t("Por revisar")}>
-      <SearchBar value={search} onChange={(v) => { setSearch(v); setOffset(0); }} label={t("Buscar en la cola")} placeholder={t("Título o número (#12)…")} />
+    <ViewBar title={t("Por revisar")} meta={q && queue.data ? t("Coinciden {{n}} de {{all}}", { n: queue.data.total, all: kinds.all ?? 0 }) : undefined}>
+      {(q || (kinds.all ?? 0) > 0) && <SearchBar value={search} onChange={(v) => { setSearch(v); setOffset(0); }} label={t("Buscar en la cola")} placeholder={t("Título o número (#12)…")} />}
       {(kind !== "all" || (!!kinds.memory && !!kinds.correction)) && <div className="ms-review-filter">
         <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
           data={[{ value: "all", label: t("Todas"), count: kinds.all }, { value: "memory", label: t("Añaden"), count: kinds.memory },
             { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />
       </div>}
     </ViewBar>
-      {pendingFixes > 0 && kind !== "correction" && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
+      {pendingFixes > 0 && kind !== "correction" && !q && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
-        ? <EmptyState action={<Btn kind="link" onClick={onDecided}>{t("Ver las decididas")}</Btn>}>{t("No queda nada por revisar.")}</EmptyState>
+        ? (q ? <EmptyState action={<ClearFilters active onClear={() => { setSearch(""); setOffset(0); }} />}>{t("Ninguna propuesta pendiente coincide con «{{q}}».", { q })}</EmptyState>
+          : <EmptyState action={<Btn kind="link" onClick={onDecided}>{t("Ver las decididas")}</Btn>}>{t("No queda nada por revisar.")}</EmptyState>)
         : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading" scopeRef={inboxRef}
           skip={active !== null ? { label: t("Ir a la propuesta abierta"), onSkip: () => { setShowDetail(true); setFocusTo("title"); } } : undefined}
           list={<>

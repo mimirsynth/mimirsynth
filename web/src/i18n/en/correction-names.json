@@ -1,5 +1,8 @@
 {
  "Buscar en la cola": "Search the queue",
+ "Coinciden {{n}} de {{all}}": "{{n}} of {{all}} match",
+ "Corrección repetida: se queda la pendiente": "Repeated correction: the pending one is kept",
+ "Ninguna propuesta pendiente coincide con «{{q}}».": "No pending proposal matches «{{q}}».",
  "Título o número (#12)…": "Title or number (#12)…",
  "hecho {{id}}": "fact {{id}}"
 }
