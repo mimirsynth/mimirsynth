@@ -1,6 +1,14 @@
 {
-  " · 1 repetido unido": " · 1 repeat joined",
-  " · 1 trivial descartado": " · 1 trivial fact dropped",
-  " · {{n}} repetidos unidos": " · {{n}} repeats joined",
-  " · {{n}} triviales descartados": " · {{n}} trivial facts dropped"
+ " · 1 relación normalizada por alias": " · 1 relation normalised by alias",
+ "1 duplicado unido": "1 duplicate merged",
+ "1 hecho vacío descartado": "1 empty fact dropped",
+ "Qué se unió o descartó": "What was merged or dropped",
+ "duplicados sin revisar": "duplicates not checked",
+ "habla de la propia memoria, no del mundo que describe": "it is about the memory itself, not the world it describes",
+ "repetía otro hecho de este episodio": "it repeated another fact of this episode",
+ "un extremo es un comodín («it», «algo»), no una cosa del mundo": "one end is a placeholder («it», «something»), not a thing of the world",
+ "ya lo decía un hecho del brain: el episodio queda enlazado a él": "a fact of the brain already said it: the episode is linked to it",
+ "{{n}} duplicados unidos": "{{n}} duplicates merged",
+ "{{n}} hechos vacíos descartados": "{{n}} empty facts dropped",
+ "«{{fact}}»: {{why}}": "«{{fact}}»: {{why}}"
 }

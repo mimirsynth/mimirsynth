@@ -104,6 +104,7 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
                            "off_ontology": sorted({n for n in names if allowed and ontology_mod.canon(n) not in allowed}),
                            "untyped_entities": sum(1 for n in res.nodes if not [l for l in n.labels if l not in ("Entity", "Entity_")]),
                            "_edges": [(str(e.uuid), e.name) for e in res.edges],
+                           "_new_edges": [str(e.uuid) for e in res.edges if e.created_at and e.created_at >= started],
                            "_nodes": [(str(n.uuid), n.name, bool(n.created_at and n.created_at >= started)) for n in res.nodes]})
         return str(res.episode.uuid)
     finally:

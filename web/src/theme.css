@@ -630,6 +630,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-queue-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 12px; color: var(--ms-muted); }
 .ms-queue-age { white-space: nowrap; }
 
+.ms-nowrap { white-space: nowrap; }  /* a number and its words on one line; the line breaks between such pieces */
 .ms-fold[hidden] { display: none; }  /* a folded region stays in the page, for aria-controls, but out of sight */
 .ms-hit { min-height: 24px; }  /* text buttons outside a sentence: at least the 24px target of WCAG 2.5.8 */
 .ms-queue-item .ms-check { --checkbox-size: 24px !important; }  /* the queue's checkboxes, at the same minimum target */

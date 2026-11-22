@@ -13,7 +13,7 @@ import { fmt, fmtDay, fmtNum, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
-  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; collapsed?: { fact: string; kept: string; why: string }[]; dropped?: { fact: string; rule: string; why: string }[]; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
+  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; collapsed?: Joined[]; dropped?: Dropped[]; quality_error?: boolean; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
   kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null; category?: string;
   /** Whether its new facts came back to a control question after ingesting (issue 296). */
   selftest?: { checked_at: string; retrievable?: boolean | null; skipped?: string; error?: string; results?: { fact_uuid: string; fact: string; question: string; found: boolean; rank: number | null; outranked_by: string[] }[] } | null };
@@ -343,6 +343,30 @@ function DistilDetail({ d, ops }: { d: Prop; ops: Ops }) {
   </>);
 }
 
+type Joined = { uuid?: string; fact?: string; kept: string; with?: "episode" | "current"; why: string };
+type Dropped = { uuid?: string; fact?: string; rule: string; why: string };
+
+/** What an ingestion wrote, and what it tidied as it wrote (issue 458): duplicates merged into one fact and empty facts dropped, each
+ * listed with why behind a fold. Their text is gone once an entity is forgotten; the counts stay. */
+function IngestReport({ r, id }: { r: NonNullable<Prop["ingest_report"]>; id: number }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const joined = r.collapsed ?? [], dropped = r.dropped ?? [];
+  const tidy = [joined.length ? (joined.length === 1 ? t("1 duplicado unido") : t("{{n}} duplicados unidos", { n: joined.length })) : "",
+    dropped.length ? (dropped.length === 1 ? t("1 hecho vacío descartado") : t("{{n}} hechos vacíos descartados", { n: dropped.length })) : "",
+    r.quality_error ? t("duplicados sin revisar") : ""].filter(Boolean);
+  const listed = [...joined.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.with === "current" ? t("ya lo decía un hecho del brain: el episodio queda enlazado a él") : t("repetía otro hecho de este episodio") })),
+    ...dropped.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.rule === "meta" ? t("habla de la propia memoria, no del mundo que describe") : t("un extremo es un comodín («it», «algo»), no una cosa del mundo") }))];
+  return (<Stack gap={4}>
+    <div>{r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })}{r.untyped_entities ? ` (${t("{{n}} sin tipo", { n: r.untyped_entities })})` : ""} · {r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })}{tidy.length ? <> ({tidy.map((x, i) => <Fragment key={i}>{i ? ", " : ""}<span className="ms-nowrap">{x}</span></Fragment>)})</> : ""}{r.ontology ? (r.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: r.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{r.aliased_edges ? (r.aliased_edges === 1 ? t(" · 1 relación normalizada por alias") : t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: r.aliased_edges })) : ""}{r.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: r.auto_merged.join(", ") }) : ""}{r.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: r.merge_ambiguous.join(", ") }) : ""}</div>
+    {listed.length > 0 && <Group><Btn kind="link" className="ms-hit" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls={`ms-tidy-${id}`}
+      onClick={() => setOpen(!open)}>{t("Qué se unió o descartó")}</Btn></Group>}
+    {listed.length > 0 && <Stack gap={4} id={`ms-tidy-${id}`} className="ms-fold" hidden={!open}>
+      {listed.map((e, i) => <Text key={i} size="sm">{t("«{{fact}}»: {{why}}", { fact: e.fact, why: e.why })}</Text>)}
+    </Stack>}
+  </Stack>);
+}
+
 /** A proposal as a curator reads it: what it says (or the correction it asks for), its secrets and its life so far. */
 function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context?: ReactNode;
   /** Shown in the review queue, where every proposal is pending: its state and the usual kind (adding) go without saying. */ inQueue?: boolean }) {
@@ -398,7 +422,7 @@ function ProposalBody({ d, ops, context, inQueue }: { d: Prop; ops: Ops; context
         {d.status === "ingested" && <Group gap="xs"><span className="ms-data">{fmt(d.ingested_at)}</span>
           {d.episode_uuid && <Btn size="row" kind="link" component={Link} to={`/diario?episodio=${d.episode_uuid}`}>{t("Ver el episodio en Diario")}</Btn>}
           {d.episode_uuid && <CopyBtn value={d.episode_uuid} label={t("Copiar id")} doneLabel={t("Copiado")} />}</Group>}
-        {d.status === "ingested" && d.ingest_report && <div>{d.ingest_report.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: d.ingest_report.entities })}{d.ingest_report.untyped_entities ? ` (${t("{{n}} sin tipo", { n: d.ingest_report.untyped_entities })})` : ""} · {d.ingest_report.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: d.ingest_report.edges })}{d.ingest_report.ontology ? (d.ingest_report.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: d.ingest_report.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{d.ingest_report.collapsed?.length ? (d.ingest_report.collapsed.length === 1 ? t(" · 1 repetido unido") : t(" · {{n}} repetidos unidos", { n: d.ingest_report.collapsed.length })) : ""}{d.ingest_report.dropped?.length ? (d.ingest_report.dropped.length === 1 ? t(" · 1 trivial descartado") : t(" · {{n}} triviales descartados", { n: d.ingest_report.dropped.length })) : ""}{d.ingest_report.aliased_edges ? t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: d.ingest_report.aliased_edges }) : ""}{d.ingest_report.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: d.ingest_report.auto_merged.join(", ") }) : ""}{d.ingest_report.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: d.ingest_report.merge_ambiguous.join(", ") }) : ""}</div>}
+        {d.status === "ingested" && d.ingest_report && <IngestReport r={d.ingest_report} id={d.id} />}
         {d.status === "failed" && <Notice tone="danger">{t("Falló:")} {d.ingest_error ? translateServer(d.ingest_error) : t("error sin detalle")}{" "}
           <Btn kind="link" component={Link} to="/trabajos">{t("Ver los trabajos")}</Btn> · <Btn kind="link" component={Link} to="/admin?seccion=llm">{t("Revisar el modelo LLM")}</Btn></Notice>}
         {d.status === "approved" && <div>{t("Pendiente de ingestar.")}</div>}

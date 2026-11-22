@@ -373,6 +373,9 @@ def run(brain_id: int, uuid: str, aliases: list[str], user_id: int | None, ctx=N
         for p in dt["proposals"]:
             p.name, p.body, p.source_description, p.review_note = "", "", "", ""
             p.decision, p.secret_findings, p.correction, p.claims = None, None, None, None
+            if p.ingest_report:
+                from .write_quality import without_text
+                p.ingest_report = without_text(p.ingest_report)
             p.purged_at = datetime.now(timezone.utc)
             if p.status == "pending":
                 p.status, p.reviewed_at, p.review_kind = "rejected", datetime.now(timezone.utc), "direct"
