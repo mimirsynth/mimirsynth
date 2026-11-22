@@ -682,7 +682,7 @@ def reject(rid: int, i: int, request: Request, ctx: BrainCtx = Depends(curator))
 class BatchIn(BaseModel):
     approve: list[int] = Field(default_factory=list, max_length=60)
     reject: list[int] = Field(default_factory=list, max_length=60)
-    texts: dict[int, str] = Field(default_factory=dict, description="rewrite and gap: the curator's edit of each ticked action's text, by its index")
+    texts: dict[int, str] = Field(default_factory=dict, max_length=60, description="rewrite and gap: the curator's edit of each ticked action's text, by its index")
     note: str = Field("", max_length=2000, description="kept on each action rejected this way")
 
 
@@ -699,6 +699,14 @@ def decide(rid: int, body: BatchIn, request: Request, bg: BackgroundTasks, ctx: 
         raise HTTPException(422, tr("Una acción no puede aprobarse y rechazarse a la vez.", lang))
     if any(len(t) > MAX_TEXT for t in body.texts.values()):
         raise HTTPException(422, tr("El texto puede tener como mucho {{max}} caracteres.", lang, max=MAX_TEXT))
+    if set(body.texts) - set(body.approve):
+        raise HTTPException(422, tr("Solo se envía el texto de las acciones que se aprueban.", lang))
+    if ctx.token is not None:   # a batch is a person's decision
+        raise HTTPException(403, tr("Las acciones en lote las decide una persona desde la interfaz, no un token.", lang))
+    try:
+        note, _ = secretguard.guard(ctx.brain, body.note)
+    except secretguard.Blocked as b:
+        raise HTTPException(422, tr("La nota lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", lang, labels=str(b))) from None
     _get(ctx, rid, lang)
     results = []
     for i in dict.fromkeys(body.approve):
@@ -709,7 +717,7 @@ def decide(rid: int, body: BatchIn, request: Request, bg: BackgroundTasks, ctx: 
             results.append({"i": i, "decision": "pending", "error": str(e.detail)[:300], "status": e.status_code})
     for i in dict.fromkeys(body.reject):
         try:
-            results.append({"i": i, "decision": _reject_one(ctx, rid, i, lang, body.note)["decision"]})
+            results.append({"i": i, "decision": _reject_one(ctx, rid, i, lang, note)["decision"]})
         except HTTPException as e:
             results.append({"i": i, "decision": "pending", "error": str(e.detail)[:300], "status": e.status_code})
     audit(ctx.db, ctx.user, "topic.batch", ctx.brain, id=rid, approved=sum(r["decision"] == "approved" for r in results),

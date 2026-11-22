@@ -17,6 +17,7 @@ pending returns that one (200 over REST, said over MCP) instead of a second. A c
 Groups (#457): pending invalidations with the same author, token and `source_description` (not empty) are reviewed together, a table
 with each fact ticked; approving applies the ticked ones, each as its own correction (same audit, same undo), and rejects the others with
 the group's note. Reactivations, and corrections that arrive alone or without `source_description`, are decided one at a time."""
+import logging
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -36,6 +37,7 @@ from .proposals import _get, _out
 from .roles import allows
 
 router = APIRouter(prefix="/api/brains/{slug}/proposals")
+log = logging.getLogger("mimirsynth.corrections")
 contributor = brain_access("contributor")
 curator = brain_access("curator")
 
@@ -148,6 +150,8 @@ def apply(ctx: BrainCtx, p: Proposal, lang: str = "es", note: str = "", kind: st
     """Approves and applies a pending correction: invalidates the fact and, if there is a replacement, sends it to be ingested. The graph
     is only written if the fact is still current at that moment, and the proposal becomes approved in the same commit as the history
     operation: if the fact stopped being current between the check and the write, 409 and the proposal stays pending, never half done."""
+    if p.status != "pending":   # decided by someone else meanwhile (a batch takes seconds): never overridden
+        raise HTTPException(409, tr("La propuesta ya está decidida.", lang))
     c = dict(p.correction or {})
     act = action(c)
     f = _check(ctx, c["fact_uuid"], lang, act)
@@ -226,6 +230,9 @@ def reactivate(pid: int, request: Request, ctx: BrainCtx = Depends(curator)):
 
 groups_router = APIRouter(prefix="/api/brains/{slug}/correction-groups")
 GROUP_MAX = 200   # rows of a group shown and decided at once
+REPLACEMENT_SHOWN = 2000   # characters of a replacement the table shows; the detail has all of it
+GROUPS_READ = 2000   # pending corrections with a source read to form the groups (the oldest first)
+GROUPS_SHOWN = 20
 
 
 def _group_key(p: Proposal) -> tuple | None:
@@ -239,7 +246,7 @@ def _group_key(p: Proposal) -> tuple | None:
 def _group_row(p: Proposal) -> dict:
     c = p.correction or {}
     return {"id": p.id, "name": p.name, "fact_uuid": c.get("fact_uuid"), "fact": c.get("fact") or {}, "reason": c.get("reason") or "",
-            "replacement": p.body, "invalid_at": c.get("invalid_at"), "created_at": p.created_at,
+            "replacement": p.body[:REPLACEMENT_SHOWN], "replacement_cut": len(p.body) > REPLACEMENT_SHOWN, "invalid_at": c.get("invalid_at"), "created_at": p.created_at,
             "secrets": secretguard.describe(p.secret_findings), "flagged": secretguard.flagged(p.secret_findings)}
 
 
@@ -247,7 +254,7 @@ def _groups(ctx: BrainCtx) -> dict[tuple, list[Proposal]]:
     q = select(Proposal).where(Proposal.brain_id == ctx.brain.id, Proposal.kind == "correction", Proposal.status == "pending",
                                Proposal.source_description != "").order_by(Proposal.created_at, Proposal.id)
     out: dict[tuple, list[Proposal]] = {}
-    for p in ctx.db.scalars(q):
+    for p in ctx.db.scalars(q.limit(GROUPS_READ)):
         if (k := _group_key(p)) is not None:
             out.setdefault(k, []).append(p)
     return {k: v for k, v in out.items() if len(v) > 1}
@@ -262,7 +269,7 @@ def list_groups(ctx: BrainCtx = Depends(curator)):
         groups.append({"key": f"{ps[0].id}", "author": a.name or a.email, "token": bool(tok), "source_description": sd, "count": len(ps),
                        "first_at": ps[0].created_at, "last_at": ps[-1].created_at, "items": [_group_row(p) for p in ps[:GROUP_MAX]]})
     groups.sort(key=lambda g: (-g["count"], g["first_at"]))
-    return {"groups": groups}
+    return {"groups": groups[:GROUPS_SHOWN]}
 
 
 class GroupIn(BaseModel):
@@ -277,6 +284,12 @@ def decide_group(body: GroupIn, request: Request, ctx: BrainCtx = Depends(curato
     changed meanwhile, or with a secret to review, is skipped and said; nothing is half applied."""
     from .proposals import _review
     lang = language(request)
+    if ctx.token is not None:   # a batch is a person's decision: an agent's token, even a curator's, decides one at a time
+        raise HTTPException(403, tr("Las correcciones en grupo las decide una persona desde la interfaz, no un token.", lang))
+    try:
+        note, _ = secretguard.guard(ctx.brain, body.note)
+    except secretguard.Blocked as b:
+        raise HTTPException(422, tr("La nota lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", lang, labels=str(b))) from None
     ids = list(dict.fromkeys(body.approve)) + list(dict.fromkeys(body.reject))
     if not ids:
         raise HTTPException(422, tr("No hay ninguna corrección marcada ni desmarcada.", lang))
@@ -292,22 +305,45 @@ def decide_group(body: GroupIn, request: Request, ctx: BrainCtx = Depends(curato
         raise HTTPException(409, tr("La propuesta #{{id}} ya no está pendiente o no va en grupo: decídela aparte.", lang, id=bad))
     if len(keys) > 1:
         raise HTTPException(422, tr("Las correcciones no son del mismo grupo.", lang))
+    (key,) = keys
+    group = min(ids)
     approved, rejected, skipped = [], [], []
-    for pid in dict.fromkeys(body.approve):
-        p = found[pid]
-        if secretguard.flagged(p.secret_findings):   # what the detector flagged is masked by a person, one at a time
-            skipped.append({"id": pid, "reason": "secret"})
-            continue
-        try:
-            apply(ctx, p, lang, note=body.note)
-        except HTTPException as e:   # the fact stopped being current, or went away: it stays pending, never half applied
-            ctx.db.rollback()
-            skipped.append({"id": pid, "reason": "changed", "detail": str(e.detail)[:300]})
-            continue
-        approved.append(pid)
-    for pid in dict.fromkeys(body.reject):
-        _review(ctx, pid, "rejected", body.note)
-        rejected.append(pid)
-    (_, _, sd), = keys
-    audit(ctx.db, ctx.user, "proposal.group", ctx.brain, source=sd[:255], approved=len(approved), rejected=len(rejected), skipped=len(skipped))
+
+    def fresh(pid: int) -> Proposal | None:
+        """The row read again under a lock: still pending and in this group, or None (someone decided it meanwhile)."""
+        p = ctx.db.execute(select(Proposal).where(Proposal.id == pid).with_for_update().execution_options(populate_existing=True)).scalar_one()
+        return p if _group_key(p) == key else None
+
+    try:
+        for pid in dict.fromkeys(body.approve):
+            try:
+                p = fresh(pid)
+                if p is None:
+                    skipped.append({"id": pid, "reason": "not_pending"})
+                elif secretguard.flagged(p.secret_findings):   # what the detector flagged is masked by a person, one at a time
+                    skipped.append({"id": pid, "reason": "secret"})
+                else:
+                    apply(ctx, p, lang, note=note)
+                    approved.append(pid)
+            except HTTPException as e:   # the fact stopped being current, or went away: it stays pending, never half applied
+                ctx.db.rollback()
+                skipped.append({"id": pid, "reason": "changed", "detail": str(e.detail)[:300]})
+            except Exception:  # noqa: BLE001  (a passing failure: this one stays pending, the others go on)
+                log.exception("correction group %s: %s", group, pid)
+                ctx.db.rollback()
+                skipped.append({"id": pid, "reason": "error"})
+        for pid in dict.fromkeys(body.reject):
+            try:
+                if fresh(pid) is None:
+                    ctx.db.rollback()
+                    skipped.append({"id": pid, "reason": "not_pending"})
+                    continue
+                _review(ctx, pid, "rejected", note)
+                rejected.append(pid)
+            except Exception:  # noqa: BLE001
+                log.exception("correction group %s: %s", group, pid)
+                ctx.db.rollback()
+                skipped.append({"id": pid, "reason": "error"})
+    finally:   # the group's own record, whatever happened to each row: which ones, never the texts
+        audit(ctx.db, ctx.user, "proposal.group", ctx.brain, group=group, approved=approved, rejected=rejected, skipped=skipped)
     return {"approved": approved, "rejected": rejected, "skipped": skipped}

@@ -640,6 +640,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 /* which fact a correction is about (issue 460): after the markers, the size of the meta line, breaking only between its pieces */
 .ms-fact-tag { display: inline-flex; flex-wrap: wrap; gap: 0 1ch; font-family: var(--ms-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
 .ms-fact-tag > span { white-space: nowrap; }
+.ms-group-line { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
 .ms-queue-num { font-weight: 400; color: var(--ms-muted); font-variant-numeric: tabular-nums; }
 
 .ms-wrap-any { overflow-wrap: anywhere; }  /* quoted text that may hold a long URL or hash: it breaks anywhere rather than overflow */
@@ -862,6 +863,9 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-compare-label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ms-muted); }
 .ms-compare-body { font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
 .ms-dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+/* inside a dialog, its actions stay in view while a long table scrolls under them, as ConfirmDialog's do */
+.ms-modal .ms-dialog-actions { position: sticky; bottom: calc(-1 * var(--mb-padding, 16px)); z-index: 1; margin-bottom: calc(-1 * var(--mb-padding, 16px));
+  padding: 10px 0 var(--mb-padding, 16px); background: var(--ms-raised); }
 .ms-empty-action { margin-left: 8px; }
 .ms-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .ms-cell-main { font-size: 14px; }

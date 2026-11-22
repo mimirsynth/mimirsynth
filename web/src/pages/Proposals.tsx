@@ -7,7 +7,7 @@ import { Block, Btn, CellText, ClearFilters, Compare, ConfirmDialog, DialogActio
   Pill, Check, QueueList, RowOpen, SearchBar, focusedQueueItem, Segments, Sheet, SheetRow, Steps, EntityChip, ListCard, Step, Tabs, TextArea, TextField, Tone, ViewBar, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
-import CorrectionGroups from "./CorrectionGroups";
+import { DoneNotice, GroupDialog, GroupLines, useCorrectionGroups, type Decided, type Group as CorrectionGroup } from "./CorrectionGroups";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -821,7 +821,11 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const [kind, setKind] = useState(initialKind ?? "all");
   const [offset, setOffset] = useState(0);
   const [sp, setSp] = useSearchParams();
-  const [search, setSearch] = useState((sp.get("buscar") ?? "").slice(0, 200));   // the API takes up to 200 characters
+  const [search, setSearch] = useState((sp.get("buscar") ?? "").slice(0, 200));
+  const groups = useCorrectionGroups(ops.graph);
+  const grouped = useMemo(() => new Set(groups.flatMap((g) => g.items.map((r) => r.id))), [groups]);
+  const [groupOpen, setGroupOpen] = useState<CorrectionGroup | null>(null);
+  const [groupDone, setGroupDone] = useState<Decided | null>(null);   // the API takes up to 200 characters
   const [q] = useDebouncedValue(search.trim(), 300);
   useEffect(() => {   // the search stays in the address, like the tab: back from another tab, or a reload, keeps it
     const p = new URLSearchParams(sp);
@@ -952,6 +956,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
     id: p.id, label: p.purged_at ? t("(texto purgado)") : p.name, title: <><span className="ms-queue-num">#{p.id} · </span>{p.purged_at ? t("(texto purgado)") : p.name}</>,
     preview: p.correction ? p.correction.reason : p.body,
     tags: <>{p.kind === "correction" && <KindPill kind={p.kind} correction={p.correction} />}<SecretsPill found={p.secrets} />
+      {grouped.has(p.id) && <Pill tone="neutral" title={t("Enviada junto con otras: se pueden decidir juntas desde el aviso de correcciones")}>{t("En grupo")}</Pill>}
       {p.related_verdict === "duplicate" && <Pill tone="warn" title={t("El brain ya dice algo casi igual")}><span className="ms-pill-row"><Icon name="copy" size={12} />{t("Posible duplicado")}</span></Pill>}
       {p.related_verdict === "stale" && <Pill tone="warn" title={t("Se parece a algo que dejó de ser cierto")}><span className="ms-pill-row"><Icon name="timeline" size={12} />{t("Posiblemente ya no es cierto")}</span></Pill>}
       {p.related_verdict === "similar" && <Pill tone="neutral" title={t("Muy parecido a algo que el brain ya sabe: revisa qué añade")}><span className="ms-pill-row"><Icon name="search" size={12} />{t("Muy parecido")}</span></Pill>}
@@ -971,10 +976,14 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
             { value: "correction", label: t("Corrigen"), count: kinds.correction }]} />
       </div>}
     </ViewBar>
-      {pendingFixes > 0 && kind !== "correction" && !q && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
-        {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
-        <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
-      {!q && kind !== "memory" && <CorrectionGroups graph={ops.graph} />}
+      {groupDone && <DoneNotice d={groupDone} onClose={() => setGroupDone(null)} />}
+      {pendingFixes > 0 && !q && (kind !== "correction" || groups.length > 0) && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
+        <Stack gap={6}>
+          <div>{t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
+            {kind !== "correction" && <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn>}</div>
+          {groups.length > 0 && <GroupLines groups={groups} ago={waited} onOpen={setGroupOpen} />}
+        </Stack></Notice>}
+      {groupOpen && <GroupDialog graph={ops.graph} g={groupOpen} onClose={() => setGroupOpen(null)} onDone={(r) => { setGroupDone(r); setGroupOpen(null); }} />}
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
         ? (q ? <EmptyState action={<Btn kind="link" onClick={() => { setSearch(""); setOffset(0); }}>{t("Borrar la búsqueda")}</Btn>}>{t("Ninguna propuesta pendiente coincide con «{{q}}».", { q })}</EmptyState>

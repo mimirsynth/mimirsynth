@@ -566,3 +566,19 @@ def test_the_ticked_actions_of_a_review_are_decided_at_once(client):  # noqa: F8
         assert db.get(Proposal, acts[0]["became"][0]["proposal"]).category == "topic.gap"
     again = client.post(url, json={"approve": [0], "reject": [1]}).json()["results"]
     assert again[0]["status"] == 409 and again[1]["decision"] == "rejected"                   # already decided: said, the other goes on
+
+
+
+def test_a_batch_is_refused_in_a_read_only_brain_and_to_a_reader(client):  # noqa: F811
+    assert client.post("/api/brains", json={"slug": "topic13", "name": "T13"}).status_code == 201
+    assert client.put("/api/brains/topic13/members", json={"email": "rita@x.com", "role": "reader"}).status_code == 200
+    rid = _seed("topic13", [{"type": "gap", "text": "a", "why": "a"}, {"type": "gap", "text": "b", "why": "b"}])
+    url = f"/api/brains/topic13/topics/{rid}/actions/decide"
+    _as("rita@x.com", "Rita")
+    assert client.post(url, json={"approve": [0]}).status_code == 403
+    app.dependency_overrides.clear()
+    assert client.post(url, json={"approve": [0], "texts": {"1": "x"}}).status_code == 422          # a text for an action not approved
+    with _factory()() as db:
+        db.scalar(select(Brain).where(Brain.slug == "topic13")).read_only = True
+        db.commit()
+    assert client.post(url, json={"approve": [0]}).status_code == 409

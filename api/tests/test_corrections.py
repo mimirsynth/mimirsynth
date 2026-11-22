@@ -346,7 +346,8 @@ def test_corrections_sent_together_are_decided_as_a_group(client, monkeypatch): 
         st = {p.id: (p.status, p.review_note) for p in db.query(Proposal).filter(Proposal.id.in_(ids))}
         assert st[ids[1]] == ("pending", "") and st[ids[3]] == ("rejected", "Checked against the inventory")
         a = db.query(Audit).filter(Audit.action == "proposal.group").order_by(Audit.id.desc()).first()
-        assert a.detail["approved"] == 2 and a.detail["rejected"] == 1 and a.detail["skipped"] == 1
+        assert a.detail["approved"] == [ids[0], ids[2]] and a.detail["rejected"] == [ids[3]] and a.detail["skipped"][0]["id"] == ids[1]
+        assert "cleanup" not in str(a.detail)                                                   # which rows, never the texts
     assert client.get("/api/brains/cg/correction-groups").json()["groups"] == []              # one left pending: no longer a group
 
 
@@ -366,3 +367,77 @@ def test_a_group_of_corrections_applies_each_one_undoable_on_its_own(client, gra
     assert r["approved"] == ids and r["skipped"] == [] and _state(graphs, "f3")[0] and _state(graphs, "f4")[0]
     assert client.post(f"/api/brains/cg2/proposals/{ids[0]}/reactivate").status_code == 200
     assert _state(graphs, "f3") == [None, None] and _state(graphs, "f4")[0]                # each undone on its own
+
+
+
+def test_a_group_never_overrides_a_decision_taken_meanwhile_and_is_a_persons_decision(client, monkeypatch):  # noqa: F811
+    """#457: a row someone else decides while the batch runs is left as they decided it; a token cannot decide a group; the note goes
+    through the secret detector."""
+    from test_control import _as
+    from mimirsynth import corrections
+    from mimirsynth.models import Brain, Proposal
+    from mimirsynth.proposals import _review
+    from mimirsynth.store import _factory
+    _fake_fact(monkeypatch)
+    assert client.post("/api/brains", json={"slug": "cg3", "name": "CG3"}).status_code == 201
+    assert client.put("/api/brains/cg3/members", json={"email": "ana@x.com", "role": "contributor"}).status_code == 200
+    _as("ana@x.com", "Ana")
+    ids = [client.post("/api/brains/cg3/proposals/corrections", json={"fact_uuid": f"h{n}", "reason": "Old", "source_description": "run"}).json()["id"] for n in range(3)]
+    app.dependency_overrides.clear()
+    with _factory()() as db:
+        db.query(Brain).filter(Brain.slug == "cg3").one().secret_mode = "block"
+        db.commit()
+    dec = "/api/brains/cg3/correction-groups/decide"
+    token = "ghp_" + "A1b2C3d4E5f6G7h8J9k0" + "A1b2C3d4E5f6G7h8"
+    assert client.post(dec, json={"approve": ids, "note": f"key {token}"}).status_code == 422
+
+    def racing_apply(ctx, p, lang="es", note="", kind="human"):
+        if p.id == ids[0]:   # while the batch applies the first one, another curator rejects the third
+            _review(ctx, ids[2], "rejected", "decided elsewhere")
+        p.status = "ingested"
+        ctx.db.commit()
+    monkeypatch.setattr(corrections, "apply", racing_apply)
+    r = client.post(dec, json={"approve": ids, "note": "ok"}).json()
+    assert r["approved"] == [ids[0], ids[1]] and r["skipped"] == [{"id": ids[2], "reason": "not_pending"}]
+    with _factory()() as db:
+        p = db.get(Proposal, ids[2])
+        assert p.status == "rejected" and p.review_note == "decided elsewhere"                 # not overridden
+
+    tok = client.post("/api/brains/cg3/tokens", json={"name": "cur", "role": "curator"}).json()["token"]
+    r = client.post(dec, json={"approve": [ids[0]]}, headers={"Authorization": f"Bearer {tok}"})
+    assert r.status_code == 403
+
+
+
+def test_a_group_leaves_a_possible_secret_and_refuses_readers_and_read_only_brains(client, monkeypatch):  # noqa: F811
+    """#457: a row with a flagged secret is never applied from a group; a reader cannot decide; a read-only brain refuses."""
+    from test_control import _as
+    from mimirsynth import corrections
+    from mimirsynth.models import Brain, Proposal
+    from mimirsynth.store import _factory
+    _fake_fact(monkeypatch)
+    assert client.post("/api/brains", json={"slug": "cg4", "name": "CG4"}).status_code == 201
+    for email, role in (("ana@x.com", "contributor"), ("rita@x.com", "reader")):
+        assert client.put("/api/brains/cg4/members", json={"email": email, "role": role}).status_code == 200
+    with _factory()() as db:
+        db.query(Brain).filter(Brain.slug == "cg4").one().secret_mode = "warn"
+        db.commit()
+    _as("ana@x.com", "Ana")
+    url = "/api/brains/cg4/proposals/corrections"
+    ok = client.post(url, json={"fact_uuid": "k1", "reason": "Old", "source_description": "run"}).json()["id"]
+    flagged = client.post(url, json={"fact_uuid": "k2", "reason": "key ghp_" + "A1b2C3d4E5f6G7h8J9k0" + "A1b2C3d4E5f6G7h8", "source_description": "run"}).json()["id"]
+    _as("rita@x.com", "Rita")
+    dec = "/api/brains/cg4/correction-groups/decide"
+    assert client.post(dec, json={"approve": [ok, flagged]}).status_code == 403
+    app.dependency_overrides.clear()
+    item = next(i for i in client.get("/api/brains/cg4/correction-groups").json()["groups"][0]["items"] if i["id"] == flagged)
+    assert item["flagged"] is True
+    applied = []
+    monkeypatch.setattr(corrections, "apply", lambda ctx, p, lang="es", note="", kind="human": applied.append(p.id) or setattr(p, "status", "ingested") or ctx.db.commit())
+    r = client.post(dec, json={"approve": [ok, flagged]}).json()
+    assert r["approved"] == [ok] and r["skipped"] == [{"id": flagged, "reason": "secret"}] and applied == [ok]
+    with _factory()() as db:
+        assert db.get(Proposal, flagged).status == "pending"
+        db.query(Brain).filter(Brain.slug == "cg4").one().read_only = True
+        db.commit()
+    assert client.post(dec, json={"approve": [flagged]}).status_code == 409

@@ -101,6 +101,7 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
   const ticked = pendingIdx.filter((i) => !unticked.has(i));
   const rest = pendingIdx.filter((i) => unticked.has(i));
   const textOf = (a: Act) => texts[a.i] ?? a.text;
+  const blocked = !!d && ticked.some((i) => ["rewrite", "gap"].includes(d.actions[i].type) && !textOf(d.actions[i]).trim());
   const batch = useMutation({
     mutationFn: () => send<{ results: BatchResult[] }>("POST", `brains/${graph}/topics/${id}/actions/decide`, {
       approve: ticked, reject: rest, note, texts: Object.fromEntries(ticked.filter((i) => texts[i] !== undefined).map((i) => [i, texts[i]])) }),
@@ -128,9 +129,10 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
             <Text size="sm" className="ms-prose">{d.state}</Text>
           </Block>
           <Block title={t("Acciones propuestas")} count={d.actions.length}
-            help={t("Cada acción pendiente está marcada. «Decidir las marcadas» aprueba las marcadas, una a una y por el mismo camino que su botón Aprobar, y rechaza las desmarcadas con la nota que escribas. Una que no se pueda aplicar dice por qué y sigue pendiente.")}
-            actions={pendingIdx.length > 1 && <Btn kind="primary" size="row" icon="check" disabled={ticked.some((i) => ["rewrite", "gap"].includes(d.actions[i].type) && !textOf(d.actions[i]).trim())}
-              onClick={() => { batch.reset(); setAsking(true); }}>{t("Decidir las marcadas ({{n}})", { n: ticked.length })}</Btn>}>
+            help={t("Cada acción pendiente sale marcada para aprobarla. El botón de arriba aprueba las marcadas, una a una y por el mismo camino que su propio botón Aprobar, y rechaza las desmarcadas con la nota que escribas. Una que no se pueda aplicar dice por qué y sigue pendiente.")}
+            meta={pendingIdx.length > 1 && blocked ? t("Falta el texto de una acción marcada") : undefined}
+            actions={pendingIdx.length > 1 && <Btn kind="primary" size="row" icon="check" disabled={blocked}
+              onClick={() => { batch.reset(); setAsking(true); }}>{rest.length ? t("Aprobar {{n}} y rechazar {{m}}", { n: ticked.length, m: rest.length }) : t("Aprobar {{n}}", { n: ticked.length })}</Btn>}>
             {result && <BatchNotice results={result} onClose={() => setResult(null)} />}
             {d.actions.length === 0 ? <EmptyState>{t("El motor no propone ningún cambio en este tema.")}</EmptyState>
               : <Stack gap="sm">{d.actions.map((a) => <ActionCard key={a.i} graph={graph} d={d} a={a} ticked={!unticked.has(a.i)} batchable={pendingIdx.length > 1}
@@ -138,11 +140,11 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
                   text={textOf(a)} onText={(v) => setTexts((m) => ({ ...m, [a.i]: v }))} />)}</Stack>}
           </Block>
         </div>}
-        {d.status === "ready" && <ConfirmDialog opened={asking} onClose={() => setAsking(false)} tone="primary" title={t("Decidir {{n}} acciones", { n: pendingIdx.length })}
+        {d.status === "ready" && <ConfirmDialog opened={asking} onClose={() => setAsking(false)} tone="primary" title={rest.length ? t("Aprobar {{n}} y rechazar {{m}}", { n: ticked.length, m: rest.length }) : t("Aprobar {{n}}", { n: ticked.length })}
           action={rest.length ? t("Aprobar {{n}} y rechazar {{m}}", { n: ticked.length, m: rest.length }) : t("Aprobar {{n}}", { n: ticked.length })} onConfirm={() => batch.mutateAsync()}
           warning={<BatchSummary acts={d.actions.filter((a) => ticked.includes(a.i))} rejected={rest.length} />}>
-          <TextArea label={t("Nota")} description={t("Se guarda en las acciones que se rechazan.")} autosize minRows={2} maxRows={6} maxLength={2000}
-            value={note} onChange={(e) => setNote(e.currentTarget.value)} />
+          {rest.length > 0 && <TextArea label={t("Nota")} description={t("Se guarda en las acciones que se rechazan.")} autosize minRows={2} maxRows={6} maxLength={2000}
+            value={note} onChange={(e) => setNote(e.currentTarget.value)} />}
           <MutationError error={batch.error} />
         </ConfirmDialog>}
         {(left.length > 0 || dropped.length > 0) && <Notice title={t("Lo que no entró en la revisión")}><Stack gap={4}>
@@ -218,8 +220,10 @@ function ActionCard({ graph, d, a, ticked, batchable, onTick, text, onText }: { 
     a.evidence.length > 0 && { label: t("Pruebas"), children: list(a.evidence) },
   ].filter(Boolean) as { label: string; children: ReactNode }[];
   return (
-    <ListCard title={<>{pending && batchable && <Check aria-label={t("Marcar «{{type}}» para decidirla con las demás", { type: t(TYPE[a.type] ?? a.type) })} checked={ticked}
-        onChange={(e) => onTick(e.currentTarget.checked)} />}{t(TYPE[a.type] ?? a.type)}</>} aside={!pending && label ? <Pill tone={tone}>{t(label)}</Pill> : undefined}
+    <ListCard title={t(TYPE[a.type] ?? a.type)}
+      aside={!pending && label ? <Pill tone={tone}>{t(label)}</Pill>
+        : pending && batchable ? <Check label={t("Aprobar")} aria-label={t("Aprobar «{{type}}» al decidir las marcadas; desmarcada, se rechaza", { type: t(TYPE[a.type] ?? a.type) })}
+          checked={ticked} onChange={(e) => onTick(e.currentTarget.checked)} /> : undefined}
       notice={<Text size="sm" className="ms-prose">{a.why}</Text>}
       tags={(a.edited || a.secrets.length > 0) && <>
         {a.edited && <Pill>{t("editado por un curador")}</Pill>}
@@ -245,8 +249,9 @@ const factsOf = (a: Act) => (a.type === "gap" ? 0 : a.type === "merge" ? a.facts
 
 function BatchSummary({ acts, rejected }: { acts: Act[]; rejected: number }) {
   const { t } = useTranslation();
-  const facts = acts.reduce((n, a) => n + factsOf(a), 0);
-  const gaps = acts.filter((a) => a.type === "gap").length;
+  // a correction with a possible secret waits in the queue for a person to mask it, as with its own Approve button
+  const facts = acts.reduce((n, a) => n + (a.flagged ? 0 : factsOf(a)), 0);
+  const gaps = acts.filter((a) => a.type === "gap").length + acts.reduce((n, a) => n + (a.flagged ? factsOf(a) : 0), 0);
   return <>{t("Se aprueban {{n}}. Hechos que se invalidan, cada uno con su propia corrección, que se deshace aparte: {{facts}}. Propuestas que van a la cola: {{gaps}}.", { n: acts.length, facts, gaps })}{" "}
     {rejected ? t("Se rechazan {{m}}.", { m: rejected }) : ""}</>;
 }
