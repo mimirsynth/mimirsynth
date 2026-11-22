@@ -10,7 +10,7 @@ For now, **clear contradictions** in the relations marked functional (a single v
 - unclear groups, which stay in Content quality → Contradictions for a person;
 - facts that already have a pending proposal.
 
-And, once an administrator ticks it (it is off by default), **repeated facts**: current facts between the same two entities that say the same thing. That means the same text, or very close embeddings with the same numbers and identifiers, as [[Memory health]] counts redundancy: «PostgreSQL 14» and «PostgreSQL 16» are a change, not a repeat. The proposal keeps the newest one and invalidates the others. Up to 3,000 candidate facts are read per run, the most recent first.
+And, once an administrator ticks it (it is off by default), **repeated facts**: current facts between the same two entities that say the same thing. That means the same text, or very close embeddings with the same numbers and identifiers, as [[Memory health]] counts redundancy: «PostgreSQL 14» and «PostgreSQL 16» are a change, not a repeat, and so are two facts that each name something the other does not («…node A…» and «…node B…»). The proposal keeps the most precise one, whose words contain the others' and add some («H is an M 7050 Micro» over «H is an M 7050»), whatever its date; otherwise the newest. It invalidates the others. Up to 3,000 candidate facts are read per run, the most recent first.
 
 And, also off by default, **facts past their shelf life**: the current facts that Content quality → To review lists (relations with a shelf life, not confirmed in time), the longest overdue first. Each one becomes a proposal to invalidate it. Rejecting the proposal, or confirming the fact in To review, keeps it.
 
@@ -19,6 +19,8 @@ And, also off by default, **noise**: current facts that say nothing useful, by f
 - One end is the memory itself («the graph», «la memoria», «episode», «fact»…). Names that can be real things, such as «node» (Node.js), «memory» (RAM) or «edge», do not count.
 - A generic relation (`RELATES_TO`, `MENTIONS`…) whose text adds nothing beyond its two entities. The text decides, not the relation: a text with a number (a version, a date, a port), an identifier (`ready-for-review`, `host.lan`), a month or a negation («Epsilon no longer hosts Vaultwarden», «ya no») is never noise, and «is related to», «está relacionado con» and the like do not count as content.
 - A change told as an event («X was moved to Y») when another current fact between the same entities already states the result. If it is the only trace of the change, it is kept.
+
+Two kinds of fact are never noise, whatever their relation: a **retirement or replacement** («X was replaced by Y», «decommissioned», «se dio de baja», or a relation such as `REPLACED_BY`), which is what tells an agent that X no longer exists, and a fact that gives the **reason** for a decision («…to free RAM», «…because…», «…para evitar…», «…por falta de…»), which the fact with the result does not keep. A generic relation whose text says **where something is** («the credentials of K are in the password manager item K», a folder, a document, a URL) is not noise either.
 
 The first two rules need no person, so ingestion already drops the clear cases among new facts ([Proposals](Proposals), ingestion report); this pass finds them among the facts learned before, or kept because their episode replaced another fact.
 

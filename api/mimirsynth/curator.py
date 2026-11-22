@@ -95,10 +95,22 @@ _RICH = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL
          "a.uuid AS source_uuid, b.name AS target, b.uuid AS target_uuid ORDER BY coalesce(r.valid_at, r.created_at) DESC, r.uuid LIMIT $n")
 
 
+def keeper(c: list[dict]) -> tuple[dict, str]:
+    """The fact a cluster of repeats keeps, and why the others go. `c` is newest first. A fact whose words contain every other's and
+    add a name («H is an M 7050 Micro» over «H is an M 7050») is kept whatever its date (#461); otherwise the newest. Only a name counts as
+    precision: «no longer» or «not» added to an older fact must not win over the newer one."""
+    from . import health
+    ws = [health.words(f.get("fact")) for f in c]
+    best = max((i for i in range(len(c)) if all(w <= ws[i] for w in ws)), key=lambda i: (len(ws[i]), -i), default=0)
+    if best and (ws[best] - ws[0]) & health._named(c[best].get("fact")):
+        return c[best], "says less than a more precise current fact between the same entities"
+    return c[0], "says the same as a newer current fact between the same entities"
+
+
 def redundancy(brain_id: int) -> list[dict]:
     """Findings of the redundancy pass (#297's merge): current facts between the same two entities that say the same thing (the same
-    text, or close embeddings with the same numbers and identifiers, as the memory health counts them). The newest one is kept and the
-    others are proposed for invalidation, pointing to it."""
+    text, or close embeddings with the same numbers and identifiers and no name apart, as the memory health counts them). The most
+    precise one (`keeper`) is kept and the others are proposed for invalidation, pointing to it."""
     from . import health
     from .db import graph, rows
     with _factory()() as db:
@@ -119,12 +131,13 @@ def redundancy(brain_id: int) -> list[dict]:
     for grp in groups:
         for c in health.clusters([{**f, "embedding": vectors.get(f["uuid"])} for f in grp]):
             c = sorted(c, key=lambda f: (str(f.get("valid_at") or f.get("created_at") or ""), f["uuid"]), reverse=True)
-            keep, drop = c[0], [f for f in c[1:] if f["uuid"] not in busy]
+            keep, why = keeper(c)
+            drop = [f for f in c if f is not keep and f["uuid"] not in busy]
             if not drop:
                 continue
             short = lambda f: {k: f.get(k) for k in ("uuid", "fact", "target", "valid_at")}  # noqa: E731
             out.append({"pass": "redundancy", "subject": keep["source"], "relation": keep["name"], "keep": short(keep),
-                        "replace": [short(f) for f in drop], "why": "says the same as a newer current fact between the same entities"})
+                        "replace": [short(f) for f in drop], "why": why})
             if len(out) >= MAX_FINDINGS:
                 return out
     return out
@@ -154,8 +167,28 @@ esto eso ello él ella ellos ellas algo alguien cosa cosas usuario el-usuario lo
 META = frozenset("""knowledge-graph the-graph this-graph the-memory this-memory episode episodes fact facts entity entities
 grafo-de-conocimiento el-grafo este-grafo la-memoria esta-memoria episodio episodios hecho hechos entidad entidades""".split())
 # A change told as an event («X was moved to Y»): history, redundant when a current fact between the same entities states the result.
+# A replacement or a reason is never one (#462, `_RETIRED` and `_REASON` below).
 _CHANGE = re.compile(r"\b(was|were|has been|have been|got) (changed|moved|migrated|updated|renamed|replaced|switched|upgraded)\b|"
                      r"\bse (cambi[oó]|movi[oó]|migr[oó]|actualiz[oó]|renombr[oó]|sustituy[oó])\b|\bha sido (cambiad|movid|migrad|actualizad|renombrad)", re.I)
+# A retirement or a replacement («X was replaced by Y», «se dio de baja»): the fact that tells an agent X no longer exists, never noise
+# (#462), and the anchor of a retirement review (#455). Read in the text and in the relation's name.
+_RETIRED = re.compile(r"\b(replace[ds]?|replacing|replacement|retired|retiring|retirement|removed|removal|decommission\w*|supersed\w*|"
+                      r"deprecat\w*|discontinu\w*|uninstall\w*|dismantl\w*|sunset|shut ?down|"
+                      r"sustitu(id|y)\w*|sustituci[oó]n|reemplaz(ad\w*|[oó])|retirad\w*|retiró|eliminad\w*|elimin[oó]|desmantelad\w*|"
+                      r"desinstalad\w*|suprimid\w*|d(ar|ad[oa]s?|i[oó]|ieron) de baja)\b", re.I)
+# The reason of a decision («…to free RAM», «…para evitar…», «…porque…»): the event carries it and the current-state fact does not (#462).
+# A purpose verb is lowercase and is not an identifier: «to Keep», «to support.lan» and «para cluster» are destinations.
+_REASON = re.compile(r"\b(because|due to|owing to|so that|so as to|in order to|as a result of|"
+                     r"porque|ya que|puesto que|dado que|debido a|a causa de|con el fin de|a fin de|para que|"
+                     r"por (falta|culpa|motivos?|razones?|problemas?|seguridad|rendimiento|costes?|espacio))\b|"
+                     r"\b(?i:to) (?-i:avoid|free|save|reduce|cut|lower|fix|solve|resolve|improve|speed|simplify|allow|enable|prevent|gain|"
+                     r"isolate|separate|consolidate|balance|comply|handle|get rid of|stop|[a-z]\w*(ize|ise|ify))\b(?![.\-/:]\w)|"
+                     r"\b(?i:para) (?-i:[a-záéíóúñ]\w*(ar|ir)|tener|hacer|poder|mover|resolver|mantener|obtener|proteger|responder|"
+                     r"ofrecer|ver|disponer|atender|leer)\b(?![.\-/:]\w)", re.I)
+# Where something is (a vault item, a folder, a document, a URL): useful although told with a generic relation (#462).
+_WHERE = re.compile(r"\b(in|at|under|inside|en|dentro de|bajo)\b(?:\s+\S+){0,6}?\s+(item|entry|vault|folder|directory|file|document|doc|"
+                    r"page|wiki|note|repo|repository|url|link|path|password manager|keychain|elemento|entrada|bóveda|carpeta|directorio|"
+                    r"fichero|archivo|documento|página|nota|repositorio|enlace|ruta|gestor de contraseñas)(s|es)?\b|\bentries\b", re.I)
 _WORD = re.compile(r"\w(?:[\w.-]*\w)?")
 # What makes a fact's text carry information even when its relation is generic (#325): a number (a version, a date, a port, an
 # address), an identifier (`ready-for-review`, `host.lan`, `a/b`, `x_y`), a month or a negation («Epsilon ya no aloja Vaultwarden»).
@@ -196,14 +229,17 @@ def noise_rule(f: dict, others: list[dict]) -> str | None:
     """The noise rule a current fact falls under (a key of NOISE_RULES), or None. `others`: the other current facts between
     the same two entities."""
     from .conflicts import generic
+    from .vocab import canon_rel
     s, t = _name(f.get("source")), _name(f.get("target"))
     if s in PLACEHOLDERS or t in PLACEHOLDERS or len(s) < 2 or len(t) < 2:
         return "placeholder"
     if s in META or t in META:
         return "meta"
     text = f.get("fact") or ""
+    if _RETIRED.search(f"{text} {canon_rel(f.get('name')).replace('_', ' ')}") or _REASON.search(text):   # #462
+        return None
     names = set(_WORD.findall(f"{f.get('source') or ''} {f.get('target') or ''}".lower()))
-    if generic(f.get("name")) and len(_content(text, names)) < 2 and not informs(text):   # the relation says nothing, the text may (#325)
+    if generic(f.get("name")) and len(_content(text, names)) < 2 and not informs(text) and not _WHERE.search(text):   # #325, #462
         return "generic"
     if _CHANGE.search(text) and any(not _CHANGE.search(o.get("fact") or "") for o in others):
         return "change"

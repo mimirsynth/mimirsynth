@@ -2,7 +2,7 @@
 
 # Fusionar duplicados
 
-Pestaña **Duplicados** de [[Calidad del contenido]]. Muestra **grupos de entidades que probablemente son la misma cosa**: mismo nombre salvo la versión o las mayúsculas (por ejemplo «Servidor 2» y «servidor 2», o «Nextcloud» y «Nextcloud 29»).
+Pestaña **Duplicados** de [[Calidad del contenido]]. Muestra **grupos de entidades que probablemente son la misma cosa**: mismo nombre salvo mayúsculas, espacios, `_` y `-`, o una versión escrita como palabra aparte (por ejemplo «VM 201» y «vm201», o «Nextcloud» y «Nextcloud 29.0.1»). Un número pegado al nombre forma parte de él («ups@10.0.0.4», «min_similarity=0.55»), y un nombre que es solo una dirección se compara entero. El nombre es solo una pista: comprueba que los miembros son de verdad lo mismo antes de fusionar.
 
 ## Por qué molestan
 Si la misma entidad existe dos veces, sus hechos quedan repartidos: una búsqueda encuentra la mitad, el grafo muestra dos nodos y el [[Resumen]] cuenta de más.

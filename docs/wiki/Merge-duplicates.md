@@ -2,7 +2,7 @@
 
 # Merge duplicates
 
-The **Duplicates** tab of [[Content quality]]. It shows **groups of entities that are probably the same thing**: same name except for version or capitalisation (for example "Server 2" and "server 2", or "Nextcloud" and "Nextcloud 29").
+The **Duplicates** tab of [[Content quality]]. It shows **groups of entities that are probably the same thing**: same name except for capitalisation, spaces, `_` and `-`, or a version written as a separate word (for example "VM 201" and "vm201", or "Nextcloud" and "Nextcloud 29.0.1"). A number glued to the name is part of it ("ups@10.0.0.4", "min_similarity=0.55"), and a name that is only an address is compared whole. The name is only a hint: check that the members really are the same thing before merging.
 
 ## Why they are a nuisance
 If the same entity exists twice, its facts are split: a search finds half, the graph shows two nodes and the [[Overview]] over-counts.

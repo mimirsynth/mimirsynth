@@ -130,6 +130,19 @@ def repeated(monkeypatch):
     dbm.backend.cache_clear()
 
 
+def test_the_redundancy_pass_keeps_the_more_precise_repeat():
+    """Issue 461: between «H is an M 7050» and «H is an M 7050 Micro» the pass kept whichever was newer."""
+    new, precise = {"uuid": "n", "fact": "H is an M 7050"}, {"uuid": "p", "fact": "H is an M 7050 Micro"}
+    keep, why = K.keeper([new, precise])                                                       # newest first
+    assert keep is precise and why.startswith("says less than a more precise")
+    assert K.keeper([precise, new])[0] is precise
+    a, b = {"uuid": "a", "fact": "Vaultwarden is hosted on altair"}, {"uuid": "b", "fact": "altair hosts Vaultwarden"}
+    assert K.keeper([a, b]) == (a, "says the same as a newer current fact between the same entities")   # neither contains the other
+    assert K.keeper([{"uuid": "x", "fact": "X runs on Y"}, {"uuid": "y", "fact": "x runs on y"}])[0]["uuid"] == "x"   # same words: newest
+    newer, negated = {"uuid": "w", "fact": "Rafa works at Dubois"}, {"uuid": "o", "fact": "Rafa no longer works at Dubois"}
+    assert K.keeper([newer, negated])[0] is newer                                              # more words, but no more names
+
+
 @needs_falkor
 def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa: F811
     from mimirsynth.models import Proposal
@@ -203,6 +216,46 @@ def test_a_generic_relation_is_judged_by_its_text():
     assert rule("Vaultwarden", "altair", "Vaultwarden está relacionado con altair") == "generic"
     assert K.noise_reason({"source": "Vaultwarden", "target": "altair", "name": "RelatesTo", "fact": "Vaultwarden is related to altair"},
                           []) == K.NOISE_RULES["generic"]
+
+
+def test_retirements_reasons_and_locations_are_never_noise():
+    """Issue 462: on a real brain the noise pass proposed the only record of a replacement, the reason of a migration and where a
+    secret is kept."""
+    now = [{"fact": "Passbolt runs on altair"}]                                                 # a current fact between the same entities
+    rule = lambda fact, name="RELATES_TO", s="Vaultwarden", t="Passbolt", others=now: K.noise_rule(  # noqa: E731
+        {"source": s, "target": t, "name": name, "fact": fact}, others)
+    assert rule("Vaultwarden was replaced by Passbolt") is None
+    assert rule("Vaultwarden was replaced by Passbolt", "REPLACED_BY") is None
+    assert rule("Vaultwarden se sustituyó por Passbolt") is None
+    assert rule("Vaultwarden was decommissioned") is None
+    assert rule("Vaultwarden se dio de baja") is None
+    assert rule("Vaultwarden was switched to Passbolt", "UPDATED_TO") == "change"
+    assert rule("Vaultwarden was switched to Passbolt", "SUPERSEDES") is None                    # the relation says it
+    assert rule("Vaultwarden was switched to Passbolt", "IsSupersededBy") is None
+    assert rule("Vaultwarden is related to Passbolt") == "generic"                              # plain filler is still noise
+    mig = lambda fact: rule(fact, "MIGRATED_TO", "Grafana", "altair", [{"fact": "Grafana runs on altair"}])  # noqa: E731
+    assert mig("Grafana was migrated to altair") == "change"                                    # the result is stated: history
+    assert mig("Grafana was migrated from host vega to altair to free RAM") is None
+    assert mig("Grafana was migrated from a native install to altair to avoid slow source compilation") is None
+    assert mig("Grafana was moved to altair because vega ran out of disk") is None
+    assert mig("Grafana se migró a altair para liberar memoria") is None
+    assert mig("Grafana se migró a altair por falta de memoria") is None
+    assert mig("Grafana was moved to Coolify") == "change"                                      # a destination, not «to optimize»
+    assert mig("Grafana se migró a altair para el equipo de datos") == "change"                # «para» without a verb is no reason
+    assert mig("Grafana se migró a altair para cluster") == "change"
+    assert mig("Grafana was moved to Keep") == "change"
+    assert mig("Grafana was moved to support.lan") == "change"
+    assert mig("Grafana se movió a un disco de baja latencia") == "change"                     # «de baja» is not always a retirement
+    assert mig("Grafana was moved to the Retiro office") == "change"
+    assert rule("Passbolt took over", "REPLACES", others=[{"fact": "Passbolt was switched on"}]) is None
+    assert K.noise_rule({"source": "container C", "target": "host H", "name": "UPDATED_ON",
+                         "fact": "container C on host H was updated during the bulk update"},
+                        [{"fact": "container C runs on host H"}]) == "change"                  # a good finding of the first run
+    where = lambda fact: rule(fact, "RELATES_TO", "K credentials", "password manager", [])      # noqa: E731
+    assert where("the credentials of K are in the password manager item K") is None
+    assert where("las credenciales de K están en la entrada K del gestor de contraseñas") is None
+    assert where("the K credentials are related to Vaultwarden in the docs") is None
+    assert where("the K credentials are related to the password manager") == "generic"
 
 
 @needs_falkor
