@@ -45,21 +45,24 @@ READ = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.uuid IN $u AND r.in
         "RETURN r.uuid AS uuid, r.name AS name, r.fact AS fact, a.uuid AS s, a.name AS sname, b.uuid AS t, b.name AS tname")
 
 
-def detect(db, brain, graph, report: dict, proposal_id: int | None = None) -> dict | None:
+def detect(db, brain, report: dict, proposal_id: int | None = None, graph=None) -> dict | None:
     """Queues a review of each entity the episode's new facts say was retired or replaced. Returns what it did, for the ingestion
-    report, or None when no new fact says so. Never fails the ingestion: a failure is logged and said."""
+    report, or None when no new fact says so. Never fails the ingestion: a failure (the graph down, say) is logged and said."""
     from . import topic_review
-    from .db import rows
+    from .db import graph as open_graph, rows
     new = set(report.get("_new_edges") or [])
     names = {u: n for u, n in report.get("_edges") or [] if u in new}
-    marked = marks(get_ontology(db, brain.id))
-    hits = [u for u, n in names.items() if end(n, marked)]
-    if not hits:
+    if not names:
         return None
     out: dict = {"queued": [], "joined": [], "not_queued": []}
     try:
+        marked = marks(get_ontology(db, brain.id))
+        hits = [u for u, n in names.items() if end(n, marked)]
+        if not hits:
+            return None
+        g = graph if graph is not None else open_graph(brain.graph_name)
         by_entity: dict[str, tuple[str, list[dict]]] = {}
-        for f in rows(graph.query(READ, {"u": hits[:MAX_FACTS]})):
+        for f in rows(g.query(READ, {"u": hits[:MAX_FACTS]})):
             side = end(names.get(f["uuid"]) or f["name"], marked)
             if side is None:
                 continue

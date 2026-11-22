@@ -237,13 +237,13 @@ def test_retiring_an_entity_queues_exactly_one_review_with_the_facts_that_descri
     assert client.post("/api/brains", json={"slug": "ret9", "name": "R9", "graph_name": GRAPH}).status_code == 201
     with _factory()() as db:
         b = db.scalar(select(Brain).where(Brain.slug == "ret9"))
-        out = retirement.detect(db, b, g, {"_edges": [("ret1", "REPLACES"), ("other", "SENDS_THROUGH")], "_new_edges": ["ret1", "other"]}, 41)
+        out = retirement.detect(db, b, {"_edges": [("ret1", "REPLACES"), ("other", "SENDS_THROUGH")], "_new_edges": ["ret1", "other"]}, 41, graph=g)
         assert [e["entity"] for e in out["queued"]] == ["sg"] and out["joined"] == [] and out["not_queued"] == []
         rid = out["queued"][0]["review"]
         # the second fact of the same retirement joins the review still queued; an edge that is not new is never read
-        out = retirement.detect(db, b, g, {"_edges": [("ret2", "WAS_REPLACED_BY"), ("live1", "SENDS_THROUGH")], "_new_edges": ["ret2"]}, 42)
+        out = retirement.detect(db, b, {"_edges": [("ret2", "WAS_REPLACED_BY"), ("live1", "SENDS_THROUGH")], "_new_edges": ["ret2"]}, 42, graph=g)
         assert out["joined"] == [{"entity": "sg", "name": "Sendgrid", "facts": ["ret2"], "review": rid}] and out["queued"] == []
-        assert retirement.detect(db, b, g, {"_edges": [("live1", "REPLACES")], "_new_edges": []}) is None
+        assert retirement.detect(db, b, {"_edges": [("live1", "REPLACES")], "_new_edges": []}, graph=g) is None
         assert len(db.scalars(select(TopicReview).where(TopicReview.brain_id == b.id)).all()) == 1
     tr_.run(rid)
     assert len(asked) == 1 and "Retired or replaced, according to:" in asked[0] and "Name: Sendgrid" in asked[0]
@@ -284,3 +284,16 @@ def test_an_ingestion_reports_the_review_its_retirement_fact_asked_for(client, e
         assert rep["retirement"]["queued"][0]["entity"] == "sg" and rep["retirement"]["queued"][0]["name"] == "Sendgrid"
         r = db.get(TopicReview, rep["retirement"]["queued"][0]["review"])
         assert r.anchors[0]["proposal"] == pid and r.anchors[0]["uuid"] == "ret1"
+
+
+def test_a_graph_that_is_down_never_fails_the_ingestion_and_the_report_says_so(client):  # noqa: F811
+    assert client.post("/api/brains", json={"slug": "ret5", "name": "R5"}).status_code == 201
+
+    class Down:
+        def query(self, q, params=None):
+            raise RuntimeError("graph down")
+    with _factory()() as db:
+        b = db.scalar(select(Brain).where(Brain.slug == "ret5"))
+        out = retirement.detect(db, b, {"_edges": [("x", "REPLACES")], "_new_edges": ["x"]}, 7, graph=Down())
+        assert out["error"] == "graph down" and out["queued"] == []
+        assert retirement.detect(db, b, {"_edges": [("x", "RUNS_ON")], "_new_edges": ["x"]}, 7, graph=Down()) is None   # nothing to read

@@ -166,7 +166,7 @@ def ingest_proposal(pid: int, job=None) -> str:
             kept = list(rep.get("_edges") or [])
             vocab_apply.apply(db, brain, rep)
             # a new fact saying an entity was retired or replaced queues a review of it (#455); never fails the ingestion
-            if (retired := retirement.detect(db, brain, _graph(brain), {"_edges": kept, "_new_edges": created}, p.id)) is not None:
+            if (retired := retirement.detect(db, brain, {"_edges": kept, "_new_edges": created}, p.id)) is not None:
                 rep["retirement"] = retired
             p.status, p.episode_uuid, p.ingest_error, p.ingested_at, p.ingest_report = "ingested", uuid, "", datetime.now(timezone.utc), rep or None
             if p.claims:   # after the text is in the graph: an old fact is never invalidated without its replacement (#295)
