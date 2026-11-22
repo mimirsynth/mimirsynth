@@ -44,6 +44,7 @@ All hang off `/api/brains/{slug}/…`. The role is the **minimum** their depende
 | **Replay sample** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` · `GET/POST /replay/runs` · `GET /replay/runs/{rid}` · `POST /replay/samples/{sid}/promote` | administrator |
 | **Curator** | `PUT /curator/distil/{pid}` · `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curator |
 | | `PUT /curator/settings` | administrator |
+| **Topic reviews** | `GET /topics` · `GET /topics/{rid}` · `POST /topics/entity/{uuid}` · `POST /topics/{rid}/actions/{i}/approve` · `POST /topics/{rid}/actions/{i}/reject` | curator |
 | **Archived facts** | `GET /archive` · `DELETE /archive/{uuid}` | curator |
 | **Right to be forgotten** | `POST /forget/report` · `POST /forget/run` | owner |
 | **Verifiable facts** | `GET /verifiers` · `GET /probes` · `POST /probes/run` | curator |

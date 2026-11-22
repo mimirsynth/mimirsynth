@@ -1,0 +1,13 @@
+{
+ "El texto no puede estar vacío.": "The text cannot be empty.",
+ "Esa acción ya está decidida.": "That action is already decided.",
+ "La revisión no tiene esa acción.": "The review has no such action.",
+ "No hay ninguna revisión de tema con ese id en este brain.": "There is no topic review with that id in this brain.",
+ "No se pudo aplicar ahora mismo; la acción sigue pendiente. Inténtalo de nuevo.": "It could not be applied right now; the action is still pending. Try again.",
+ "Pruebas: {{evidence}}.": "Evidence: {{evidence}}.",
+ "Revisión de un tema": "Topic review",
+ "Revisión del tema «{{name}}» (#{{id}}): {{why}}": "Review of the topic «{{name}}» (#{{id}}): {{why}}",
+ "Revisión del tema «{{name}}»: lo que falta": "Review of the topic «{{name}}»: what is missing",
+ "Se queda: {{fact}}.": "Kept: {{fact}}.",
+ "Ya hay {{n}} revisiones de tema en marcha en este brain: espera a que alguna termine.": "{{n}} topic reviews are already running in this brain: wait for one to finish."
+}

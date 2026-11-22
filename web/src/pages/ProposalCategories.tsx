@@ -11,7 +11,7 @@ type Cat = { category: string; pending: number; oldest: string | null; flagged: 
 
 /** How each category reads: what produced its proposals. An unknown one shows its id. */
 const LABEL: Record<string, string> = {
-  "curator.contradictions": T("Contradicciones que propone el curador"), "curator.distil": T("Notas destiladas por el curador (se aprueban una a una)"), "forget.rewrite": T("Episodios reescritos sin datos personales"), "verifier.refuted": T("Hechos que un verificador contradice"),
+  "curator.contradictions": T("Contradicciones que propone el curador"), "curator.distil": T("Notas destiladas por el curador (se aprueban una a una)"), "topic.gap": T("Lo que falta en la memoria, según una revisión de tema"), "forget.rewrite": T("Episodios reescritos sin datos personales"), "verifier.refuted": T("Hechos que un verificador contradice"),
   correction: T("Correcciones"), duplicate: T("Posibles duplicados"), stale: T("Parecidas a algo que ya no es cierto"), new: T("Nuevas"),
 };
 

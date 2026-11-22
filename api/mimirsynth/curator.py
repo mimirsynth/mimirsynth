@@ -16,6 +16,7 @@ each proposal (as a correction, one at a time), and only then the change is appl
 - **Preview.** `POST /curator/preview` runs a pass read-only and says what it would propose, with the pass's **precision** so far:
   the share of its proposals that curators approved (`category`: `curator.contradictions`).
 - **Cost.** These passes read the graph, with no AI calls, except `distil` (#297): one call to the brain's LLM per group, at most `distil_calls` a run.
+  A topic review (#454, `topic_review`) is asked for one entity at a time; its bounds (`topic_calls`, `topic_max_tokens`) live here too.
 """
 import logging
 import re
@@ -38,7 +39,8 @@ KIND = "curator.run"
 PASSES = ("contradictions", "redundancy", "obsolescence", "noise", "archive", "distil")
 DEFAULT = {"enabled": False, "passes": {"contradictions": True, "redundancy": False, "obsolescence": False, "noise": False, "archive": False,
                                         "distil": False},
-           "batch": 5, "archive_days": 180, "distil_similarity": 0.85, "distil_min": 3, "distil_calls": 5}
+           "batch": 5, "archive_days": 180, "distil_similarity": 0.85, "distil_min": 3, "distil_calls": 5,
+           "topic_calls": 1, "topic_max_tokens": 4000}
 MAX_REDUNDANT = 3000   # candidate facts whose embeddings the redundancy pass reads per run (the most recent first)
 MAX_FINDINGS = 200   # per run: what is past it waits for the next one
 SAMPLE = 10
@@ -493,6 +495,8 @@ class SettingsIn(BaseModel):
     distil_similarity: float = Field(DEFAULT["distil_similarity"], ge=0.5, le=0.99)
     distil_min: int = Field(DEFAULT["distil_min"], ge=2, le=50)
     distil_calls: int = Field(DEFAULT["distil_calls"], ge=1, le=50)
+    topic_calls: int = Field(DEFAULT["topic_calls"], ge=1, le=5)
+    topic_max_tokens: int = Field(DEFAULT["topic_max_tokens"], ge=500, le=16000)
 
 
 def _run_out(db, r: CuratorRun, full: bool = False) -> dict:
@@ -516,7 +520,7 @@ def set_settings(body: SettingsIn, ctx: BrainCtx = Depends(admin_of_brain)):
         raise HTTPException(422, f"pasadas desconocidas: {', '.join(sorted(unknown))}")
     was = config(ctx.brain)   # what the request leaves out keeps its value (the tab only sends what it shows)
     tuned = {k: getattr(body, k) if k in body.model_fields_set else was[k]
-             for k in ("archive_days", "distil_similarity", "distil_min", "distil_calls")}
+             for k in ("archive_days", "distil_similarity", "distil_min", "distil_calls", "topic_calls", "topic_max_tokens")}
     ctx.brain.curator = {"enabled": body.enabled, "passes": {**DEFAULT["passes"], **body.passes}, "batch": body.batch, **tuned, "by": ctx.user.id}
     ctx.db.commit()
     audit(ctx.db, ctx.user, "curator.settings", ctx.brain, enabled=body.enabled, passes=body.passes, batch=body.batch)

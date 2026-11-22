@@ -6,6 +6,7 @@ import { get } from "../api";
 import { Btn, DataState, EmptyState, Page, PageHeader, StatCard, StatGrid, Tabs, useTabParam } from "../ui";
 import Retype from "./Retype";
 import SummaryReview from "./SummaryReview";
+import TopicReviews from "./TopicReview";
 import VocabConflicts from "./VocabConflicts";
 import VocabDuplicates from "./VocabDuplicates";
 import VocabStale from "./VocabStale";
@@ -63,6 +64,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
           <Tabs.Tab value="stale">{t("A revisar")}{count(a?.stale)}</Tabs.Tab>
           {isAdmin && <Tabs.Tab value="alias">{t("Alias repetidos")}</Tabs.Tab>}
           <Tabs.Tab value="summaries">{t("Resúmenes")}{count(a?.summaries)}</Tabs.Tab>
+          <Tabs.Tab value="topics">{t("Temas")}</Tabs.Tab>
           <Tabs.Tab value="curator">{t("Curador")}</Tabs.Tab>
           <Tabs.Tab value="verify">{t("Verificación")}</Tabs.Tab>
         </Tabs.List>
@@ -75,6 +77,7 @@ export default function Quality({ graph, role }: { graph: string; role: string }
         <Tabs.Panel value="stale"><VocabStale graph={graph} /></Tabs.Panel>
         {isAdmin && <Tabs.Panel value="alias"><VocabAliasCleanup graph={graph} /></Tabs.Panel>}
         <Tabs.Panel value="summaries"><SummaryReview graph={graph} role={role} /></Tabs.Panel>
+        <Tabs.Panel value="topics"><TopicReviews graph={graph} /></Tabs.Panel>
         <Tabs.Panel value="curator"><CuratorPanel graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
         <Tabs.Panel value="verify"><ProbesPanel graph={graph} isAdmin={isAdmin} /></Tabs.Panel>
       </Tabs>
