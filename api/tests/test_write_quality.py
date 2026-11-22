@@ -98,7 +98,7 @@ class _Graph:
 
     def query(self, q, p=None):
         if q == W._FOUND:
-            data = [f for f in self.found if f["uuid"] in p["u"]]
+            data = [f for f in reversed(self.found) if f["uuid"] in p["u"]]   # any order, as a real graph
         elif q == W._CURRENT:
             data = self.current
         else:

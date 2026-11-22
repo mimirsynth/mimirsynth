@@ -122,7 +122,8 @@ def apply(brain, rep: dict, episode: str) -> None:
         return
     try:
         g = graph(brain.graph_name)
-        found = rows(g.query(_FOUND, {"u": [u for u, _ in edges]}))
+        order = {u: i for i, (u, _) in enumerate(edges)}   # the graph returns them in any order: the first extracted one stays
+        found = sorted(rows(g.query(_FOUND, {"u": list(order)})), key=lambda f: order.get(f["uuid"], len(order)))
         new = [f for f in new_of(found, episode, created) if not _old(f)]
         ends = sorted({str(f[k]) for f in new for k in ("su", "tu")})
         current = rows(g.query(_CURRENT, {"ends": ends, "new": [f["uuid"] for f in new]})) if ends else []
