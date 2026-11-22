@@ -820,7 +820,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   const [kind, setKind] = useState(initialKind ?? "all");
   const [offset, setOffset] = useState(0);
   const [sp, setSp] = useSearchParams();
-  const [search, setSearch] = useState(sp.get("buscar") ?? "");
+  const [search, setSearch] = useState((sp.get("buscar") ?? "").slice(0, 200));   // the API takes up to 200 characters
   const [q] = useDebouncedValue(search.trim(), 300);
   useEffect(() => {   // the search stays in the address, like the tab: back from another tab, or a reload, keeps it
     const p = new URLSearchParams(sp);
