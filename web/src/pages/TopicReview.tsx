@@ -169,7 +169,7 @@ function Anchors({ anchors }: { anchors: Anchor[] }) {
     <Notice title={anchors.length === 1 ? t("Un hecho nuevo dice que se retiró o se sustituyó") : t("{{n}} hechos nuevos dicen que se retiró o se sustituyó", { n: anchors.length })}>
       <Stack gap={6}>
         <Text inherit>{t("La revisión busca los hechos que aún lo describen como vigente. Nada se invalida sin que un curador lo apruebe.")}</Text>
-        {anchors.map((a) => <CellText key={a.uuid} sub={<>{a.relation}{a.proposal ? <> · <Btn kind="link" component={Link} to={`/propuestas?tab=decididas&id=${a.proposal}`}>{t("Propuesta #{{id}}", { id: a.proposal })}</Btn></> : null}</>}>
+        {anchors.map((a) => <CellText key={a.uuid} sub={a.proposal ? t("{{relation}} · de la propuesta #{{id}}", { relation: a.relation, id: a.proposal }) : a.relation}>
           {t("«{{fact}}»", { fact: a.fact })}</CellText>)}
       </Stack>
     </Notice>

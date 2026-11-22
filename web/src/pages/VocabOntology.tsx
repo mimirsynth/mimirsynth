@@ -40,17 +40,16 @@ function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[];
             <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
             <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
             <ColHead>{t("Vida útil")}</ColHead>
-            <ColHead>{t("Retirada")}</ColHead>
             {canEdit && <DataTable.ActionsHead />}
           </DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{v.rows.map((ty) => (
             <DataTable.Tr key={ty.name}>
-              <DataTable.Td>{ty.name}</DataTable.Td>
+              <DataTable.Td>{ty.retires ? <Group gap={6}>{ty.name}<Pill tone="alt" title={t("Un hecho nuevo suyo pide una revisión del tema de lo retirado")}>
+                {ty.retires === "source" ? t("retira el origen") : t("retira el destino")}</Pill></Group> : ty.name}</DataTable.Td>
               <DataTable.Td><Text size="sm" lineClamp={2}>{ty.description}</Text></DataTable.Td>
               <DataTable.Td className="ms-data">{used(ty.name)}</DataTable.Td>
               <DataTable.Td>{ty.functional ? <Pill tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : "—"}</DataTable.Td>
               <DataTable.Td className="ms-data">{ty.shelf_life_days ? t("{{n}} días", { n: ty.shelf_life_days }) : "—"}</DataTable.Td>
-              <DataTable.Td>{ty.retires ? <Pill tone="alt" title={t("Un hecho nuevo suyo pide una revisión del tema de lo retirado")}>{ty.retires === "source" ? t("el origen") : t("el destino")}</Pill> : "—"}</DataTable.Td>
               {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
             </DataTable.Tr>))}</DataTable.Tbody>
         </DataTable>)}

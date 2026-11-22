@@ -9,8 +9,6 @@
  "No": "No",
  "No se pudo pedir la revisión de una retirada: {{e}}": "The review of a retirement could not be asked for: {{e}}",
  "Por una retirada": "From a retirement",
- "Propuesta #{{id}}": "Proposal #{{id}}",
- "Retirada": "Retirement",
  "Revisiones de tema por decidir": "Topic reviews to decide",
  "Sí: se retira el destino": "Yes: the target is retired",
  "Sí: se retira el origen": "Yes: the source is retired",
@@ -21,13 +19,14 @@
  "Ver la revisión": "See the review",
  "el brain es de solo lectura": "the brain is read-only",
  "el brain ha agotado su presupuesto de IA de este mes": "the brain has used up its AI budget for this month",
- "el destino": "the target",
- "el origen": "the source",
- "invalidaban el hecho que dice que se retiró": "they invalidated the fact saying it was retired",
+ "invalidaban el hecho que dice que se retiró": "invalidated the fact saying it was retired",
  "las revisiones por retirada están desactivadas en los ajustes del curador": "retirement reviews are off in the curator settings",
  "no hay ningún motor LLM configurado": "no LLM engine is configured",
  "pedidas por un curador o por una retirada": "asked for by a curator or by a retirement",
+ "retira el destino": "retires the target",
+ "retira el origen": "retires the source",
  "una entidad": "an entity",
  "ya se pidieron hoy las que permite el brain (ajuste retirement_daily del curador)": "the brain already asked for as many as it allows today (curator setting retirement_daily)",
- "{{n}} hechos nuevos dicen que se retiró o se sustituyó": "{{n}} new facts say it was retired or replaced"
+ "{{n}} hechos nuevos dicen que se retiró o se sustituyó": "{{n}} new facts say it was retired or replaced",
+ "{{relation}} · de la propuesta #{{id}}": "{{relation}} · from proposal #{{id}}"
 }
