@@ -100,6 +100,8 @@ def test_deleting_removes_every_layer_rewrites_episodes_and_keeps_what_is_to_rev
     with _factory()() as db:
         bid, uid = db.query(Brain).filter(Brain.slug == "fg2").one().id, db.query(User).first().id
         db.add_all([Proposal(brain_id=bid, author_id=uid, name="Note", body="José Pérez prefers mornings", source="text", status="pending"),
+                    Proposal(brain_id=bid, author_id=uid, name="Shift", body="She works mornings", source="text", status="ingested",  # #458
+                             ingest_report={"edges": 1, "dropped": [{"uuid": "d1", "fact": "It is José Pérez's shift", "rule": "placeholder", "why": "w"}]}),
                     RecallLog(brain_id=bid, rid="r2", query_hash="h", query_text="where does jose perez work"),
                     Notification(event="x", title="Pepe Pérez", brain_id=bid), Job(kind="k", brain_id=bid, title="Ingerir: José Pérez", status="done"),
                     Audit(brain_id=bid, action="x", detail={"name": "José Pérez", "n": 1}), RefQuery(brain_id=bid, query="who is Pepe Perez"),
@@ -120,7 +122,9 @@ def test_deleting_removes_every_layer_rewrites_episodes_and_keeps_what_is_to_rev
         assert job.status == "done" and job.params == {} and job.result["episodes"]["rewritten"] == 1 and job.result["snapshots"]["done"] == 1
         props = db.query(Proposal).filter(Proposal.brain_id == bid).all()
         purged = [p for p in props if p.purged_at]
-        assert len(purged) == 1 and purged[0].body == "" and purged[0].status == "rejected"
+        assert len(purged) == 2 and all(p.body == "" for p in purged) and [p.status for p in purged if p.ingest_report is None] == ["rejected"]
+        shift = next(p for p in purged if p.ingest_report)   # found by the text of a fact it dropped, which goes; the count stays (#458)
+        assert shift.ingest_report["dropped"] == [{"uuid": "d1", "rule": "placeholder", "why": "w"}]
         rewrite = [p for p in props if p.category == "forget.rewrite"]
         assert len(rewrite) == 1 and rewrite[0].body == "Someone called" and rewrite[0].status == "pending"
         assert db.query(RecallLog).filter(RecallLog.brain_id == bid).count() == 0

@@ -67,7 +67,9 @@ def test_trivial_new_facts_are_dropped_and_what_was_already_there_is_never_touch
 def test_names_that_can_be_real_things_are_left_to_the_curator():
     found = [fact("e1", "IT manages pve-norte-02", su="it", source="IT"), fact("e2", "Backend is written in C", tu="c", target="C"),
              fact("e3", "Let's Encrypt is LE", tu="le", target="LE"), fact("e4", "The auth service stores the user", tu="u", target="User"),
-             fact("e5", "Ella uses Spotify", su="el", source="Ella"), fact("e6", "Office is in LA", tu="la", target="LA")]
+             fact("e5", "Ella uses Spotify", su="el", source="Ella"), fact("e6", "Office is in LA", tu="la", target="LA"),
+             fact("e7", "Graphiti stores each Episode", tu="ep", target="Episode"), fact("e8", "Order is an Entity", tu="en", target="Entity"),
+             fact("e9", "Uniswap uses The Graph", tu="tg", target="The Graph"), fact("e10", "Thing runs on AWS IoT", su="th", source="Thing")]
     assert W.decide(found, EP, [], created(found))["gone"] == []
 
 

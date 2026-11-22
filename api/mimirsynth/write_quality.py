@@ -24,8 +24,11 @@ _EPISODE = ("MATCH (e:Episodic {uuid:$e}) SET e.entity_edges = [x IN coalesce(e.
 SAME_EPISODE = "says word for word what another fact of this episode says"
 SAME_CURRENT = "says word for word what a current fact already in the brain says"
 # Words of the curator's placeholder list that can also be a real thing's name («User» in a software brain, «Ella» a first name,
-# «LE» Let's Encrypt): at write time, with no person to look, they are left to the curator. So is a name written in capitals («IT»).
+# «LE» Let's Encrypt): at write time, with no person to look, they are left to the curator.
 _NOT_AT_WRITE = frozenset("user the-user usuario el-usuario la le lo él ella".split())
+# Only pronouns count when capitalised («It runs on…»); any other placeholder or memory word only in lower case: «Thing» (AWS IoT),
+# «Episode», «Entity» or «The Graph» can be real things and stay with the curator. A name in capitals («IT») never counts.
+_PRONOUNS = frozenset("it this that these those them they something someone esto eso ello ellos ellas algo alguien".split())
 
 
 def same_text(text) -> str:
@@ -35,11 +38,11 @@ def same_text(text) -> str:
 
 def write_rule(f: dict) -> str | None:
     """The curator's sure noise rules as applied with no person (#458): an end that is a placeholder or the memory itself, written in
-    lower case or capitalised, never in capitals nor one of the names that can be a real thing."""
+    lower case (a pronoun may also be capitalised), never in capitals nor one of the names that can be a real thing."""
     for end in (f.get("source"), f.get("target")):
         raw = " ".join(str(end or "").split())
         n = _name(raw)
-        if raw.isupper() or n in _NOT_AT_WRITE:
+        if n in _NOT_AT_WRITE or not (raw == raw.lower() or (n in _PRONOUNS and raw == raw.capitalize())):
             continue
         if n in PLACEHOLDERS:
             return "placeholder"
