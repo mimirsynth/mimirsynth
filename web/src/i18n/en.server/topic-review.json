@@ -7,5 +7,6 @@
  "Revisión de un tema": "Topic review",
  "Revisión del tema «{{name}}» (#{{id}}): {{why}}": "Review of the topic «{{name}}» (#{{id}}): {{why}}",
  "Revisión del tema «{{name}}»: lo que falta": "Review of the topic «{{name}}»: what is missing",
- "Se queda: {{fact}}.": "Kept: {{fact}}."
+ "Se queda: {{fact}}.": "Kept: {{fact}}.",
+ "Ya hay {{n}} revisiones de tema en marcha en este brain: espera a que alguna termine.": "{{n}} topic reviews are already running in this brain: wait for one to finish."
 }

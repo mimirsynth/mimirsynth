@@ -165,12 +165,26 @@ def _proposals(db, brain_id: int, m: Matcher) -> list:
     found = _scan(db, Proposal, brain_id, ["name", "body", "review_note"], m, ["name", "body", "review_note"])
     seen = {p.id for p in found}
     reports = select(Proposal).where(Proposal.brain_id == brain_id, Proposal.ingest_report.is_not(None))
-    return found + [p for p in db.scalars(reports.limit(MAX_ROWS)) if p.id not in seen and m(p.ingest_report)]
+    found += [p for p in db.scalars(reports.limit(MAX_ROWS)) if p.id not in seen and m(p.ingest_report)]
+    seen = {p.id for p in found}   # a correction's reason can name it when the fact is between two other entities (a topic review, #454)
+    fixes = select(Proposal).where(Proposal.brain_id == brain_id, Proposal.correction.is_not(None))
+    return found + [p for p in db.scalars(fixes.limit(MAX_ROWS)) if p.id not in seen and m(p.correction)]
 
 
-def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
+def _topic_reviews(db, brain_id: int, entity: str, facts: set[str], m: Matcher) -> list:
+    """Topic reviews of the entity, those that name it, and those that cite one of its facts (#454)."""
+    from .models import TopicReview
+    out = []
+    for r in db.scalars(select(TopicReview).where(TopicReview.brain_id == brain_id).limit(MAX_ROWS)):
+        cited = {v.get("uuid") for v in (r.items or {}).values() if isinstance(v, dict)}
+        if r.entity_uuid == entity or cited & set(facts) or any(m(getattr(r, c)) for c in ("name", "state", "items", "actions", "error")):
+            out.append(r)
+    return out
+
+
+def _db_targets(db, brain_id: int, facts: set[str], m: Matcher, entity: str = "") -> dict:
     from .models import (Audit, CuratorRun, FactArchive, FactConfirmation, FactProbe, FactRecall, Job, Notification, Proposal, RecallLog,
-                         RecallSample, RefQuery, RefRun, ReplayRun, RetypeSuggestion, SummarySuggestion, TopicReview, VocabOp, WebhookEvent)
+                         RecallSample, RefQuery, RefRun, ReplayRun, RetypeSuggestion, SummarySuggestion, VocabOp, WebhookEvent)
     hanging = []
     if facts:
         for model in (FactConfirmation, FactProbe, FactRecall, FactArchive):
@@ -186,7 +200,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
         "summary_suggestions": _scan(db, SummarySuggestion, brain_id, ["name", "current", "proposed", "applied"], m,
                                      ["name", "current", "proposed", "applied"]),
         "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name"], m, ["name"]),
-        "topic_reviews": _scan(db, TopicReview, brain_id, ["name", "state", "items", "actions", "error"], m),
+        "topic_reviews": _topic_reviews(db, brain_id, entity, facts, m),
         "jobs": _scan(db, Job, brain_id, ["title", "params", "log", "error", "result"], m),
         "notifications": _scan(db, Notification, brain_id, ["title", "body"], m, ["title", "body"]),
         "webhook_events": _scan(db, WebhookEvent, brain_id, ["title"], m, ["title"]),
@@ -218,7 +232,7 @@ def select_all(db, brain, uuid: str, aliases: list[str]) -> tuple[dict, Matcher,
         raise HTTPException(422, "hace falta al menos un nombre o alias de 3 caracteres o más")
     gt = _graph_targets(g, uuid, m)
     docs = _documents(db, brain.id, m) if index.enabled() else {}
-    return {"uuid": uuid, "name": e["name"], "aliases": e["aliases"] or []}, m, gt, _db_targets(db, brain.id, gt["facts"], m), docs
+    return {"uuid": uuid, "name": e["name"], "aliases": e["aliases"] or []}, m, gt, _db_targets(db, brain.id, gt["facts"], m, uuid), docs
 
 
 def report(db, brain, uuid: str, aliases: list[str]) -> dict:

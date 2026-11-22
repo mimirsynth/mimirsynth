@@ -463,7 +463,9 @@ class TopicReview(Base):
     discarded: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     left_out: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     calls: Mapped[int] = mapped_column(Integer, default=0)
-    error: Mapped[str] = mapped_column(Text, default="")
+    error: Mapped[str] = mapped_column(Text, default="")  # the technical detail
+    secret_findings: Mapped[list | None] = mapped_column(JSON, nullable=True)  # what the secret detector found in the state
+    error_code: Mapped[str] = mapped_column(String(24), default="")  # no_engine | gone | paused | invalid_reply | secrets | engine | cancelled | failed
     job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

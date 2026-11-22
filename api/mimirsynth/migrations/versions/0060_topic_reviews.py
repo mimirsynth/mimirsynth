@@ -33,6 +33,8 @@ def upgrade() -> None:
         sa.Column("left_out", sa.JSON(), nullable=True),
         sa.Column("calls", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("error", sa.Text(), nullable=False, server_default=""),
+        sa.Column("secret_findings", sa.JSON(), nullable=True),
+        sa.Column("error_code", sa.String(24), nullable=False, server_default=""),
         sa.Column("job_id", sa.Integer(), nullable=True),
         sa.Column("created_by", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

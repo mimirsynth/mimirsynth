@@ -19,7 +19,7 @@ const LAYER: Record<string, string> = {
   other_summaries: T("Resúmenes de otras entidades que la nombran"), similar_entities: T("Otras entidades con un nombre o alias suyo"),
   snapshots: T("Copias del grafo para deshacer fusiones"), episode_chunks: T("Índice de los episodios"), documents: T("Documentos de Conocimiento"),
   proposals: T("Propuestas"), recall_samples: T("Muestra de consultas reales"), recall_logs: T("Registros del recall y sus valoraciones"),
-  replay_runs: T("Repeticiones de la muestra"), summary_suggestions: T("Resúmenes propuestos"), jobs: T("Trabajos"), notifications: T("Avisos"),
+  replay_runs: T("Repeticiones de la muestra"), summary_suggestions: T("Resúmenes propuestos"), topic_reviews: T("Revisiones de tema"), jobs: T("Trabajos"), notifications: T("Avisos"),
   webhook_events: T("Eventos de webhooks"), audit: T("Auditoría"), ref_runs: T("Ejecuciones de las consultas de referencia"),
   curator_runs: T("Ejecuciones del curador"), retype_suggestions: T("Tipos propuestos"), vocab_history: T("Historial de cambios del vocabulario"), fact_records: T("Confirmaciones, sondas y fechas de sus hechos"),
   ref_queries: T("Consultas de referencia"), backups: T("Copias de seguridad"), logs: T("Logs de la aplicación"), other_systems: T("Otros sistemas"),

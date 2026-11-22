@@ -22,6 +22,7 @@ import re
 from datetime import datetime, timezone
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import select
@@ -49,6 +50,8 @@ TYPES = ("invalidate", "merge", "rewrite", "drop_trivial", "gap")
 ON_FACTS = ("invalidate", "merge", "rewrite", "drop_trivial")   # the types that become corrections
 DECIDED = ("approved", "rejected", "outdated")
 MAX_TEXT = 2000
+MAX_ACTED = 10           # facts one action may change: a single approval never invalidates a whole topic
+MAX_ACTIVE = 5           # reviews queued or running per brain
 REVIEWS_FOR_PRECISION = 500
 
 SYSTEM = (
@@ -130,8 +133,12 @@ def check(a: Action, items: dict[str, dict], sent: set[str]) -> tuple[dict | Non
         return None, "unknown_id"
     if any(not x.startswith("F") for x in facts + ([keep] if keep else [])):
         return None, "not_a_fact"
+    if any(not items[x].get("own") for x in facts + ([keep] if keep else [])):
+        return None, "not_own"   # a neighbour's fact is context and evidence, never what an action of this topic changes
     if any(not items[x].get("current") for x in facts):
         return None, "not_current"
+    if len(facts) > MAX_ACTED:
+        return None, "too_many"
     if a.type == "invalidate" and not [x for x in evidence if x not in facts]:
         return None, "no_evidence"
     if a.type == "merge":
@@ -148,10 +155,10 @@ def check(a: Action, items: dict[str, dict], sent: set[str]) -> tuple[dict | Non
             "text": text, "why": " ".join(a.why.split())}, ""
 
 
-def review_reply(brain: Brain, reply: Reply, items: dict[str, dict], sent: set[str]) -> tuple[str, list[dict], dict[str, int]]:
-    """The state and the actions that pass, through the secret detector, and what was discarded by reason.
-    Raises secretguard.Blocked when the state carries secrets the brain blocks."""
-    state, _ = secretguard.guard(brain, " ".join(reply.state.split()))
+def review_reply(brain: Brain, reply: Reply, items: dict[str, dict], sent: set[str]) -> tuple[str, list[dict], dict[str, int], list[dict]]:
+    """The state and the actions that pass, through the secret detector, what was discarded by reason, and what the detector found in
+    the state. Raises secretguard.Blocked when the state carries secrets the brain blocks."""
+    state, in_state = secretguard.guard(brain, " ".join(reply.state.split()))
     out, discarded = [], {}
     for a in reply.actions:
         act, why = check(a, items, sent)
@@ -167,7 +174,7 @@ def review_reply(brain: Brain, reply: Reply, items: dict[str, dict], sent: set[s
             discarded[why] = discarded.get(why, 0) + 1
             continue
         out.append(act)
-    return state, out, discarded
+    return state, out, discarded, in_state
 
 
 # --- gathering ------------------------------------------------------------------------------------
@@ -182,12 +189,15 @@ NEIGHBOURS = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE (a.uuid IN $nb 
 EPISODES = ("MATCH (e:Episodic)-[:MENTIONS]->(n:Entity {uuid:$u}) RETURN e.uuid AS uuid, e.name AS name, e.content AS content, "
             "e.valid_at AS valid_at, e.created_at AS created_at, e.source_description AS source "
             "ORDER BY coalesce(e.valid_at, e.created_at) DESC, e.uuid LIMIT $n")
+NEIGHBOURS_COUNT = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE (a.uuid IN $nb OR b.uuid IN $nb) AND a.uuid <> $u AND b.uuid <> $u "
+                    "AND r.invalid_at IS NULL AND r.expired_at IS NULL RETURN count(r)")
 EPISODES_COUNT = "MATCH (e:Episodic)-[:MENTIONS]->(n:Entity {uuid:$u}) RETURN count(e)"
 ENTITY = "MATCH (n:Entity {uuid:$u}) RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels"
 
 
 def _day(x) -> str:
-    return str(x or "")[:10]
+    from .answer import unclosable
+    return unclosable(str(x or "")[:10])   # a date from an imported graph is a string like any other
 
 
 def _fact(f: dict, own: bool, probes: dict[str, str]) -> dict:
@@ -216,8 +226,9 @@ def gather(g, db, brain_id: int, uuid: str) -> dict | None:
                           "source": e["source"] or "", "text": " ".join(str(e["content"] or "").split())[:EPISODE_CHARS]}
     total_facts = g.query(OWN_COUNT, {"u": uuid}).result_set[0][0]
     total_eps = g.query(EPISODES_COUNT, {"u": uuid}).result_set[0][0]
-    return {"entity": ent[0], "items": items,
-            "left_out": {"facts": max(total_facts - len(own), 0), "episodes": max(total_eps - len(eps), 0), "neighbour_facts": 0}}
+    total_near = g.query(NEIGHBOURS_COUNT, {"u": uuid, "nb": nb}).result_set[0][0] if nb else 0
+    return {"entity": ent[0], "items": items, "left_out": {"facts": max(total_facts - len(own), 0), "episodes": max(total_eps - len(eps), 0),
+                                                           "neighbour_facts": max(total_near - len(near), 0)}}
 
 
 def line(key: str, it: dict) -> str:
@@ -275,13 +286,29 @@ def _engine() -> dict | None:
 
 def _ask(eng: dict, msgs: list[dict], max_tokens: int) -> str:
     from .summary_review import ask
-    return ask(eng, msgs, max_tokens)
+    return ask(eng, msgs, max_tokens, timeout=max(120.0, max_tokens / 20))   # a slow local engine writes about 20 tokens a second
 
 
 # --- the job --------------------------------------------------------------------------------------
 
 class Failed(RuntimeError):
-    pass
+    """A review that cannot finish; `code` is what the screen says in words, the message the technical detail."""
+    def __init__(self, code: str, msg: str):
+        super().__init__(msg)
+        self.code = code
+
+
+def _failure(e: Exception) -> tuple[str, str]:
+    """(code, technical detail) of what stopped a review. An engine's HTTP error keeps only its status: its text can carry the URL."""
+    if isinstance(e, Failed):
+        return e.code, str(e)
+    if isinstance(e, httpx.HTTPStatusError):
+        return "engine", f"el motor respondió con el estado {e.response.status_code}"
+    if isinstance(e, httpx.HTTPError):
+        return "engine", f"no se pudo llamar al motor ({e.__class__.__name__})"
+    if isinstance(e, jobs.Cancelled):
+        return "cancelled", "cancelada desde Trabajos"
+    return "failed", (str(e) or e.__class__.__name__)[:1000]
 
 
 def _safe(brain: Brain, raw: str) -> str:
@@ -296,8 +323,10 @@ def run(rid: int, job=None) -> dict:
     from .curator import config
     with _factory()() as db:
         r = db.get(TopicReview, rid)
-        if r is None or r.status != "queued":
+        if r is None:   # forgotten before it started
             return {}
+        if r.status != "queued":
+            raise RuntimeError("esta revisión ya terminó o se interrumpió: pide otra desde la página de la entidad")
         brain = db.get(Brain, r.brain_id)
         r.status = "running"
         db.commit()
@@ -305,21 +334,21 @@ def run(rid: int, job=None) -> dict:
         try:
             eng = _engine()
             if eng is None:
-                raise Failed("no hay ningún motor LLM configurado")
+                raise Failed("no_engine", "no hay ningún motor LLM configurado")
             cfg = config(brain)
             topic = gather(graph(brain.graph_name), db, brain.id, r.entity_uuid)
             if topic is None:
-                raise Failed("la entidad ya no está en el grafo")
+                raise Failed("gone", "la entidad ya no está en el grafo")
             items = topic["items"]
             chunks, left = pack(items, int(cfg["topic_calls"]))
             left = {k: topic["left_out"][k] + left[k] for k in left}
-            states, actions, discarded = [], [], {}
+            states, actions, discarded, state_secrets = [], [], {}, []
             for i, ids in enumerate(chunks):
                 if job:
                     job.check()
                     job.progress(i, len(chunks), f"«{r.name[:60]}»")
                 if usage.paused(brain.id):
-                    raise Failed("el brain ha agotado su presupuesto de IA de este mes")
+                    raise Failed("paused", "el brain ha agotado su presupuesto de IA de este mes")
                 with usage.scope(brain.id, "curator"):
                     raw = _ask(eng, messages(topic["entity"], items, ids, i + 1, len(chunks)), int(cfg["topic_max_tokens"]))
                 calls += 1
@@ -328,12 +357,13 @@ def run(rid: int, job=None) -> dict:
                 except ReplyError as e:
                     if job:
                         job.note(f"respuesta {i + 1}: {_safe(brain, raw)[:300]}")
-                    raise Failed(f"la respuesta no cumple el formato {PROMPT_VERSION}: {e}") from None
+                    raise Failed("invalid_reply", f"la respuesta no cumple el formato {PROMPT_VERSION}: {e}") from None
                 try:
-                    state, acts, disc = review_reply(brain, reply, items, set(ids))
+                    state, acts, disc, found = review_reply(brain, reply, items, set(ids))
                 except secretguard.Blocked as b:
-                    raise Failed(f"el estado que escribió el motor lleva secretos que el brain bloquea ({b})") from None
+                    raise Failed("secrets", f"el estado que escribió el motor lleva secretos que el brain bloquea ({b})") from None
                 states.append(state)
+                state_secrets += found
                 actions += acts
                 for k, v in disc.items():
                     discarded[k] = discarded.get(k, 0) + v
@@ -342,13 +372,17 @@ def run(rid: int, job=None) -> dict:
             cited = {x for a in actions for x in a["facts"] + a["evidence"] + ([a["keep"]] if a["keep"] else [])}
             r.state, r.actions, r.discarded, r.left_out, r.calls = "\n\n".join(states), actions, discarded, left, calls
             r.items = {k: v for k, v in items.items() if k in cited}
+            r.secret_findings = state_secrets or None
             r.prompt_version, r.status, r.finished_at = PROMPT_VERSION, "ready", datetime.now(timezone.utc)
             db.commit()
             return {"review": rid, "actions": len(actions), "discarded": discarded, "left_out": left, "calls": calls}
         except Exception as e:  # noqa: BLE001  (also a cancellation: the review fails and the job says why)
             db.rollback()
             r = db.get(TopicReview, rid)
-            r.status, r.error, r.finished_at = "failed", (str(e) or e.__class__.__name__)[:1000], datetime.now(timezone.utc)
+            if r is None:   # forgotten meanwhile: nothing of it is written back
+                raise
+            code, detail = _failure(e)
+            r.status, r.error_code, r.error, r.finished_at = "failed", code, detail, datetime.now(timezone.utc)
             r.state, r.actions, r.items, r.calls = "", None, None, calls
             db.commit()
             raise
@@ -393,7 +427,7 @@ def _counts(acts: list | None) -> dict:
 def _row(db, r: TopicReview) -> dict:
     stuck = r.status in ("queued", "running") and not _alive(db, r)   # its job ended without it: a restart, for example
     return {"id": r.id, "entity_uuid": r.entity_uuid, "name": r.name, "status": "failed" if stuck else r.status,
-            "error": "" if stuck else r.error,   # the screen says it was interrupted
+            "error": "" if stuck else r.error, "error_code": "interrupted" if stuck else r.error_code,
             "created_at": r.created_at, "finished_at": r.finished_at, "job": r.job_id, "counts": _counts(r.actions), "calls": r.calls}
 
 
@@ -432,7 +466,8 @@ def get_review(rid: int, request: Request, ctx: BrainCtx = Depends(curator)):
     items = r.items or {}
     now = _now_state(ctx, items) if r.status == "ready" else {}
     acts = [{**a, "secrets": secretguard.describe(a.get("secrets")), "flagged": secretguard.flagged(a.get("secrets"))} for a in r.actions or []]
-    return {**_row(ctx.db, r), "state": r.state, "prompt_version": r.prompt_version, "actions": acts, "discarded": r.discarded or {},
+    return {**_row(ctx.db, r), "state": r.state, "state_secrets": secretguard.describe(r.secret_findings),
+            "state_flagged": secretguard.flagged(r.secret_findings), "prompt_version": r.prompt_version, "actions": acts, "discarded": r.discarded or {},
             "left_out": r.left_out or {}, "items": {k: {**v, "now": now.get(k)} for k, v in items.items()}, "precision": precision(ctx.db, ctx.brain.id)}
 
 
@@ -450,6 +485,9 @@ def start(uuid: str, request: Request, ctx: BrainCtx = Depends(curator)):
         raise HTTPException(409, tr("No hay ningún motor LLM configurado (Administración → Proveedores IA).", lang))
     if usage.paused(ctx.brain.id):
         raise HTTPException(409, tr("El brain ha agotado su presupuesto de IA de este mes.", lang))
+    active = ctx.db.scalars(select(TopicReview).where(TopicReview.brain_id == ctx.brain.id, TopicReview.status.in_(("queued", "running")))).all()
+    if sum(_alive(ctx.db, x) for x in active) >= MAX_ACTIVE:
+        raise HTTPException(409, tr("Ya hay {{n}} revisiones de tema en marcha en este brain: espera a que alguna termine.", lang, n=MAX_ACTIVE))
     found = rows(ctx.graph.query(ENTITY, {"u": uuid}))
     if not found:
         raise HTTPException(404, tr("No hay ninguna entidad con el uuid {{uuid}} en este brain.", lang, uuid=uuid))
@@ -467,14 +505,40 @@ class DecideIn(BaseModel):
     text: str | None = Field(None, max_length=MAX_TEXT, description="rewrite and gap: the curator's edit of the text; empty: the text as proposed")
 
 
-def _action(ctx: BrainCtx, rid: int, i: int, lang: str) -> tuple[TopicReview, list[dict], dict]:
-    r = _get(ctx, rid, lang)
+def _locked(ctx: BrainCtx, rid: int, lang: str) -> TopicReview:
+    """The review read again under a row lock (PostgreSQL), so two decisions on it never overwrite each other."""
+    r = ctx.db.execute(select(TopicReview).where(TopicReview.id == rid).with_for_update()
+                       .execution_options(populate_existing=True)).scalar_one_or_none()
+    if r is None or r.brain_id != ctx.brain.id:
+        raise HTTPException(404, tr("No hay ninguna revisión de tema con ese id en este brain.", lang))
+    return r
+
+
+def _save(ctx: BrainCtx, rid: int, i: int, a: dict, lang: str) -> TopicReview:
+    """Writes one action into the review as it is now, leaving the others as other decisions left them."""
+    r = _locked(ctx, rid, lang)
+    acts = [dict(x) for x in r.actions or []]
+    acts[i] = a
+    r.actions = acts
+    ctx.db.commit()
+    return r
+
+
+def _claim(ctx: BrainCtx, rid: int, i: int, lang: str) -> tuple[TopicReview, dict]:
+    """Marks a pending action as being decided («applying») under the lock: a second approval of it, at the same time, gets 409."""
+    r = _locked(ctx, rid, lang)
     acts = [dict(a) for a in r.actions or []]
     if r.status != "ready" or not 0 <= i < len(acts):
+        ctx.db.rollback()
         raise HTTPException(404, tr("La revisión no tiene esa acción.", lang))
     if acts[i].get("decision") != "pending":
+        ctx.db.rollback()
         raise HTTPException(409, tr("Esa acción ya está decidida.", lang))
-    return r, acts, acts[i]
+    a = dict(acts[i])
+    acts[i] = {**a, "decision": "applying"}
+    r.actions = acts
+    ctx.db.commit()
+    return r, a
 
 
 def _evidence(items: dict, ids: list[str]) -> str:
@@ -521,8 +585,14 @@ def _apply(ctx: BrainCtx, request: Request, bg: BackgroundTasks, r: TopicReview,
                                         source_description=f"topic review #{r.id}"[:255])
         try:
             p = corrections.create(ctx, request, body, direct=True)
-        except HTTPException as e:   # the fact is no longer current, or went away: that fact is skipped and said why
-            a["skipped"].append({"fact": fid, "why": str(e.detail)[:300]})
+        except HTTPException as e:   # the fact went away (404), is no longer current (409) or the reason carries secrets (422)
+            ctx.db.rollback()
+            a["skipped"].append({"fact": fid, "why": {404: "gone", 409: "not_current", 422: "secrets"}.get(e.status_code, "error")})
+            continue
+        except Exception:  # noqa: BLE001  (the others were applied: they are said, and this one is skipped)
+            log.exception("topic review %s: correction of %s", r.id, fid)
+            ctx.db.rollback()
+            a["skipped"].append({"fact": fid, "why": "error"})
             continue
         a["became"].append({"proposal": p.id, "fact": fid, "status": p.status})
 
@@ -532,34 +602,44 @@ def approve(rid: int, i: int, body: DecideIn, request: Request, bg: BackgroundTa
     lang = language(request)
     if ctx.brain.read_only:
         raise read_only_error()
-    r, acts, a = _action(ctx, rid, i, lang)
-    a["became"], a["skipped"] = list(a.get("became") or []), list(a.get("skipped") or [])
-    text = a["text"]
-    edit = " ".join((body.text or "").split())
+    r, pending = _claim(ctx, rid, i, lang)
+    a = {**pending, "became": [], "skipped": []}
+    try:
+        text = a["text"]
+        edit = " ".join((body.text or "").split())
+        if a["type"] in ("rewrite", "gap"):
+            if edit and edit != text:   # the curator's edit goes through the secret detector before anything keeps it
+                try:
+                    text, found = secretguard.guard(ctx.brain, edit)
+                except secretguard.Blocked as b:
+                    raise HTTPException(422, tr("El texto lleva secretos ({{labels}}). Quítalos y guarda solo dónde están.", lang, labels=str(b))) from None
+                a["edited"] = True
+                a["secrets"] = [x for x in a.get("secrets") or [] if x.get("field") != "text"] + [{**f, "field": "text"} for f in found]
+            if not text:
+                raise HTTPException(422, tr("El texto no puede estar vacío.", lang))
+        _apply(ctx, request, bg, r, a, text)
+        if not a["became"] and any(s["why"] == "secrets" for s in a["skipped"]):
+            raise HTTPException(422, tr("La corrección contiene secretos. Quítalos y guarda solo dónde están (por ejemplo, en qué gestor de contraseñas).", lang))
+    except Exception:
+        ctx.db.rollback()
+        _save(ctx, rid, i, pending, lang)   # nothing was applied, or what was is said in the error: it is pending again
+        raise
     if a["type"] in ("rewrite", "gap"):
-        if edit and edit != text:
-            text, a["edited"] = edit, True
-        if not text:
-            raise HTTPException(422, tr("El texto no puede estar vacío.", lang))
-    _apply(ctx, request, bg, r, a, text)
-    a["text"] = text if a["type"] in ("rewrite", "gap") else a["text"]
+        a["text"] = text
     a["decision"] = "approved" if a["became"] else "outdated"
     a["by"], a["at"] = ctx.user.id, datetime.now(timezone.utc).isoformat()
-    acts[i] = a
-    r.actions = acts
-    ctx.db.commit()
-    audit(ctx.db, ctx.user, "topic.approve", ctx.brain, id=r.id, action=i, type=a["type"], decision=a["decision"],
+    r = _save(ctx, rid, i, a, lang)
+    audit(ctx.db, ctx.user, "topic.approve", ctx.brain, id=r.id, index=i, type=a["type"], decision=a["decision"],
           became=[b["proposal"] for b in a["became"]], skipped=len(a["skipped"]), edited=a["edited"])
     return {"action": a}
 
 
 @router.post("/{rid}/actions/{i}/reject")
 def reject(rid: int, i: int, request: Request, ctx: BrainCtx = Depends(curator)):
-    r, acts, a = _action(ctx, rid, i, language(request))
+    lang = language(request)
+    r, a = _claim(ctx, rid, i, lang)
     a["decision"], a["by"], a["at"] = "rejected", ctx.user.id, datetime.now(timezone.utc).isoformat()
-    acts[i] = a
-    r.actions = acts
-    ctx.db.commit()
-    audit(ctx.db, ctx.user, "topic.reject", ctx.brain, id=r.id, action=i, type=a["type"])
+    r = _save(ctx, rid, i, a, lang)
+    audit(ctx.db, ctx.user, "topic.reject", ctx.brain, id=r.id, index=i, type=a["type"])
     return {"action": a}
 
