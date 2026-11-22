@@ -16,7 +16,7 @@ A line below points to what stays elsewhere:
 ## Tabs
 | Tab | What it is for | Who decides |
 |---|---|---|
-| **Duplicates** ([[Merge duplicates]]) | Groups of entities with the same name except for version or capitalisation. Mark which to merge and which is the main one, or say they are not duplicates. The merge is undone from **Recent merges**. | Administrator (curators see the groups) |
+| **Duplicates** ([[Merge duplicates]]) | Groups of entities with the same name except for capitalisation, spacing or a trailing version. Mark which to merge and which is the main one, or say they are not duplicates. The merge is undone from **Recent merges**. | Administrator (curators see the groups) |
 | [[Contradictions]] | Current facts that cannot both be true: the same subject with two targets in a single-valued relation. Keep the one that is still true, or say it is not a contradiction. | Curator and above |
 | **Doubtful types** ([[Type corrector]]) | Entities left without a type or with a catch-all one: the decider proposes a type from the ontology, and an administrator applies or discards it. Each change is undone on its own. | Administrator |
 | **Summaries** | Entities whose summary is a list of their own facts: the engine proposes one to three sentences, and a curator edits it if needed and approves it. Each approval is undone from **Recent changes**. See below. | Curator and above (an administrator starts the analysis) |
