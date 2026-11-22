@@ -962,7 +962,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
   return (<>
     {/* the queue's bar: the kind segments, only when there is something to tell apart (it draws nothing otherwise); on a phone the
         three kinds fit one row (ms-review-filter) */}
-    <ViewBar title={t("Por revisar")} meta={q && queue.data ? t("Coinciden {{n}} de {{all}}", { n: queue.data.total, all: kinds.all ?? 0 }) : undefined}>
+    <ViewBar title={t("Por revisar")} meta={q && queue.data ? t("Coinciden {{n}} de {{all}}", { n: queue.data.total, all: (kind === "all" ? kinds.all : kinds[kind as "memory" | "correction"]) ?? 0 }) : undefined}>
       {(q || (kinds.all ?? 0) > 0) && <SearchBar value={search} onChange={(v) => { setSearch(v.slice(0, 200)); setOffset(0); }} label={t("Buscar en la cola")} placeholder={t("Título o número (#12)…")} />}
       {(kind !== "all" || (!!kinds.memory && !!kinds.correction)) && <div className="ms-review-filter">
         <Segments label={t("Tipo")} value={kind} onChange={(k) => { setKind(k); setOffset(0); }}
@@ -975,7 +975,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
-        ? (q ? <EmptyState action={<ClearFilters active onClear={() => { setSearch(""); setOffset(0); }} />}>{t("Ninguna propuesta pendiente coincide con «{{q}}».", { q })}</EmptyState>
+        ? (q ? <EmptyState action={<Btn kind="link" onClick={() => { setSearch(""); setOffset(0); }}>{t("Borrar la búsqueda")}</Btn>}>{t("Ninguna propuesta pendiente coincide con «{{q}}».", { q })}</EmptyState>
           : <EmptyState action={<Btn kind="link" onClick={onDecided}>{t("Ver las decididas")}</Btn>}>{t("No queda nada por revisar.")}</EmptyState>)
         : <InboxLayout showDetail={showDetail} detailLabelledBy={d ? `ms-title-${d.id}` : undefined} listLabelledBy="ms-queue-heading" scopeRef={inboxRef}
           skip={active !== null ? { label: t("Ir a la propuesta abierta"), onSkip: () => { setShowDetail(true); setFocusTo("title"); } } : undefined}
