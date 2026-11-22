@@ -22,7 +22,7 @@ type Act = { ts: string; action: string; detail: Record<string, unknown> };
 const ACTION: Record<string, string> = {
   login: T("Inicio de sesión"), "account.profile": T("Perfil actualizado"), "account.avatar": T("Avatar cambiado"), "account.sessions.revoke": T("Sesiones cerradas en otros dispositivos"),
   "token.create": T("Token creado"), "token.revoke": T("Token revocado"), "document.upload": T("Documento subido"), "document.delete": T("Documento borrado"), "document.reindex": T("Documento reindexado"),
-  "proposal.submit": T("Propuesta enviada"), "proposal.approved": T("Propuesta aprobada"), "proposal.rejected": T("Propuesta rechazada"), "proposal.ingested": T("Propuesta ingerida"), "proposal.failed": T("Ingesta fallida"), "proposal.duplicate": T("Corrección repetida: se queda la pendiente"),
+  "proposal.submit": T("Propuesta enviada"), "proposal.approved": T("Propuesta aprobada"), "proposal.rejected": T("Propuesta rechazada"), "proposal.ingested": T("Propuesta ingerida"), "proposal.failed": T("Ingesta fallida"), "proposal.duplicate": T("Corrección repetida: se queda la pendiente"), "proposal.group": T("Grupo de correcciones decidido"),
   "vocab.alias.add": T("Alias creado"), "vocab.alias.delete": T("Alias quitado"), "vocab.revert": T("Cambio deshecho"), "vocab.duplicates.ignore": T("Grupo marcado como «no son duplicados»"),
   "vocab.entity.merge": T("Entidades fusionadas"), "vocab.type.create": T("Tipo de entidad creado"), "vocab.type.edit": T("Tipo de entidad editado"), "vocab.type.delete": T("Tipo de entidad quitado"),
   "vocab.type.rename": T("Tipo de entidad renombrado"), "vocab.type.merge": T("Tipos de entidad fusionados"), "vocab.relation.create": T("Tipo de relación creado"), "vocab.relation.edit": T("Tipo de relación editado"),

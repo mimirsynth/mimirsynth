@@ -540,3 +540,29 @@ def test_what_a_review_cites_must_still_be_in_the_graph_when_it_is_kept():
     assert not tr_._still_there(G({"Mailer sends through Sendgrid"}, set()), "mail", cited)
     assert not tr_._still_there(G({"Mailer sends through Sendgrid"}, {"e1"}, entity=False), "mail", cited)
     assert tr_._still_there(G(set(), set()), "mail", [])
+
+
+def test_the_ticked_actions_of_a_review_are_decided_at_once(client):  # noqa: F811
+    """#457: approving the ticked actions goes through the same path as approving each alone; the unticked ones are rejected with the
+    note; one that cannot be approved says why and stays pending while the others go on."""
+    assert client.post("/api/brains", json={"slug": "topic12", "name": "T12"}).status_code == 201
+    with _factory()() as db:
+        db.scalar(select(Brain).where(Brain.slug == "topic12")).secret_mode = "block"
+        db.commit()
+    rid = _seed("topic12", [{"type": "gap", "text": "Mailer moved to Postmark.", "why": "a"}, {"type": "gap", "text": "Key revoked.", "why": "b"},
+                            {"type": "gap", "text": "Hosted on hz-02.", "why": "c"}, {"type": "gap", "text": "Unwanted.", "why": "d"}])
+    token = "ghp_" + "A1b2C3d4E5f6G7h8J9k0" + "A1b2C3d4E5f6G7h8"
+    url = f"/api/brains/topic12/topics/{rid}/actions/decide"
+    assert client.post(url, json={}).status_code == 422 and client.post(url, json={"approve": [0], "reject": [0]}).status_code == 422
+    r = client.post(url, json={"approve": [0, 1, 2], "reject": [3], "texts": {"0": "Mailer moved to Postmark in March 2025.", "1": f"The key {token}"},
+                               "note": "Only what the episodes say"}).json()["results"]
+    by = {x["i"]: x for x in r}
+    assert by[0]["decision"] == "approved" and by[2]["decision"] == "approved" and by[3]["decision"] == "rejected"
+    assert by[1]["decision"] == "pending" and by[1]["status"] == 422                         # its edit carried a secret: it stays to decide
+    with _factory()() as db:
+        acts = db.get(TopicReview, rid).actions
+        assert [a["decision"] for a in acts] == ["approved", "pending", "approved", "rejected"]
+        assert acts[0]["text"] == "Mailer moved to Postmark in March 2025." and acts[0]["edited"] and acts[3]["note"] == "Only what the episodes say"
+        assert db.get(Proposal, acts[0]["became"][0]["proposal"]).category == "topic.gap"
+    again = client.post(url, json={"approve": [0], "reject": [1]}).json()["results"]
+    assert again[0]["status"] == 409 and again[1]["decision"] == "rejected"                   # already decided: said, the other goes on

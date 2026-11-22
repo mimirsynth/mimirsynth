@@ -624,11 +624,17 @@ def approve(rid: int, i: int, body: DecideIn, request: Request, bg: BackgroundTa
     lang = language(request)
     if ctx.brain.read_only:
         raise read_only_error()
+    return {"action": _approve_one(ctx, request, bg, rid, i, body.text, lang)}
+
+
+def _approve_one(ctx: BrainCtx, request: Request, bg: BackgroundTasks, rid: int, i: int, edit_text: str | None, lang: str) -> dict:
+    """Approves one pending action (with the curator's edit of its text, if any) through the existing paths; raises HTTPException and
+    leaves it pending when nothing could be applied."""
     r, pending = _claim(ctx, rid, i, lang)
     a = {**pending, "became": [], "skipped": []}
     try:
         text = a["text"]
-        edit = " ".join((body.text or "").split())
+        edit = " ".join((edit_text or "").split())
         if a["type"] in ("rewrite", "gap"):
             if edit and edit != text:   # the curator's edit goes through the secret detector before anything keeps it
                 try:
@@ -655,15 +661,58 @@ def approve(rid: int, i: int, body: DecideIn, request: Request, bg: BackgroundTa
     r = _save(ctx, rid, i, a, lang)
     audit(ctx.db, ctx.user, "topic.approve", ctx.brain, id=r.id, index=i, type=a["type"], decision=a["decision"],
           became=[b["proposal"] for b in a["became"]], skipped=len(a["skipped"]), edited=a["edited"])
-    return {"action": a}
+    return a
+
+
+def _reject_one(ctx: BrainCtx, rid: int, i: int, lang: str, note: str = "") -> dict:
+    r, a = _claim(ctx, rid, i, lang)
+    a["decision"], a["by"], a["at"] = "rejected", ctx.user.id, datetime.now(timezone.utc).isoformat()
+    if note:
+        a["note"] = note
+    r = _save(ctx, rid, i, a, lang)
+    audit(ctx.db, ctx.user, "topic.reject", ctx.brain, id=r.id, index=i, type=a["type"])
+    return a
 
 
 @router.post("/{rid}/actions/{i}/reject")
 def reject(rid: int, i: int, request: Request, ctx: BrainCtx = Depends(curator)):
+    return {"action": _reject_one(ctx, rid, i, language(request))}
+
+
+class BatchIn(BaseModel):
+    approve: list[int] = Field(default_factory=list, max_length=60)
+    reject: list[int] = Field(default_factory=list, max_length=60)
+    texts: dict[int, str] = Field(default_factory=dict, description="rewrite and gap: the curator's edit of each ticked action's text, by its index")
+    note: str = Field("", max_length=2000, description="kept on each action rejected this way")
+
+
+@router.post("/{rid}/actions/decide")
+def decide(rid: int, body: BatchIn, request: Request, bg: BackgroundTasks, ctx: BrainCtx = Depends(curator)):
+    """Approves the ticked actions in order, each exactly as approving it alone (#457), and rejects the others with the note. One that
+    fails says why and stays pending; the rest go on."""
     lang = language(request)
-    r, a = _claim(ctx, rid, i, lang)
-    a["decision"], a["by"], a["at"] = "rejected", ctx.user.id, datetime.now(timezone.utc).isoformat()
-    r = _save(ctx, rid, i, a, lang)
-    audit(ctx.db, ctx.user, "topic.reject", ctx.brain, id=r.id, index=i, type=a["type"])
-    return {"action": a}
+    if ctx.brain.read_only:
+        raise read_only_error()
+    if not body.approve and not body.reject:
+        raise HTTPException(422, tr("No hay ninguna acción marcada ni desmarcada.", lang))
+    if set(body.approve) & set(body.reject):
+        raise HTTPException(422, tr("Una acción no puede aprobarse y rechazarse a la vez.", lang))
+    if any(len(t) > MAX_TEXT for t in body.texts.values()):
+        raise HTTPException(422, tr("El texto puede tener como mucho {{max}} caracteres.", lang, max=MAX_TEXT))
+    _get(ctx, rid, lang)
+    results = []
+    for i in dict.fromkeys(body.approve):
+        try:
+            a = _approve_one(ctx, request, bg, rid, i, body.texts.get(i), lang)
+            results.append({"i": i, "decision": a["decision"], "became": a["became"], "skipped": a["skipped"]})
+        except HTTPException as e:
+            results.append({"i": i, "decision": "pending", "error": str(e.detail)[:300], "status": e.status_code})
+    for i in dict.fromkeys(body.reject):
+        try:
+            results.append({"i": i, "decision": _reject_one(ctx, rid, i, lang, body.note)["decision"]})
+        except HTTPException as e:
+            results.append({"i": i, "decision": "pending", "error": str(e.detail)[:300], "status": e.status_code})
+    audit(ctx.db, ctx.user, "topic.batch", ctx.brain, id=rid, approved=sum(r["decision"] == "approved" for r in results),
+          rejected=sum(r["decision"] == "rejected" for r in results), failed=sum("error" in r for r in results))
+    return {"results": results}
 

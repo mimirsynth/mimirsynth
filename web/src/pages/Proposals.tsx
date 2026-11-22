@@ -7,6 +7,7 @@ import { Block, Btn, CellText, ClearFilters, Compare, ConfirmDialog, DialogActio
   Pill, Check, QueueList, RowOpen, SearchBar, focusedQueueItem, Segments, Sheet, SheetRow, Steps, EntityChip, ListCard, Step, Tabs, TextArea, TextField, Tone, ViewBar, humanRelation, rowOpen, useServerTableView, useShortcuts, useTabParam, type QueueItem } from "../ui";
 import { SecretsNotice, type SecretFinding } from "./Secrets";
 import ProposalCategories from "./ProposalCategories";
+import CorrectionGroups from "./CorrectionGroups";
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -973,6 +974,7 @@ function ReviewTab({ ops, initialKind, onDecided }: { ops: Ops; initialKind?: st
       {pendingFixes > 0 && kind !== "correction" && !q && <Notice tone="warn" title={t("Correcciones pendientes: {{n}}", { n: pendingFixes })}>
         {t("Cada una invalida un hecho del grafo y solo la decide una persona.")}{" "}
         <Btn kind="link" onClick={() => { setKind("correction"); setOffset(0); }}>{t("Ver solo las correcciones pendientes")}</Btn></Notice>}
+      {!q && kind !== "memory" && <CorrectionGroups graph={ops.graph} />}
       <MutationError error={queue.error} />
       {queue.data && items.length === 0
         ? (q ? <EmptyState action={<Btn kind="link" onClick={() => { setSearch(""); setOffset(0); }}>{t("Borrar la búsqueda")}</Btn>}>{t("Ninguna propuesta pendiente coincide con «{{q}}».", { q })}</EmptyState>

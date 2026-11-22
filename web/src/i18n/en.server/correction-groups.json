@@ -1,0 +1,10 @@
+{
+ "El texto puede tener como mucho {{max}} caracteres.": "The text can be at most {{max}} characters long.",
+ "La propuesta #{{id}} ya no está pendiente o no va en grupo: decídela aparte.": "Proposal #{{id}} is no longer pending or does not go in a group: decide it alone.",
+ "Las correcciones no son del mismo grupo.": "The corrections are not from the same group.",
+ "No hay ninguna acción marcada ni desmarcada.": "No action is ticked or unticked.",
+ "No hay ninguna corrección marcada ni desmarcada.": "No correction is ticked or unticked.",
+ "No hay ninguna propuesta con el número {{id}} en este brain.": "There is no proposal number {{id}} in this brain.",
+ "Una acción no puede aprobarse y rechazarse a la vez.": "An action cannot be approved and rejected at once.",
+ "Una corrección no puede aprobarse y rechazarse a la vez.": "A correction cannot be approved and rejected at once."
+}

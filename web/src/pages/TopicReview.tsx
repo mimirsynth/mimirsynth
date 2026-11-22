@@ -1,11 +1,11 @@
 import { useTranslation } from "react-i18next";
 import { Stack, Text } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { fmt, get, send } from "../api";
 import { T } from "../i18n";
-import { Block, Btn, CellText, Compare, DataState, DataTable, EmptyState, ListCard, MutationError, Notice, Pill, TextArea, ViewBar } from "../ui";
+import { Block, Btn, CellText, Check, Compare, ConfirmDialog, DataState, DataTable, EmptyState, ListCard, MutationError, Notice, Pill, TextArea, ViewBar } from "../ui";
 
 type Row = { id: number; entity_uuid: string; name: string; status: "queued" | "running" | "ready" | "failed"; error: string; error_code: string;
   created_at: string; finished_at: string | null; job: number | null; calls: number; counts: Record<"pending" | "approved" | "rejected" | "outdated", number> };
@@ -91,6 +91,21 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
   const q = useQuery({ queryKey: ["topic", graph, id], refetchInterval: (c) => (busy(c.state.data) ? 2000 : false),
     queryFn: () => get<Detail>(`brains/${graph}/topics/${id}`) });
   const d = q.data;
+  const qc = useQueryClient();
+  const pendingIdx = useMemo(() => (d?.actions ?? []).filter((a) => a.decision === "pending").map((a) => a.i), [d]);
+  const [unticked, setUnticked] = useState<Set<number>>(new Set());   // all pending ones are ticked until the curator unticks one
+  const [texts, setTexts] = useState<Record<number, string>>({});
+  const [asking, setAsking] = useState(false);
+  const [note, setNote] = useState("");
+  const [result, setResult] = useState<BatchResult[] | null>(null);
+  const ticked = pendingIdx.filter((i) => !unticked.has(i));
+  const rest = pendingIdx.filter((i) => unticked.has(i));
+  const textOf = (a: Act) => texts[a.i] ?? a.text;
+  const batch = useMutation({
+    mutationFn: () => send<{ results: BatchResult[] }>("POST", `brains/${graph}/topics/${id}/actions/decide`, {
+      approve: ticked, reject: rest, note, texts: Object.fromEntries(ticked.filter((i) => texts[i] !== undefined).map((i) => [i, texts[i]])) }),
+    onSuccess: (r) => { setResult(r.results); setUnticked(new Set()); setNote("");
+      ["topic", "topics", "entity", "proposals"].forEach((k) => qc.invalidateQueries({ queryKey: k === "topic" ? [k, graph, id] : [k, graph] })); } });
   const left = d ? Object.entries(d.left_out).filter(([, n]) => n > 0) : [];
   const dropped = d ? Object.entries(d.discarded).filter(([, n]) => n > 0) : [];
   const LEFT: Record<string, string> = { facts: t("hechos de la entidad"), episodes: t("episodios"), neighbour_facts: t("hechos de sus vecinos") };
@@ -112,11 +127,24 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
           <Block title={t("Estado del tema")} meta={d.state_secrets.length > 0 ? (d.state_flagged ? t("posibles secretos: revísalo") : t("secretos tapados")) : undefined}>
             <Text size="sm" className="ms-prose">{d.state}</Text>
           </Block>
-          <Block title={t("Acciones propuestas")} count={d.actions.length}>
+          <Block title={t("Acciones propuestas")} count={d.actions.length}
+            help={t("Cada acción pendiente está marcada. «Decidir las marcadas» aprueba las marcadas, una a una y por el mismo camino que su botón Aprobar, y rechaza las desmarcadas con la nota que escribas. Una que no se pueda aplicar dice por qué y sigue pendiente.")}
+            actions={pendingIdx.length > 1 && <Btn kind="primary" size="row" icon="check" disabled={ticked.some((i) => ["rewrite", "gap"].includes(d.actions[i].type) && !textOf(d.actions[i]).trim())}
+              onClick={() => { batch.reset(); setAsking(true); }}>{t("Decidir las marcadas ({{n}})", { n: ticked.length })}</Btn>}>
+            {result && <BatchNotice results={result} onClose={() => setResult(null)} />}
             {d.actions.length === 0 ? <EmptyState>{t("El motor no propone ningún cambio en este tema.")}</EmptyState>
-              : <Stack gap="sm">{d.actions.map((a) => <ActionCard key={a.i} graph={graph} d={d} a={a} />)}</Stack>}
+              : <Stack gap="sm">{d.actions.map((a) => <ActionCard key={a.i} graph={graph} d={d} a={a} ticked={!unticked.has(a.i)} batchable={pendingIdx.length > 1}
+                  onTick={(on) => setUnticked((u) => { const n = new Set(u); if (on) n.delete(a.i); else n.add(a.i); return n; })}
+                  text={textOf(a)} onText={(v) => setTexts((m) => ({ ...m, [a.i]: v }))} />)}</Stack>}
           </Block>
         </div>}
+        {d.status === "ready" && <ConfirmDialog opened={asking} onClose={() => setAsking(false)} tone="primary" title={t("Decidir {{n}} acciones", { n: pendingIdx.length })}
+          action={rest.length ? t("Aprobar {{n}} y rechazar {{m}}", { n: ticked.length, m: rest.length }) : t("Aprobar {{n}}", { n: ticked.length })} onConfirm={() => batch.mutateAsync()}
+          warning={<BatchSummary acts={d.actions.filter((a) => ticked.includes(a.i))} rejected={rest.length} />}>
+          <TextArea label={t("Nota")} description={t("Se guarda en las acciones que se rechazan.")} autosize minRows={2} maxRows={6} maxLength={2000}
+            value={note} onChange={(e) => setNote(e.currentTarget.value)} />
+          <MutationError error={batch.error} />
+        </ConfirmDialog>}
         {(left.length > 0 || dropped.length > 0) && <Notice title={t("Lo que no entró en la revisión")}><Stack gap={4}>
           {left.length > 0 && <Text inherit>{t("No cupo y no se leyó:")} {left.map(([k, n]) => `${LEFT[k] ?? k}: ${n}`).join(" · ")}. {t("Un administrador del brain puede darles más llamadas al motor con el ajuste topic_calls del curador.")}</Text>}
           {dropped.length > 0 && <Text inherit>{t("Acciones que el motor propuso y no se muestran porque")} {dropped.map(([k, n]) => `${t(DISCARDED[k] ?? k)} (${n})`).join(", ")}.</Text>}
@@ -164,10 +192,11 @@ function ItemLine({ it, keep }: { it?: Item; keep?: boolean }) {
     </CellText>);
 }
 
-function ActionCard({ graph, d, a }: { graph: string; d: Detail; a: Act }) {
+function ActionCard({ graph, d, a, ticked, batchable, onTick, text, onText }: { graph: string; d: Detail; a: Act; ticked: boolean; batchable: boolean;
+  onTick: (on: boolean) => void; text: string; onText: (v: string) => void }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [text, setText] = useState(a.text);
+  const setText = onText;
   const [applied, setApplied] = useState<number[]>([]);   // the corrections this card just applied, to undo them from here
   const refresh = () => { qc.invalidateQueries({ queryKey: ["topic", graph, d.id] }); qc.invalidateQueries({ queryKey: ["topics", graph] });
     qc.invalidateQueries({ queryKey: ["entity", graph] }); qc.invalidateQueries({ queryKey: ["proposals", graph] }); };
@@ -189,7 +218,8 @@ function ActionCard({ graph, d, a }: { graph: string; d: Detail; a: Act }) {
     a.evidence.length > 0 && { label: t("Pruebas"), children: list(a.evidence) },
   ].filter(Boolean) as { label: string; children: ReactNode }[];
   return (
-    <ListCard title={t(TYPE[a.type] ?? a.type)} aside={!pending && label ? <Pill tone={tone}>{t(label)}</Pill> : undefined}
+    <ListCard title={<>{pending && batchable && <Check aria-label={t("Marcar «{{type}}» para decidirla con las demás", { type: t(TYPE[a.type] ?? a.type) })} checked={ticked}
+        onChange={(e) => onTick(e.currentTarget.checked)} />}{t(TYPE[a.type] ?? a.type)}</>} aside={!pending && label ? <Pill tone={tone}>{t(label)}</Pill> : undefined}
       notice={<Text size="sm" className="ms-prose">{a.why}</Text>}
       tags={(a.edited || a.secrets.length > 0) && <>
         {a.edited && <Pill>{t("editado por un curador")}</Pill>}
@@ -205,6 +235,31 @@ function ActionCard({ graph, d, a }: { graph: string; d: Detail; a: Act }) {
       </> : undefined}>
       <Compare items={cols} />
     </ListCard>
+  );
+}
+
+type BatchResult = { i: number; decision: string; error?: string; status?: number; became?: { proposal: number; status: string }[] };
+
+/** How many facts each ticked action invalidates: a merge keeps one of its facts. */
+const factsOf = (a: Act) => (a.type === "gap" ? 0 : a.type === "merge" ? a.facts.length - 1 : a.facts.length);
+
+function BatchSummary({ acts, rejected }: { acts: Act[]; rejected: number }) {
+  const { t } = useTranslation();
+  const facts = acts.reduce((n, a) => n + factsOf(a), 0);
+  const gaps = acts.filter((a) => a.type === "gap").length;
+  return <>{t("Se aprueban {{n}}. Hechos que se invalidan, cada uno con su propia corrección, que se deshace aparte: {{facts}}. Propuestas que van a la cola: {{gaps}}.", { n: acts.length, facts, gaps })}{" "}
+    {rejected ? t("Se rechazan {{m}}.", { m: rejected }) : ""}</>;
+}
+
+function BatchNotice({ results, onClose }: { results: BatchResult[]; onClose: () => void }) {
+  const { t } = useTranslation();
+  const failed = results.filter((r) => r.error);
+  const n = (d: string) => results.filter((r) => r.decision === d).length;
+  return (
+    <Notice tone={failed.length ? "warn" : "success"} title={failed.length ? t("Decididas, salvo {{n}}", { n: failed.length }) : t("Decididas")} onClose={onClose} withCloseButton>
+      {t("Aprobadas: {{a}}. Rechazadas: {{r}}. Ya no aplicaban: {{o}}.", { a: n("approved"), r: n("rejected"), o: n("outdated") })}
+      {failed.map((r) => <div key={r.i}>{t("Acción {{i}}: {{why}}", { i: r.i + 1, why: r.error })}</div>)}
+    </Notice>
   );
 }
 

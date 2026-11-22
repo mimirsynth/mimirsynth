@@ -51,7 +51,7 @@ METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"]
 BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; "" is the brain itself)
     ("Recall", "Recall", ["/recall", "/answer", "/mcp", "/news", "/whoami"]), ("Text index", "Índice de texto", ["/index"]),
     ("Overview", "Resumen", ["/overview"]), ("Episodes", "Episodios", ["/episodes"]), ("Facts", "Hechos", ["/facts", "/timeline", "/entities"]),
-    ("Graph and query", "Grafo y consulta", ["/graph", "/query"]), ("Proposals", "Propuestas", ["/proposals"]), ("Documents", "Documentos", ["/docs"]),
+    ("Graph and query", "Grafo y consulta", ["/graph", "/query"]), ("Proposals", "Propuestas", ["/proposals", "/correction-groups"]), ("Documents", "Documentos", ["/docs"]),
     ("Vocabulary", "Vocabulario", ["/vocabulary", "/vocab", "/ontology", "/retype", "/summaries"]), ("To review", "Por revisar", ["/attention"]),
     ("Movement", "Movimiento", ["/changes"]), ("Facts to review", "Hechos a revisar", ["/review"]),
     ("Contradictions", "Contradicciones", ["/conflicts"]), ("Reference queries", "Consultas de referencia", ["/refqueries"]),
