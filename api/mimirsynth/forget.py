@@ -170,7 +170,7 @@ def _proposals(db, brain_id: int, m: Matcher) -> list:
 
 def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
     from .models import (Audit, CuratorRun, FactArchive, FactConfirmation, FactProbe, FactRecall, Job, Notification, Proposal, RecallLog,
-                         RecallSample, RefQuery, RefRun, ReplayRun, RetypeSuggestion, SummarySuggestion, VocabOp, WebhookEvent)
+                         RecallSample, RefQuery, RefRun, ReplayRun, RetypeSuggestion, SummarySuggestion, TopicReview, VocabOp, WebhookEvent)
     hanging = []
     if facts:
         for model in (FactConfirmation, FactProbe, FactRecall, FactArchive):
@@ -186,6 +186,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
         "summary_suggestions": _scan(db, SummarySuggestion, brain_id, ["name", "current", "proposed", "applied"], m,
                                      ["name", "current", "proposed", "applied"]),
         "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name"], m, ["name"]),
+        "topic_reviews": _scan(db, TopicReview, brain_id, ["name", "state", "items", "actions", "error"], m),
         "jobs": _scan(db, Job, brain_id, ["title", "params", "log", "error", "result"], m),
         "notifications": _scan(db, Notification, brain_id, ["title", "body"], m, ["title", "body"]),
         "webhook_events": _scan(db, WebhookEvent, brain_id, ["title"], m, ["title"]),
@@ -197,7 +198,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher) -> dict:
 
 
 DB_ACTIONS = {"proposals": "purge", "recall_samples": "delete", "recall_logs": "delete", "replay_runs": "clean", "ref_runs": "clean",
-              "curator_runs": "clean", "summary_suggestions": "delete", "retype_suggestions": "delete", "jobs": "delete",
+              "curator_runs": "clean", "summary_suggestions": "delete", "retype_suggestions": "delete", "topic_reviews": "delete", "jobs": "delete",
               "notifications": "delete", "webhook_events": "clean", "vocab_history": "clean", "audit": "clean", "fact_records": "delete",
               "ref_queries": "review"}
 OUTSIDE = [_layer("backups", "outside", "outside", 0), _layer("logs", "outside", "outside", 0), _layer("other_systems", "outside", "outside", 0)]
@@ -390,7 +391,7 @@ def run(brain_id: int, uuid: str, aliases: list[str], user_id: int | None, ctx=N
             if p.status == "pending":
                 p.status, p.reviewed_at, p.review_kind = "rejected", datetime.now(timezone.utc), "direct"
         busy = []
-        for key in ("recall_samples", "recall_logs", "summary_suggestions", "retype_suggestions", "notifications", "fact_records"):
+        for key in ("recall_samples", "recall_logs", "summary_suggestions", "retype_suggestions", "topic_reviews", "notifications", "fact_records"):
             for r in dt[key]:
                 db.delete(r)
         for j in dt["jobs"]:

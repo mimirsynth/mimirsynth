@@ -499,12 +499,14 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-entity-card-graph { grid-area: graph; min-width: 0; }
 .ms-entity-card .ms-minigraph { height: 320px; }
 .ms-entity-cols { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 3fr); gap: 12px; align-items: start; }
+/* a topic review: the state of the topic beside the actions proposed, which take the wider side */
+.ms-topic-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; align-items: start; }
 /* one relation inside the Facts card: a tinted block without a border of its own, so the column reads as one card like Episodes */
 .ms-relgroup { background: var(--ms-surface); border-radius: var(--ms-radius); padding: var(--mantine-spacing-sm); }
 @media (max-width: 48em) {
   .ms-entity-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: "head" "graph" "summary"; }
   .ms-entity-card .ms-minigraph { height: 240px; }
-  .ms-entity-cols { grid-template-columns: minmax(0, 1fr); }
+  .ms-entity-cols, .ms-topic-cols { grid-template-columns: minmax(0, 1fr); }
 }
 .ms-minigraph { position: relative; height: 280px; border-radius: var(--ms-radius); overflow: hidden; background: var(--ms-canvas); }  /* the canvas background, also in the light theme */
 @media (max-width: 48em) { .ms-minigraph { height: 200px; } }

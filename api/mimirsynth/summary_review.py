@@ -135,9 +135,9 @@ def engine() -> dict | None:
         return named(db, appsettings.get("summary_engine"), "summaries")
 
 
-def ask(eng: dict, msgs: list[dict]) -> str:
+def ask(eng: dict, msgs: list[dict], max_tokens: int = 500) -> str:
     """One call to an OpenAI-compatible engine, counted in the AI consumption of the scope it runs in."""
-    body = {"model": eng["model"], "messages": msgs, "temperature": 0.2, "max_tokens": 500}
+    body = {"model": eng["model"], "messages": msgs, "temperature": 0.2, "max_tokens": max_tokens}
     r = httpx.post(f"{eng['base_url'].rstrip('/')}/chat/completions", json=body, timeout=120,
                    headers={"Authorization": f"Bearer {eng['api_key']}"} if eng.get("api_key") else {})
     usage.observe("llm", eng["model"], r)

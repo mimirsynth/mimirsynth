@@ -445,6 +445,31 @@ class SummarySuggestion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+class TopicReview(Base):
+    """One topic review (#454): the LLM reads everything about one entity and proposes invalidations, merges, rewrites and gaps, each
+    citing its evidence, for a curator to approve or reject one by one. `items`: the gathered facts and episodes by their local id
+    (`F3`, `E1`), as they were; `actions`: what survived validation, each with its decision and what it became; `discarded`: what did
+    not, counted by reason; `left_out`: what did not fit in the calls the settings allow."""
+    __tablename__ = "topic_reviews"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brain_id: Mapped[int] = mapped_column(ForeignKey("brains.id", ondelete="CASCADE"), index=True)
+    entity_uuid: Mapped[str] = mapped_column(String(64), index=True)
+    name: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(12), default="queued", index=True)  # queued | running | ready | failed
+    prompt_version: Mapped[str] = mapped_column(String(32), default="")
+    state: Mapped[str] = mapped_column(Text, default="")
+    items: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    discarded: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    left_out: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    calls: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str] = mapped_column(Text, default="")
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class Job(Base):
     """Trabajo en segundo plano (ingesta, indexación, reescaneo…). Registro central: estado, progreso, salida y reintentos."""
     __tablename__ = "jobs"

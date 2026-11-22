@@ -9,6 +9,7 @@ import { TypeDialog } from "./TypePicker";
 import EntityMiniGraph from "./EntityMiniGraph";
 import { ProbeDialog, ProbeMark, useProbes } from "./Probes";
 import { ForgetDialog } from "./Forget";
+import { TopicReviewStart } from "./TopicReview";
 
 type Other = { uuid: string; name: string; labels: string[] };
 type EFact = { uuid: string; fact: string; status: string; valid_at: string | null; invalid_at: string | null; created_at: string | null; other: Other; episodes: number };
@@ -140,6 +141,7 @@ function EntityBody({ d, graph, role, asOf, setAsOf, origin, docs }: { d: EPage;
         </Block>}
         {isCurator && <Block title={t("Curación")}>
           <Stack gap={4} align="flex-start">
+            {!origin && <TopicReviewStart graph={graph} uuid={e.uuid} />}
             <Btn kind="link" component={Link} to="/calidad?tab=dup">{t("Fusionar con otra entidad (Calidad del contenido → Duplicados)")}</Btn>
             {["admin", "owner"].includes(role) && <Btn kind="link" component={Link} to="/calidad?tab=corrector">{t("Revisar los tipos dudosos (Calidad del contenido → Tipos dudosos)")}</Btn>}
             <Btn kind="link" component={Link} to="/hechos">{t("Editar el texto de un hecho (Hechos)")}</Btn>

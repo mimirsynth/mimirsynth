@@ -31,6 +31,7 @@ If a relation is marked as **single-valued** in the [[Ontology]] and the entity 
 - **Invalidate** a current fact, or **Reactivate** an earlier one, with the small button next to the fact. They are the same actions as in [[Facts]] and can be undone from the vocabulary history.
 - **Change type**: the pencil next to the entity's type in the header, for curators: pick one of the types of the brain's [[Ontology]] (the same closed list the [[Type corrector]] uses; nothing else is accepted). The change is seen at once here and in the [[Graph]], goes to the audit log, and can be undone from the message that confirms it or from **Recent changes** in [[Entity types]]. If the type corrector had a suggestion pending for this entity, it is no longer offered, and a later analysis does not propose the entity again.
 - Links to **merge** the entity with another ([[Merge duplicates]]), review the **doubtful types** of the whole brain ([[Type corrector]], administrators) and **edit the text** of a fact ([[Facts]]).
+- **Review this topic**, under **Curation**: the LLM reads everything the memory knows about the entity and proposes what to invalidate, merge, rewrite or add, for a curator to decide action by action in [[Content quality]] → Topics. While it runs the block says so; when it ends the review opens. **See the last review** opens the latest one. Not offered for a lent entity.
 
 ## Lent entities
 With [[Federation]], an entity of a brain that lends its graph opens with its origin ("from «slug»") and is **read-only**.
