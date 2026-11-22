@@ -41,7 +41,7 @@ def test_casefold_and_typographic_dashes():
     assert _entity_key("Straße") == _entity_key("STRASSE")
     assert _entity_key("Web–Vault") == _entity_key("Web-Vault")
     assert _entity_key("Ünïcode 1.2") == _entity_key("ünïcode")
-    assert _entity_key("Über") == _entity_key("Über")  # decomposed and composed «Ü»
+    assert _entity_key("U" + chr(0x308) + "ber") == _entity_key(chr(0xDC) + "ber")  # decomposed and composed «Ü»
 
 
 def test_ignore_marks_saved_in_the_old_key_format_still_match():

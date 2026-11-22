@@ -493,7 +493,8 @@ def _undo_merge(ctx: BrainCtx, d: dict) -> None:
 @router.post("/duplicates/ignore", status_code=201)
 def ignore_group(body: KeyIn, ctx: BrainCtx = Depends(admin_of_brain)):
     """Marca un grupo de posibles duplicados como «no son duplicados» (reutiliza vocab_aliases con kind='dup_ignore')."""
-    key = body.key.strip().lower()
+    from .graphapi import _entity_key
+    key = _entity_key(body.key)
     if not ctx.db.scalar(select(VocabAlias.id).where(VocabAlias.brain_id == ctx.brain.id, VocabAlias.kind == "dup_ignore", VocabAlias.alias == key)):
         ctx.db.add(VocabAlias(brain_id=ctx.brain.id, kind="dup_ignore", alias=key, canonical="", created_by=ctx.user.id))
         ctx.db.commit()
@@ -503,8 +504,12 @@ def ignore_group(body: KeyIn, ctx: BrainCtx = Depends(admin_of_brain)):
 
 @router.delete("/duplicates/ignore")
 def unignore_group(key: str, ctx: BrainCtx = Depends(admin_of_brain)):
-    a = ctx.db.scalar(select(VocabAlias).where(VocabAlias.brain_id == ctx.brain.id, VocabAlias.kind == "dup_ignore", VocabAlias.alias == key.strip().lower()))
-    if a:
+    from .graphapi import _entity_key
+    k = _entity_key(key)  # also the rows saved in the older key format, which the list shows normalised
+    gone = [a for a in ctx.db.scalars(select(VocabAlias).where(VocabAlias.brain_id == ctx.brain.id, VocabAlias.kind == "dup_ignore"))
+            if _entity_key(a.alias) == k]
+    for a in gone:
         ctx.db.delete(a)
+    if gone:
         ctx.db.commit()
     return {"ok": True}
