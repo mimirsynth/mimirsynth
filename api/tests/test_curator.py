@@ -130,6 +130,19 @@ def repeated(monkeypatch):
     dbm.backend.cache_clear()
 
 
+def test_the_redundancy_pass_keeps_the_more_precise_repeat():
+    """Issue 461: between «H is an M 7050» and «H is an M 7050 Micro» the pass kept whichever was newer."""
+    new, precise = {"uuid": "n", "fact": "H is an M 7050"}, {"uuid": "p", "fact": "H is an M 7050 Micro"}
+    keep, why = K.keeper([new, precise])                                                       # newest first
+    assert keep is precise and why.startswith("says less than a more precise")
+    assert K.keeper([precise, new])[0] is precise
+    a, b = {"uuid": "a", "fact": "Vaultwarden is hosted on altair"}, {"uuid": "b", "fact": "altair hosts Vaultwarden"}
+    assert K.keeper([a, b]) == (a, "says the same as a newer current fact between the same entities")   # neither contains the other
+    assert K.keeper([{"uuid": "x", "fact": "X runs on Y"}, {"uuid": "y", "fact": "x runs on y"}])[0]["uuid"] == "x"   # same words: newest
+    newer, negated = {"uuid": "w", "fact": "Rafa works at Dubois"}, {"uuid": "o", "fact": "Rafa no longer works at Dubois"}
+    assert K.keeper([newer, negated])[0] is newer                                              # more words, but no more names
+
+
 @needs_falkor
 def test_the_redundancy_pass_keeps_the_newest_repeat(client, repeated):  # noqa: F811
     from mimirsynth.models import Proposal

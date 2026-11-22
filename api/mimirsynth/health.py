@@ -74,6 +74,42 @@ def _ids(text) -> frozenset[str]:
     return frozenset(t for t in _TOKEN.findall(_norm(text)) if any(c.isdigit() for c in t))
 
 
+def words(text) -> frozenset[str]:
+    """The words of a fact, lowercased."""
+    return frozenset(_TOKEN.findall(_norm(text)))
+
+
+_ABBREV = re.compile(r"(\b\w\.\w|\betc|\bvs|\bp\.ej|\bej)\.$", re.I)   # a dot that does not close a sentence (e.g., etc.)
+
+
+def _names(text) -> list[str]:
+    """The names of a fact, as written: a capitalised word that does not open a sentence (node «A», «Micro»), or one with a digit, a slash
+    or a colon, or a dot past three letters (pve-02, a/b, host.lan). Not names: «e.g.», hyphenated words without a digit (self-hosted,
+    nas-vega) and the word that opens the fact, which a sentence capitalises whatever it is (known limits of #461)."""
+    s = str(text or "")
+    out = []
+    for m in _TOKEN.finditer(s):
+        t, before = m.group(), s[:m.start()].rstrip()
+        opens = not before or before[-1] in "!?" or (before[-1] == "." and not _ABBREV.search(before))
+        if (t[0].isupper() and not opens) or any(c.isdigit() or c in ":/" for c in t) or (len(t) > 4 and "." in t):
+            out.append(t)
+    return out
+
+
+def _named(text) -> frozenset[str]:
+    """The names of a fact, lowercased."""
+    return frozenset(t.lower() for t in _names(text))
+
+
+def named_apart(a, b) -> bool:
+    """Each fact names something the other does not mention («…node A…» and «…node B…»): two facts about different things (#461).
+    A one-letter name is compared as written, so the article «a» does not stand for node «A»."""
+    def unmatched(x, y) -> bool:
+        low, raw = words(y), set(_TOKEN.findall(str(y or "")))
+        return any((t not in raw) if len(t) == 1 else (t.lower() not in low) for t in _names(x))
+    return unmatched(a, b) and unmatched(b, a)
+
+
 def _cosine(a, b) -> float:
     num = sum(x * y for x, y in zip(a, b))
     na, nb = sum(x * x for x in a) ** 0.5, sum(y * y for y in b) ** 0.5
@@ -84,7 +120,7 @@ def near_duplicate(a: dict, b: dict) -> bool:
     """Two current facts between the same entities that say the same thing."""
     if _norm(a.get("fact")) == _norm(b.get("fact")):
         return True
-    if _ids(a.get("fact")) != _ids(b.get("fact")):
+    if _ids(a.get("fact")) != _ids(b.get("fact")) or named_apart(a.get("fact"), b.get("fact")):
         return False
     ea, eb = a.get("embedding"), b.get("embedding")
     return bool(ea) and bool(eb) and len(ea) == len(eb) and _cosine(ea, eb) >= REDUNDANT_COSINE
@@ -112,10 +148,15 @@ def clusters(group: list[dict]) -> list[list[dict]]:
             parent[i] = parent[parent[i]]
             i = parent[i]
         return i
+    members = {i: [i] for i in range(len(group))}
     for i in range(len(group)):
         for j in range(i + 1, len(group)):
-            if root(i) != root(j) and near_duplicate(group[i], group[j]):
-                parent[root(j)] = root(i)
+            ri, rj = root(i), root(j)
+            # never join two facts that name different things through a third, vaguer one (#461)
+            if ri != rj and near_duplicate(group[i], group[j]) and not any(
+                    named_apart(group[x].get("fact"), group[y].get("fact")) for x in members[ri] for y in members[rj]):
+                parent[rj] = ri
+                members[ri] += members.pop(rj)
     by: dict[int, list[dict]] = {}
     for i, f in enumerate(group):
         by.setdefault(root(i), []).append(f)

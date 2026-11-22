@@ -10,7 +10,7 @@ For now, **clear contradictions** in the relations marked functional (a single v
 - unclear groups, which stay in Content quality → Contradictions for a person;
 - facts that already have a pending proposal.
 
-And, once an administrator ticks it (it is off by default), **repeated facts**: current facts between the same two entities that say the same thing. That means the same text, or very close embeddings with the same numbers and identifiers, as [[Memory health]] counts redundancy: «PostgreSQL 14» and «PostgreSQL 16» are a change, not a repeat. The proposal keeps the newest one and invalidates the others. Up to 3,000 candidate facts are read per run, the most recent first.
+And, once an administrator ticks it (it is off by default), **repeated facts**: current facts between the same two entities that say the same thing. That means the same text, or very close embeddings with the same numbers and identifiers, as [[Memory health]] counts redundancy: «PostgreSQL 14» and «PostgreSQL 16» are a change, not a repeat, and so are two facts that each name something the other does not («…node A…» and «…node B…»). The proposal keeps the most precise one, whose words contain the others' and add some («H is an M 7050 Micro» over «H is an M 7050»), whatever its date; otherwise the newest. It invalidates the others. Up to 3,000 candidate facts are read per run, the most recent first.
 
 And, also off by default, **facts past their shelf life**: the current facts that Content quality → To review lists (relations with a shelf life, not confirmed in time), the longest overdue first. Each one becomes a proposal to invalidate it. Rejecting the proposal, or confirming the fact in To review, keeps it.
 
