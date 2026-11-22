@@ -381,7 +381,7 @@ def test_a_gap_is_approved_into_the_queue_and_an_edit_goes_through_the_secret_de
     with _factory()() as db:
         t = db.get(TopicReview, rid)
         assert t.actions[0]["decision"] == "pending" and token not in json.dumps(t.actions)       # blocked: nothing kept, still pending
-        assert db.scalars(select(Proposal).where(Proposal.category == "topic.gap")).all() == []
+        assert db.scalars(select(Proposal).where(Proposal.brain_id == t.brain_id, Proposal.category == "topic.gap")).all() == []
     a = client.post(f"{base}/0/approve", json={"text": "Mailer has used Postmark since March 2025."}).json()["action"]
     assert a["decision"] == "approved" and a["edited"] and a["text"] == "Mailer has used Postmark since March 2025."
     assert client.post(f"{base}/0/approve", json={}).status_code == 409 and client.post(f"{base}/0/reject").status_code == 409

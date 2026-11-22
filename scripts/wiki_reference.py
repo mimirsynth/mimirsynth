@@ -58,6 +58,7 @@ BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; ""
     ("Memory health", "Salud de la memoria", ["/health"]),
     ("Replay sample", "Muestra para repetir", ["/replay"]),
     ("Curator", "Curador", ["/curator"]),
+    ("Topic reviews", "Revisiones de tema", ["/topics"]),
     ("Archived facts", "Hechos archivados", ["/archive"]),
     ("Right to be forgotten", "Derecho al olvido", ["/forget"]),
     ("Verifiable facts", "Hechos verificables", ["/verifiers", "/probes"]),
