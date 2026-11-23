@@ -25,6 +25,7 @@ A memory that only accumulates becomes a log of everything that was ever said, n
 - It runs as a job ([[Jobs]], «Measure the memory health»), one brain at a time.
 - Coverage, staleness and noise come from **recalls**, one embedding each (the reference queries plus eight vague questions). They are not logged for the recall ratings. A brain that has reached its [[AI consumption]] budget is not probed that day; the other numbers are still measured.
 - Each number is measured on its own: one that fails is left empty and named under the numbers, and the rest is kept.
+- The same measurement counts the brain's **common terms**: the words in more than 20% of its episode fragments or of the passages of its active documents (with at least 50 of them). It is not a number on the screen; the recall uses it with *Weigh the brain's common terms less* ([[Recall and ingestion]]).
 - Nothing is written to the graph.
 - Measurements are kept for 400 days.
 

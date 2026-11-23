@@ -92,8 +92,9 @@ def _cut(text: str, n: int) -> str:
 WORDS_LEEWAY = 0.08   # a text sharing two or more terms with the query enters with this much less similarity
 
 
-def query_terms(query: str) -> list[str]:
-    return [t for t in index._tsquery(query).split(" | ") if t]
+def query_terms(query: str, skip: frozenset[str] = frozenset()) -> list[str]:
+    """The query's terms, without those in `skip` (the brain's common terms, #459)."""
+    return [t for t in index._tsquery(query, skip).split(" | ") if t]
 
 
 def relevant(text: str, sim: float | None, terms: list[str], min_sim: float) -> bool:
@@ -104,11 +105,11 @@ def relevant(text: str, sim: float | None, terms: list[str], min_sim: float) -> 
     return sim >= min_sim - WORDS_LEEWAY and sum(1 for t in terms if re.search(rf"\b{re.escape(t)}", text.lower())) >= 2
 
 
-def pick_passages(hits: list[dict], query: str, n: int, min_sim: float) -> list[dict]:
+def pick_passages(hits: list[dict], query: str, n: int, min_sim: float, skip: frozenset[str] = frozenset()) -> list[dict]:
     """Se queda con pasajes realmente relevantes (ver `relevant`): mejor no devolver nada que meter ruido en cada prompt. Un pasaje con
     el mismo texto que otro ya elegido (el mismo contenido en dos documentos, o en el brain y en un origen prestado) se salta: con un
-    presupuesto de 2, un duplicado se comería la mitad."""
-    terms = query_terms(query)
+    presupuesto de 2, un duplicado se comería la mitad. `skip`: terms that do not count as shared (#459)."""
+    terms = query_terms(query, skip)
     out, seen = [], set()
     for h in hits:
         key = " ".join(h["text"].lower().split())
@@ -140,26 +141,31 @@ def docs_block(passages: list[dict], lang: str = "es") -> str:
 
 
 def search_documents(brain_id: int, qvec: list[float], query: str, n: int, sources: list[Source] | None = None,
-                     min_sim: float | None = None) -> tuple[list[dict], str]:
+                     min_sim: float | None = None, common: bool = False) -> tuple[list[dict], str]:
     """Búsqueda documental (se ejecuta en un hilo; el tiempo máximo lo controla `recall`). Estado: ok | error | off.
     Con `sources`, añade los documentos de los brains que prestan los suyos, fusionados con RRF y marcados con su origen. `min_sim`
-    sustituye a la similitud mínima de la instancia (para simular otro umbral sin cambiar el ajuste)."""
+    sustituye a la similitud mínima de la instancia (para simular otro umbral sin cambiar el ajuste). `common`: each brain's common
+    terms leave the text part of its search, and none counts as shared (#459)."""
     from . import docindex
     if n <= 0 or not index.enabled():
         return [], "off"
     try:
-        hits = docindex.search(brain_id, qvec, query, 6)
+        own = _common(brain_id, "docs", common)
+        skip = set(own)
+        hits = docindex.search(brain_id, qvec, query, 6, skip=own)
         lists, weights = [hits], [1.0]
         for src in sources or []:
             if src.scope not in ("docs", "both"):
                 continue
             try:
-                lists.append([{**h, "origin": src.slug} for h in docindex.search(src.brain_id, qvec, query, 6)]); weights.append(FED_WEIGHT)
+                lent = _common(src.brain_id, "docs", common)
+                lists.append([{**h, "origin": src.slug} for h in docindex.search(src.brain_id, qvec, query, 6, skip=lent)]); weights.append(FED_WEIGHT)
+                skip |= lent
             except Exception as e:  # noqa: BLE001  (un origen que falla no tumba la consulta)
                 log.warning("federación: documentos de %s no disponibles: %s", src.slug, e)
         if len(lists) > 1:
             hits = fuse(lists, lambda h: (h.get("origin"), h["id"]), weights)
-        return pick_passages(hits, query, n, appsettings.get("doc_min_similarity") if min_sim is None else min_sim), "ok"
+        return pick_passages(hits, query, n, appsettings.get("doc_min_similarity") if min_sim is None else min_sim, frozenset(skip)), "ok"
     except Exception:  # noqa: BLE001
         return [], "error"
 
@@ -254,16 +260,28 @@ def keep_facts(facts: list[dict], min_sim: float) -> list[dict]:
     return facts if min_sim <= 0 else [f for f in facts if (s := _similarity(f)) is None or s >= min_sim]
 
 
-def search_chunks(brain_id: int, qvec: list[float], query: str, n: int, min_sim: float) -> list[dict]:
-    """The best `n` episode fragments that pass the threshold (#281). It asks for twice as many, since some may not pass."""
+def _common(brain_id: int, corpus: str, on: bool) -> frozenset[str]:
+    """A brain's common terms in `corpus` (`chunks` or `docs`) when they are left out (#459); otherwise none."""
+    if not on:
+        return frozenset()
+    from . import terms
+    return terms.common(brain_id)[corpus]
+
+
+def search_chunks(brain_id: int, qvec: list[float], query: str, n: int, min_sim: float, common: bool = False) -> list[dict]:
+    """The best `n` episode fragments that pass the threshold (#281). It asks for twice as many, since some may not pass. `common`:
+    the brain's common terms leave the text part of the search and do not count as shared (#459)."""
     if n <= 0:
         return []
-    hits = index.search(brain_id, qvec, query, k=n * 2 if min_sim > 0 else n, recency=recency_weight(query))
-    terms = query_terms(query)
+    skip = _common(brain_id, "chunks", common)
+    hits = index.search(brain_id, qvec, query, k=n * 2 if min_sim > 0 else n, recency=recency_weight(query), skip=skip)
+    terms = query_terms(query, skip)
     return [c for c in hits if relevant(c.get("text") or "", c.get("similarity"), terms, min_sim)][:n]
 
 
 SUPERSEDING_MAX = 3      # current facts a recall pulls in because they replace something it returned (#282)
+WARNING_PLACES = 2       # with `recall_superseded_rank`, the places each "may be superseded" warning moves a text down (#459)
+LOOK_AHEAD = 2           # with it, the fragments and passages looked at beyond those returned, so a clean one can take a place
 SUPERSEDED_OLD_MAX = 3   # facts no longer true it adds because a returned fragment still states them
 _SAME_TIME = 60          # seconds: Graphiti gives the fact it invalidates, as `invalid_at`, the `valid_at` of the fact that contradicts it
 _CANDIDATES = 300        # current facts of the entities involved that are looked at to find the replacement
@@ -370,16 +388,26 @@ def _states(f: dict, eps: set[str], ents: set[str], repl: dict) -> bool:
     return bool(ends) and ends <= ents and not any(_ends(r) <= ents for r in repl.get(f["uuid"], []) if _ends(r))
 
 
+def rank_down(items: list[dict], n: int) -> list[dict]:
+    """The best `n` of a ranked list after each "may be superseded" warning moved its text WARNING_PLACES down (#459): one warning near
+    the top keeps its place; several give it to a clean text further down."""
+    order = sorted(range(len(items)), key=lambda i: (i + WARNING_PLACES * len(items[i].get("superseded") or []), i))
+    return [items[i] for i in order[:n]]
+
+
 def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs: dict, amap: dict | None,
-                    passages: list[dict] | None = None, brains: dict | None = None) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+                    passages: list[dict] | None = None, brains: dict | None = None,
+                    keep: tuple[int, int] | None = None) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
     """A fragment of an episode, or a document passage, that states something no longer true says so, with what is true now, and goes
     after the others; the facts that replace them, and those that replace a fact no longer true in the result, join the current facts
     first (#282, #286). A fact that replaces another is fetched by its link to it, not by its similarity, so the threshold does not
     apply to it; like a fact no longer true that a fragment or passage states, it joins with `similarity` None. `graphs`: the graph of each origin (None: the brain's own); `brains`: the brain of each origin whose passages are
-    checked (a brain that lends only its documents has no graph here)."""
+    checked (a brain that lends only its documents has no graph here). `keep`: with the rank penalty (#459), how many fragments and
+    passages to return, chosen by `rank_down`; the facts that only a text left out states do not join."""
     cur, old, passages = list(cur), list(old), list(passages or [])
     have = {(f.get("origin"), f.get("uuid")) for f in cur + old if f.get("uuid")}
     added_now = added_old = 0
+    checked = []   # first every text gets its warnings, then (with `keep`) the texts returned are chosen, then the facts join
     for origin, gname in graphs.items():
         gone = [f for f in old if f.get("origin") == origin]
         try:
@@ -394,13 +422,23 @@ def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs
         except Exception as e:  # noqa: BLE001  (without it the recall is what it was before)
             log.warning("recall: no se pudo comprobar lo superado en %s: %s", gname, e)
             continue
-        tag = {"origin": origin} if origin else {}
-        olds = [*gone]
+        stated = []
         for item, eps, ents in mine:
             facts = [f for f in found if _states(f, eps, ents, repl)]
             if facts:
                 item["superseded"] = [{"uuid": f["uuid"], "fact": f["fact"], "invalid_at": f["invalid_at"],
                                        "replaced_by": [{"uuid": r["uuid"], "fact": r["fact"]} for r in repl.get(f["uuid"], [])]} for f in facts[:3]]
+            stated.append((item, facts))
+        checked.append((origin, gone, stated, repl))
+    if keep is not None:
+        chunks, passages = rank_down(chunks, keep[0]), rank_down(passages, keep[1])
+        kept = {id(x) for x in chunks + passages}
+    for origin, gone, stated, repl in checked:
+        tag = {"origin": origin} if origin else {}
+        olds = [*gone]
+        for item, facts in stated:
+            if keep is not None and id(item) not in kept:
+                continue
             for f in facts:
                 olds.append(f)
                 if (origin, f["uuid"]) not in have and added_old < SUPERSEDED_OLD_MAX:
@@ -420,24 +458,31 @@ def mark_superseded(chunks: list[dict], cur: list[dict], old: list[dict], graphs
     return sorted(chunks, key=last), cur, old, sorted(passages, key=last)
 
 
-def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n_chunks: int, min_sim: float) -> tuple[list[dict], list[dict]]:
+def _federated_graph(src: Source, qvec: list[float], query: str, n_facts: int, n_chunks: int, min_sim: float,
+                     common: bool = False) -> tuple[list[dict], list[dict]]:
     """Hechos y fragmentos de un brain que presta su grafo. Solo contenido: sin embeddings. Los alias son los de ese brain."""
     from .store import _factory
     with _factory()() as db:
         amap = alias_map(db, src.brain_id)
     facts = [{**f, "origin": src.slug} for f in keep_facts(search_facts(src.graph_name, qvec, n_facts * 3, amap), min_sim)]
-    chunks = [{**c, "origin": src.slug} for c in search_chunks(src.brain_id, qvec, query, n_chunks, min_sim)]
+    chunks = [{**c, "origin": src.slug} for c in search_chunks(src.brain_id, qvec, query, n_chunks, min_sim, common)]   # its own common terms
     return facts, chunks
 
 
 def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunks: int = 4, max_chars: int = 6000,
            embedder: EmbeddingProvider | None = None, n_docs: int | None = None, sources: list[Source] | None = None, lang: str = "es",
            min_sim: float | None = None, min_similarity: float | None = None, trust: bool | None = None, decay: bool | None = None,
-           state_card: bool | None = None, archived: bool = False) -> dict:
+           state_card: bool | None = None, archived: bool = False, common_terms: bool | None = None,
+           superseded_rank: bool | None = None) -> dict:
     """`min_sim`: the documents' threshold, to simulate one without changing the setting. `min_similarity`: the threshold of the facts
-    and the episode fragments (#281); empty, the instance's `recall_min_similarity`; 0, none."""
+    and the episode fragments (#281); empty, the instance's `recall_min_similarity`; 0, none. `common_terms` and `superseded_rank`
+    (#459): leave the brain's common terms out of the text search, and move a text down per "may be superseded" warning; empty, the
+    settings `recall_common_terms` and `recall_superseded_rank`."""
     t0 = time.time()
     graph_min = float(appsettings.get("recall_min_similarity") if min_similarity is None else min_similarity)
+    common = (appsettings.get("recall_common_terms") == "yes") if common_terms is None else bool(common_terms)
+    ranked = (appsettings.get("recall_superseded_rank") == "yes") if superseded_rank is None else bool(superseded_rank)
+    extra = LOOK_AHEAD if ranked else 0   # with the rank penalty a few more are looked at, and `mark_superseded` keeps the best
     from .usage import scope
     with scope(brain_id, "recall"):
         try:
@@ -448,14 +493,14 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     n_docs = appsettings.get("doc_passages") if n_docs is None else n_docs
     t_docs = time.time()
     sources = sources or []
-    docs_fut = _pool.submit(_timed_documents, brain_id, qvec, query, n_docs, sources, min_sim) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
+    docs_fut = _pool.submit(_timed_documents, brain_id, qvec, query, n_docs + extra, sources, min_sim, common) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
     from .store import _factory
     with _factory()() as db:
         amap = alias_map(db, brain_id)
     tf = time.time()
     facts = keep_facts(search_facts(graph_name, qvec, n_facts * 3, amap), graph_min)
     tc = time.time()
-    chunks = search_chunks(brain_id, qvec, query, n_chunks, graph_min)
+    chunks = search_chunks(brain_id, qvec, query, n_chunks + extra if n_chunks > 0 else 0, graph_min, common)
     t_chunks = time.time() - tc
     fed = []   # estado de cada origen prestado
     flists, clists = [facts], [chunks]
@@ -463,7 +508,7 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
         if src.scope not in ("graph", "both"):
             continue
         try:
-            f, c = _federated_graph(src, qvec, query, n_facts, n_chunks, graph_min)
+            f, c = _federated_graph(src, qvec, query, n_facts, n_chunks + extra if n_chunks > 0 else 0, graph_min, common)
             flists.append(f); clists.append(c); fed.append({"slug": src.slug, "name": src.name, "scope": src.scope, "state": "ok"})
         except Exception as e:  # noqa: BLE001  (un origen caído no tumba la consulta)
             log.warning("federación: grafo de %s no disponible: %s", src.slug, e)
@@ -471,7 +516,7 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     if len(flists) > 1:   # lo propio manda: un hecho repetido en un origen se descarta; el resto se fusiona con RRF ponderado
         weights = [1.0] + [FED_WEIGHT] * (len(flists) - 1)
         facts = fuse(flists, lambda f: (f["fact"] or "").strip().lower(), weights)
-        chunks = fuse(clists, lambda c: (c.get("origin"), c["id"]), weights)[:n_chunks]
+        chunks = fuse(clists, lambda c: (c.get("origin"), c["id"]), weights)[:n_chunks + extra]
     if not archived:   # archived facts stay out unless asked for (#297)
         from . import archive
         facts = archive.leave_out(brain_id, facts)
@@ -498,7 +543,7 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     ts = time.time()
     graphs = {None: graph_name, **{s.slug: s.graph_name for s in sources if s.scope in ("graph", "both")}}
     brains = {None: brain_id, **{s.slug: s.brain_id for s in sources if s.scope == "both"}}   # a lent passage, against its brain's graph
-    chunks, cur, old, passages = mark_superseded(chunks, cur, old, graphs, amap, passages, brains)
+    chunks, cur, old, passages = mark_superseded(chunks, cur, old, graphs, amap, passages, brains, (n_chunks, n_docs) if ranked else None)
     t_superseded = time.time() - ts
     t4 = time.time()
     keep = cur + old

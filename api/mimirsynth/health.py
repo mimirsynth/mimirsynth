@@ -13,6 +13,8 @@ stale fact.
   repeat: they are a change). Past MAX_SAMPLE candidate facts it is estimated on the most recent ones and says so.
 - **Open contradictions** (in the functional relations; none if no relation is functional) and **facts to review** (past their
   shelf life; none if no relation has one), as their screens count them.
+- **Common terms** (`terms`, #459): the words in more than a share of the brain's episode fragments or document passages, which the
+  recall can leave out of its text search (`terms.py`). Not a headline number.
 
 A brain is measured once a UTC day (`due`, called by the notification loop every few minutes): the day is the run's key in the
 database, so a restart never measures twice and never skips a day. A curator can measure again (`POST /health/run`): that day's numbers
@@ -286,6 +288,13 @@ def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
         with _factory()() as db:
             return retrievability(db, brain_id)
     part("retrievable", retrievable)
+
+    def common_terms():
+        from . import terms
+        m = terms.measure(brain_id)
+        terms.remember(brain_id, m)
+        return {"terms": m}
+    part("terms", common_terms)
     for k in HEADLINE:
         out.setdefault(k, None)
     return out

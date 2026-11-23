@@ -47,13 +47,16 @@ export default function ReplayRuns({ graph, samples }: { graph: string; samples:
   const [trust, setTrust] = useState("");
   const [decay, setDecay] = useState("");
   const [card, setCard] = useState("");
+  const [common, setCommon] = useState("");
+  const [ranked, setRanked] = useState("");
   const [size, setSize] = useState<number | string>(100);
   const [form, setForm] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [promote, setPromote] = useState<Result | null>(null);
   const flag = (v: string) => (v === "" ? undefined : v === "on");
   const start = useMutation({ mutationFn: () => send("POST", `brains/${graph}/replay/runs`, { sample: Number(size) || 100,
-    candidate: { min_similarity: min === "" ? undefined : Number(min), trust: flag(trust), decay: flag(decay), state_card: flag(card) } }),
+    candidate: { min_similarity: min === "" ? undefined : Number(min), trust: flag(trust), decay: flag(decay), state_card: flag(card),
+      common_terms: flag(common), superseded_rank: flag(ranked) } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["replay-runs", graph] }) });
   const detail = useQuery({ queryKey: ["replay-run", graph, open], enabled: open !== null, queryFn: () => get<Run & { results: Result[] }>(`brains/${graph}/replay/runs/${open}`) });
   const describe = (p: Run["params"]) => Object.entries(p).map(([k, v]) => `${k}: ${typeof v === "boolean" ? (v ? t("sí") : t("no")) : v}`).join(" · ") || t("los ajustes de ahora");
@@ -101,6 +104,8 @@ export default function ReplayRuns({ graph, samples }: { graph: string; samples:
           <SelectField label={t("Peso por origen")} data={onoff} value={trust} onChange={(v) => setTrust(v ?? "")} allowDeselect={false} />
           <SelectField label={t("Envejecer por relación")} data={onoff} value={decay} onChange={(v) => setDecay(v ?? "")} allowDeselect={false} />
           <SelectField label={t("Estado actual primero")} data={onoff} value={card} onChange={(v) => setCard(v ?? "")} allowDeselect={false} />
+          <SelectField label={t("Pesar menos los términos comunes")} data={onoff} value={common} onChange={(v) => setCommon(v ?? "")} allowDeselect={false} />
+          <SelectField label={t("Bajar lo que puede estar superado")} data={onoff} value={ranked} onChange={(v) => setRanked(v ?? "")} allowDeselect={false} />
           <NumberField label={t("Consultas")} min={1} max={500} value={size} onChange={setSize} />
           <MutationError error={start.error} />
           <DialogActions>

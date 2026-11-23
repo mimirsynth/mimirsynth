@@ -61,6 +61,8 @@ class Params(BaseModel):
     trust: bool | None = None  # simulate the trust weighting on or off (#298)
     decay: bool | None = None  # simulate the decay by relation on or off (#298)
     state_card: bool | None = None  # simulate the current-state cards on or off (#294)
+    common_terms: bool | None = None  # simulate leaving the brain's common terms out of the text search (#459)
+    superseded_rank: bool | None = None  # simulate moving a text down per "may be superseded" warning (#459)
 
 
 class RunIn(BaseModel):
@@ -336,6 +338,7 @@ def _job_run(ctx: "jobs.JobCtx", p: dict) -> dict:
                 out = recall(bid, graph, q["query"], params.get("facts", 8), params.get("chunks", 4), 6000, n_docs=params.get("docs"),
                              lang=lang, min_sim=params.get("min_sim"),
                              min_similarity=params.get("min_similarity"), trust=params.get("trust"), decay=params.get("decay"), state_card=params.get("state_card"),
+                             common_terms=params.get("common_terms"), superseded_rank=params.get("superseded_rank"),
                              **({"sources": src} if src else {}))
                 results.append(evaluate(q, out))
             except Exception as e:  # noqa: BLE001  (una consulta que falla no tumba la ejecución)

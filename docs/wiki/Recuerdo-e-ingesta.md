@@ -43,11 +43,13 @@ Cada hecho del JSON del recall dice su **nivel de confianza** (`trust`), según 
 
 Un token fija lo máximo que pueden declarar sus propuestas (marcar *Para una captura automática* al crearlo lo deja en `auto`), y el `origin` que envía un cliente solo puede bajarlo. Los hechos anteriores a esto no tienen nivel.
 
-Dos ajustes, los dos **desactivados por defecto** en Administración → Recuerdo (recall), cambian el orden:
+Cuatro ajustes, todos **desactivados por defecto** en Administración → Recuerdo (recall), cambian el orden:
 - **Pesar los hechos por su origen**: un hecho de un agente pesa *Peso de un hecho escrito por un agente* (0,95) y uno automático *Peso de un hecho capturado automáticamente* (0,85).
 - **Envejecer los hechos según su relación**: un hecho vigente de una relación con vida útil pierde peso poco a poco, hasta el *Peso de un hecho a revisar* al acabar su vida útil, en vez de todo de golpe al final.
+- **Pesar menos los términos comunes del brain**: una palabra que sale en más del 20 % de los fragmentos de episodio o de los pasajes de documento del brain (su tema, por ejemplo) no se busca como texto en ellos; solo cuenta su significado. Una pregunta cuya única palabra distintiva es esa ya no trae los muchos fragmentos que solo la nombran, y la palabra no cuenta entre los dos términos en común que dejan entrar un fragmento con algo menos de similitud. Los términos se cuentan con la medición diaria de la [[Salud de la memoria]]; mientras un brain no se ha medido, no cambia nada. Los hechos se buscan solo por su significado, así que esto cambia fragmentos y pasajes, no hechos.
+- **Bajar lo que puede estar superado**: cada aviso «puede estar superado» de un fragmento o un pasaje lo baja dos puestos antes de elegir los que entran. El recall mira dos más de los que devuelve, así que uno con varios avisos deja su sitio a uno limpio que también pasó el umbral. Los avisados siguen yendo detrás de los limpios.
 
-Simúlalos con las [[Consultas de referencia]] antes de activarlos.
+Simúlalos con las [[Consultas de referencia]] o repitiendo la muestra ([[Preguntar]]) antes de activarlos.
 
 ## Ingesta y trabajos
 | Ajuste | Por defecto | Rango | Qué hace |

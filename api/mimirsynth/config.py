@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     recall_trust_agent: float = 0.95  # weight of a fact an agent chose to write (#298)
     recall_trust_auto: float = 0.85  # weight of a fact captured automatically (#298)
     recall_decay: str = "no"  # facts of relations with a shelf life lose weight as they age (#298): yes | no
+    recall_common_terms: str = "no"  # the brain's common terms leave the text part of the hybrid search (#459): yes | no
+    recall_superseded_rank: str = "no"  # each "may be superseded" warning moves a fragment or passage down (#459): yes | no
     recall_stale_weight: float = 0.6  # weight in the recall of a fact past its relation's shelf life (#114)
     summary_engine: str = ""  # LLM engine (by name) that rewrites the poor entity summaries in Content quality (#201); empty: the default engine
     answer_engine: str = ""  # LLM engine (by name) that writes the answers of Ask (#126); empty: the default engine
