@@ -37,7 +37,7 @@ REVIEWED = 0.1           # the weight of a topic reviewed after its newest fact
 CANDIDATES = 3           # repeats are measured on this many times `limit` entities, the best by the other inputs
 REVIEWS_READ = 2000      # the brain's latest reviews read to know each entity's last one
 GROUP_CAP = 50           # a group of facts between two entities compared pair by pair (O(n²)); a larger one, by its text alone
-CLUSTER_BUDGET = 1000    # the facts compared pair by pair, with their embeddings, in one request
+CLUSTER_BUDGET = 5000    # the comparisons (n·(n−1)/2 per group) made pair by pair, with the embeddings, in one request
 FACTS = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.invalid_at IS NULL AND r.expired_at IS NULL "
          "RETURN r.uuid AS uuid, r.fact AS fact, r.created_at AS created_at, a.uuid AS source_uuid, a.name AS source, labels(a) AS source_labels, "
          "b.uuid AS target_uuid, b.name AS target, labels(b) AS target_labels ORDER BY coalesce(r.valid_at, r.created_at) DESC, r.uuid LIMIT $n")
@@ -164,8 +164,9 @@ def ranking(ctx: BrainCtx, limit: int = 20, now: datetime | None = None, lang: s
         lr = last.get(u)
         lr_at = _when(lr.finished_at) if lr else None
         ws = waiting.get(u) or []
-        w = ws[0] if ws else None   # the newest one still waiting
-        retire = any(x.trigger == "retirement" for x in ws)
+        retiring = [x for x in ws if x.trigger == "retirement"]
+        w = (retiring or ws or [None])[0]   # the one its pill speaks of: a retirement review first, else the newest one still waiting
+        retire = bool(retiring)
         nflag = sum(1 for f in e["facts"] if f["uuid"] in flagged)
         out.append({"uuid": u, "name": e["name"], "type": e["type"], "facts": n, "recalls": recalls.get(u, 0), "repeats": 0, "flagged": nflag,
                     "flagged_share": round(nflag / n, 3), "retirement": retire,
@@ -180,15 +181,16 @@ def ranking(ctx: BrainCtx, limit: int = 20, now: datetime | None = None, lang: s
         x["score"] = score(x["recalls"], x["facts"], 0, x["flagged_share"], x["retirement"], x["_fresh"])
     out.sort(key=lambda x: (-x["score"], x["name"].lower(), x["uuid"]))
     # repeats are measured on the best candidates only. A group of facts between two entities is compared pair by pair, with the
-    # embeddings, when it has at most GROUP_CAP facts and fits in CLUSTER_BUDGET; otherwise by its text, in one pass. Each group is
+    # embeddings, when it has at most GROUP_CAP facts and its comparisons fit in CLUSTER_BUDGET; otherwise by its text, in one pass. Each group is
     # measured once, for both of its ends.
     candidates, budget = out[:limit * CANDIDATES], CLUSTER_BUDGET
     keys = list(dict.fromkeys(k for x in candidates for k in sorted(x["_pairs"]) if len(pairs[k]) > 1))
     fine = []
     for k in keys:
-        if len(pairs[k]) <= GROUP_CAP and len(pairs[k]) <= budget:
+        cost = len(pairs[k]) * (len(pairs[k]) - 1) // 2
+        if len(pairs[k]) <= GROUP_CAP and cost <= budget:
             fine.append(k)
-            budget -= len(pairs[k])
+            budget -= cost
     need = [f["uuid"] for k in fine for f in pairs[k]]
     vectors: dict[str, list] = {}
     try:

@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { fmtDay, get, send } from "../api";
 import { locale } from "../i18n";
@@ -18,7 +18,7 @@ export default function TopicQueue({ graph, switcher }: { graph: string; switche
   const { t } = useTranslation();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const q = useQuery({ queryKey: ["topics", graph, "queue"], refetchInterval: (c) => (c.state.data?.items.some(working) ? 3000 : false),
+  const q = useQuery({ queryKey: ["topics", graph, "queue"], refetchInterval: (c) => (c.state.data?.items.some(working) ? 30000 : false),   // the ranking is a heavy read: not every few seconds
     queryFn: () => get<Queue>(`brains/${graph}/topics/queue`) });
   // the view stays in the address, so the review's way back returns here
   const open = (id: number) => { const p = new URLSearchParams(params); p.set("revision", String(id)); setParams(p); };
@@ -43,7 +43,8 @@ export default function TopicQueue({ graph, switcher }: { graph: string; switche
           <DataTable.ActionsHead />
         </DataTable.Tr></DataTable.Thead>
         <DataTable.Tbody>{d.items.map((i) => (
-          <DataTable.Tr key={i.uuid}>
+          <Fragment key={i.uuid}>
+          <DataTable.Tr>
             <DataTable.Td><CellText sub={<Signals i={i} />}><EntityChip wrap name={i.name || i.uuid} type={i.type} to={`/entidad/${encodeURIComponent(i.uuid)}`} /></CellText></DataTable.Td>
             <DataTable.Td ta="right" className="ms-data">{i.recalls}</DataTable.Td>
             <DataTable.Td><LastReview i={i} /></DataTable.Td>
@@ -51,29 +52,34 @@ export default function TopicQueue({ graph, switcher }: { graph: string; switche
               ? <Btn size="row" onClick={() => open(i.waiting!.id)} aria-label={t("Ver la revisión de «{{name}}»", { name: i.name })}>{t("Ver la revisión")}</Btn>
               : <Btn size="row" icon="refresh" disabled={!d.engine || (start.isPending && start.variables !== i.uuid)} loading={start.isPending && start.variables === i.uuid}
                   onClick={() => { start.reset(); start.mutate(i.uuid); }} aria-label={t("Revisar el tema «{{name}}»", { name: i.name })}>{t("Revisar")}</Btn>}
-              {start.variables === i.uuid && <MutationError error={start.error} />}
             </DataTable.Td>
-          </DataTable.Tr>))}</DataTable.Tbody>
+          </DataTable.Tr>
+          {/* why this row's review could not start, right under it and as wide as the table */}
+          {start.error && start.variables === i.uuid && <DataTable.Tr><DataTable.Td colSpan={4}><MutationError error={start.error} /></DataTable.Td></DataTable.Tr>}
+          </Fragment>))}</DataTable.Tbody>
       </DataTable> : <EmptyState>{t("Aún no hay temas: hace falta alguna entidad con al menos dos hechos vigentes.")}</EmptyState>}
     </>
   );
 }
 
-/** What puts the topic in the list, besides its recalls: its facts, its repeats, its flagged facts and a retirement waiting. */
+/** What puts the topic in the list, besides its recalls: its facts, its repeats and its flagged facts. */
 function Signals({ i }: { i: Item }) {
   const { t } = useTranslation();
   const share = i.flagged_share.toLocaleString(locale(), { style: "percent", maximumFractionDigits: 0 });
   const parts = [t("{{n}} hechos", { n: i.facts }),
     i.repeats === 1 ? t("1 grupo de repetidos") : i.repeats > 1 ? t("{{n}} grupos de repetidos", { n: i.repeats }) : null,
     i.flagged === 1 ? t("1 marcado ({{share}})", { share }) : i.flagged > 1 ? t("{{n}} marcados ({{share}})", { n: i.flagged, share }) : null].filter(Boolean);
-  return <>{parts.join(" · ")}{i.retirement && <> <Pill>{t("Por una retirada")}</Pill></>}</>;
+  // each part whole: a line breaks between them, never between a count and what it counts
+  return <>{parts.map((p, n) => <Fragment key={n}>{n > 0 && " · "}<span className="ms-nowrap">{p}</span></Fragment>)}</>;
 }
 
 /** When the topic was last reviewed and what came since, or the review it is waiting on, as the reviews list shows it. */
 function LastReview({ i }: { i: Item }) {
   const { t } = useTranslation();
   const w = i.waiting;
-  if (w) return w.status === "ready" ? <Pill tone="warn">{t("Por decidir: {{n}}", { n: w.pending })}</Pill> : <Pill tone="alt">{t("Revisando…")}</Pill>;
+  // where it stands, then where it came from, as the reviews list shows it
+  const from = i.retirement && <Pill>{t("Por una retirada")}</Pill>;
+  if (w) return <>{w.status === "ready" ? <Pill tone="warn">{t("Por decidir: {{n}}", { n: w.pending })}</Pill> : <Pill tone="alt">{t("Revisando…")}</Pill>}{from}</>;
   const r = i.last_review;
   if (!r) return <>{t("Nunca")}</>;
   const since = r.new_facts === 1 ? t("1 hecho nuevo desde entonces") : r.new_facts > 1 ? t("{{n}} hechos nuevos desde entonces", { n: r.new_facts }) : t("nada nuevo desde entonces");

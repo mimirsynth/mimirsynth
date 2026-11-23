@@ -103,13 +103,14 @@ def test_new_facts_since_the_last_review_bring_a_topic_back():
 
 
 def test_a_review_with_new_facts_since_counts_them(client, monkeypatch):  # noqa: F811
-    bid = _brain(client, "tq3", monkeypatch)
+    undated = {**_f("m5", "mail", "Mailer", "pm", "Postmark", "Mailer retries through Postmark"), "created_at": None}
+    bid = _brain(client, "tq3", monkeypatch, facts=FACTS + [undated])
     with _factory()() as db:
         db.add(TopicReview(brain_id=bid, entity_uuid="mail", name="Mailer", status="ready", actions=[],
                            finished_at=datetime(2025, 1, 2, 12, tzinfo=timezone.utc)))
         db.commit()
     by = {x["uuid"]: x for x in client.get("/api/brains/tq3/topics/queue").json()["items"]}
-    assert by["mail"]["last_review"]["new_facts"] == 2      # m3 and m4 arrived after it
+    assert by["mail"]["last_review"]["new_facts"] == 2      # m3 and m4 arrived after it; a fact with no date is not counted as new
 
 
 def test_only_curators_see_the_queue(client, monkeypatch):  # noqa: F811
@@ -149,7 +150,7 @@ def test_a_retirement_review_still_counts_when_a_newer_manual_review_also_waits(
                                 actions=[{"decision": "pending"}])])                                             # another brain's
         db.commit()
     by = {x["uuid"]: x for x in client.get("/api/brains/tq7/topics/queue").json()["items"]}
-    assert by["sg"]["retirement"] and by["sg"]["waiting"]["trigger"] == "manual"          # the newest one is shown, the retirement still counts
+    assert by["sg"]["retirement"] and by["sg"]["waiting"]["trigger"] == "retirement"      # the retirement review is the one it opens
     assert by["pm"]["waiting"]["status"] == "running" and not by["pm"]["retirement"]
     assert by["mail"]["waiting"] is None and not by["mail"]["retirement"] and by["mail"]["last_review"] is None
 
