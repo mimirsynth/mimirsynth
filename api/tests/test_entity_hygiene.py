@@ -319,7 +319,7 @@ def test_bulk_apply_waits_for_twenty_decisions_taken_one_by_one(client, monkeypa
     assert client.post(f"{url}/{yid}/apply-as", json={"type": "Service"}).status_code == 200
     assert client.get(url, params={"min_conf": 0.9}).json()["calibration"]["above"] == after["above"] + 1
     shown = {i["id"]: i for i in client.get(url, params={"status": "applied"}).json()["items"]}[xid]
-    assert shown["suggested_type"] == "Service" and shown["chosen_type"] == "Host"
+    assert shown["suggested_type"] == "Host" and shown["proposed_type"] == "Service" and shown["chosen_type"] == "Host"
     labels = []
     monkeypatch.setattr(retype, "_set_label", lambda g, u, old, new: labels.append((old, new)))
     assert client.post(f"{url}/{xid}/revert").status_code == 200 and labels == [("Host", "Object")]

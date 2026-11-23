@@ -244,7 +244,9 @@ def _ontology_type(ctx: BrainCtx, name: str) -> str:
 
 def _out(s: RetypeSuggestion, rules: frozenset[str]) -> dict:
     st = _eff_status(s, rules)
-    return {"id": s.id, "entity_uuid": s.entity_uuid, "name": s.name, "current_type": s.current_type, "suggested_type": s.suggested_type,
+    # `suggested_type` is the type applied (as it always was); the decider's own proposal, if a curator applied another, is `proposed_type`
+    return {"id": s.id, "entity_uuid": s.entity_uuid, "name": s.name, "current_type": s.current_type, "suggested_type": s.chosen_type or s.suggested_type,
+            "proposed_type": s.suggested_type,
             "confidence": s.confidence, "status": st, "previous_type": s.previous_type, "chosen_type": s.chosen_type or None,
             "applied_at": s.applied_at,
             "fold": {"uuid": s.fold_uuid, "name": s.fold_name, "confidence": s.fold_confidence} if s.fold_uuid else None, "op": s.op_id,

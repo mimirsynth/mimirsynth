@@ -114,7 +114,7 @@ export default function Retype({ graph, role }: { graph: string; role: string })
               {status === "pending" || status === "applied" || status === "rejected" || status === "same"
                 // where it is and where it would go, in one cell: the row keeps room for its actions on a tablet
                 ? <><DataTable.Td><CellText sub={i.status === "applied" ? t("antes: {{type}}", { type: i.previous_type || t("sin tipo") }) : t("ahora: {{type}}", { type: i.current_type || t("sin tipo") })}>
-                    <Pill tone="success">{i.chosen_type || i.suggested_type}</Pill></CellText></DataTable.Td>
+                    <Pill tone="success">{i.suggested_type}</Pill></CellText></DataTable.Td>
                     <DataTable.Td><Pill tone={tone(i.confidence)}>{pct(i.confidence)}</Pill></DataTable.Td></>
                 : status === "none" ? <><DataTable.Td><Pill>{i.current_type || t("sin tipo")}</Pill></DataTable.Td><DataTable.Td>{i.reason || "—"}</DataTable.Td></>
                 : <DataTable.Td>{i.fold ? <CellText sub={i.fold.confidence != null ? t("confianza del decisor: {{p}}", { p: pct(i.fold.confidence) }) : undefined}>
