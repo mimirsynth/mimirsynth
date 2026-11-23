@@ -226,6 +226,9 @@ def revert_op(oid: int, ctx: BrainCtx = Depends(curator_of_brain)):
         return {"ok": True, "restored": n}
     if op.kind == "entity.merge":
         _undo_merge(ctx, d)
+        if d.get("suggestion"):   # a fold of the type corrector (#467): its row is doubtful again
+            from .retype import unfold
+            unfold(ctx.db, ctx.brain.id, d["suggestion"])
         op.status = "reverted"
         ctx.db.commit()
         audit(ctx.db, ctx.user, "vocab.revert", ctx.brain, summary=op.summary)

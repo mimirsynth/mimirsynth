@@ -1,0 +1,7 @@
+{
+ "antes de aplicar en bloque, decide al menos {{CALIBRATION}} propuestas una a una (llevas {{decided}}): así se mide cuánto acierta el decisor en este brain": "before applying in bulk, decide at least {{CALIBRATION}} suggestions one by one ({{decided}} so far): that measures how often the decider is right in this brain",
+ "elige una de las entidades con las que comparte hechos vigentes": "choose one of the entities it shares current facts with",
+ "la entidad ya no está en el grafo": "the entity is no longer in the graph",
+ "no hay una propuesta con ese id": "there is no suggestion with that id",
+ "no hay una propuesta dudosa con ese id": "there is no doubtful suggestion with that id"
+}

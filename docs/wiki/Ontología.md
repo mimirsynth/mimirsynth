@@ -20,10 +20,10 @@ Un **paquete** es una ontología de partida ya preparada. Cada tipo dice qué es
 | Paquete | Para | Tipos de entidad | Tipos de relación |
 |---|---|---|---|
 | `general` | Un cuaderno mixto o personal: personas, organizaciones, lugares, eventos, documentos, proyectos, decisiones, temas | 8 | 10 |
-| `infrastructure` | Infraestructura y operaciones TI: hosts, guests, servicios, redes, almacenamiento, incidentes, cambios, runbooks | 16 | 15 |
+| `infrastructure` | Infraestructura y operaciones TI: hosts, guests, servicios, software, modelos de IA, redes, almacenamiento, incidentes, cambios, runbooks | 18 | 15 |
 | `team-projects` | Trabajo de equipo y proyectos: personas, equipos, proyectos, tareas, hitos, reuniones, decisiones, riesgos | 11 | 14 |
 | `personal-family` | Vida familiar: personas, hogar, mascotas, lugares, viajes, citas, pertenencias, suscripciones, documentos | 12 | 11 |
-| `software-knowledge` | Ingeniería de software: repositorios, aplicaciones, componentes, librerías, APIs, entornos, versiones, errores, decisiones | 14 | 15 |
+| `software-knowledge` | Ingeniería de software: repositorios, aplicaciones, componentes, librerías, modelos de IA, APIs, entornos, versiones, errores, decisiones | 15 | 15 |
 
 El antiguo paquete `generic` es ahora `general` (el nombre antiguo sigue funcionando). Los brains que lo aplicaron conservan su ontología. Al elegir un paquete en **Aplicar paquete** se muestran su descripción, su tamaño, su versión y los estándares en los que se basa (**Basado en:**). Detalles: [`docs/es/ONTOLOGY.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/ONTOLOGY.md).
 
@@ -68,6 +68,9 @@ El LLM decide mirando las descripciones. Las buenas:
 - Dicen **cuándo sí** y **cuándo no**, con ejemplos reales.
 - Resuelven las confusiones típicas de tu dominio («los servidores físicos son *Host*, nunca *Location*»).
 - Son específicas y cortas.
+
+## Lo que nunca se crea como entidad
+Sea cual sea la ontología, algunos nombres que extrae el LLM son un detalle de un hecho, no una cosa propia: una opción de línea de comandos (`--help`, `tool --help flag`), la ruta de un campo en código (`SectionVMInfo.uptime`), una ruta o un fichero de código (`utils/secrets.py`), una URL, una fecha sola (`1 October 2026`) o una frase (cinco palabras o más que empiezan en minúscula, como «sync push from A to B»). Se descartan antes de escribir las entidades, así que los hechos se extraen entre las entidades que quedan y el detalle se queda en el texto del hecho. Se conservan a propósito: nombres de host (`api.example.com`), productos como `Node.js`, `TCP/IP`, nombres propios de cinco palabras o más («Ministerio de Sanidad y Servicios Sociales») y productos con versión (`Debian 13`), para los que está el tipo `Software` de `infrastructure`. El informe de [[Propuestas]] cuenta lo descartado, por clase.
 
 ## Qué pasa si una extracción se sale de la ontología
 La ingesta no la bloquea: el **informe de la propuesta** ([[Propuestas]]) indica cuántas entidades quedaron *sin tipo* y qué tipos se salieron. Así puedes ver qué le falta a la ontología. El [[Corrector de tipos]] revisa después esas entidades.

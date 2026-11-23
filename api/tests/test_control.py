@@ -405,7 +405,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert {"users", "brains", "proposals", "decision_engines", "alembic_version"} <= set(inspect(e1).get_table_names())
     with e1.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0061"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0062"
     store.init_db()  # idempotente
     # BD heredada (create_all sin alembic_version y sin columnas nuevas): se completa y se marca
     e2 = create_engine(f"sqlite:///{tmp_path}/legacy.db")
@@ -416,7 +416,7 @@ def test_alembic_fresh_and_legacy(tmp_path, monkeypatch):
     store.init_db()
     assert "ingest_error" in {c["name"] for c in inspect(e2).get_columns("proposals")}
     with e2.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0061"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0062"
 
 
 def test_ontology_api_and_graphiti_conversion(client):
@@ -479,6 +479,7 @@ def test_retype_doubtful_heuristics_and_counts(client, monkeypatch):
             {"uuid": "c", "name": "Cosa rara", "type": "Object", "summary": ""}]
     monkeypatch.setattr(retype, "_candidates", lambda g, prof, skip, limit: [e for e in ents if e["uuid"] not in skip])
     monkeypatch.setattr(retype, "_facts", lambda g, u: [])
+    monkeypatch.setattr(retype, "neighbours", lambda g, u: [])   # nothing to fold them into (#467)
     types = [t["name"] for t in __import__("mimirsynth.ontology", fromlist=["x"]).presets()["infrastructure"]["entity_types"]]
 
     def fake(base, model, key, state, q, opts, **k):
@@ -493,7 +494,8 @@ def test_retype_doubtful_heuristics_and_counts(client, monkeypatch):
     assert o["items"][0]["suggested_type"] == "Service"
     d = client.get("/api/brains/dud/retype?status=doubtful").json()["items"]
     assert {i["name"]: bool(i["reason"]) for i in d} == {"roulette_spin.py": True, "Cosa rara": True}
-    assert client.post("/api/brains/dud/retype/apply", json={"ids": [i["id"] for i in d]}).json()["applied"] == 0  # las dudosas no se aplican
+    assert client.post("/api/brains/dud/retype/apply", json={"ids": [i["id"] for i in d]}).status_code == 409   # in bulk, not before calibrating (#467)
+    assert client.post("/api/brains/dud/retype/apply", json={"ids": [d[1]["id"]]}).json()["applied"] == 0   # las dudosas no se aplican
     assert client.post("/api/brains/dud/retype/reject", json={"ids": [d[0]["id"]]}).json()["rejected"] == 1
 
 

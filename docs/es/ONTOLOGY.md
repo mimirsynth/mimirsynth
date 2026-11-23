@@ -7,10 +7,10 @@ La ontología de un brain le dice al ingestor qué **tipos de entidad** y de **r
 | Paquete | Para | Tipos de entidad | Tipos de relación |
 |---|---|---|---|
 | `general` | Un cuaderno mixto o personal: personas, organizaciones, lugares, eventos, documentos, proyectos, decisiones, temas | 8 | 10 |
-| `infrastructure` | Infraestructura y operaciones TI: hosts, guests, servicios, redes, almacenamiento, incidentes, cambios, runbooks | 16 | 15 |
+| `infrastructure` | Infraestructura y operaciones TI: hosts, guests, servicios, software, modelos de IA, redes, almacenamiento, incidentes, cambios, runbooks | 18 | 15 |
 | `team-projects` | Trabajo de equipo y proyectos: personas, equipos, proyectos, tareas, hitos, reuniones, decisiones, riesgos | 11 | 14 |
 | `personal-family` | Vida familiar: personas, hogar, mascotas, lugares, viajes, citas, pertenencias, suscripciones, documentos | 12 | 11 |
-| `software-knowledge` | Ingeniería de software: repositorios, aplicaciones, componentes, librerías, APIs, entornos, versiones, errores, decisiones | 14 | 15 |
+| `software-knowledge` | Ingeniería de software: repositorios, aplicaciones, componentes, librerías, modelos de IA, APIs, entornos, versiones, errores, decisiones | 15 | 15 |
 
 > El antiguo paquete `generic` se sustituyó por `general` (el nombre antiguo sigue funcionando como alias). Los brains que ya lo aplicaron conservan su ontología.
 
@@ -42,6 +42,10 @@ El corrector de tipos (Calidad del contenido → Tipos dudosos) no supone ningú
 - **Qué se aparta como dudoso** sin preguntar al decisor: un nombre de cinco palabras o más (en cualquier brain) y, solo si el paquete las activa, las reglas técnicas `file` (ruta o nombre de fichero), `option` (opción de línea de comandos), `code` (expresión de código), `version` (versión al final del nombre) y `problem` (palabras como *bug*, *error*, *fix*). `infrastructure` activa las cinco; `software-knowledge`, solo `option`, porque las demás descartarían sus propios repositorios, documentos, APIs y versiones; el resto de paquetes, ninguna.
 - **La pregunta del decisor** no excluye errores ni procedimientos si la ontología tiene un tipo para ellos (`Bug`, `Incident`, `Runbook`…).
 - Un brain con la ontología escrita a mano, o cuyo paquete ya no existe, usa lo mínimo: revisa `Object`, `Thing` y `Topic` y no aplica ninguna regla técnica.
+
+Una entidad dudosa se puede **unir** a la entidad de la que es un detalle: se pregunta al decisor de cuál de las entidades con las que comparte hechos vigentes es un detalle, y aplicarlo es la fusión de duplicados (hechos movidos, nombre como alias, el nodo antiguo como lápida `Merged`), que se deshace desde Cambios recientes. Aplicar en bloque espera a que un curador haya decidido 20 propuestas una a una en el brain, y después muestra la parte aplicada y mantenida por encima del umbral.
+
+Un paquete también puede declarar **prefijos equivalentes** para la pestaña de duplicados, en un bloque `duplicates` que se lee igual: `"duplicates": {"equivalent_prefixes": [["CT", "LXC"], ["VM", "QEMU"]]}` agrupa «CT147» con «LXC 147» (cada grupo se lleva a su primer prefijo, y solo cuenta un prefijo seguido de un número).
 
 El bloque se lee del paquete al ejecutar el corrector, así que cambiarlo no exige una versión nueva del paquete. Los tests comprueban que cada bloque solo usa tipos de su paquete y reglas conocidas, y que las reglas de un paquete no descartan los ejemplos de sus propios tipos.
 

@@ -6,7 +6,7 @@ export function SliderField({ label, value, onChange, min, max, step, width = 22
   return (
     <div className="ms-field-row">
       <Text size="xs">{label}: <span className="ms-data">{value.toFixed(2)}</span></Text>
-      <Slider w={width} min={min} max={max} step={step} value={value} onChange={onChange} />
+      <Slider w={width} min={min} max={max} step={step} value={value} onChange={onChange} thumbLabel={typeof label === "string" ? label : undefined} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
  "title": "Infrastructure and IT operations",
- "version": 2,
+ "version": 3,
  "description": "Servers, virtual machines and containers, services, networks, storage, workflows, incidents, changes and runbooks, with where each one runs and what depends on what. Aligned with the configuration-item model of ITIL/CMDB.",
  "standards": [
   "ITIL / CMDB configuration items and relationships",
@@ -23,6 +23,18 @@
    "problem"
   ]
  },
+ "duplicates": {
+  "equivalent_prefixes": [
+   [
+    "CT",
+    "LXC"
+   ],
+   [
+    "VM",
+    "QEMU"
+   ]
+  ]
+ },
  "entity_types": [
   {
    "name": "Host",
@@ -35,6 +47,14 @@
   {
    "name": "Service",
    "description": "A running application or software service that provides something to users or other systems. Use for: web apps, databases, daemons, APIs, SaaS in use. Not for: the machine or container it runs in (Host/Guest) or its domain name (Network). Examples: 'Grafana', 'PostgreSQL', 'Vaultwarden'."
+  },
+  {
+   "name": "Software",
+   "description": "A software product, package or library as such, at any version, as opposed to a running instance of it. Use for: an operating system or distribution, a package, a library, an app as released ('Debian 13', 'Web-Vault 2026.4.1', 'nginx 1.26'). Not for: the instance that runs and serves something (Service) or the machine it is installed on (Host/Guest)."
+  },
+  {
+   "name": "Model",
+   "description": "An AI or machine-learning model, identified by its name or id. Use for: LLMs, embedding and speech models ('gpt-4o-mini', 'Qwen3 4B', 'nomic-embed-text'). Not for: the service or provider that serves it (Service/Organization)."
   },
   {
    "name": "Workflow",
@@ -403,6 +423,34 @@
    "target": "Entity",
    "edge_types": [
     "RelatesTo"
+   ]
+  },
+  {
+   "source": "Service",
+   "target": "Software",
+   "edge_types": [
+    "DependsOn"
+   ]
+  },
+  {
+   "source": "Service",
+   "target": "Model",
+   "edge_types": [
+    "DependsOn"
+   ]
+  },
+  {
+   "source": "Software",
+   "target": "Host",
+   "edge_types": [
+    "HostedOn"
+   ]
+  },
+  {
+   "source": "Software",
+   "target": "Guest",
+   "edge_types": [
+    "HostedOn"
    ]
   }
  ],
