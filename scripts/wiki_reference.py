@@ -55,7 +55,7 @@ BRAIN_AREAS = [  # (English, Spanish, path prefixes after /api/brains/{slug}; ""
     ("Vocabulary", "Vocabulario", ["/vocabulary", "/vocab", "/ontology", "/retype", "/summaries"]), ("To review", "Por revisar", ["/attention"]),
     ("Movement", "Movimiento", ["/changes"]), ("Facts to review", "Hechos a revisar", ["/review"]),
     ("Contradictions", "Contradicciones", ["/conflicts"]), ("Reference queries", "Consultas de referencia", ["/refqueries"]),
-    ("Memory health", "Salud de la memoria", ["/health"]),
+    ("Memory health", "Salud de la memoria", ["/health", "/similarity"]),
     ("Replay sample", "Muestra para repetir", ["/replay"]),
     ("Curator", "Curador", ["/curator"]),
     ("Topic reviews", "Revisiones de tema", ["/topics"]),

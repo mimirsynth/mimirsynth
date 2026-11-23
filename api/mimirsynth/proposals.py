@@ -417,28 +417,46 @@ def _words(text: str | None) -> set[str]:
     return out
 
 
-def relevance(fact: str | None, proposal_words: set[str], score: float | None) -> str:
+def relevance(fact: str | None, proposal_words: set[str], score: float | None, close: float = CLOSE_SCORE) -> str:
     """«repeats»: the proposal says it again and adds nothing (the fact's words, or nearly identical embeddings, and no word of content the
-    fact lacks); «close»: very similar but it adds something, or a high similarity; «related»: what the recall brought, no more."""
+    fact lacks); «close»: very similar but it adds something, or a similarity over `close` (the brain's own, #468); «related»: what the
+    recall brought, no more. `score` and `close` are on the graph's (1 + cosine) / 2 scale."""
     fw = _words(fact)
     contains = len(fw) >= 3 and len(fw & proposal_words) / len(fw) >= REPEATS_WORDS  # the fact's words are in the proposal
     adds = bool(proposal_words - fw)                                                   # and it says something the fact does not
     if (contains or (score or 0) >= REPEATS_SCORE) and not adds:
         return "repeats"
-    return "close" if contains or (score or 0) >= CLOSE_SCORE else "related"
+    return "close" if contains or (score or 0) >= max(close, CLOSE_SCORE) else "related"
 
 
-def related_facts(brain, p: Proposal) -> list[dict]:
+def calibration(brain) -> dict | None:
+    """The brain's similarity distribution (#468), or None when it cannot be measured: the panels then keep the fixed thresholds."""
+    from . import similarity
+    from .store import _factory
+    with _factory()() as db:
+        return similarity.current(db, brain)
+
+
+def related_facts(brain, p: Proposal, cal: dict | None = None) -> list[dict]:
     """The facts a recall of the proposal's title and text brings back, each with its relevance, what it repeats first. Facts only (no
-    fragments, no documents), and not logged for the recall ratings: it is a read for the reviewer, not an agent's recall."""
-    from . import recall as recall_mod
+    fragments, no documents), and not logged for the recall ratings: it is a read for the reviewer, not an agent's recall. A fact is
+    «close» only above what two unrelated facts of this brain usually score (#468): with today's embeddings, unrelated facts sit high
+    and in a narrow band, so the fixed threshold alone called them close. The similarity compared is the plain one, before recall
+    weighs a fact down for its age or trust."""
+    from . import recall as recall_mod, similarity
     if p.purged_at or not (p.body or "").strip():
         return []
     query = f"{p.name}. {p.body}"[:1500]
     out = recall_mod.recall(brain.id, brain.graph_name, query, RELATED_FACTS, 0, 4000, n_docs=0, min_similarity=0)  # the closest, however far
-    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "source_type", "target_type", "valid_at", "invalid_at", "status", "score")
+    keys = ("uuid", "fact", "name", "source", "target", "source_uuid", "target_uuid", "source_type", "target_type", "valid_at", "invalid_at", "status", "score",
+            "similarity")
     words = _words(query)
-    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score")), "mostly_new": mostly_new(f.get("fact"), words)}
+    close = (1 + similarity.close_cosine(cal)) / 2
+
+    def raw(f):   # the graph's own scale, from the plain cosine when recall weighed the score
+        return (1 + f["similarity"]) / 2 if f.get("similarity") is not None else f.get("score")
+    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, raw(f), close), "mostly_new": mostly_new(f.get("fact"), words),
+              "standing": similarity.standing(f.get("similarity"), cal)}
              for f in out.get("facts", [])]
     return sorted(facts, key=lambda f: (_RANK[f["relevance"]], -(f["score"] or 0)))  # what it repeats first, then the closest
 
@@ -474,7 +492,8 @@ def check_related(pid: int) -> None:
         if not p or p.status != "pending" or p.kind == "correction" or not ingest.enabled():
             return  # without an extraction engine nothing reaches the graph, so there is nothing to compare with
         try:
-            v = verdict(related_facts(db.get(Brain, p.brain_id), p))
+            b = db.get(Brain, p.brain_id)
+            v = verdict(related_facts(b, p, calibration(b)))
         except Exception:  # noqa: BLE001 — no engine or graph yet: nothing to rank by
             return
         p.related_verdict = v
@@ -518,16 +537,20 @@ def related(pid: int, ctx: BrainCtx = Depends(curator)):
     """What the brain already knows close to a proposal: the facts a recall of its title and text brings back, for the curator to check
     it against (a duplicate, a contradiction, or nothing at all: new knowledge). It is a read for the reviewer, not an agent's recall, so it
     is not logged for the recall ratings. Opening it refreshes the verdict the queue ranks by."""
+    from . import similarity
     p = _get(ctx, pid)
+    cal = calibration(ctx.brain)
     try:
-        facts = related_facts(ctx.brain, p)
+        facts = related_facts(ctx.brain, p, cal)
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"no se pudo buscar lo relacionado: {e}") from e
     curated = (p.category or "").startswith("curator.")   # the curator's proposal keeps the verdict it was written with (#460)
     if p.status == "pending" and p.kind != "correction" and not p.purged_at and not curated and (v := verdict(facts)) != p.related_verdict:
         p.related_verdict = v
         ctx.db.commit()
-    return {"facts": facts}
+    base = (cal or {}).get("baseline") or {}
+    return {"facts": facts, "calibration": {"measured": bool(base) and not (cal or {}).get("too_few"), "close": similarity.close_cosine(cal),
+                                            "usual": base.get("p50"), "p95": base.get("p95"), "p99": base.get("p99")}}
 
 
 @router.post("/{pid}/undo")

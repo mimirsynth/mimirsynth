@@ -107,11 +107,11 @@ def test_related_facts_for_the_reviewer(client, monkeypatch):  # noqa: F811
     r = client.get(url, headers=curator).json()
     assert r["facts"] == [{"uuid": "f1", "fact": "nas01 is in room A", "name": "LOCATED_AT", "source": "nas01", "target": "Room A", "source_uuid": None,
                            "target_uuid": None, "source_type": "Device", "target_type": None, "valid_at": "2026-01-01T00:00:00Z", "invalid_at": None, "status": None, "score": 0.8,
-                           "relevance": "related", "mostly_new": True}]
+                           "similarity": None, "relevance": "related", "mostly_new": True, "standing": None}]
     assert calls[0][0].startswith("NAS movido") and calls[0][1:] == (5, 0, 0)  # facts only: no fragments, no documents
     assert logged == []  # not an agent's recall: nothing for the recall ratings
     _set(pid, purged_at=__import__("datetime").datetime.now())
-    assert client.get(url, headers=curator).json() == {"facts": []}
+    assert client.get(url, headers=curator).json()["facts"] == []
 
 
 def test_related_facts_say_how_close_they_are():

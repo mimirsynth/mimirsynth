@@ -271,6 +271,14 @@ def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
         extra = {"sources": src} if src else {}
         part("probes", lambda: probes(lambda text: recall(brain_id, gname, text, 8, 4, 6000, lang=lang, **extra), queries, check))
     part("redundancy", lambda: redundancy(g))
+
+    def similar():   # how close two facts of this brain usually are (#468), kept for the panels that compare against it
+        from . import similarity
+        with _factory()() as db:
+            m = similarity.measure(g, db, brain_id)
+        similarity.remember(brain_id, m)
+        return {"similarity": m}
+    part("similarity", similar)
     part("contradictions", lambda: {"contradictions": conflicts.scan(g, amap, functional, dismissed=dismissed)["total"]
                                     if functional else None})
 

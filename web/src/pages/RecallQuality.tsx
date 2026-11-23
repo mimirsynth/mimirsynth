@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { fmt, get, send } from "../api";
 import { Block, Btn, DataState, DataTable, EmptyState, MutationError, SettingsBody, SettingsGroup, SettingsRow, StatCard, StatGrid, Toggle, ViewBar } from "../ui";
 import ReplayRuns from "./ReplayRuns";
+import SimilarityBlock from "./SimilarityBlock";
 
 type Counts = { useful: number; irrelevant: number; incorrect: number };
 type Quality = { days: number; recalls: number; rated_recalls: number; ratings: number; by_kind: Record<string, Counts>;
@@ -77,6 +78,7 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
           </DataTable>
         </Block>}
       </> : <EmptyState>{t("Nadie ha valorado el recall en los últimos 30 días.")}</EmptyState>}
+      <SimilarityBlock graph={graph} canAdmin={canAdmin} />
       {canAdmin && <SettingsGroup title={t("Qué se guarda de las consultas")}>
         <SettingsRow label={t("Guardar el texto de las consultas")}
           help={t("Por defecto solo se guarda una huella y la longitud de cada consulta, porque llevan los prompts de las personas. Con esto se guarda el texto, que se borra a los {{n}} días; al desmarcarlo se borra ya.", { n: d.query_text_days })}>
