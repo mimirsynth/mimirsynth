@@ -65,7 +65,6 @@ a.ms-entchip:focus-visible { outline: 2px solid var(--ms-focus); outline-offset:
 /* a chip that may wrap (in a table cell): the name breaks across lines, any word too long breaks too, and the dot stays by the first line */
 .ms-entchip[data-wrap] { white-space: normal; overflow-wrap: anywhere; align-items: flex-start; }
 .ms-entchip[data-wrap] .ms-entchip-dot { margin-top: 0.42em; }
-.ms-nowrap { white-space: nowrap; }   /* a short run of words kept on one line (a count and what it counts) */
 .ms-entchip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ms-type); flex-shrink: 0; }
 .ms-pill[data-strong] { background: var(--ms-accent); color: var(--ms-on-accent); border-color: var(--ms-accent); }
 :root[data-mantine-color-scheme="light"] .ms-pill[data-tone="success"] { background: #d3ecdf; color: #17603a; border-color: #8cc9a8; }
