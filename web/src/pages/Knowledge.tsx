@@ -11,6 +11,8 @@ import { Link, useSearchParams } from "react-router-dom";
 type Doc = {
   url?: string; id: number; source: string; title: string; filename: string; size: number; status: string; error: string; chunks: number;
   progress: { done: number; total: number } | null; created_at: string; updated_at: string; sha256: string; secrets?: SecretFinding[]; duplicate_of?: number | null; ocr?: OcrInfo | null;
+  // a chat transcript (issue 466): held out of the index, indexed as a conversation, or declared a document by a person
+  transcript?: "held" | "transcript" | "document" | null;
 };
 // what OCR did with a scanned PDF or an image (issue 135)
 type OcrInfo = { engine?: "tesseract" | "vision"; pages?: number; of?: number; skipped?: number; unread?: number; failed?: number[]; tesseract?: number };
@@ -24,8 +26,8 @@ type Adapter = { id: string; label: string; collection_label: string; fields: { 
 type Up = { key: string; name: string; size: number; done: number; state: "subiendo" | "listo" | "duplicado" | "error"; msg?: string };
 const UP_LABEL: Record<Up["state"], string> = { subiendo: T("subiendo"), listo: T("subido"), duplicado: T("duplicado"), error: T("error") };
 
-const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger", duplicate: "neutral" };
-const LABEL: Record<string, string> = { active: T("indexado"), indexing: T("indexando"), pending: T("en cola"), error: T("error"), duplicate: T("duplicado"), blocked: T("bloqueado por un derecho al olvido") };
+const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger", duplicate: "neutral", transcript: "neutral" };
+const LABEL: Record<string, string> = { active: T("indexado"), indexing: T("indexando"), pending: T("en cola"), error: T("error"), duplicate: T("duplicado"), transcript: T("conversación sin indexar"), blocked: T("bloqueado por un derecho al olvido") };
 // what a source is, in the table and its filter
 const KIND: Record<string, string> = { upload: T("subidas"), wiki: T("wiki"), git: T("repositorio"), directory: T("carpeta") };
 // the paths a new Git source indexes, one per line in the form (the server checks them again)
@@ -122,6 +124,9 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   const dedupeDone = dedupeJob.data?.status === "done" ? dedupeJob.data.result : null;
   useEffect(() => { if (dedupeDone) { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } }, [dedupeDone, graph, qc]);
   const reindex = useMutation({ mutationFn: (id: number) => send("POST", `docs/${id}/reindex`, undefined, { graph }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["doc", graph] }); } });
+  // a person decides about a chat transcript (issue 466)
+  const indexAs = useMutation({ mutationFn: (b: { id: number; as: "transcript" | "document" }) => send("POST", `docs/${b.id}/transcript`, { as: b.as }, { graph }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["doc", graph] }); } });
 
   const roots = useQuery({ queryKey: ["docs-roots", graph], enabled: isAdmin, queryFn: () => get<{ roots: { name: string; available: boolean }[] }>("docs/roots", { graph }) });
   const refreshSrc = () => { for (const k of ["docs", "docs-sources", "jobs", "jobs-summary"]) qc.invalidateQueries({ queryKey: [k, graph] }); };
@@ -355,6 +360,25 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                 <Group><Btn size="row" onClick={() => setOpen(detail.data!.duplicate_of!)}>{t("Ver el original")}</Btn></Group>
               </Stack>
             </Notice>}
+            {detail.data.status === "transcript" && <Notice title={t("Parece una conversación")}>
+              <Stack gap={4}>
+                <Text size="sm">{t("Su texto son sobre todo turnos de un chat o de una reunión, así que no se trocea ni llega al recall: lo que se dijo en una conversación no vale lo mismo que la documentación. Puedes leerlo y descargarlo.")}</Text>
+                {isAdmin ? <>
+                  <Text size="sm">{t("Si quieres que el agente lo encuentre, indéxalo como conversación: sus pasajes quedarán por debajo de los documentos igual de relevantes. Si no es una conversación, indéxalo como un documento más.")}</Text>
+                  <Group gap={6}>
+                    <Btn size="row" loading={indexAs.isPending && indexAs.variables?.as === "transcript"} onClick={() => indexAs.mutate({ id: detail.data!.id, as: "transcript" })}>{t("Indexar como conversación")}</Btn>
+                    <Btn size="row" loading={indexAs.isPending && indexAs.variables?.as === "document"} onClick={() => indexAs.mutate({ id: detail.data!.id, as: "document" })}>{t("No es una conversación")}</Btn>
+                  </Group>
+                </> : <Text size="sm">{t("Un administrador del brain puede indexarlo como conversación o como documento.")}</Text>}
+              </Stack>
+            </Notice>}
+            {detail.data.status === "active" && detail.data.transcript === "transcript" && <Notice title={t("Indexado como conversación")}>
+              <Stack gap={4}>
+                <Text size="sm">{t("En el recall, sus pasajes quedan por debajo de los documentos igual de relevantes, y al agente le llegan marcados como conversación de chat.")}</Text>
+                {isAdmin && <Group><Btn size="row" loading={indexAs.isPending} onClick={() => indexAs.mutate({ id: detail.data!.id, as: "document" })}>{t("No es una conversación")}</Btn></Group>}
+              </Stack>
+            </Notice>}
+            <MutationError error={indexAs.error} />
             <Group gap={6}>
               <Btn size="row" icon="download" component="a" href={`/api/brains/${graph}/docs/${detail.data.id}/file`}>{t("Descargar original")}</Btn>
               <Btn size="row" icon="knowledge" onClick={() => setFullText(detail.data!.id)}>{t("Ver texto completo")}</Btn>

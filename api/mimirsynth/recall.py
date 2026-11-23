@@ -131,6 +131,8 @@ def docs_block(passages: list[dict], lang: str = "es") -> str:
         updated = p.get("source_updated_at") or p.get("last_seen_at")
         if updated:   # how old the page is, next to what it says (#286)
             cite += tr(" · actualizado el {{date}}", lang, date=_fmt_date(updated))
+        if p.get("transcript"):   # what was said in a chat, not curated documentation (#466)
+            cite += tr(" · conversación de chat", lang)
         entry = (tr("### {{cite}} [doc {{doc}}, trozo {{chunk}}]", lang, cite=cite, doc=p["document_id"], chunk=p["chunk_idx"]) + "\n" + p["text"]
                  + _superseded_note(p, lang))
         if size + len(entry) > DOC_BLOCK_CHARS:

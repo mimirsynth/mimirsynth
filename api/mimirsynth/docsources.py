@@ -13,7 +13,7 @@ from sqlalchemy import select
 import hashlib
 import re
 
-from . import appsettings, docindex, docs, docstore, gitsource, jobs, wikis
+from . import appsettings, docindex, docs, docstore, gitsource, jobs, transcripts, wikis
 from .i18n import SOURCE, tr
 from .secretbox import seal, unseal
 from .deps import BrainCtx, admin_of_brain, audit
@@ -414,7 +414,8 @@ def _scan_git(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         seen.add(path)
         sha = hashlib.sha256(data).hexdigest()
         ext = docstore.ext_of(path)
-        meta = {"repo": gitsource.web_base(url) or url, "branch": branch or None, "commit": head.commit, "blob": blob, "path": path, "title_auto": False}
+        meta = {"repo": gitsource.web_base(url) or url, "branch": branch or None, "commit": head.commit, "blob": blob, "path": path, "title_auto": False,
+                **transcripts.kept(doc.meta if doc else None)}
         link = gitsource.web_link(url, head.commit, path) or ""
         if doc:
             old_dir = docstore.doc_dir(doc.brain_id, doc.source_id, doc.id)
@@ -644,7 +645,7 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         if not body:
             unchanged += 1  # página vacía: no hay nada que indexar
             continue
-        meta = {"collection": pg.collection, "collection_id": pg.collection_id, "title_auto": False}
+        meta = {"collection": pg.collection, "collection_id": pg.collection_id, "title_auto": False, **transcripts.kept(d.meta if d else None)}
         if d and d.sha256 == sha:  # solo cambió la fecha o el título no afecta al texto
             d.source_updated_at, d.meta, d.url = stamp, meta, pg.url
             unchanged += 1

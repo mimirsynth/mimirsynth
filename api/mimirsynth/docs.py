@@ -9,13 +9,14 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from . import appsettings, docindex, docstore, index, jobs, ocr, secretguard
+from . import appsettings, docindex, docstore, index, jobs, ocr, secretguard, transcripts
 from .config import settings
 from .deps import BrainCtx, admin_of_brain, audit, contributor_of_brain, reader
 from .docextract import ExtractError, chunk, extract
@@ -46,7 +47,7 @@ def _embed(texts: list[str]) -> list[list[float]]:
 
 def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
     """Extrae, trocea, calcula embeddings y sustituye los trozos del documento. Deja el resultado en su estado (active | duplicate |
-    error) y devuelve el error (vacío si fue bien)."""
+    transcript | error) y devuelve el error (vacío si fue bien)."""
     with _SEM, _factory()() as db:
         d = db.get(Document, doc_id)
         if not d:
@@ -90,8 +91,14 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
             d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "duplicate_of"}, **({"duplicate_of": orig.id} if orig else {})}
             db.commit()  # el hash, visible ya para quien se indexe a la vez
             promote = bool(before and before != h)  # cambió el texto: sus duplicados ya no lo son
+            held = False
+            if (d.meta or {}).get("transcript") not in transcripts.CHOSEN:   # a person's choice stands; otherwise look (again: the text may have changed)
+                held = transcripts.looks_like(text)
+                d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "transcript"}, **({"transcript": transcripts.HELD} if held else {})}
             if orig:
                 raise _Duplicate
+            if held:
+                raise _Held
             vecs: list[list[float]] = []
             _PROGRESS[doc_id] = {"done": 0, "total": len(chunks)}
             from .usage import scope
@@ -110,6 +117,10 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
         except _Duplicate:  # el mismo texto ya está indexado en el brain: ni trozos ni embeddings (#117)
             docindex.delete_document(d.id)
             d.chunks, d.status = 0, "duplicate"
+        except _Held:  # a chat transcript: kept and readable, but out of the index until a person decides (#466)
+            docindex.delete_document(d.id)
+            d.chunks, d.status = 0, "transcript"
+            promote = True  # if it was the original of copies, one of them goes through the same check
         except jobs.Cancelled:
             d.status, d.error = "error", "indexación cancelada"
             _PROGRESS.pop(doc_id, None)
@@ -138,6 +149,10 @@ def _vision_engine(db, brain: Brain | None) -> dict | None:
 
 class _Duplicate(Exception):
     pass
+
+
+class _Held(Exception):
+    """A chat transcript nobody asked to index (#466)."""
 
 
 def norm_hash(text: str) -> str:
@@ -256,7 +271,7 @@ def _out(d: Document, source_name: str = "") -> dict:
             "sha256": d.sha256, "status": d.status, "error": d.error, "chunks": d.chunks, "progress": _PROGRESS.get(d.id),
             "created_at": d.first_seen_at, "updated_at": d.source_updated_at or d.last_seen_at, "url": d.url, "external_id": d.external_id,
             "secrets": secretguard.describe((d.meta or {}).get("secrets")), "duplicate_of": (d.meta or {}).get("duplicate_of") if d.status == "duplicate" else None,
-            "ocr": (d.meta or {}).get("ocr")}
+            "ocr": (d.meta or {}).get("ocr"), "transcript": (d.meta or {}).get("transcript")}
 
 
 def _doc(ctx: BrainCtx, doc_id: int) -> Document:
@@ -432,6 +447,28 @@ def reindex(doc_id: int, unblock: bool = False, ctx: BrainCtx = Depends(contribu
         raise HTTPException(409, "bloqueado por un derecho al olvido: corrígelo en su origen o vuelve a indexarlo a propósito (unblock=true)")
     start_index(d.id, ctx.user.id)
     audit(ctx.db, ctx.user, "document.reindex", ctx.brain, id=doc_id)
+    return {"ok": True}
+
+
+class TranscriptIn(BaseModel):
+    index_as: Literal["transcript", "document"] = Field(alias="as")
+
+
+@router.post("/{doc_id:int}/transcript")
+def index_as(doc_id: int, body: TranscriptIn, ctx: BrainCtx = Depends(contributor_of_brain)):
+    """A person decides about a chat transcript (#466): index it as a conversation, whose passages weigh less in recall, or as an
+    ordinary document. The choice stands through re-syncs and is never detected again."""
+    d = _doc(ctx, doc_id)
+    if not allows(ctx.role, "admin"):
+        raise HTTPException(403, "requiere rol admin o superior")
+    if d.status == "indexing":
+        raise HTTPException(409, "ya se está indexando")
+    if d.status == "blocked":   # a right-to-be-forgotten deletion took it out (#134): only a deliberate reindex brings it back
+        raise HTTPException(409, "bloqueado por un derecho al olvido: corrígelo en su origen o vuelve a indexarlo a propósito (unblock=true)")
+    d.meta = {**(d.meta or {}), "transcript": body.index_as}
+    ctx.db.commit()
+    start_index(d.id, ctx.user.id)
+    audit(ctx.db, ctx.user, "document.transcript", ctx.brain, id=doc_id, index_as=body.index_as)
     return {"ok": True}
 
 
