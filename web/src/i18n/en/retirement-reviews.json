@@ -1,6 +1,6 @@
 {
  "(su texto llevaba un secreto que el brain bloquea)": "(its text carried a secret the brain blocks)",
- "Además, cuando se ingiere un hecho que dice que una entidad se retiró o se sustituyó, se pide sola una revisión de esa entidad, marcada «Por una retirada».": "Also, when a fact saying an entity was retired or replaced is ingested, a review of that entity is asked for on its own, marked «From a retirement».",
+ "Además, cuando se ingiere un hecho que dice que una entidad se retiró o se sustituyó, se pide sola una revisión de esa entidad, marcada «Por una retirada».": "Also, when a fact saying an entity was retired or replaced is ingested, a review of that entity is asked for on its own, marked «Started by a retirement».",
  "Es una relación genérica: no puede marcar una retirada.": "It is a generic relation: it cannot mark a retirement.",
  "No": "No",
  "No se pudo pedir la revisión de una retirada: {{e}}": "The review of a retirement could not be asked for: {{e}}",

@@ -44,7 +44,7 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Muestra para repetir** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` · `GET/POST /replay/runs` · `GET /replay/runs/{rid}` · `POST /replay/samples/{sid}/promote` | administrador |
 | **Curador** | `PUT /curator/distil/{pid}` · `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curador |
 | | `PUT /curator/settings` | administrador |
-| **Revisiones de tema** | `GET /topics` · `GET /topics/{rid}` · `POST /topics/entity/{uuid}` · `POST /topics/{rid}/actions/{i}/approve` · `POST /topics/{rid}/actions/{i}/reject` · `POST /topics/{rid}/actions/decide` | curador |
+| **Revisiones de tema** | `GET /topics` · `GET /topics/queue` · `GET /topics/{rid}` · `POST /topics/entity/{uuid}` · `POST /topics/{rid}/actions/{i}/approve` · `POST /topics/{rid}/actions/{i}/reject` · `POST /topics/{rid}/actions/decide` | curador |
 | **Hechos archivados** | `GET /archive` · `DELETE /archive/{uuid}` | curador |
 | **Derecho al olvido** | `POST /forget/report` · `POST /forget/run` | propietario |
 | **Hechos verificables** | `GET /verifiers` · `GET /probes` · `POST /probes/run` | curador |
