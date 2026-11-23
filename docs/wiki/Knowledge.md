@@ -32,7 +32,7 @@ Columns: **Document** (title and file name), **Source**, **Size**, **Chunks**, *
 | Queued | Waiting its turn |
 | Error | It failed (the reason appears in the detail) |
 | Duplicate | Same text as another document of the brain: not indexed again (see below) |
-| Conversation | A chat or meeting transcript: kept, but out of recall until an administrator decides (see below) |
+| On hold | A chat or meeting transcript: kept, but out of recall until an administrator decides (see below) |
 
 ### Duplicate documents
 The same note can arrive twice: from two folders, from a folder and a wiki, or uploaded under another name. When a document's extracted text matches one already indexed in the brain (ignoring case and spacing), it is marked **Duplicate**: it is neither chunked nor embedded, and recall uses the original.
@@ -41,7 +41,7 @@ The same note can arrive twice: from two folders, from a folder and a wiki, or u
 - **Find duplicates** (brain administrators), next to the filters, checks the documents indexed before this check existed and takes the repeated ones out of the index. It runs as a job with progress ([[Jobs]]) and says how many it took out. **Nothing is deleted at the source.**
 
 ### Conversations
-A document whose text is mostly the turns of a chat or a meeting is marked **Conversation**: it is kept and can be read, but it is neither chunked nor embedded, so it does not reach recall. Its detail explains why and, for brain administrators, has two buttons:
+A document whose text is mostly the turns of a chat or a meeting is put **On hold**: it is kept and can be read, but it is neither chunked nor embedded, so it does not reach recall. Its detail explains why and, for brain administrators, has two buttons:
 - **Index as a conversation:** it is indexed, and in recall its passages rank below documents of equal relevance and reach the agent marked as a chat conversation. Its row says *as a conversation* under the state.
 - **Index as a document:** it is indexed as an ordinary document.
 

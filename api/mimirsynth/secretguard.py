@@ -81,7 +81,7 @@ def audit_existing(db, brain: Brain, max_items: int = 500, max_bytes: int = 200 
     for p in db.scalars(select(Proposal).where(Proposal.brain_id == brain.id).order_by(Proposal.id.desc())):
         counts["proposals"] += 1
         look("proposal", p.id, p.name, f"{p.name}\n{p.body}")
-    for d in db.scalars(select(Document).where(Document.brain_id == brain.id, Document.status == "active", Document.text_ref != "")):
+    for d in db.scalars(select(Document).where(Document.brain_id == brain.id, Document.status.in_(("active", "transcript")), Document.text_ref != "")):
         try:
             path = docstore.resolve(d.text_ref)
             size = path.stat().st_size

@@ -96,6 +96,7 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
                 held = transcripts.looks_like(text)
                 d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "transcript"}, **({"transcript": transcripts.HELD} if held else {})}
             if orig:
+                _inherit_choice(d, orig)
                 raise _Duplicate
             if held:
                 raise _Held
@@ -179,6 +180,15 @@ def _demote_newer(db, d: Document) -> None:
             docindex.delete_document(n.id)
             n.status, n.chunks = "duplicate", 0
         n.meta = {**(n.meta or {}), "duplicate_of": d.id}
+        _inherit_choice(n, d)
+
+
+def _inherit_choice(dup: Document, orig: Document) -> None:
+    """A copy takes the original's transcript choice (#466): with the same text the decision is the same, and when the copy is promoted
+    because the original went away, it is indexed the way a person decided instead of being held again."""
+    v = (orig.meta or {}).get("transcript")
+    if v in transcripts.CHOSEN and (dup.meta or {}).get("transcript") not in transcripts.CHOSEN:
+        dup.meta = {**(dup.meta or {}), "transcript": v}
 
 
 def promote_duplicates(original_id: int) -> int | None:

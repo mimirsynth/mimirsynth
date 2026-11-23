@@ -152,10 +152,28 @@ def _documents(db, brain_id: int, m: Matcher) -> dict[int, int]:
     for did, txt in db.execute(q.limit(MAX_ROWS)):
         if m(txt):
             docs[did] = docs.get(did, 0) + 1
+    return _named_documents(db, brain_id, m, docs)
+
+
+def _named_documents(db, brain_id: int, m: Matcher, docs: dict[int, int]) -> dict[int, int]:
+    """Adds the documents whose title or file name names it, or whose stored text does when it has no chunks to search."""
+    from .models import Document
     for d in db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status != "deleted")):
-        if d.id not in docs and (m(d.title) or m(d.filename)):
+        if d.id not in docs and (m(d.title) or m(d.filename) or (d.chunks == 0 and d.status != "blocked" and m(_stored_text(d)))):
             docs[d.id] = 0
     return docs
+
+
+def _stored_text(d) -> str:
+    """The normalised text of a document with no chunks to search: a chat transcript held out of the index (#466), a duplicate, one
+    that failed after extraction. A person indexing it later must not bring the forgotten entity back."""
+    if not d.text_ref:
+        return ""
+    from . import docstore
+    try:
+        return docstore.resolve(d.text_ref).read_text(encoding="utf-8", errors="replace")
+    except (OSError, ValueError):
+        return ""
 
 
 def _proposals(db, brain_id: int, m: Matcher) -> list:

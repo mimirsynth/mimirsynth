@@ -7,6 +7,7 @@ import pytest
 from test_control import client  # noqa: F401
 from test_docs import MD, _upload, fake_index  # noqa: F401
 from test_docsources import _FakeOutline, lib  # noqa: F401
+from test_gitsource import _commit, origin  # noqa: F401
 
 from mimirsynth import recall, transcripts
 from mimirsynth.models import Document
@@ -33,8 +34,29 @@ def test_detects_transcripts(text):
     assert transcripts.looks_like(text)
 
 
-@pytest.mark.parametrize("text", [MD, FAQ, FAQ_ES, CONFIG, SCORES, RUNBOOK, FEW, MONOLOGUE, ""],
-                         ids=["markdown", "faq", "faq-es", "config", "scores", "runbook", "too-few", "one-speaker", "empty"])
+CHANGELOG = "\n\n".join(f"## [1.{i}.0](https://x.test/compare/v1.{i}) (2026-10-{i + 10:02d})\n\n### Features\n\n"
+                          f"* **api:** add the export option number {i} ([#{i}](https://x.test/{i})) ([abc{i}](https://x.test/c/{i}))\n"
+                          f"* **web:** show the new status in the list {i} ([#{i}](https://x.test/{i}))\n* allow longer names in sources {i}" for i in range(10))
+PROS = "\n\n".join(f"**Ventajas:** el servicio arranca mucho más rápido en el nodo {i}\n**Inconvenientes:** gasta más memoria en el nodo {i}" for i in range(5))
+ACTIONS = "# Acta de la reunión\n\n" + "\n".join(f"- {'Ana' if i % 2 else 'Luis'}: revisar la configuración del servidor {i} antes del lunes" for i in range(10))
+LOG = "\n".join(f"2024-03-12 10:{i:02d}:03 {'INFO' if i % 2 else 'DEBUG'}: connection pool resized to {i} workers" for i in range(10))
+BILINGUAL = "\n".join(f"Español: el documento se guarda en la carpeta {i}\nEnglish: the document is stored in folder {i}" for i in range(5))
+EXAMPLES = "\n".join(f"**User:**\nuna pregunta de ejemplo {i}\n\n**Assistant:**\nuna respuesta de ejemplo {i}\n" for i in range(2))
+PROMPT_GUIDE = ("# Guía de prompts\n\nCómo escribir buenos prompts.\n\n" + EXAMPLES + "\n"
+                + "\n".join(f"Un párrafo largo de explicación, el número {i}, con su contenido." for i in range(150)))
+SHORT_RUNBOOK = "# Reinicio del nodo\n\nCuando el nodo cae, avisa así al equipo:\n\n" + "\n".join(
+    f"{'Ana' if i % 2 else 'Luis'}: el servidor vuelve a estar en marcha {i}" for i in range(6))
+CHATGPT = "\n\n".join(f"{'You said:' if i % 2 == 0 else 'ChatGPT said:'}\n\nUn mensaje bastante largo, el número {i}." for i in range(8))
+
+
+def test_detects_a_copied_chatgpt_conversation():
+    assert transcripts.looks_like(CHATGPT)
+
+
+@pytest.mark.parametrize("text", [MD, FAQ, FAQ_ES, CONFIG, SCORES, RUNBOOK, FEW, MONOLOGUE, "", CHANGELOG, PROS, ACTIONS, LOG, BILINGUAL,
+                                  PROMPT_GUIDE, SHORT_RUNBOOK],
+                         ids=["markdown", "faq", "faq-es", "config", "scores", "runbook", "too-few", "one-speaker", "empty", "changelog",
+                              "pros-cons", "action-items", "log", "bilingual", "prompt-guide", "short-runbook"])
 def test_documents_stay_documents(text):
     assert not transcripts.looks_like(text)
 
@@ -167,3 +189,102 @@ def test_recall_says_a_passage_is_a_conversation():
     assert "conversación de chat" in recall.docs_block([{**p, "transcript": True}], "es")
     assert "chat conversation" in recall.docs_block([{**p, "transcript": True}], "en")
     assert "conversación" not in recall.docs_block([p], "es")
+
+
+def test_forget_finds_a_held_transcript_by_its_stored_text(client, fake_index):
+    """A held transcript has no chunks for the right to be forgotten to search: its stored text is read instead, so it is blocked and
+    nobody can index it later with the forgotten person in it (#134)."""
+    from mimirsynth import forget
+    slug = _brain(client)
+    _, r = _upload(client, slug, "chat.txt", (CHAT + "[11:00] Ana: Juan Pérez llamó para lo de la factura del servidor\n").encode())
+    held = r.json()["id"]
+    _, r = _upload(client, slug, "otro.txt", WHATSAPP.encode())
+    other = r.json()["id"]
+    with _factory()() as db:
+        bid = db.get(Document, held).brain_id
+        found = forget._named_documents(db, bid, forget.Matcher(["Juan Pérez"]), {})
+        assert found == {held: 0}                                   # the other held one does not name him
+        assert forget._named_documents(db, bid, forget.Matcher(["Juan Pérez"]), {held: 2}) == {held: 2}
+        d = db.get(Document, held)
+        d.status = "blocked"
+        db.commit()
+        assert forget._named_documents(db, bid, forget.Matcher(["Juan Pérez"]), {}) == {}   # already blocked: nothing to do again
+    assert other != held
+    assert client.post(f"/api/brains/{slug}/docs/{held}/transcript", json={"as": "transcript"}).status_code == 409
+
+
+@pytest.mark.parametrize("text", ["user" + " " * 5000 + "x", " " * 100000 + "!", " " * 50000 + "-" + " " * 50000 + "!", "**a**" + " " * 100000 + "x",
+                                  ("user" + " " * 1000 + "x\n") * 2000, ("a " * 150 + ":" + " x" * 100 + "\n") * 600],
+                         ids=["role-tail", "lead", "dash", "heading-tail", "many-lines", "long-label"])
+def test_hostile_text_does_not_stall_detection(text):
+    import time
+    t = time.monotonic()
+    transcripts.looks_like(text)
+    assert time.monotonic() - t < 1.0
+
+
+def test_git_resync_keeps_both_choices(client, fake_index, origin):
+    _commit(origin, {"docs/chat.md": CHAT, "docs/otro.md": WHATSAPP}, "chats")
+    slug = _brain(client)
+    base = f"/api/brains/{slug}/docs"
+    sid = client.post(f"{base}/sources/git", json={"name": "Repo", "url": origin.as_uri()}).json()["id"]
+    ds = _docs(client, slug)
+    assert ds["docs/chat.md"]["status"] == ds["docs/otro.md"]["status"] == "transcript"
+    client.post(f"{base}/{ds['docs/chat.md']['id']}/transcript", json={"as": "transcript"})
+    client.post(f"{base}/{ds['docs/otro.md']['id']}/transcript", json={"as": "document"})
+    _commit(origin, {"docs/chat.md": CHAT + "[11:00] Ana: y una cosa más que se me olvidaba decirte\n",
+                     "docs/otro.md": WHATSAPP + "\n12/03/24, 11:00 - Ana: y una cosa más que contar del backup\n"}, "más")
+    assert _scan(client, slug, sid)["changed"] == 2                                  # the files changed, and the metadata was rebuilt
+    ds = _docs(client, slug)
+    assert (ds["docs/chat.md"]["status"], ds["docs/chat.md"]["transcript"]) == ("active", "transcript")
+    assert (ds["docs/otro.md"]["status"], ds["docs/otro.md"]["transcript"]) == ("active", "document")   # never detected again
+
+
+def test_a_copy_inherits_the_choice_and_keeps_it_when_promoted(client, fake_index):
+    slug = _brain(client)
+    base = f"/api/brains/{slug}/docs"
+    _, r = _upload(client, slug, "chat.txt", CHAT.encode())
+    a = r.json()["id"]
+    client.post(f"{base}/{a}/transcript", json={"as": "transcript"})
+    _, r = _upload(client, slug, "copia.txt", (CHAT + "\n\n").encode())             # same text for the index, another file
+    b = r.json()["id"]
+    d = client.get(f"{base}/{b}").json()
+    assert (d["status"], d["transcript"]) == ("duplicate", "transcript")
+    assert client.delete(f"{base}/{a}").status_code == 200                           # the original goes: the copy is indexed as decided
+    d = client.get(f"{base}/{b}").json()
+    assert (d["status"], d["transcript"]) == ("active", "transcript") and d["chunks"] > 0
+
+
+def test_ask_marks_a_conversation_passage():
+    from mimirsynth import answer
+    doc = {"title": "chat.txt", "heading_path": "", "document_id": 1, "chunk_idx": 0, "text": "Ana: hola"}
+    sources, text = answer.evidence({"facts": [], "chunks": [], "documents": [{**doc, "transcript": True}, doc]})
+    assert "[D1] chat conversation passage «chat.txt»" in text and "[D2] document passage «chat.txt»" in text
+    assert sources[0]["transcript"] is True and "transcript" not in sources[1]
+
+
+def test_import_with_vectors_leaves_a_held_transcript_unchunked(client, fake_index, tmp_path):
+    import json
+
+    from mimirsynth import brainimport
+    slug = _brain(client)
+    _, r = _upload(client, slug, "chat.txt", CHAT.encode())
+    did = r.json()["id"]
+    (tmp_path / "vectors").mkdir()
+    (tmp_path / "vectors" / "doc_chunks.jsonl").write_text(json.dumps({"document_id": 7, "chunk_idx": 0, "text": "Ana: hola", "embedding": [0.1] * 4}) + "\n",
+                                                           encoding="utf-8")
+    job = type("J", (), {"check": lambda self: None, "progress": lambda self, *a: None, "note": lambda self, *a: None})()
+    with _factory()() as db:
+        bid = db.get(Document, did).brain_id
+        assert brainimport._doc_chunks(job, db, tmp_path, bid, {7: did}, {did: CHAT}, reuse=True) == {"copied": 0, "computed": 0}
+        assert db.get(Document, did).status == "transcript" and did not in fake_index
+
+
+def test_the_secret_scan_reads_held_transcripts(client, fake_index):
+    from mimirsynth import secretguard
+    from mimirsynth.models import Brain
+    slug = _brain(client)
+    _upload(client, slug, "chat.txt", CHAT.encode())
+    with _factory()() as db:
+        brain = db.query(Brain).filter(Brain.slug == slug).one()
+        assert secretguard.audit_existing(db, brain)["documents"] == 1
