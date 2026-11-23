@@ -13,6 +13,8 @@ stale fact.
   repeat: they are a change). Past MAX_SAMPLE candidate facts it is estimated on the most recent ones and says so.
 - **Open contradictions** (in the functional relations; none if no relation is functional) and **facts to review** (past their
   shelf life; none if no relation has one), as their screens count them.
+- **Similarity** (#468): how similar two current facts of the brain usually are, and those a curator judged the same (see
+  similarity.py). Not a headline number: kept here so the review panels read their «close» against the brain's own distribution.
 
 A brain is measured once a UTC day (`due`, called by the notification loop every few minutes): the day is the run's key in the
 database, so a restart never measures twice and never skips a day. A curator can measure again (`POST /health/run`): that day's numbers
@@ -276,7 +278,7 @@ def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
         from . import similarity
         with _factory()() as db:
             m = similarity.measure(g, db, brain_id)
-        similarity.remember(brain_id, m)
+            similarity.remember(brain_id, m, db)
         return {"similarity": m}
     part("similarity", similar)
     part("contradictions", lambda: {"contradictions": conflicts.scan(g, amap, functional, dismissed=dismissed)["total"]

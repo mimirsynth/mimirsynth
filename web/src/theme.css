@@ -464,7 +464,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-table .ms-colhead[data-filtered] .ms-colhead-in { border-color: var(--ms-accent); }
   .ms-table .mantine-Table-tbody .mantine-Table-tr { display: block; margin-bottom: 8px; padding: 6px 12px; border: 1px solid var(--ms-line); border-radius: var(--ms-radius); }
   .ms-table .mantine-Table-td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 5px 0; border: 0; text-align: right; overflow-wrap: anywhere; }
-  .ms-table .mantine-Table-td::before { content: attr(data-label); flex-shrink: 0; max-width: 40%; text-align: left; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }
+  .ms-table .mantine-Table-td::before { content: attr(data-label); flex-shrink: 0; max-width: 40%; text-align: left; font-family: var(--ms-sans); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ms-muted); }
   .ms-table .mantine-Table-td[data-label=""]::before { display: none; }
   .ms-table .mantine-Table-td[data-label=""] { justify-content: flex-end; }
 }

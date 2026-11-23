@@ -417,16 +417,18 @@ def _words(text: str | None) -> set[str]:
     return out
 
 
-def relevance(fact: str | None, proposal_words: set[str], score: float | None, close: float = CLOSE_SCORE) -> str:
+def relevance(fact: str | None, proposal_words: set[str], score: float | None, close: float = CLOSE_SCORE, plain: float | None = None) -> str:
     """«repeats»: the proposal says it again and adds nothing (the fact's words, or nearly identical embeddings, and no word of content the
-    fact lacks); «close»: very similar but it adds something, or a similarity over `close` (the brain's own, #468); «related»: what the
-    recall brought, no more. `score` and `close` are on the graph's (1 + cosine) / 2 scale."""
+    fact lacks), judged on recall's score as always; «close»: very similar but it adds something, or a plain similarity (`plain`, before
+    recall weighs the fact for its age or trust) over `close`, the brain's own threshold (#468); «related»: what the recall brought, no
+    more. Every number is on the graph's (1 + cosine) / 2 scale."""
     fw = _words(fact)
     contains = len(fw) >= 3 and len(fw & proposal_words) / len(fw) >= REPEATS_WORDS  # the fact's words are in the proposal
     adds = bool(proposal_words - fw)                                                   # and it says something the fact does not
     if (contains or (score or 0) >= REPEATS_SCORE) and not adds:
         return "repeats"
-    return "close" if contains or (score or 0) >= max(close, CLOSE_SCORE) else "related"
+    near = plain if plain is not None else score
+    return "close" if contains or (near or 0) >= max(close, CLOSE_SCORE) else "related"
 
 
 def calibration(brain) -> dict | None:
@@ -453,9 +455,10 @@ def related_facts(brain, p: Proposal, cal: dict | None = None) -> list[dict]:
     words = _words(query)
     close = (1 + similarity.close_cosine(cal)) / 2
 
-    def raw(f):   # the graph's own scale, from the plain cosine when recall weighed the score
-        return (1 + f["similarity"]) / 2 if f.get("similarity") is not None else f.get("score")
-    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, raw(f), close), "mostly_new": mostly_new(f.get("fact"), words),
+    def plain(f):   # the graph's own scale, from the plain cosine when recall weighed the score
+        return (1 + f["similarity"]) / 2 if f.get("similarity") is not None else None
+    facts = [{**{k: f.get(k) for k in keys}, "relevance": relevance(f.get("fact"), words, f.get("score"), close, plain(f)),
+              "mostly_new": mostly_new(f.get("fact"), words),
               "standing": similarity.standing(f.get("similarity"), cal)}
              for f in out.get("facts", [])]
     return sorted(facts, key=lambda f: (_RANK[f["relevance"]], -(f["score"] or 0)))  # what it repeats first, then the closest
@@ -516,6 +519,18 @@ UNCHECKED_BATCH = 100  # checked per pass; the next look at the queue goes on wi
 _checking: set[int] = set()  # brains with a pass running, so opening the queue twice does not check the same proposals twice
 
 
+def reset_verdicts(db, brain_id: int) -> int:
+    """The pending proposals' verdicts, cleared after the brain's «close» threshold moved (#468): `check_unchecked` takes them again with
+    the new one as the queue is opened. The curator's own proposals keep the verdict they were written with (#460)."""
+    from sqlalchemy import or_, update
+    n = db.execute(update(Proposal).where(Proposal.brain_id == brain_id, Proposal.status == "pending", Proposal.kind != "correction",
+                                          func.coalesce(Proposal.related_verdict, "") != "",
+                                          or_(Proposal.category.is_(None), ~Proposal.category.like("curator.%")))
+                   .values(related_verdict="")).rowcount
+    db.commit()
+    return n
+
+
 def check_unchecked(brain_id: int) -> None:
     """In the background, when a curator opens the queue: checks the pending proposals whose verdict is missing, oldest first, so the
     queue's order and the batch know about all of them, not only about those someone opened."""
@@ -549,7 +564,7 @@ def related(pid: int, ctx: BrainCtx = Depends(curator)):
         p.related_verdict = v
         ctx.db.commit()
     base = (cal or {}).get("baseline") or {}
-    return {"facts": facts, "calibration": {"measured": bool(base) and not (cal or {}).get("too_few"), "close": similarity.close_cosine(cal),
+    return {"facts": facts, "calibration": {"measured": base.get("p99") is not None and not (cal or {}).get("too_few"), "close": similarity.close_cosine(cal),
                                             "usual": base.get("p50"), "p95": base.get("p95"), "p99": base.get("p99")}}
 
 

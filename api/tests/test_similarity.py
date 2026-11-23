@@ -54,7 +54,7 @@ def test_the_baseline_and_the_same_thing_pairs_are_measured(client, monkeypatch)
     g = _Graph()
     with _factory()() as db:
         db.add_all([Proposal(brain_id=bid, author_id=1, name="r", body="r", status="ingested", category="curator.redundancy",
-                             decision={"curator": {"keep": {"uuid": "f0"}}}, claims=[{"supersedes": ["dup"]}]),
+                             decision={"curator": {"keep": {"uuid": "f0"}}}, claims=[{"supersedes": "dup"}]),   # one uuid per claim, as curator.py writes it
                     Proposal(brain_id=bid, author_id=1, name="r2", body="r", status="rejected", category="curator.redundancy",   # not approved
                              decision={"curator": {"keep": {"uuid": "f1"}}}, claims=[{"supersedes": ["f2"]}]),
                     TopicReview(brain_id=bid, entity_uuid="e3", status="ready", items={"F1": {"uuid": "f3"}, "F2": {"uuid": "f4"}},
@@ -108,6 +108,18 @@ def test_the_measurement_is_kept_and_a_new_model_makes_it_stale(client, monkeypa
             def query(self, q, params=None):
                 raise ConnectionError("graph down")
         assert similarity.current(db, b, Down(), refresh=True) is None                         # the panels keep the fixed thresholds
+        assert similarity.current(db, b, g)["model"] == "m2"                                   # what was measured stays in use meanwhile
+        similarity.forget(bid)
+        assert similarity.current(db, b, Down(), refresh=True) is None and similarity.current(db, b, g) is None   # backing off
+        assert similarity.current(db, b, g, refresh=True)["model"] == "m2"                    # an administrator measures again
+        assert similarity.current(db, b, g) is not None                                         # and the back-off is over
+        # a measurement kept with an old health run is taken again
+        similarity.forget(bid)
+        old = {**first, "model": "m2", "measured_at": "2020-01-01T00:00:00+00:00", "facts": 777}
+        run = db.scalar(select(HealthRun).where(HealthRun.brain_id == bid))
+        run.metrics = {"similarity": old}
+        db.commit()
+        assert similarity.current(db, b, g)["facts"] == 60
 
 
 def test_unrelated_facts_are_not_close_in_a_measured_brain(client, monkeypatch):  # noqa: F811
@@ -132,6 +144,66 @@ def test_unrelated_facts_are_not_close_in_a_measured_brain(client, monkeypatch):
     monkeypatch.setattr(proposals, "calibration", lambda brain: None)                          # not measured: today's fixed threshold
     r = client.get(f"/api/brains/sim4/proposals/{pid}/related").json()
     assert {f["uuid"]: f["relevance"] for f in r["facts"]} == {"rel": "close", "u1": "close", "u2": "close"} and not r["calibration"]["measured"]
+
+
+def test_repeats_keeps_reading_the_weighted_score():
+    """Only «close» reads the plain similarity: «repeats» (a known duplicate) is judged as before, on recall's weighted score."""
+    words = proposals._words("nas01 en sala A")
+    assert proposals.relevance("nas01 en sala A del CPD", words, 0.90, plain=0.96) == "close"     # weighted down: not a repeat
+    assert proposals.relevance("nas01 en sala A del CPD", words, 0.96) == "repeats"
+    assert proposals.relevance("algo distinto del todo", words, 0.80, close=0.875, plain=0.86) == "related"
+    assert proposals.relevance("algo distinto del todo", words, 0.80, close=0.875, plain=0.88) == "close"
+
+
+def test_a_brain_with_no_usable_pairs_is_not_measured(client, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(similarity, "rows", lambda res: res)
+    bid = _brain(client, "sim6")
+    g = _Graph(n=40)
+    for f in g.facts:                                       # every fact between the same two entities: no pair says anything
+        f["s"], f["t"] = "a", "b"
+    with _factory()() as db:
+        m = similarity.measure(g, db, bid, {"model": "m1", "dim": DIM})
+    assert m["too_few"] and m["baseline"] is None and similarity.close_cosine(m) == similarity.CLOSE_FLOOR
+
+
+def test_a_new_close_threshold_clears_the_pending_verdicts(client, monkeypatch):  # noqa: F811
+    bid = _brain(client, "sim7")
+    similarity.forget(bid)
+    with _factory()() as db:
+        db.add_all([Proposal(brain_id=bid, author_id=1, name="a", body="a", status="pending", related_verdict="similar"),
+                    Proposal(brain_id=bid, author_id=1, name="b", body="b", status="pending", related_verdict="similar", category="curator.redundancy"),
+                    Proposal(brain_id=bid, author_id=1, name="c", body="c", status="approved", related_verdict="similar")])
+        db.commit()
+        similarity.remember(bid, {"too_few": False, "baseline": {"p50": 0.6, "p95": 0.72, "p99": 0.75}}, db)
+        got = {p.name: p.related_verdict for p in db.scalars(select(Proposal).where(Proposal.brain_id == bid))}
+        assert got == {"a": "", "b": "similar", "c": "similar"}                  # the curator's and decided ones keep theirs
+        db.get(Proposal, db.scalar(select(Proposal.id).where(Proposal.brain_id == bid, Proposal.name == "a"))).related_verdict = "related"
+        db.commit()
+        similarity.remember(bid, {"too_few": False, "baseline": {"p50": 0.6, "p95": 0.72, "p99": 0.752}}, db)   # «close» did not move
+        assert db.scalar(select(Proposal.related_verdict).where(Proposal.brain_id == bid, Proposal.name == "a")) == "related"
+
+
+def test_the_background_verdict_reads_the_calibration(client, monkeypatch):  # noqa: F811
+    facts = [{"uuid": "u1", "fact": "La copia en cinta de los domingos usa el cartucho dos", "score": 0.87, "similarity": 0.74}]
+    monkeypatch.setattr(recall, "recall", lambda *a, **k: {"facts": facts})
+    bid = _brain(client, "sim8")
+    with _factory()() as db:
+        p = Proposal(brain_id=bid, author_id=1, name="Copia en cinta abortada", body="La copia en cinta se abortó", status="pending")
+        db.add(p)
+        db.commit()
+        pid = p.id
+    monkeypatch.setattr(proposals.ingest, "enabled", lambda: True)
+    monkeypatch.setattr(proposals, "calibration", lambda brain: {"too_few": False, "baseline": {"p50": 0.62, "p95": 0.72, "p99": 0.75}})
+    proposals.check_related(pid)
+    with _factory()() as db:
+        assert db.get(Proposal, pid).related_verdict == "related"
+    monkeypatch.setattr(proposals, "calibration", lambda brain: None)
+    with _factory()() as db:
+        db.get(Proposal, pid).related_verdict = ""
+        db.commit()
+    proposals.check_related(pid)
+    with _factory()() as db:
+        assert db.get(Proposal, pid).related_verdict == "similar"               # the fixed threshold calls it close
 
 
 def test_an_administrator_sees_the_thresholds_against_the_distribution(client, monkeypatch):  # noqa: F811

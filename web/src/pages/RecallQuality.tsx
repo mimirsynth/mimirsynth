@@ -65,6 +65,8 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
                 <DataTable.Td className="ms-data">{r.irrelevant}</DataTable.Td><DataTable.Td className="ms-data">{r.incorrect}</DataTable.Td><DataTable.Td className="ms-data">{pct(r) ?? "—"}{pct(r) !== null ? " %" : ""}</DataTable.Td></DataTable.Tr>)))}</DataTable.Tbody>
           </DataTable>
         </Block>
+        {/* next to the ratings by similarity, the scale they are read on (issue 468) */}
+        <SimilarityBlock graph={graph} canAdmin={canAdmin} />
         {d.incorrect.length > 0 && <Block title={t("Valorados como incorrectos")} count={d.incorrect.length}>
           <DataTable fz="sm" aria-label={t("Valorados como incorrectos")}>
             <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Fecha")}</DataTable.Th><DataTable.Th>{t("Tipo")}</DataTable.Th><DataTable.Th>{t("Texto")}</DataTable.Th><DataTable.Th>{t("Propuesta")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
@@ -77,8 +79,7 @@ export default function RecallQuality({ graph, canAdmin }: { graph: string; canA
               </DataTable.Tr>))}</DataTable.Tbody>
           </DataTable>
         </Block>}
-      </> : <EmptyState>{t("Nadie ha valorado el recall en los últimos 30 días.")}</EmptyState>}
-      <SimilarityBlock graph={graph} canAdmin={canAdmin} />
+      </> : <><EmptyState>{t("Nadie ha valorado el recall en los últimos 30 días.")}</EmptyState><SimilarityBlock graph={graph} canAdmin={canAdmin} /></>}
       {canAdmin && <SettingsGroup title={t("Qué se guarda de las consultas")}>
         <SettingsRow label={t("Guardar el texto de las consultas")}
           help={t("Por defecto solo se guarda una huella y la longitud de cada consulta, porque llevan los prompts de las personas. Con esto se guarda el texto, que se borra a los {{n}} días; al desmarcarlo se borra ya.", { n: d.query_text_days })}>
