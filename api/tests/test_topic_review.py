@@ -268,7 +268,7 @@ def test_a_reply_that_does_not_validate_fails_the_review_and_keeps_nothing(clien
     rid = r.json()["review"]["id"]
     with _factory()() as db:
         t = db.get(TopicReview, rid)
-        assert t.actions is None and t.items is None and t.state == "" and "topic-review/1" in t.error and t.calls == 1
+        assert t.actions is None and t.items is None and t.state == "" and tr_.PROMPT_VERSION in t.error and t.calls == 1
         j = db.get(Job, t.job_id)
         assert j.status == "failed" and any("delete_everything" in x["msg"] for x in j.log)
     assert not _invalid(g, "old") and not _invalid(g, "triv")

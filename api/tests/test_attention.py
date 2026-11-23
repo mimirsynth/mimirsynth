@@ -76,7 +76,7 @@ def test_every_counter_and_who_sees_it(client, graph, monkeypatch):  # noqa: F81
                                                           "shelf_life_days": 90})
     attention.forget(bid)
     out = client.get("/api/brains/at1/attention").json()
-    assert out.pop("proposals_oldest") and out == {"proposals": 2, "corrections": 1, "failed": 1, "duplicates": 1, "conflicts": 1, "stale": 1, "retype": 1, "summaries": 1, "refqueries": 2}
+    assert out.pop("proposals_oldest") and out == {"proposals": 2, "corrections": 1, "failed": 1, "duplicates": 1, "conflicts": 1, "stale": 1, "retype": 1, "summaries": 1, "refqueries": 2, "topics": 0}
     curator = client.get("/api/brains/at1/attention", headers=_tok(client, "at1", "curator")).json()
     assert "retype" not in curator and curator["conflicts"] == 1                       # only administrators can apply a type correction
     assert curator["summaries"] == 1                                                   # a curator approves summaries

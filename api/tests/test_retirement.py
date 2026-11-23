@@ -237,8 +237,9 @@ def _invalid(g, uuid: str):
 
 
 @pytest.mark.skipif(not FALKOR, reason="needs a disposable FalkorDB (MIMIRSYNTH_TEST_FALKOR=host)")
-def test_retiring_an_entity_queues_exactly_one_review_with_the_facts_that_describe_it_as_live(client, env):  # noqa: F811
+def test_retiring_an_entity_queues_exactly_one_review_with_the_facts_that_describe_it_as_live(client, env, monkeypatch):  # noqa: F811
     g, asked = env
+    _queued_jobs(monkeypatch)   # the review waits, so the second fact can join it
     assert client.post("/api/brains", json={"slug": "ret9", "name": "R9", "graph_name": GRAPH}).status_code == 201
     with _factory()() as db:
         b = db.scalar(select(Brain).where(Brain.slug == "ret9"))
