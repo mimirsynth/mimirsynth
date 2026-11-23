@@ -70,6 +70,6 @@ def test_a_question_that_only_shares_the_subject_brings_fewer_and_the_relevant_o
     after = R.search_chunks(BRAIN, embed(q), q, 4, 0.5, common=True)
     assert before[0]["text"] == RELEVANT and len(before) == 4                           # today: three more that only name the subject
     assert [c["text"] for c in after] == [RELEVANT]                                    # the subject's words no longer let them in
-    q = "haproxy"                                                                       # a distinctive word: found either way
-    assert [c["text"] for c in R.search_chunks(BRAIN, embed(q), q, 4, 0.5, common=True)] == [RELEVANT]
-    assert [c["text"] for c in R.search_chunks(BRAIN, embed(q), q, 4, 0.5)] == [RELEVANT]
+    q = "haproxy"   # a distinctive word: found either way (one word of five: similarity 1/√5, so a threshold below it)
+    assert [c["text"] for c in R.search_chunks(BRAIN, embed(q), q, 4, 0.4, common=True)] == [RELEVANT]
+    assert [c["text"] for c in R.search_chunks(BRAIN, embed(q), q, 4, 0.4)] == [RELEVANT]
