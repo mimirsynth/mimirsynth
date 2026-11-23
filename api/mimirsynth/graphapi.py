@@ -429,17 +429,34 @@ GENERIC_RELS = {"RELATES_TO", "MENTIONED_IN", "PARTICIPATES_IN", "ASSOCIATED_WIT
 # Up to three parts: a four-part number is more often an address («AdGuard 10.0.100.101») than a version.
 _VERSION = re.compile(r"\s+[\(\[]?v?\d+(\.\d+){1,2}(?![.\d])[\w.\-]*[\)\]]?$", re.I)
 _SEPARATORS = re.compile(r"[\s_\-\N{HYPHEN}-\N{HORIZONTAL BAR}]+")
+_LETTER_DOT = re.compile(r"(?<=[^\W\d_])\.|\.(?=[^\W\d_])")   # a dot beside a letter («VM.201»); between digits it is part of an address
 
 
-def _entity_key(name: str) -> str:
-    """How the duplicates tab compares entity names: case, spacing, «_» and «-» and a trailing version do not count, so «VM 201»,
-    «vm201» and «VM-201 1.2» are one group. A name that is only numbers and dots (an address, a bare version) is compared whole:
-    stripping its «version» used to leave it with an empty key, so even two identical addresses never showed up."""
+def _entity_key(name: str, prefixes: dict[str, str] | None = None) -> str:
+    """How the duplicates tab compares entity names: case, spacing, «_», «-», a dot beside a letter and a trailing version do not
+    count (a dot between digits does: «10.0.1.12» and «10.0.11.2» are two addresses), so «VM 201»,
+    «vm201», «VM.201» and «VM-201 1.2» are one group. A name that is only numbers and dots (an address, a bare version) is compared
+    whole: stripping its «version» used to leave it with an empty key, so even two identical addresses never showed up. `prefixes`
+    maps a prefix to the one it is equivalent to, as the brain's ontology pack declares them (#467), so «LXC147» and «CT147» are one
+    group too."""
     s = " ".join(unicodedata.normalize("NFKC", name or "").split()).casefold()
     base = _VERSION.sub("", s)
     if not re.search(r"[^\W\d_]", base):
         return s
-    return _SEPARATORS.sub("", base)
+    key = _LETTER_DOT.sub("", _SEPARATORS.sub("", base))
+    for alt, canon in (prefixes or {}).items():
+        if key.startswith(alt) and key[len(alt):][:1].isdigit():
+            return canon + key[len(alt):]
+    return key
+
+
+def equivalent_prefixes(onto: dict | None) -> dict[str, str]:
+    """The prefixes the brain's ontology pack declares equivalent («CT» and «LXC»), each mapped to the first of its group, casefolded.
+    Read from the pack, as the type corrector reads its `retype` block: a brain without a pack has none."""
+    from .ontology import ALIASES, presets
+    name = ((onto or {}).get("preset") or {}).get("name", "")
+    groups = ((presets().get(ALIASES.get(name, name)) or {}).get("duplicates") or {}).get("equivalent_prefixes") or []
+    return {p.casefold(): g[0].casefold() for g in groups if g for p in g[1:]}
 
 
 def duplicates(G, db, brain_id: int) -> tuple[list[dict], list[dict], set[str]]:
@@ -449,11 +466,13 @@ def duplicates(G, db, brain_id: int) -> tuple[list[dict], list[dict], set[str]]:
         "MATCH (n:Entity) OPTIONAL MATCH (n)-[r:RELATES_TO]-() "
         "RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels, count(r) AS degree"
     ))
+    from .ontology import get_ontology
+    prefixes = equivalent_prefixes(get_ontology(db, brain_id))
     groups: dict[str, list] = {}
     for e in ents:
-        groups.setdefault(_entity_key(e["name"]), []).append(e)
+        groups.setdefault(_entity_key(e["name"], prefixes), []).append(e)
     # keys saved before the key format changed (single spaces, «web vault») still hide their group
-    ignored = {_entity_key(a.alias) for a in db.scalars(select(VocabAlias).where(VocabAlias.brain_id == brain_id, VocabAlias.kind == "dup_ignore"))}
+    ignored = {_entity_key(a.alias, prefixes) for a in db.scalars(select(VocabAlias).where(VocabAlias.brain_id == brain_id, VocabAlias.kind == "dup_ignore"))}
     dups = sorted(
         ({"key": k, "members": sorted(v, key=lambda x: -x["degree"])} for k, v in groups.items() if len(v) > 1 and k and k not in ignored),
         key=lambda g: -sum(m["degree"] for m in g["members"]),

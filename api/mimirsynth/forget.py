@@ -199,7 +199,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher, entity: str = ""
         "curator_runs": _scan(db, CuratorRun, brain_id, ["findings", "error"], m),
         "summary_suggestions": _scan(db, SummarySuggestion, brain_id, ["name", "current", "proposed", "applied"], m,
                                      ["name", "current", "proposed", "applied"]),
-        "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name"], m, ["name"]),
+        "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name", "fold_name"], m, ["name", "fold_name"]),
         "topic_reviews": _topic_reviews(db, brain_id, entity, set(facts) | set(episodes or ()), m),
         "jobs": _scan(db, Job, brain_id, ["title", "params", "log", "error", "result"], m),
         "notifications": _scan(db, Notification, brain_id, ["title", "body"], m, ["title", "body"]),

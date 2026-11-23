@@ -7,10 +7,10 @@ The ontology of a brain tells the ingestor which **entity types** and **relation
 | Package | For | Entity types | Relation types |
 |---|---|---|---|
 | `general` | A mixed or personal notebook: people, organizations, places, events, documents, projects, decisions, topics | 8 | 10 |
-| `infrastructure` | Infrastructure and IT operations: hosts, guests, services, networks, storage, incidents, changes, runbooks | 16 | 15 |
+| `infrastructure` | Infrastructure and IT operations: hosts, guests, services, software, AI models, networks, storage, incidents, changes, runbooks | 18 | 15 |
 | `team-projects` | Team and project work: people, teams, projects, tasks, milestones, meetings, decisions, risks | 11 | 14 |
 | `personal-family` | Family life: people, household, pets, places, trips, appointments, belongings, subscriptions, documents | 12 | 11 |
-| `software-knowledge` | Software engineering: repositories, applications, components, libraries, APIs, environments, releases, bugs, decisions | 14 | 15 |
+| `software-knowledge` | Software engineering: repositories, applications, components, libraries, AI models, APIs, environments, releases, bugs, decisions | 15 | 15 |
 
 > The former `generic` package was replaced by `general` (the old name still works as an alias). Brains that already applied it keep their ontology.
 
@@ -52,6 +52,10 @@ The type corrector (Content quality → Doubtful types) does not assume any doma
 - **What is set aside as doubtful** without asking the decider: a name of five words or more (in every brain) and, only if the package enables them, the technical rules `file` (path or file name), `option` (command-line option), `code` (code expression), `version` (version at the end of the name) and `problem` (words such as *bug*, *error*, *fix*). `infrastructure` enables all five; `software-knowledge` only `option`, because the others would discard its own repositories, documents, APIs and releases; the other packages none.
 - **The decider's question** does not rule out errors or procedures when the ontology has a type for them (`Bug`, `Incident`, `Runbook`…).
 - A brain whose ontology was written by hand, or whose package no longer exists, uses the minimum: it reviews `Object`, `Thing` and `Topic` and applies no technical rule.
+
+A doubtful entity can be **merged** into the entity it is a detail of: the decider is asked which of the entities it shares current facts with it belongs to, and applying it is the duplicates merge (facts moved, the facts between both ends kept as facts of the entity, name kept as an alias, the old node a `Merged` tombstone), undoable from Recent changes. A pack with a `Software` type does not apply the `version` rule: a versioned name is what that type is for. Bulk apply waits until a curator has decided 20 suggestions one by one in the brain, and then shows the share applied and kept above the threshold.
+
+A package can also declare **equivalent prefixes** for the duplicates tab, in a `duplicates` block read the same way: `"duplicates": {"equivalent_prefixes": [["CT", "LXC"], ["VM", "QEMU"]]}` groups «CT147» with «LXC 147» (each group maps to its first prefix, and only a prefix followed by a number counts).
 
 The block is read from the package when the corrector runs, so changing it needs no new package version. The tests check that each block only uses types of its package and known rules, and that a package's rules do not discard the examples of its own types.
 
