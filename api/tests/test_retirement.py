@@ -33,7 +33,10 @@ def test_the_relation_name_says_which_end_is_retired():
     assert retirement.end("MigratedTo", {}) == "source" and retirement.end("SUPERSEDES", {}) == "target"
     assert retirement.end("Supersedes", {}) == "target" and retirement.end("DECOMMISSIONED", {}) == "target"
     assert retirement.end("REEMPLAZADO_POR", {}) == "source" and retirement.end("SUSTITUYE_A", {}) == "target"
-    for name in ("RELATES_TO", "HOSTED_ON", "REMOVED_FROM", "", None, "REPLACEMENT_FOR"):
+    assert retirement.end("REPLACED", {}) == "target" and retirement.end("SUPERSEDED", {}) == "target"   # «Postmark REPLACED Sendgrid»
+    assert retirement.end("WAS_DECOMMISSIONED", {}) == "source" and retirement.end("IS_DEPRECATED", {}) == "source"   # passive: the first
+    assert retirement.end("WAS_HOSTED_ON", {}) is None
+    for name in ("RELATES_TO", "HOSTED_ON", "REMOVED_FROM", "REMOVED", "", None, "REPLACEMENT_FOR"):
         assert retirement.end(name, {}) is None
     marked = retirement.marks({"edge_types": [{"name": "Sunsets", "description": "x", "retires": "target"},
                                               {"name": "MigratedTo", "description": "x", "retires": "target"}, {"name": "HostedOn", "description": "x"}]})
@@ -82,7 +85,8 @@ def test_an_action_that_would_invalidate_the_anchor_is_discarded():
     assert ok(type="drop_trivial", facts=["F1"])[1] == "anchor"
     assert ok(type="merge", facts=["F3", "F1"], keep="F3")[1] == "anchor"      # merging it away invalidates it too
     assert ok(type="merge", facts=["F1", "F3"], keep="F1")[1] == ""            # keeping it is fine
-    assert ok(type="rewrite", facts=["F1"], text="Postmark replaced Sendgrid in 2025.", evidence=["F3"])[1] == ""
+    assert ok(type="merge", facts=["F1", "F3"])[0]["keep"] == "F1"             # also when the first is kept by default
+    assert ok(type="rewrite", facts=["F1"], text="Postmark replaced Sendgrid in 2025.", evidence=["F3"])[1] == "anchor"   # nor rewritten
 
 
 # --- queueing --------------------------------------------------------------------------------------
@@ -184,6 +188,7 @@ def test_forgetting_finds_a_review_by_its_anchor_and_the_ingest_report_loses_the
         db.commit()
         assert [x.id for x in forget._topic_reviews(db, bid, "sg", {"a1"}, lambda v: False)] == [r.id]         # it cites one of its facts
         assert [x.id for x in forget._topic_reviews(db, bid, "sg", set(), lambda v: "Sendgrid" in str(v))] == [r.id]   # it names it
+    assert without_text({"retirement": {"queued": [], "error": "KeyError"}})["retirement"]["error"] == "failed"
     rep = {"edges": 2, "retirement": {"queued": [{"entity": "sg", "name": "Sendgrid", "facts": ["a1"], "review": 3}], "not_queued": [], "joined": []}}
     out = without_text(rep)
     assert out["retirement"]["queued"] == [{"entity": "sg", "facts": ["a1"], "review": 3}] and rep["retirement"]["queued"][0]["name"] == "Sendgrid"
@@ -274,7 +279,9 @@ def test_an_ingestion_reports_the_review_its_retirement_fact_asked_for(client, e
     monkeypatch.setattr(vocab_apply, "apply", lambda db, brain, rep: rep.pop("_edges", None))
     with _factory()() as db:
         b = db.scalar(select(Brain).where(Brain.slug == "ret8"))
-        p = Proposal(brain_id=b.id, name="move", body="Postmark replaced Sendgrid in March 2025.", status="approved", source="text")
+        from mimirsynth.models import User
+        p = Proposal(brain_id=b.id, author_id=db.scalar(select(User.id)), name="move", body="Postmark replaced Sendgrid in March 2025.",
+                     status="approved", source="text")
         db.add(p)
         db.commit()
         pid = p.id
@@ -295,5 +302,81 @@ def test_a_graph_that_is_down_never_fails_the_ingestion_and_the_report_says_so(c
     with _factory()() as db:
         b = db.scalar(select(Brain).where(Brain.slug == "ret5"))
         out = retirement.detect(db, b, {"_edges": [("x", "REPLACES")], "_new_edges": ["x"]}, 7, graph=Down())
-        assert out["error"] == "graph down" and out["queued"] == []
+        assert out["error"] == "RuntimeError" and out["queued"] == []   # its kind, never its text
         assert retirement.detect(db, b, {"_edges": [("x", "RUNS_ON")], "_new_edges": ["x"]}, 7, graph=Down()) is None   # nothing to read
+
+
+def test_an_ingestion_with_a_retirement_fact_and_the_graph_down_is_still_ingested(client, monkeypatch):  # noqa: F811
+    from mimirsynth import db as dbm, ingest, vocab_apply, write_quality
+    from mimirsynth.models import Proposal
+    assert client.post("/api/brains", json={"slug": "ret6", "name": "R6"}).status_code == 201
+
+    async def fake_add(graph_name, name, body, source, description, reference_time, ontology=None, report=None):
+        report.update({"entities": 2, "edges": 1, "_edges": [("x1", "REPLACES")], "_new_edges": ["x1"], "_nodes": []})
+        return "ep6"
+
+    def down(name):
+        raise ConnectionError("graph down")
+    monkeypatch.setattr(ingest, "add_episode", fake_add)
+    monkeypatch.setattr(ingest, "_engine", lambda: ENGINE)
+    monkeypatch.setattr(write_quality, "apply", lambda brain, rep, ep: rep.pop("_new_edges", None))
+    monkeypatch.setattr(vocab_apply, "apply", lambda db, brain, rep: rep.pop("_edges", None))
+    monkeypatch.setattr(dbm, "graph", down)
+    pid = client.post("/api/brains/ret6/proposals", json={"name": "move", "body": "Postmark replaced Sendgrid."}).json()["id"]
+    with _factory()() as db:
+        db.get(Proposal, pid).status = "approved"
+        db.commit()
+    assert ingest.ingest_proposal(pid) == ""
+    with _factory()() as db:
+        p = db.get(Proposal, pid)
+        assert p.status == "ingested" and p.ingest_report["retirement"]["error"] == "ConnectionError"
+
+
+class _Graph:
+    """The new facts as the graph holds them, after the aliases were applied."""
+    def __init__(self, facts):
+        self.facts = facts
+
+    def query(self, q, params=None):
+        return [f for f in self.facts if f["uuid"] in (params or {}).get("u", [])]
+
+
+def _edge(u: str, name: str) -> dict:
+    return {"uuid": u, "name": name, "fact": f"Ops {name} the VPN", "s": "ops", "sname": "Ops", "t": "vpn", "tname": "VPN"}
+
+
+def test_the_names_are_read_through_the_brain_aliases_and_a_full_review_says_so(client, monkeypatch):  # noqa: F811
+    from mimirsynth import db as dbm
+    from mimirsynth.models import VocabAlias
+    assert client.post("/api/brains", json={"slug": "ret7", "name": "R7"}).status_code == 201
+    rel = {"name": "Sunsets", "description": "One thing retires another", "retires": "target"}
+    assert client.post("/api/brains/ret7/vocab/relations", json=rel).status_code == 201
+    monkeypatch.setattr(tr_, "_engine", lambda: ENGINE)
+    monkeypatch.setattr(dbm, "rows", lambda res: res)
+    _queued_jobs(monkeypatch)
+    with _factory()() as db:
+        b = db.scalar(select(Brain).where(Brain.slug == "ret7"))
+        db.add_all([VocabAlias(brain_id=b.id, kind="relation", alias="PHASED_OUT", canonical="SUNSETS"),
+                    VocabAlias(brain_id=b.id, kind="relation", alias="RETIRED", canonical="STATUS_OF")])
+        db.commit()
+        out = retirement.detect(db, b, {"_edges": [("p1", "PHASED_OUT")], "_new_edges": ["p1"]}, graph=_Graph([_edge("p1", "SUNSETS")]))
+        assert out["queued"][0]["entity"] == "vpn"                                      # PHASED_OUT is SUNSETS in this brain
+        r = db.get(TopicReview, out["queued"][0]["review"])
+        assert r.anchors[0]["relation"] == "SUNSETS" and r.anchors[0]["source"] == "Ops" and r.anchors[0]["target"] == "VPN"
+        assert retirement.detect(db, b, {"_edges": [("p2", "RETIRED")], "_new_edges": ["p2"]}, graph=_Graph([_edge("p2", "STATUS_OF")])) is None
+        # a review that already holds the most anchors it keeps: what does not fit is said, never reported as joined
+        db.execute(tr_.update(TopicReview).where(TopicReview.id == r.id).values(anchors=[_anchor(f"z{n}") for n in range(tr_.MAX_ANCHORS)]))
+        db.commit()
+        out = retirement.detect(db, b, {"_edges": [("p3", "PHASED_OUT")], "_new_edges": ["p3"]}, graph=_Graph([_edge("p3", "SUNSETS")]))
+        assert out["joined"] == [] and out["not_queued"][0]["why"] == "full"
+
+
+def test_the_retirement_settings_are_kept_when_a_request_leaves_them_out(client):  # noqa: F811
+    assert client.post("/api/brains", json={"slug": "ret10", "name": "R10"}).status_code == 201
+    url = "/api/brains/ret10/curator/settings"
+    got = client.get(url).json()
+    assert got["retirement_reviews"] is True and got["retirement_daily"] == 10
+    assert client.put(url, json={"enabled": False, "retirement_reviews": False, "retirement_daily": 3}).status_code == 200
+    assert client.put(url, json={"enabled": False, "retirement_daily": 0}).status_code == 422
+    got = client.put(url, json={"enabled": True}).json()
+    assert got["retirement_reviews"] is False and got["retirement_daily"] == 3

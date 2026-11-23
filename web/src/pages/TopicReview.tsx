@@ -11,7 +11,7 @@ type Row = { id: number; entity_uuid: string; name: string; status: "queued" | "
   created_at: string; finished_at: string | null; job: number | null; calls: number; counts: Record<"pending" | "approved" | "rejected" | "outdated", number>;
   trigger?: "manual" | "retirement" };
 /** A fact that says the entity was retired or replaced (issue 455), as it was when it started the review. */
-type Anchor = { uuid: string; fact: string; relation: string; proposal: number | null };
+type Anchor = { uuid: string; fact: string; relation: string; source?: string; target?: string; proposal: number | null };
 type Prec = Record<string, { approved: number; rejected: number; pending: number; precision: number | null }>;
 type Item = { kind: "fact"; uuid: string; fact: string; source: string; target: string; valid_at: string | null; invalid_at: string | null; probe: string | null;
   now: "current" | "invalidated" | "gone" | null } | { kind: "episode"; uuid: string; name: string; valid_at: string | null; source: string; text: string };
@@ -29,7 +29,7 @@ const TYPE: Record<string, string> = { invalidate: T("Invalidar"), merge: T("Uni
 const DISCARDED: Record<string, string> = { unknown_id: T("citaban algo que no se les envió"), no_evidence: T("no citaban pruebas"),
   not_a_fact: T("actuaban sobre algo que no es un hecho"), not_own: T("cambiaban un hecho de otra entidad"), not_current: T("actuaban sobre un hecho ya invalidado"),
   too_many: T("cambiaban más de diez hechos a la vez"), rule: T("no cumplían las reglas de su tipo"), secrets: T("llevaban secretos"),
-  anchor: T("invalidaban el hecho que dice que se retiró") };
+  anchor: T("habrían cambiado el propio hecho de la retirada") };
 const DECISION: Record<string, [string, "success" | "neutral" | "warn" | "alt"]> = { approved: [T("Aprobada"), "success"], rejected: [T("Rechazada"), "neutral"],
   outdated: [T("Ya no aplicaba"), "warn"], applying: [T("Aplicándose…"), "alt"] };
 /** Why a fact of an approved action was left alone. */
@@ -74,13 +74,14 @@ const standing = (r: Row) => (r.counts.pending > 0 ? "pending" : r.counts.approv
 
 function RowState({ r }: { r: Row }) {
   const { t } = useTranslation();
-  const from = r.trigger === "retirement" && <Pill>{t("Por una retirada")}</Pill>;
-  if (busy(r)) return <>{from}<Pill tone="alt">{t("Revisando…")}</Pill></>;
-  if (r.status === "failed") return <>{from}<Pill tone="danger">{t("Falló")}</Pill></>;
+  const from = r.trigger === "retirement" && <Pill>{t("Por una retirada")}</Pill>;   // where it came from, after where it stands
+  if (busy(r)) return <><Pill tone="alt">{t("Revisando…")}</Pill>{from}</>;
+  if (r.status === "failed") return <><Pill tone="danger">{t("Falló")}</Pill>{from}</>;
   const s = standing(r);
-  return <>{from}
+  return <>
     {s === "pending" ? <Pill tone="warn">{t("Por decidir: {{n}}", { n: r.counts.pending })}</Pill> : <Pill>{s === "decided" ? t("Decidida") : t("Sin cambios propuestos")}</Pill>}
     {r.counts.approved > 0 && <Pill tone="success">{t("Aprobadas: {{n}}", { n: r.counts.approved })}</Pill>}
+    {from}
   </>;
 }
 
@@ -120,12 +121,13 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
       <ViewBar title={t("Revisión de tema")}
         meta={d && <>{d.name} · {d.status === "ready" ? <>{{ pending: t("por decidir: {{n}}", { n: d.counts.pending }), decided: t("decidida"), none: t("sin cambios propuestos") }[standing(d)]} · </> : ""}{fmt(d.finished_at ?? d.created_at)}</>}
         help={<>{t("A la izquierda, cómo está el tema según lo que la memoria sabe ahora; a la derecha, lo que el motor propone cambiar, cada acción con los hechos sobre los que actúa y las pruebas que cita. Un hecho tachado ya no está vigente. Aprobar una invalidación, una unión, un hecho vacío o una reescritura aplica una corrección en el momento (se deshace desde la propuesta, con «Reactivar el hecho»); aprobar lo que falta lo manda a la cola de propuestas.")}
+          {d && d.anchors.length > 0 ? " " + t("Una revisión por una retirada busca los hechos que aún describen la entidad como vigente, con los hechos que la lanzaron como prueba; nada se invalida sin que un curador lo apruebe.") : ""}
           {d?.status === "ready" ? " " + t("Llamadas al motor: {{n}}. Formato de la respuesta: {{version}}.", { n: d.calls, version: d.prompt_version }) : ""}</>}>
         <Btn kind="link" onClick={back}>{t("← Todas las revisiones")}</Btn>
         {d && <Btn kind="link" component={Link} to={`/entidad/${d.entity_uuid}`}>{t("Ver la entidad «{{name}}»", { name: d.name })}</Btn>}
       </ViewBar>
       {!d ? <DataState query={q} /> : <>
-        {d.anchors.length > 0 && <Anchors anchors={d.anchors} />}
+        {d.anchors.length > 0 && <Anchors anchors={d.anchors} name={d.name} />}
         {busy(d) && <Notice title={t("Revisando el tema «{{name}}»…", { name: d.name })}>{t("El motor está leyendo lo que la memoria sabe de la entidad. Esta página se actualiza sola.")}</Notice>}
         {d.status === "failed" && <Notice tone="danger" title={t("La revisión falló")}><Stack gap={4}>
           <Text inherit>{t(FAILURE[d.error_code] ?? FAILURE.failed)} {t("No se ha guardado nada de ella. Puedes pedirla otra vez desde la página de la entidad.")}</Text>
@@ -163,14 +165,15 @@ function ReviewDetail({ graph, id, back }: { graph: string; id: number; back: ()
 }
 
 /** The facts that started a review on their own (issue 455): each one says the entity was retired or replaced. */
-function Anchors({ anchors }: { anchors: Anchor[] }) {
+function Anchors({ anchors, name }: { anchors: Anchor[]; name: string }) {
   const { t } = useTranslation();
   return (
-    <Notice title={anchors.length === 1 ? t("Un hecho nuevo dice que se retiró o se sustituyó") : t("{{n}} hechos nuevos dicen que se retiró o se sustituyó", { n: anchors.length })}>
+    <Notice title={anchors.length === 1 ? t("Un hecho dice que «{{name}}» se retiró o se sustituyó", { name })
+      : t("{{n}} hechos dicen que «{{name}}» se retiró o se sustituyó", { n: anchors.length, name })}>
       <Stack gap={6}>
-        <Text inherit>{t("La revisión busca los hechos que aún lo describen como vigente. Nada se invalida sin que un curador lo apruebe.")}</Text>
-        {anchors.map((a) => <CellText key={a.uuid} sub={a.proposal ? t("{{relation}} · de la propuesta #{{id}}", { relation: a.relation, id: a.proposal }) : a.relation}>
-          {t("«{{fact}}»", { fact: a.fact })}</CellText>)}
+        {anchors.map((a) => <CellText key={a.uuid} sub={<>{a.source && a.target ? `${a.source} → ${a.target} · ` : ""}<span className="ms-data">{a.relation}</span>
+          {a.proposal ? ` · ${t("de la propuesta #{{id}}", { id: a.proposal })}` : ""}</>}>
+          {a.fact ? t("«{{fact}}»", { fact: a.fact }) : t("(su texto llevaba un secreto que el brain bloquea)")}</CellText>)}
       </Stack>
     </Notice>
   );

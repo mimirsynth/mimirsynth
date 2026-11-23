@@ -21,10 +21,11 @@ type Dlg = { kind: "rel"; item?: T } | { kind: "rel-del"; item: T } | { kind: "r
  *  the column filters on the right, then the table. */
 function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[]; used: (n: string) => number; canEdit: boolean; onAdd: () => void; onEdit: (t: T) => void; onDelete: (t: T) => void }) {
   const { t } = useTranslation();
-  const v = useTableView(rows, { name: { get: (t: T) => t.name }, desc: { get: (t: T) => t.description }, used: { get: (t: T) => used(t.name) }, one: { get: (t: T) => (t.functional ? 1 : 0) } });
+  const v = useTableView(rows, { name: { get: (t: T) => t.name }, desc: { get: (t: T) => t.description }, used: { get: (t: T) => used(t.name) }, one: { get: (t: T) => (t.functional ? 1 : 0) },
+    ret: { get: (t: T) => t.retires ?? "" } });
   return (
     <Block title={t("Tipos de relación")} count={rows.length}
-      help={<>{t("Tres marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones; la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar; y «Marca una retirada» (un hecho nuevo suyo dice que algo se retiró o se sustituyó), una revisión del tema de lo retirado.")}{" "}
+      help={<>{t("Tres marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones; la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar; y la «Retirada» (un hecho nuevo suyo dice que algo se retiró o se sustituyó), una revisión del tema de lo retirado.")}{" "}
         <Btn kind="link" component={Link} to="/calidad?tab=conflicts">{t("Contradicciones")}</Btn>{" · "}
         <Btn kind="link" component={Link} to="/calidad?tab=stale">{t("A revisar")}</Btn>{" · "}
         <Btn kind="link" component={Link} to="/calidad?tab=topics">{t("Temas")}</Btn></>}
@@ -40,16 +41,17 @@ function RelBlock({ rows, used, canEdit, onAdd, onEdit, onDelete }: { rows: T[];
             <ColHead sort={v.sortProps("used")}>{t("En reglas")}</ColHead>
             <ColHead sort={v.sortProps("one")}>{t("Un solo valor")}</ColHead>
             <ColHead>{t("Vida útil")}</ColHead>
+            <ColHead sort={v.sortProps("ret")}>{t("Retirada")}</ColHead>
             {canEdit && <DataTable.ActionsHead />}
           </DataTable.Tr></DataTable.Thead>
           <DataTable.Tbody>{v.rows.map((ty) => (
             <DataTable.Tr key={ty.name}>
-              <DataTable.Td>{ty.retires ? <Group gap={6}>{ty.name}<Pill tone="alt" title={t("Un hecho nuevo suyo pide una revisión del tema de lo retirado")}>
-                {ty.retires === "source" ? t("retira el origen") : t("retira el destino")}</Pill></Group> : ty.name}</DataTable.Td>
+              <DataTable.Td>{ty.name}</DataTable.Td>
               <DataTable.Td><Text size="sm" lineClamp={2}>{ty.description}</Text></DataTable.Td>
               <DataTable.Td className="ms-data">{used(ty.name)}</DataTable.Td>
               <DataTable.Td>{ty.functional ? <Pill tone="alt" title={t("Un solo valor a la vez: dos destinos vigentes son una posible contradicción")}>{t("sí")}</Pill> : "—"}</DataTable.Td>
               <DataTable.Td className="ms-data">{ty.shelf_life_days ? t("{{n}} días", { n: ty.shelf_life_days }) : "—"}</DataTable.Td>
+              <DataTable.Td>{ty.retires === "source" ? t("origen") : ty.retires === "target" ? t("destino") : "—"}</DataTable.Td>
               {canEdit && <DataTable.Td><Group gap={6} wrap="nowrap"><Btn size="row" icon="edit" onClick={() => onEdit(ty)}>{t("Editar")}</Btn><Btn kind="danger" size="row" icon="trash" onClick={() => onDelete(ty)}>{t("Quitar")}</Btn></Group></DataTable.Td>}
             </DataTable.Tr>))}</DataTable.Tbody>
         </DataTable>)}
@@ -184,9 +186,9 @@ export default function VocabOntology({ graph, role }: { graph: string; role: st
               : t("Márcalo solo si un sujeto no puede tener dos destinos vigentes a la vez (por ejemplo, dónde está un equipo físico). Dos destinos aparecerán en Calidad del contenido → Contradicciones. Muchas relaciones parecen de un solo valor y no lo son: mide antes allí, con «Medir en todas las relaciones».")} />
           <NumberField label={t("Vida útil (días)")} min={1} max={3650} value={shelf} onChange={setShelf} disabled={isGeneric(name)} placeholder={t("Sin vida útil")}
             description={isGeneric(name) ? t("Es una relación genérica: no puede tener vida útil.") : t("Para datos que se quedan viejos sin que nadie los contradiga (una IP, una versión): pasado este plazo sin confirmar, un hecho vigente pesa menos en el recall y aparece en Calidad del contenido → A revisar. Vacío: nunca.")} />
-          <SelectField label={t("Marca una retirada")} value={isGeneric(name) ? "none" : retires} onChange={(v) => setRetires(v ?? "none")} disabled={isGeneric(name)} allowDeselect={false}
-            data={[{ value: "none", label: t("No") }, { value: "source", label: t("Sí: se retira el origen") }, { value: "target", label: t("Sí: se retira el destino") }]}
-            description={isGeneric(name) ? t("Es una relación genérica: no puede marcar una retirada.") : t("Un hecho nuevo de esta relación dice que una entidad se retiró o se sustituyó (por ejemplo, «X fue sustituido por Y»): se pide sola una revisión del tema de esa entidad, en Calidad del contenido → Temas. Sin marcarla, ya se reconocen los nombres habituales (REPLACED_BY, SUPERSEDES, MIGRATED_TO…).")} />
+          <SelectField label={t("Retirada")} value={isGeneric(name) ? "none" : retires} onChange={(v) => setRetires(v ?? "none")} disabled={isGeneric(name)} allowDeselect={false}
+            data={[{ value: "none", label: t("No") }, { value: "source", label: t("Se retira el origen") }, { value: "target", label: t("Se retira el destino") }]}
+            description={isGeneric(name) ? t("Es una relación genérica: no puede marcar una retirada.") : t("Un hecho nuevo de esta relación pide automáticamente una revisión del tema de lo que se retira, en Calidad del contenido → Temas. Los nombres habituales (REPLACED_BY, SUPERSEDES, MIGRATED_TO…) ya se reconocen sin marcarla.")} />
           <MutationError error={saveRel.error} />
           <DialogActions><Btn kind="ghost" onClick={() => setDlg(null)}>{t("Cancelar")}</Btn><Btn kind="primary" icon="check" disabled={!name || desc.trim().length < 3} loading={saveRel.isPending} onClick={() => saveRel.mutate()}>{t("Guardar")}</Btn></DialogActions>
         </Stack>

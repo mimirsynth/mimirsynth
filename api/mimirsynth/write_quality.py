@@ -113,7 +113,7 @@ def without_text(rep: dict) -> dict:
     if rep.get("collapsed") or rep.get("dropped"):
         out = {**rep, **{k: [{x: y for x, y in e.items() if x != "fact"} for e in rep[k]] for k in ("collapsed", "dropped") if rep.get(k)}}
     if isinstance(rep.get("retirement"), dict):
-        out = {**out, "retirement": {k: [{x: y for x, y in e.items() if x != "name"} for e in v] if isinstance(v, list) else v
+        out = {**out, "retirement": {k: [{x: y for x, y in e.items() if x != "name"} for e in v] if isinstance(v, list) else "failed"
                                      for k, v in rep["retirement"].items()}}
     return out
 

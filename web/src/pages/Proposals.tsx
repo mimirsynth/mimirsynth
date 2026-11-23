@@ -363,17 +363,19 @@ type RetiredOne = { entity: string; name?: string; facts: string[]; review?: num
 type Retired = { queued?: RetiredOne[]; joined?: RetiredOne[]; not_queued?: RetiredOne[]; error?: string };
 const NOT_QUEUED: Record<string, string> = { off: T("las revisiones por retirada están desactivadas en los ajustes del curador"), read_only: T("el brain es de solo lectura"),
   no_engine: T("no hay ningún motor LLM configurado"), paused: T("el brain ha agotado su presupuesto de IA de este mes"),
-  daily: T("ya se pidieron hoy las que permite el brain (ajuste retirement_daily del curador)") };
+  daily: T("hoy ya se pidieron todas las que permite el ajuste retirement_daily del curador"),
+  full: T("la revisión que espera ya tiene todos los hechos de retirada que admite") };
 
 /** What the ingestion did with a fact saying an entity was retired or replaced: the topic review it asked for, joined or could not ask for. */
 function RetiredLines({ r }: { r: Retired }) {
   const { t } = useTranslation();
   const name = (e: RetiredOne) => e.name || t("una entidad");
-  const open = (e: RetiredOne) => e.review ? <> <Btn kind="link" component={Link} to={`/calidad?tab=topics&revision=${e.review}`}>{t("Ver la revisión")}</Btn></> : null;
+  const open = (e: RetiredOne) => e.review ? <> <Btn kind="link" className="ms-link-inline" component={Link} to={`/calidad?tab=topics&revision=${e.review}`}
+    aria-label={t("Ver la revisión de «{{name}}»", { name: name(e) })}>{t("Ver la revisión")}</Btn></> : null;
   return <>
-    {(r.queued ?? []).map((e) => <div key={`q${e.entity}`}>{t("Dice que «{{name}}» se retiró o se sustituyó: se pidió una revisión de su tema.", { name: name(e) })}{open(e)}</div>)}
-    {(r.joined ?? []).map((e) => <div key={`j${e.entity}`}>{t("Dice que «{{name}}» se retiró o se sustituyó: se sumó a la revisión de su tema que ya esperaba.", { name: name(e) })}{open(e)}</div>)}
-    {(r.not_queued ?? []).map((e) => <div key={`n${e.entity}`}>{t("Dice que «{{name}}» se retiró o se sustituyó, pero no se pidió una revisión de su tema: {{why}}.", { name: name(e), why: t(NOT_QUEUED[e.why ?? ""] ?? e.why ?? "") })}</div>)}
+    {(r.queued ?? []).map((e) => <div key={`q${e.entity}`}>{t("Un hecho dice que «{{name}}» se retiró o se sustituyó: se pidió una revisión de su tema.", { name: name(e) })}{open(e)}</div>)}
+    {(r.joined ?? []).map((e) => <div key={`j${e.entity}`}>{t("Un hecho dice que «{{name}}» se retiró o se sustituyó: se sumó a la revisión de su tema que ya esperaba.", { name: name(e) })}{open(e)}</div>)}
+    {(r.not_queued ?? []).map((e) => <div key={`n${e.entity}`}>{t("Un hecho dice que «{{name}}» se retiró o se sustituyó, pero no se pidió una revisión de su tema: {{why}}.", { name: name(e), why: t(NOT_QUEUED[e.why ?? ""] ?? e.why ?? "") })}</div>)}
     {r.error && <div>{t("No se pudo pedir la revisión de una retirada: {{e}}", { e: r.error })}</div>}
   </>;
 }

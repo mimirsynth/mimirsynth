@@ -146,8 +146,10 @@ def check(a: Action, items: dict[str, dict], sent: set[str]) -> tuple[dict | Non
         return None, "not_own"   # a neighbour's fact is context and evidence, never what an action of this topic changes
     if any(not items[x].get("current") for x in facts):
         return None, "not_current"
-    if a.type != "rewrite" and any(items[x].get("anchor") for x in facts if x != keep):
-        return None, "anchor"   # the fact that says the topic was retired is its history: it stays
+    if a.type == "merge" and not keep and facts:
+        keep = facts[0]
+    if any(items[x].get("anchor") for x in facts if not (a.type == "merge" and x == keep)):
+        return None, "anchor"   # the fact that says the topic was retired is its history: nothing changes it, not even a rewrite
     if len(facts) > MAX_ACTED:
         return None, "too_many"
     if a.type == "invalidate" and not [x for x in evidence if x not in facts]:
@@ -238,7 +240,7 @@ def gather(g, db, brain_id: int, uuid: str, anchors: list[str] | tuple = ()) -> 
     items: dict[str, dict] = {}
     for i, f in enumerate(own + near, 1):
         items[f"F{i}"] = _fact(f, i <= len(own), probes)
-        if i <= len(own) and f["uuid"] in anchors:
+        if i <= len(own) and f["uuid"] in anchors and items[f"F{i}"]["current"]:   # an anchor invalidated since says nothing now
             items[f"F{i}"]["anchor"] = True
     for i, e in enumerate(eps, 1):
         items[f"E{i}"] = {"kind": "episode", "uuid": e["uuid"], "name": e["name"] or "", "valid_at": e["valid_at"] or e["created_at"],
@@ -250,16 +252,21 @@ def gather(g, db, brain_id: int, uuid: str, anchors: list[str] | tuple = ()) -> 
                                                            "neighbour_facts": max(total_near - len(near), 0)}}
 
 
+def _one(x) -> str:
+    """On one line: a name or a label with a newline in it cannot write a line of its own in the prompt (#455)."""
+    return " ".join(str(x or "").split())
+
+
 def line(key: str, it: dict) -> str:
     """One item as a line of the prompt. Everything that comes from the memory goes through `unclosable`."""
     from .answer import unclosable as u
     if it["kind"] == "episode":
-        src = f" | source: {u(it['source'][:80])}" if it["source"] else ""
+        src = f" | source: {u(_one(it['source'])[:80])}" if it["source"] else ""
         return f"{key} | {_day(it['valid_at']) or '?'}{src} | {u(it['text'])}"
     when = (f"invalidated {_day(it['invalid_at'])} | valid from {_day(it['valid_at']) or '?'}" if not it["current"]
             else f"current | valid from {_day(it['valid_at']) or '?'}")
     probe = f" | live check: {it['probe']}" if it.get("probe") else ""
-    return f"{key} | {when} | {u(it['source'] or '')} → {u(it['target'] or '')} | {u(' '.join(it['fact'].split()))}{probe}"
+    return f"{key} | {when} | {u(_one(it['source']))} → {u(_one(it['target']))} | {u(_one(it['fact']))}{probe}"
 
 
 def pack(items: dict[str, dict], calls: int, budget: int = PROMPT_CHARS) -> tuple[list[list[str]], dict[str, int]]:
@@ -288,12 +295,12 @@ def pack(items: dict[str, dict], calls: int, budget: int = PROMPT_CHARS) -> tupl
 
 def messages(entity: dict, items: dict[str, dict], ids: list[str], part: int = 1, parts: int = 1) -> list[dict]:
     from .answer import unclosable as u
-    kind = u(", ".join(entity.get("labels") or [])) or "-"
+    kind = u(_one(", ".join(entity.get("labels") or []))) or "-"
     own = [k for k in ids if items[k]["kind"] == "fact" and items[k]["own"]]
     eps = [k for k in ids if items[k]["kind"] == "episode"]
     near = [k for k in ids if items[k]["kind"] == "fact" and not items[k]["own"]]
     sec = lambda title, ks: f"{title}:\n" + ("\n".join(line(k, items[k]) for k in ks) or "-")  # noqa: E731
-    head = f"Name: {u(entity['name'])}\nType: {kind}" + (f"\nPart {part} of {parts} of what the memory holds about it." if parts > 1 else "")
+    head = f"Name: {u(_one(entity['name']))}\nType: {kind}" + (f"\nPart {part} of {parts} of what the memory holds about it." if parts > 1 else "")
     retired = [k for k in ids if items[k].get("anchor")]
     if retired:
         head += f"\nRetired or replaced, according to: {', '.join(retired)}"
@@ -563,7 +570,9 @@ def _anchors(have: list | None, new: list[dict]) -> list[dict]:
 def queue_retirement(db, brain: Brain, uuid: str, name: str, anchors: list[dict]) -> tuple[str, int | None]:
     """A review of an entity that an ingested fact says was retired or replaced (#455), with those facts as its anchors: what happened
     and the review. `joined` a review of it still queued; `queued` a new one (one may be running: it may have read the topic before
-    the fact came in); or why none: `off`, `read_only`, `no_engine`, `paused`, `daily` (the brain's limit for today)."""
+    the fact came in); or why none: `off`, `read_only`, `no_engine`, `paused`, `daily` (the brain's limit for today), `full` (the queued
+    review already holds MAX_ANCHORS). Joining is a conditional write: a review that started meanwhile is left alone, and a new one is
+    queued, on PostgreSQL and on SQLite alike."""
     from .curator import config
     cfg = config(brain)
     if not cfg["retirement_reviews"]:
@@ -573,10 +582,22 @@ def queue_retirement(db, brain: Brain, uuid: str, name: str, anchors: list[dict]
     q = (select(TopicReview).where(TopicReview.brain_id == brain.id, TopicReview.entity_uuid == uuid, TopicReview.status == "queued")
          .order_by(TopicReview.id.desc()).with_for_update().execution_options(populate_existing=True))
     for r in db.scalars(q).all():
-        if _alive(db, r):
-            r.anchors = _anchors(r.anchors, anchors)
-            db.commit()
+        if not _alive(db, r):
+            continue
+        have = list(r.anchors or [])
+        fresh = [a for a in anchors if a["uuid"] not in {x["uuid"] for x in have}]
+        if not fresh:
+            db.rollback()
+            return "joined", r.id   # it already holds them
+        if len(have) >= MAX_ANCHORS:
+            db.rollback()
+            return "full", None
+        done = db.execute(update(TopicReview).where(TopicReview.id == r.id, TopicReview.status == "queued")
+                          .values(anchors=_anchors(have, fresh))).rowcount
+        db.commit()
+        if done:
             return "joined", r.id
+        break   # it started meanwhile: a new one is queued below
     db.rollback()
     if _engine() is None:
         return "no_engine", None

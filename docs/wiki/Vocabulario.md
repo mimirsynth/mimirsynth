@@ -39,7 +39,7 @@ Los **nombres de las entidades fusionadas** son otra cosa: al fusionar un duplic
 Dos marcas de cada relación en [[Ontología]] hacen aparecer trabajo para los curadores:
 - **Un solo valor a la vez**: dos destinos vigentes del mismo sujeto salen en [[Calidad del contenido]] → [[Contradicciones]].
 - **Vida útil**: un hecho que pasa ese plazo sin confirmar sale en [[Calidad del contenido]] → **A revisar**.
-- **Marca una retirada**: un hecho nuevo suyo encola una revisión del tema de la entidad retirada en [[Calidad del contenido]] → **Temas**.
+- **Retirada**: un hecho nuevo suyo encola una revisión del tema de la entidad retirada en [[Calidad del contenido]] → **Temas**.
 
 El diálogo de la relación y la cabecera de Ontología enlazan con esas pestañas, y ellas enlazan de vuelta con Ontología.
 
