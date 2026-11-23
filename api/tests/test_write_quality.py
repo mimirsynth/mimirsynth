@@ -305,6 +305,16 @@ def test_with_the_budget_paused_or_no_decider_nothing_is_asked(monkeypatch):
     assert s(_acme("e1", "network N1 belongs to Acme")) is None and s.skipped is None and dec.calls == []
 
 
+def test_an_answer_without_its_confidence_is_a_failure_and_the_sure_rules_still_apply(monkeypatch):
+    s = _subject(monkeypatch, lambda *a, **k: {"index": 0, "letter": "A"})
+    g = _Graph([_acme("e1", "network N1 belongs to Acme"), _acme("e2", "network N1 belongs to Acme"), fact("e3", "It runs on altair", su="it", source="it")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+    rep = {"edges": 3, "_new_edges": ["e1", "e2", "e3"], "_edges": [("e1", "B"), ("e2", "B"), ("e3", "R")]}
+    W.apply(ACME, rep, EP, s)
+    assert rep["subject_error"] is True and "quality_error" not in rep and rep["_edges"] == [("e1", "B")]
+    assert [d["rule"] for d in rep["dropped"]] == ["placeholder"] and [c["uuid"] for c in rep["collapsed"]] == ["e2"]
+
+
 def test_a_decider_failure_keeps_the_fact_and_stops_asking(monkeypatch):
     import httpx
     dec = _Decider(fail=httpx.ConnectError("down"))

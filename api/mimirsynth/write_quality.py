@@ -111,12 +111,13 @@ class Subject:
             state = decider.with_scope(f"Hecho: {_plain(f.get('fact'), 500)}\nExtremos: «{_plain(f.get('source'), 120)}» → «{_plain(f.get('target'), 120)}»", context)
             with usage.scope(b.id, "decider"):
                 r = decider.decide(d["base_url"], d["model"], d["key"], state, QUESTION, OPTIONS, timeout=CALL_TIMEOUT)
-        except Exception:  # noqa: BLE001 — the fact stays; the ingestion goes on
+            verdict = {"prob": float(r["prob"])} if r["index"] == 0 and r["prob"] >= max(d["threshold"], MIN_PROB) else None
+        except Exception:  # noqa: BLE001 — the fact stays; the ingestion goes on (an odd answer too)
             log.warning("no se pudo consultar al decisor sobre un hecho ingerido", exc_info=True)
             self.error = True
             return None
-        self.asked[key] = {"prob": r["prob"]} if r["index"] == 0 and r["prob"] >= max(d["threshold"], MIN_PROB) else None
-        return self.asked[key]
+        self.asked[key] = verdict
+        return verdict
 
 
 def same_text(text) -> str:
