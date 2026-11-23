@@ -395,15 +395,19 @@ function IngestReport({ r, id }: { r: NonNullable<Prop["ingest_report"]>; id: nu
   const joined = r.collapsed ?? [], dropped = r.dropped ?? [];
   const kinds = Object.entries(r.not_entities ?? {}).filter(([, n]) => n > 0);
   const notEntities = kinds.reduce((s, [, n]) => s + n, 0);
+  // the empty facts of issue 458 and those that only restated the brain's subject (issue 465) are counted apart: the latter are not empty
+  const empty = dropped.filter((e) => e.rule !== "subject").length, restated = dropped.length - empty;
   const tidy = [joined.length ? (joined.length === 1 ? t("1 duplicado unido") : t("{{n}} duplicados unidos", { n: joined.length })) : "",
-    dropped.length ? (dropped.length === 1 ? t("1 hecho vacío descartado") : t("{{n}} hechos vacíos descartados", { n: dropped.length })) : "",
+    empty ? (empty === 1 ? t("1 hecho vacío descartado") : t("{{n}} hechos vacíos descartados", { n: empty })) : "",
+    restated ? (restated === 1 ? t("1 hecho que solo repetía el tema del brain") : t("{{n}} hechos que solo repetían el tema del brain", { n: restated })) : "",
     r.quality_error ? t("no se pudo buscar duplicados") : ""].filter(Boolean);
   // the decider's check of issue 465, when it could not run: its own line, since it is a sentence and wraps
-  const subject = r.subject_skipped ? t("No se consultó al decisor sobre los hechos que solo repiten el tema del brain: el brain agotó su presupuesto de IA.")
-    : r.subject_error ? t("No se pudo consultar al decisor sobre los hechos que solo repiten el tema del brain: se quedan todos.") : "";
+  const subject = r.subject_skipped === "budget_partial" ? t("El brain agotó su presupuesto de IA de este mes mientras se consultaba al decisor: los hechos que quedaban por consultar se quedan.")
+    : r.subject_skipped ? t("No se consultó al decisor sobre los hechos que solo repiten el tema del brain: el brain ha agotado su presupuesto de IA de este mes, así que se quedan todos.")
+    : r.subject_error ? t("No se pudo consultar al decisor sobre los hechos que solo repiten el tema del brain, así que se quedan todos.") : "";
   // why a fact was dropped: the sure rules of issue 458, or the decider of issue 465
   const droppedWhy = (e: Dropped) => e.rule === "subject"
-    ? (e.prob === undefined ? t("solo repetía el tema del brain, según el decisor") : t("solo repetía el tema del brain, según el decisor ({{p}} %)", { p: Math.round(e.prob * 100) }))
+    ? t("solo repetía el tema del brain (confianza del decisor: {{p}})", { p: (e.prob ?? 0).toLocaleString(locale(), { style: "percent", maximumFractionDigits: 0 }) })
     : e.rule === "meta" ? t("habla de la propia memoria, no del mundo que describe") : t("un extremo es un comodín («it», «algo»), no una cosa del mundo");
   const listed = [...joined.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.with === "current" ? t("ya lo decía un hecho del brain: el episodio queda enlazado a él") : t("repetía otro hecho de este episodio") })),
     ...dropped.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: droppedWhy(e) }))];

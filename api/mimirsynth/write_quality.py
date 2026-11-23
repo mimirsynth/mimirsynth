@@ -9,6 +9,7 @@ MAX_ASK per ingestion and never while the brain's budget is paused, and it goes 
 threshold. A failure of the decider keeps the fact and never fails the ingestion."""
 import logging
 import re
+import time
 
 from .curator import META, NOISE_RULES, PLACEHOLDERS, _name
 from .db import graph, rows
@@ -37,9 +38,25 @@ _NOT_AT_WRITE = frozenset("user the-user usuario el-usuario la le lo él ella".s
 _PRONOUNS = frozenset("it this that these those them they something someone esto eso ello ellos ellas algo alguien".split())
 SUBJECT = "it only restates what the brain is about, as the decider judged"
 MAX_ASK = 10   # decider calls per ingestion, one per distinct text
+MIN_PROB = 0.8   # a delete with no person: never on a less sure answer, whatever the decider's own threshold
+DEADLINE = 90.0   # seconds the whole check may take; a slow decider leaves the rest of the facts as they are
+CALL_TIMEOUT = 30.0
+SUBJECT_CHARS = 200   # of the description, its first sentence at most: the subject, not everything the brain names
 QUESTION = ("Todo lo que guarda este brain trata de su tema. ¿Este hecho solo dice que algo pertenece al tema del brain, forma parte de "
             "él o se relaciona con él, sin añadir nada más?")
 OPTIONS = ["Sí: solo repite el tema del brain", "No: dice algo más"]
+
+
+def _plain(s, n: int) -> str:
+    """Extracted text as the decider reads it: one line, cut, and with no angle brackets that could close its `<state>` block."""
+    return " ".join(str(s or "").split())[:n].replace("<", "‹").replace(">", "›")
+
+
+def may_judge(p) -> bool:
+    """Whether the decider may drop facts of this proposal (#465). Not those it never decides on its own in the triage either: a
+    correction, one with claims (it may replace facts: its new value must stay), a flagged possible secret, a distilled note."""
+    from .secretguard import flagged
+    return not (p.kind == "correction" or p.claims or flagged(p.secret_findings) or (p.category or "") == "curator.distil")
 
 
 class Subject:
@@ -48,16 +65,18 @@ class Subject:
 
     def __init__(self, brain):
         self.brain = brain
-        self.text = " ".join(f"{getattr(brain, 'name', '') or ''}\n{getattr(brain, 'description', '') or ''}".lower().split())
+        first = re.split(r"(?<=[.!?])\s|\n", (getattr(brain, "description", "") or "").strip(), maxsplit=1)[0][:SUBJECT_CHARS]
+        self.texts = [" ".join(str(x or "").lower().split()) for x in (getattr(brain, "name", ""), first)]
         self.asked: dict[str, dict | None] = {}
-        self.calls, self.skipped, self.error, self._d = 0, None, False, False
+        self.calls, self.skipped, self.error, self._d, self.started = 0, None, False, False, None
 
     def names(self, end) -> bool:
-        """The end names the brain's subject: its name, as a whole phrase, is in the brain's name or description."""
+        """The end names the brain's subject: its name, as a whole phrase, is in the brain's name or in the first sentence of its
+        description."""
         n = " ".join(str(end or "").lower().split())
         if len(n) < 3 or _name(n) in PLACEHOLDERS or _name(n) in META:
             return False
-        return re.search(rf"(?<!\w){re.escape(n)}(?!\w)", self.text) is not None
+        return any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", t) for t in self.texts)
 
     def _decider(self):
         if self._d is False:
@@ -75,27 +94,28 @@ class Subject:
         key = same_text(f.get("fact"))
         if key in self.asked:
             return self.asked[key]
-        if self.calls >= MAX_ASK:
+        if self.calls >= MAX_ASK or (self.started is not None and time.monotonic() - self.started > DEADLINE):
             return None
         from . import decider, usage
         try:
             d = self._decider()
             if not d:
                 return None
-            if usage.paused(self.brain.id):   # the brain spent its AI budget: nothing is asked
-                self.skipped = "budget"
+            if usage.paused(self.brain.id):   # the brain spent its AI budget: nothing more is asked
+                self.skipped = "budget" if self.calls == 0 else "budget_partial"
                 return None
             self.calls += 1
+            self.started = time.monotonic() if self.started is None else self.started
             b = self.brain
             context = decider.scope(b.name, b.description or "") or f"Brain «{b.name}»"
-            state = decider.with_scope(f"Hecho: {f.get('fact')}\nExtremos: «{f.get('source')}» → «{f.get('target')}»", context)
+            state = decider.with_scope(f"Hecho: {_plain(f.get('fact'), 500)}\nExtremos: «{_plain(f.get('source'), 120)}» → «{_plain(f.get('target'), 120)}»", context)
             with usage.scope(b.id, "decider"):
-                r = decider.decide(d["base_url"], d["model"], d["key"], state, QUESTION, OPTIONS)
+                r = decider.decide(d["base_url"], d["model"], d["key"], state, QUESTION, OPTIONS, timeout=CALL_TIMEOUT)
         except Exception:  # noqa: BLE001 — the fact stays; the ingestion goes on
             log.warning("no se pudo consultar al decisor sobre un hecho ingerido", exc_info=True)
             self.error = True
             return None
-        self.asked[key] = {"prob": r["prob"]} if r["index"] == 0 and r["prob"] >= d["threshold"] else None
+        self.asked[key] = {"prob": r["prob"]} if r["index"] == 0 and r["prob"] >= max(d["threshold"], MIN_PROB) else None
         return self.asked[key]
 
 

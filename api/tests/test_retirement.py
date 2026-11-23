@@ -276,7 +276,7 @@ def test_an_ingestion_reports_the_review_its_retirement_fact_asked_for(client, e
         return "ep9"
     monkeypatch.setattr(ingest, "add_episode", fake_add)
     monkeypatch.setattr(ingest, "_engine", lambda: ENGINE)
-    monkeypatch.setattr(write_quality, "apply", lambda brain, rep, ep: rep.pop("_new_edges", None))   # both consume the lists, as they do
+    monkeypatch.setattr(write_quality, "apply", lambda brain, rep, ep, judge=None: rep.pop("_new_edges", None))   # both consume the lists, as they do
     monkeypatch.setattr(vocab_apply, "apply", lambda db, brain, rep: rep.pop("_edges", None))
     with _factory()() as db:
         b = db.scalar(select(Brain).where(Brain.slug == "ret8"))
@@ -320,7 +320,7 @@ def test_an_ingestion_with_a_retirement_fact_and_the_graph_down_is_still_ingeste
         raise ConnectionError("graph down")
     monkeypatch.setattr(ingest, "add_episode", fake_add)
     monkeypatch.setattr(ingest, "_engine", lambda: ENGINE)
-    monkeypatch.setattr(write_quality, "apply", lambda brain, rep, ep: rep.pop("_new_edges", None))
+    monkeypatch.setattr(write_quality, "apply", lambda brain, rep, ep, judge=None: rep.pop("_new_edges", None))
     monkeypatch.setattr(vocab_apply, "apply", lambda db, brain, rep: rep.pop("_edges", None))
     monkeypatch.setattr(dbm, "graph", down)
     pid = client.post("/api/brains/ret6/proposals", json={"name": "move", "body": "Postmark replaced Sendgrid."}).json()["id"]
