@@ -212,7 +212,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               </>}>
               <SearchBar mode="submit" value={q} onChange={setQ} placeholder={t("Busca en los documentos por significado o por texto…")} onSubmit={setQuery} onClear={() => { setQ(""); setQuery(""); }} submitted={!!query} loading={hits.isLoading} disabled={!enabled} />
               {!query && <Segments label={t("Estado")} value={f.status || "all"} onChange={(v) => setFilter({ status: v === "all" ? "" : v })}
-                data={[{ value: "all", label: t("Todos"), count: docCount }, ...Object.entries(LABEL).filter(([k]) => (docs.data?.status_counts[k] ?? 0) > 0 || f.status === k).map(([k, v]) => ({ value: k, label: v[0].toUpperCase() + v.slice(1), count: docs.data?.status_counts[k] ?? 0 }))]} />}
+                data={[{ value: "all", label: t("Todos"), count: docCount }, ...Object.entries(LABEL).filter(([k]) => (docs.data?.status_counts[k] ?? 0) > 0 || f.status === k).map(([k, v]) => { const l = t(v); return { value: k, label: l[0].toUpperCase() + l.slice(1), count: docs.data?.status_counts[k] ?? 0 }; })]} />}
               {!query && <ClearFilters active={active} onClear={clear} />}
               {ocr && <Toggle label={t("Leer con el modelo de visión")} checked={ocr.vision} disabled={vision.isPending} onChange={(e) => vision.mutate(e.currentTarget.checked)} />}
             </ViewBar>
