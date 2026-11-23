@@ -470,6 +470,9 @@ class TopicReview(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # manual (a curator asked for it) | retirement (#455: an ingested fact said the entity was retired or replaced)
+    trigger: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
+    anchors: Mapped[list | None] = mapped_column(JSON, nullable=True)  # the retirement facts, as they were: uuid, fact, relation, proposal
 
 
 class Job(Base):

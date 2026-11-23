@@ -142,7 +142,8 @@ def test_starting_is_refused_without_an_engine_with_the_budget_spent_in_a_read_o
         db.commit()
     assert client.post("/api/brains/topic0/topics/entity/mail").status_code == 409
     with _factory()() as db:
-        assert db.scalars(select(TopicReview)).all() == [] and db.scalars(select(Job).where(Job.kind == tr_.KIND)).all() == []
+        assert db.scalars(select(TopicReview).where(TopicReview.brain_id == b.id)).all() == []
+        assert db.scalars(select(Job).where(Job.kind == tr_.KIND, Job.brain_id == b.id)).all() == []
     _as("rita@x.com", "Rita")
     assert client.post("/api/brains/topic0/topics/entity/mail").status_code == 403
     assert client.get("/api/brains/topic0/topics").status_code == 403
@@ -227,7 +228,7 @@ def test_a_stale_topic_is_reviewed_and_the_curator_approves_what_holds(client, e
     assert "Name: Mailer" in prompt and "Postmark is run by Ops" in prompt and "We moved the mailer" in prompt
 
     d = client.get(f"/api/brains/topic2/topics/{rid}").json()
-    assert d["status"] == "ready" and d["prompt_version"] == "topic-review/1" and d["state"].startswith("Mailer sends its mail through Postmark")
+    assert d["status"] == "ready" and d["prompt_version"] == tr_.PROMPT_VERSION and d["state"].startswith("Mailer sends its mail through Postmark")
     assert [a["type"] for a in d["actions"]] == ["invalidate", "drop_trivial", "gap"] and d["discarded"] == {"unknown_id": 1}
     inv = d["actions"][0]
     assert d["items"][inv["facts"][0]]["uuid"] == "old" and {d["items"][x]["uuid"] for x in inv["evidence"]} == {"new", "ep1"}
@@ -267,7 +268,7 @@ def test_a_reply_that_does_not_validate_fails_the_review_and_keeps_nothing(clien
     rid = r.json()["review"]["id"]
     with _factory()() as db:
         t = db.get(TopicReview, rid)
-        assert t.actions is None and t.items is None and t.state == "" and "topic-review/1" in t.error and t.calls == 1
+        assert t.actions is None and t.items is None and t.state == "" and tr_.PROMPT_VERSION in t.error and t.calls == 1
         j = db.get(Job, t.job_id)
         assert j.status == "failed" and any("delete_everything" in x["msg"] for x in j.log)
     assert not _invalid(g, "old") and not _invalid(g, "triv")

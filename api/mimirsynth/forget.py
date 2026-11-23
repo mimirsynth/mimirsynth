@@ -176,8 +176,8 @@ def _topic_reviews(db, brain_id: int, entity: str, facts: set[str], m: Matcher) 
     from .models import TopicReview
     out = []
     for r in db.scalars(select(TopicReview).where(TopicReview.brain_id == brain_id).limit(MAX_ROWS)):
-        cited = {v.get("uuid") for v in (r.items or {}).values() if isinstance(v, dict)}
-        if r.entity_uuid == entity or cited & set(facts) or any(m(getattr(r, c)) for c in ("name", "state", "items", "actions", "error")):
+        cited = {v.get("uuid") for v in (r.items or {}).values() if isinstance(v, dict)} | {a.get("uuid") for a in r.anchors or [] if isinstance(a, dict)}
+        if r.entity_uuid == entity or cited & set(facts) or any(m(getattr(r, c)) for c in ("name", "state", "items", "actions", "error", "anchors")):
             out.append(r)
     return out
 

@@ -395,7 +395,7 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
 .ms-text-ok { color: var(--ms-accent); }
 .ms-mono-input textarea { font-family: var(--ms-mono); font-size: 13px; }
 
-.ms-tablewrap { overflow-x: auto; max-width: 100%; }
+.ms-tablewrap { overflow-x: auto; max-width: 100%; position: relative; }  /* its hidden labels (.ms-sr) stay inside what scrolls, never widen the page */
 .ms-statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .ms-split { display: flex; gap: 8px; flex: 1; min-height: 0; }
 .ms-split-main { flex: 1; min-width: 0; display: flex; }
@@ -891,3 +891,4 @@ button.ms-colhead-label:hover span, button.ms-colhead-label span[data-on] { opac
   .ms-setgroup-actions { justify-content: flex-start; }
 }
 .ms-btn[data-kind="link"] .mantine-Button-inner { justify-content: flex-start; }
+.ms-btn.ms-link-inline, .ms-btn.ms-link-inline .mantine-Button-label { font-size: inherit; }  /* a link inside a small sentence keeps its size */

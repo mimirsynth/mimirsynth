@@ -15,6 +15,10 @@
   graph: `invalidate`, `merge` (the facts other than the one kept) and `drop_trivial` become corrections applied at once, `rewrite`
   a correction with the new text as its replacement, and `gap` a free-text proposal in the queue.
 - **Precision** per action type, from the curators' decisions over the brain's reviews. Nothing is approved on its own.
+- **Retirement** (#455, `retirement`): an ingested fact saying the entity was retired or replaced queues a review of it on its own
+  (`queue_retirement`), with that fact as its anchor. A second one joins the review while it is still queued. The anchors are sent in
+  every call, and the prompt asks for the facts that still describe the entity as live; an action that would invalidate an anchor
+  (its history) is discarded.
 """
 import json
 import logging
@@ -25,7 +29,7 @@ from typing import Literal
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from . import jobs, secretguard, usage
 from .db import graph, rows
@@ -38,7 +42,7 @@ log = logging.getLogger("mimirsynth.topic_review")
 router = APIRouter(prefix="/api/brains/{slug}/topics")
 curator = brain_access("curator")
 
-PROMPT_VERSION = "topic-review/1"
+PROMPT_VERSION = "topic-review/2"   # 2: the retirement anchors (#455)
 KIND = "topic.review"
 MAX_FACTS = 150
 MAX_EPISODES = 20
@@ -51,7 +55,8 @@ ON_FACTS = ("invalidate", "merge", "rewrite", "drop_trivial")   # the types that
 DECIDED = ("approved", "rejected", "outdated")
 MAX_TEXT = 2000
 MAX_ACTED = 10           # facts one action may change: a single approval never invalidates a whole topic
-MAX_ACTIVE = 5           # reviews queued or running per brain
+MAX_ACTIVE = 5           # reviews a curator asked for, queued or running per brain
+MAX_ANCHORS = 20         # retirement facts one review keeps
 STALE_CLAIM = 600        # seconds after which an action left «applying» (a restart mid-approval) can be decided again
 REVIEWS_FOR_PRECISION = 500
 
@@ -68,7 +73,10 @@ SYSTEM = (
     "   - gap: something the episodes say that no fact holds; `text` the knowledge to add in one or two sentences; `evidence` the episodes.\n"
     "4. Act only on facts marked current. Never invalidate a fact only because it is old: a newer fact or episode must contradict it.\n"
     "5. `why`: one short sentence for the curator who decides, in the language of the facts.\n"
-    "6. Answer only with JSON, no prose around it: "
+    "6. When the block says the topic was retired or replaced, and by which facts, the facts that still describe it as running, configured, "
+    "in use, hosted, owned or depended on are `invalidate` candidates, with those facts as `evidence`. Facts about its history (that it "
+    "was replaced, by what, when, why) stay current: never act on the facts that say it was retired.\n"
+    "7. Answer only with JSON, no prose around it: "
     '{"state": "...", "actions": [{"type": "invalidate", "facts": ["F1"], "keep": null, "evidence": ["F7", "E2"], "text": "", "why": "..."}]}. '
     "An empty `actions` list when nothing needs doing."
 )
@@ -138,6 +146,10 @@ def check(a: Action, items: dict[str, dict], sent: set[str]) -> tuple[dict | Non
         return None, "not_own"   # a neighbour's fact is context and evidence, never what an action of this topic changes
     if any(not items[x].get("current") for x in facts):
         return None, "not_current"
+    if a.type == "merge" and not keep and facts:
+        keep = facts[0]
+    if any(items[x].get("anchor") for x in facts if not (a.type == "merge" and x == keep)):
+        return None, "anchor"   # the fact that says the topic was retired is its history: nothing changes it, not even a rewrite
     if len(facts) > MAX_ACTED:
         return None, "too_many"
     if a.type == "invalidate" and not [x for x in evidence if x not in facts]:
@@ -194,6 +206,7 @@ NEIGHBOURS_COUNT = ("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE (a.uuid I
                     "AND r.invalid_at IS NULL AND r.expired_at IS NULL RETURN count(r)")
 EPISODES_COUNT = "MATCH (e:Episodic)-[:MENTIONS]->(n:Entity {uuid:$u}) RETURN count(e)"
 ENTITY = "MATCH (n:Entity {uuid:$u}) RETURN n.uuid AS uuid, n.name AS name, [l IN labels(n) WHERE l <> 'Entity'] AS labels"
+ANCHORS = "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) WHERE r.uuid IN $a AND (a.uuid = $u OR b.uuid = $u) " + _FACT
 
 
 def _day(x) -> str:
@@ -207,13 +220,18 @@ def _fact(f: dict, own: bool, probes: dict[str, str]) -> dict:
             "current": not (f["invalid_at"] or f["expired_at"]), "probe": probes.get(f["uuid"])}
 
 
-def gather(g, db, brain_id: int, uuid: str) -> dict | None:
+def gather(g, db, brain_id: int, uuid: str, anchors: list[str] | tuple = ()) -> dict | None:
     """Everything sent about one entity, each item under its local id in the order it is sent (its facts, the episodes, the facts of its
-    neighbours), and how many of each were left out by the caps. None when the entity is not in the graph."""
+    neighbours), and how many of each were left out by the caps. The anchors (#455) come first among its facts, even past the cap, and
+    are marked. None when the entity is not in the graph."""
     ent = rows(g.query(ENTITY, {"u": uuid}))
     if not ent:
         return None
     own = rows(g.query(OWN, {"u": uuid, "n": MAX_FACTS}))
+    if anchors:
+        pinned = rows(g.query(ANCHORS, {"u": uuid, "a": list(anchors)}))
+        have = {f["uuid"] for f in pinned}
+        own = pinned + [f for f in own if f["uuid"] not in have]
     eps = rows(g.query(EPISODES, {"u": uuid, "n": MAX_EPISODES}))
     nb = sorted({f["t"] if f["s"] == uuid else f["s"] for f in own})
     near = rows(g.query(NEIGHBOURS, {"u": uuid, "nb": nb, "n": MAX_NEIGHBOUR_FACTS})) if nb else []
@@ -222,45 +240,54 @@ def gather(g, db, brain_id: int, uuid: str) -> dict | None:
     items: dict[str, dict] = {}
     for i, f in enumerate(own + near, 1):
         items[f"F{i}"] = _fact(f, i <= len(own), probes)
+        if i <= len(own) and f["uuid"] in anchors and items[f"F{i}"]["current"]:   # an anchor invalidated since says nothing now
+            items[f"F{i}"]["anchor"] = True
     for i, e in enumerate(eps, 1):
         items[f"E{i}"] = {"kind": "episode", "uuid": e["uuid"], "name": e["name"] or "", "valid_at": e["valid_at"] or e["created_at"],
                           "source": e["source"] or "", "text": " ".join(str(e["content"] or "").split())[:EPISODE_CHARS]}
-    total_facts = g.query(OWN_COUNT, {"u": uuid}).result_set[0][0]
+    total_facts = max(g.query(OWN_COUNT, {"u": uuid}).result_set[0][0], len(own))
     total_eps = g.query(EPISODES_COUNT, {"u": uuid}).result_set[0][0]
     total_near = g.query(NEIGHBOURS_COUNT, {"u": uuid, "nb": nb}).result_set[0][0] if nb else 0
     return {"entity": ent[0], "items": items, "left_out": {"facts": max(total_facts - len(own), 0), "episodes": max(total_eps - len(eps), 0),
                                                            "neighbour_facts": max(total_near - len(near), 0)}}
 
 
+def _one(x) -> str:
+    """On one line: a name or a label with a newline in it cannot write a line of its own in the prompt (#455)."""
+    return " ".join(str(x or "").split())
+
+
 def line(key: str, it: dict) -> str:
     """One item as a line of the prompt. Everything that comes from the memory goes through `unclosable`."""
     from .answer import unclosable as u
     if it["kind"] == "episode":
-        src = f" | source: {u(it['source'][:80])}" if it["source"] else ""
+        src = f" | source: {u(_one(it['source'])[:80])}" if it["source"] else ""
         return f"{key} | {_day(it['valid_at']) or '?'}{src} | {u(it['text'])}"
     when = (f"invalidated {_day(it['invalid_at'])} | valid from {_day(it['valid_at']) or '?'}" if not it["current"]
             else f"current | valid from {_day(it['valid_at']) or '?'}")
     probe = f" | live check: {it['probe']}" if it.get("probe") else ""
-    return f"{key} | {when} | {u(it['source'] or '')} → {u(it['target'] or '')} | {u(' '.join(it['fact'].split()))}{probe}"
+    return f"{key} | {when} | {u(_one(it['source']))} → {u(_one(it['target']))} | {u(_one(it['fact']))}{probe}"
 
 
 def pack(items: dict[str, dict], calls: int, budget: int = PROMPT_CHARS) -> tuple[list[list[str]], dict[str, int]]:
     """The item ids per call, in order (the entity's facts, its episodes, its neighbours' facts), at most `budget` characters each and at
-    most `calls` calls, and what did not fit by kind."""
-    order = ([k for k, v in items.items() if v["kind"] == "fact" and v["own"]] + [k for k, v in items.items() if v["kind"] == "episode"]
+    most `calls` calls, and what did not fit by kind. The anchors (#455) open every call: each call can cite them."""
+    pins = [k for k, v in items.items() if v.get("anchor")]
+    order = ([k for k, v in items.items() if v["kind"] == "fact" and v["own"] and k not in pins] + [k for k, v in items.items() if v["kind"] == "episode"]
              + [k for k, v in items.items() if v["kind"] == "fact" and not v["own"]])
-    chunks: list[list[str]] = [[]]
-    size = 0
+    pinned = sum(len(line(k, items[k])) + 1 for k in pins)
+    chunks: list[list[str]] = [list(pins)]
+    size = pinned
     left = {"facts": 0, "episodes": 0, "neighbour_facts": 0}
     for k in order:
         n = len(line(k, items[k])) + 1
-        if size + n > budget and chunks[-1]:
+        if size + n > budget and len(chunks[-1]) > len(pins):
             if len(chunks) >= calls:
                 it = items[k]
                 left["episodes" if it["kind"] == "episode" else "facts" if it["own"] else "neighbour_facts"] += 1
                 continue
-            chunks.append([])
-            size = 0
+            chunks.append(list(pins))
+            size = pinned
         chunks[-1].append(k)
         size += n
     return [c for c in chunks if c], left
@@ -268,12 +295,15 @@ def pack(items: dict[str, dict], calls: int, budget: int = PROMPT_CHARS) -> tupl
 
 def messages(entity: dict, items: dict[str, dict], ids: list[str], part: int = 1, parts: int = 1) -> list[dict]:
     from .answer import unclosable as u
-    kind = u(", ".join(entity.get("labels") or [])) or "-"
+    kind = u(_one(", ".join(entity.get("labels") or []))) or "-"
     own = [k for k in ids if items[k]["kind"] == "fact" and items[k]["own"]]
     eps = [k for k in ids if items[k]["kind"] == "episode"]
     near = [k for k in ids if items[k]["kind"] == "fact" and not items[k]["own"]]
     sec = lambda title, ks: f"{title}:\n" + ("\n".join(line(k, items[k]) for k in ks) or "-")  # noqa: E731
-    head = f"Name: {u(entity['name'])}\nType: {kind}" + (f"\nPart {part} of {parts} of what the memory holds about it." if parts > 1 else "")
+    head = f"Name: {u(_one(entity['name']))}\nType: {kind}" + (f"\nPart {part} of {parts} of what the memory holds about it." if parts > 1 else "")
+    retired = [k for k in ids if items[k].get("anchor")]
+    if retired:
+        head += f"\nRetired or replaced, according to: {', '.join(retired)}"
     data = (f"<topic>\n{head}\n\n{sec('Facts about it', own)}\n\n{sec('Episodes that mention it', eps)}\n\n"
             f"{sec('Current facts of the entities it is related to', near)}\n</topic>")
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": data + "\n\nReview this topic."}]
@@ -333,21 +363,23 @@ def run(rid: int, job=None) -> dict:
     """Gathers the topic, asks the engine and keeps the actions that pass. Any failure leaves the review failed with nothing of it kept."""
     from .curator import config
     with _factory()() as db:
-        r = db.get(TopicReview, rid)
-        if r is None:   # forgotten before it started
-            return {}
-        if r.status != "queued":
+        # running only from queued, and read after it: an anchor that joined it meanwhile (#455) is in what is read
+        if not db.execute(update(TopicReview).where(TopicReview.id == rid, TopicReview.status == "queued").values(status="running")).rowcount:
+            db.rollback()
+            if db.get(TopicReview, rid) is None:   # forgotten before it started
+                return {}
             raise RuntimeError("esta revisión ya terminó o se interrumpió: pide otra desde la página de la entidad")
-        brain = db.get(Brain, r.brain_id)
-        r.status = "running"
         db.commit()
+        r = db.get(TopicReview, rid)
+        db.refresh(r)
+        brain = db.get(Brain, r.brain_id)
         calls = 0
         try:
             eng = _engine()
             if eng is None:
                 raise Failed("no_engine", "no hay ningún motor LLM configurado")
             cfg = config(brain)
-            topic = gather(graph(brain.graph_name), db, brain.id, r.entity_uuid)
+            topic = gather(graph(brain.graph_name), db, brain.id, r.entity_uuid, [x["uuid"] for x in r.anchors or []])
             if topic is None:
                 raise Failed("gone", "la entidad ya no está en el grafo")
             items = topic["items"]
@@ -380,7 +412,7 @@ def run(rid: int, job=None) -> dict:
                     discarded[k] = discarded.get(k, 0) + v
             for n, a in enumerate(actions):
                 a.update(i=n, decision="pending", became=[], skipped=[], by=None, at=None, edited=False)
-            cited = {x for a in actions for x in a["facts"] + a["evidence"] + ([a["keep"]] if a["keep"] else [])}
+            cited = {x for a in actions for x in a["facts"] + a["evidence"] + ([a["keep"]] if a["keep"] else [])} | {k for k, v in items.items() if v.get("anchor")}
             if not _still_there(graph(brain.graph_name), r.entity_uuid, [items[k] for k in cited]):
                 raise Failed("gone", "algo de lo que cita la revisión se borró mientras se hacía (por ejemplo, con el derecho al olvido)")
             r.state, r.actions, r.discarded, r.left_out, r.calls = "\n\n".join(states), actions, discarded, left, calls
@@ -443,7 +475,14 @@ def _row(db, r: TopicReview) -> dict:
     stuck = r.status in ("queued", "running") and not _alive(db, r)   # its job ended without it: a restart, for example
     return {"id": r.id, "entity_uuid": r.entity_uuid, "name": r.name, "status": "failed" if stuck else r.status,
             "error": "" if stuck else r.error, "error_code": "interrupted" if stuck else r.error_code,
-            "created_at": r.created_at, "finished_at": r.finished_at, "job": r.job_id, "counts": _counts(r.actions), "calls": r.calls}
+            "created_at": r.created_at, "finished_at": r.finished_at, "job": r.job_id, "counts": _counts(r.actions), "calls": r.calls,
+            "trigger": r.trigger or "manual"}
+
+
+def pending_count(db, brain_id: int) -> int:
+    """Ready reviews with actions still to decide: the count of the Topics tab (#455)."""
+    q = select(TopicReview.actions).where(TopicReview.brain_id == brain_id, TopicReview.status == "ready").order_by(TopicReview.id.desc())
+    return sum(1 for acts in db.scalars(q.limit(REVIEWS_FOR_PRECISION)) if any(a.get("decision") in ("pending", "applying") for a in acts or []))
 
 
 def _now_state(ctx: BrainCtx, items: dict) -> dict[str, str]:
@@ -483,7 +522,8 @@ def get_review(rid: int, request: Request, ctx: BrainCtx = Depends(curator)):
     acts = [{**a, "secrets": secretguard.describe(a.get("secrets")), "flagged": secretguard.flagged(a.get("secrets"))} for a in r.actions or []]
     return {**_row(ctx.db, r), "state": r.state, "state_secrets": secretguard.describe(r.secret_findings),
             "state_flagged": secretguard.flagged(r.secret_findings), "prompt_version": r.prompt_version, "actions": acts, "discarded": r.discarded or {},
-            "left_out": r.left_out or {}, "items": {k: {**v, "now": now.get(k)} for k, v in items.items()}, "precision": precision(ctx.db, ctx.brain.id)}
+            "left_out": r.left_out or {}, "items": {k: {**v, "now": now.get(k)} for k, v in items.items()}, "precision": precision(ctx.db, ctx.brain.id),
+            "anchors": r.anchors or []}
 
 
 @router.post("/entity/{uuid}", status_code=202)
@@ -500,20 +540,77 @@ def start(uuid: str, request: Request, ctx: BrainCtx = Depends(curator)):
         raise HTTPException(409, tr("No hay ningún motor LLM configurado (Administración → Proveedores IA).", lang))
     if usage.paused(ctx.brain.id):
         raise HTTPException(409, tr("El brain ha agotado su presupuesto de IA de este mes.", lang))
-    active = ctx.db.scalars(select(TopicReview).where(TopicReview.brain_id == ctx.brain.id, TopicReview.status.in_(("queued", "running")))).all()
+    active = ctx.db.scalars(select(TopicReview).where(TopicReview.brain_id == ctx.brain.id, TopicReview.status.in_(("queued", "running")),
+                                                      TopicReview.trigger == "manual")).all()   # a retirement's has its own daily limit
     if sum(_alive(ctx.db, x) for x in active) >= MAX_ACTIVE:
         raise HTTPException(409, tr("Ya hay {{n}} revisiones de tema en marcha en este brain: espera a que alguna termine.", lang, n=MAX_ACTIVE))
     found = rows(ctx.graph.query(ENTITY, {"u": uuid}))
     if not found:
         raise HTTPException(404, tr("No hay ninguna entidad con el uuid {{uuid}} en este brain.", lang, uuid=uuid))
-    r = TopicReview(brain_id=ctx.brain.id, entity_uuid=uuid, name=(found[0]["name"] or "")[:500], status="queued", created_by=ctx.user.id)
-    ctx.db.add(r)
-    ctx.db.commit()
-    r.job_id = jobs.submit(KIND, ctx.brain.id, {"review": r.id}, f"Revisión del tema «{r.name[:80]}»", ctx.user.id, dedupe_key=f"{KIND}:{r.id}")
-    ctx.db.commit()
+    r = _queue(ctx.db, ctx.brain, uuid, found[0]["name"] or "", ctx.user.id)
     audit(ctx.db, ctx.user, "topic.review", ctx.brain, id=r.id, uuid=uuid)
     ctx.db.refresh(r)
     return {"review": _row(ctx.db, r), "created": True}
+
+
+def _queue(db, brain: Brain, uuid: str, name: str, user_id: int | None, trigger: str = "manual", anchors: list | None = None) -> TopicReview:
+    r = TopicReview(brain_id=brain.id, entity_uuid=uuid, name=name[:500], status="queued", created_by=user_id, trigger=trigger, anchors=anchors)
+    db.add(r)
+    db.commit()
+    r.job_id = jobs.submit(KIND, brain.id, {"review": r.id}, f"Revisión del tema «{r.name[:80]}»", user_id, dedupe_key=f"{KIND}:{r.id}")
+    db.commit()
+    return r
+
+
+def _anchors(have: list | None, new: list[dict]) -> list[dict]:
+    seen = {a["uuid"] for a in have or []}
+    return ([*(have or []), *[a for a in new if a["uuid"] not in seen]])[:MAX_ANCHORS]
+
+
+def queue_retirement(db, brain: Brain, uuid: str, name: str, anchors: list[dict]) -> tuple[str, int | None]:
+    """A review of an entity that an ingested fact says was retired or replaced (#455), with those facts as its anchors: what happened
+    and the review. `joined` a review of it still queued; `queued` a new one (one may be running: it may have read the topic before
+    the fact came in); or why none: `off`, `read_only`, `no_engine`, `paused`, `daily` (the brain's limit for today), `full` (the queued
+    review already holds MAX_ANCHORS). Joining is a conditional write: a review that started meanwhile is left alone, and a new one is
+    queued, on PostgreSQL and on SQLite alike."""
+    from .curator import config
+    cfg = config(brain)
+    if not cfg["retirement_reviews"]:
+        return "off", None
+    if brain.read_only:
+        return "read_only", None
+    q = (select(TopicReview).where(TopicReview.brain_id == brain.id, TopicReview.entity_uuid == uuid, TopicReview.status == "queued")
+         .order_by(TopicReview.id.desc()).with_for_update().execution_options(populate_existing=True))
+    for r in db.scalars(q).all():
+        if not _alive(db, r):
+            continue
+        have = list(r.anchors or [])
+        fresh = [a for a in anchors if a["uuid"] not in {x["uuid"] for x in have}]
+        if not fresh:
+            db.rollback()
+            return "joined", r.id   # it already holds them
+        if len(have) >= MAX_ANCHORS:
+            db.rollback()
+            return "full", None
+        done = db.execute(update(TopicReview).where(TopicReview.id == r.id, TopicReview.status == "queued")
+                          .values(anchors=_anchors(have, fresh))).rowcount
+        db.commit()
+        if done:
+            return "joined", r.id
+        break   # it started meanwhile: a new one is queued below
+    db.rollback()
+    if _engine() is None:
+        return "no_engine", None
+    if usage.paused(brain.id):
+        return "paused", None
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    done = db.scalar(select(func.count()).select_from(TopicReview).where(TopicReview.brain_id == brain.id, TopicReview.trigger == "retirement",
+                                                                         TopicReview.created_at >= today)) or 0
+    if done >= int(cfg["retirement_daily"]):
+        return "daily", None
+    r = _queue(db, brain, uuid, name, None, "retirement", _anchors(None, anchors))
+    audit(db, None, "topic.review", brain, id=r.id, uuid=uuid, trigger="retirement", anchors=[a["uuid"] for a in r.anchors or []])
+    return "queued", r.id
 
 
 class DecideIn(BaseModel):

@@ -60,6 +60,9 @@ Un hecho vigente de esa relación cuya última fecha (su última confirmación o
 
 Un hecho sin fecha de validez (importado de otro sistema, por ejemplo) nunca caduca por fecha: no hay desde dónde medir. Los hechos prestados no se marcan aquí: la vida útil es cosa del brain que presta. Una relación genérica como `RELATES_TO` no puede tener vida útil.
 
+## Retiradas y revisiones de tema
+Un tipo de relación puede **marcar una retirada** (en el diálogo de edición de la relación, **Retirada**: se retira el origen o el destino; la tabla la muestra en su propia columna). Un hecho nuevo de esa relación, por ejemplo «Postmark sustituyó a Sendgrid», encola solo una revisión del tema de la entidad retirada, para que los hechos que aún la describen como vigente lleguen a un curador: ver [[Calidad del contenido]] → Temas. Los nombres habituales (`REPLACED_BY`, `SUPERSEDES`, `MIGRATED_TO`…) se reconocen sin marca, incluidos `MigratedTo` y `Supersedes` de los paquetes; la marca es para las relaciones propias de un brain, y manda sobre la lectura habitual de un nombre. Una relación genérica como `RELATES_TO` no puede marcar una.
+
 ## Escribir buenas descripciones
 El LLM decide mirando las descripciones. Las buenas:
 - Dicen **cuándo sí** y **cuándo no**, con ejemplos reales.

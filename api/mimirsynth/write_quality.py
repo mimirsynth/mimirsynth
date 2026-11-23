@@ -107,10 +107,15 @@ def decide(found: list[dict], episode: str, current: list[dict], created: set[st
 
 
 def without_text(rep: dict) -> dict:
-    """The ingest report with the text of the joined and dropped facts removed (forgetting an entity, #458): counts and uuids stay."""
-    if not (rep.get("collapsed") or rep.get("dropped")):
-        return rep
-    return {**rep, **{k: [{x: y for x, y in e.items() if x != "fact"} for e in rep[k]] for k in ("collapsed", "dropped") if rep.get(k)}}
+    """The ingest report with the text of the joined and dropped facts removed (forgetting an entity, #458), and the names of the
+    entities a retirement fact queued a review of (#455): counts and uuids stay."""
+    out = rep
+    if rep.get("collapsed") or rep.get("dropped"):
+        out = {**rep, **{k: [{x: y for x, y in e.items() if x != "fact"} for e in rep[k]] for k in ("collapsed", "dropped") if rep.get(k)}}
+    if isinstance(rep.get("retirement"), dict):
+        out = {**out, "retirement": {k: [{x: y for x, y in e.items() if x != "name"} for e in v] if isinstance(v, list) else "failed"
+                                     for k, v in rep["retirement"].items()}}
+    return out
 
 
 def apply(brain, rep: dict, episode: str) -> None:

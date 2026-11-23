@@ -608,7 +608,6 @@
  "Documentos que la mencionan": "Documents that mention it",
  "Dominios de email (separados por comas, p. ej. example.com) a los que se aplica el alta automática. Vacío = ninguno.": "Email domains (comma-separated, e.g. example.com) that automatic sign-up applies to. Empty = none.",
  "Dominios permitidos": "Allowed domains",
- "Dos marcas de cada relación hacen aparecer trabajo para los curadores en Calidad del contenido: «Un solo valor a la vez» (no puede tener dos destinos vigentes, como la IP de un equipo o quién lleva un servicio) hace aparecer sus contradicciones, y la «Vida útil» (los días tras los que hay que volver a confirmar un hecho), los hechos a revisar.": "Two settings of each relation create work for curators in Content quality: «A single value at a time» (it cannot have two current targets, like a machine's IP or who runs a service) brings up its contradictions, and the «Shelf life» (the days after which a fact has to be confirmed again) brings up the facts to review.",
  "Dudosas": "Doubtful",
  "Duplicado": "Duplicate",
  "Duplicados": "Duplicates",

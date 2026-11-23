@@ -39,6 +39,7 @@ The **names of merged entities** are something else: when a duplicate is merged 
 Two settings of each relation in [[Ontology]] create work for curators:
 - **A single value at a time**: two current targets of the same subject show up in [[Content quality]] → [[Contradictions]].
 - **Shelf life**: a fact that goes past it without confirmation shows up in [[Content quality]] → **To review**.
+- **Retirement**: a new fact of it queues a review of the retired entity's topic in [[Content quality]] → **Topics**.
 
 The relation's dialog and the Ontology header link to those tabs, and they link back to Ontology.
 
