@@ -41,7 +41,8 @@ export default function SimilarityBlock({ graph, canAdmin }: { graph: string; ca
     : undefined;
   const rungs: Rung[] = [
     ...(d?.thresholds ?? []).map((x) => ({ key: x.key, label: THRESHOLD[x.key] ? t(THRESHOLD[x.key][0]) : x.key,
-      sub: x.key === "recall_min" && tryIt ? tryIt : THRESHOLD[x.key] ? t(THRESHOLD[x.key][1]) : undefined, cosine: x.cosine })),
+      sub: x.key === "recall_min" && tryIt ? tryIt : x.key === "close" && !b ? t("fijo, hasta que se mida el brain")
+        : THRESHOLD[x.key] ? t(THRESHOLD[x.key][1]) : undefined, cosine: x.cosine })),
     ...(b && b.p50 != null && b.p95 != null && b.p99 != null ? [
       { key: "p50", label: t("Mediana de dos hechos cualesquiera"), sub: t("{{n}} pares al azar sobre cosas distintas", { n: b.pairs }), cosine: b.p50, reference: true },
       { key: "p95", label: t("El 95 % de esos pares queda por debajo"), cosine: b.p95, reference: true },
