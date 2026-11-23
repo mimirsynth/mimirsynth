@@ -435,7 +435,8 @@ def latest(db, since_days: int = 2) -> dict[int, dict]:
 # --- API ----------------------------------------------------------------------------------------
 
 def _out(r: HealthRun) -> dict:
-    return {"id": r.id, "day": r.day.isoformat(), "status": r.status, "reason": r.reason, "metrics": r.metrics, "error": r.error,
+    metrics = {k: v for k, v in r.metrics.items() if k != "terms"} if r.metrics else r.metrics   # the common terms are for the recall
+    return {"id": r.id, "day": r.day.isoformat(), "status": r.status, "reason": r.reason, "metrics": metrics, "error": r.error,
             "job_id": r.job_id, "created_at": r.created_at, "finished_at": r.finished_at}
 
 

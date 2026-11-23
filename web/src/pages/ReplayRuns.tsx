@@ -12,6 +12,9 @@ type Result = { sample_id: number; query: string; gained?: { kind: string; id: s
   empty_before?: boolean; empty_after?: boolean; changed?: boolean; outdated?: number; error?: string };
 
 const ONOFF = [{ value: "", label: T("Como ahora") }, { value: "on", label: T("Activado") }, { value: "off", label: T("Desactivado") }];
+// a run's parameters in the form's own words (an API-only one keeps its key)
+const PARAM: Record<string, string> = { min_similarity: T("Similitud mínima de un hecho"), trust: T("Peso por origen"), decay: T("Envejecer por relación"),
+  state_card: T("Estado actual primero"), common_terms: T("Pesar menos los términos comunes"), superseded_rank: T("Bajar lo que puede estar superado") };
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : `${Math.round(v * 100)} %`);
 
 /** Turn one real question into a reference query, once the person says what it must bring. */
@@ -59,7 +62,7 @@ export default function ReplayRuns({ graph, samples }: { graph: string; samples:
       common_terms: flag(common), superseded_rank: flag(ranked) } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["replay-runs", graph] }) });
   const detail = useQuery({ queryKey: ["replay-run", graph, open], enabled: open !== null, queryFn: () => get<Run & { results: Result[] }>(`brains/${graph}/replay/runs/${open}`) });
-  const describe = (p: Run["params"]) => Object.entries(p).map(([k, v]) => `${k}: ${typeof v === "boolean" ? (v ? t("sí") : t("no")) : v}`).join(" · ") || t("los ajustes de ahora");
+  const describe = (p: Run["params"]) => Object.entries(p).map(([k, v]) => `${PARAM[k] ? t(PARAM[k]) : k}: ${typeof v === "boolean" ? (v ? t("sí") : t("no")) : v}`).join(" · ") || t("los ajustes de ahora");
   const items = runs.data?.items ?? [];
   const changed = detail.data?.results.filter((x) => x.changed || x.error) ?? [];
   const onoff = ONOFF.map((o) => ({ ...o, label: t(o.label) }));

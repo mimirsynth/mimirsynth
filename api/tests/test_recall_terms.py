@@ -54,9 +54,20 @@ def _w(i, warnings=0):
 
 def test_each_warning_moves_a_text_two_places_down():
     items = [_w(0, 1), _w(1), _w(2), _w(3, 3), _w(4), _w(5)]
-    assert [x["id"] for x in R.rank_down(items, 4)] == [1, 0, 2, 4]       # one warning at the top stays in; three give the place away
+    assert [x["id"] for x in R.rank_down(items, 4)] == [1, 2, 0, 4]       # one warning at the top: two down, still in; three: out
+    assert [x["id"] for x in R.rank_down([_w(0, 1), _w(1), _w(2)], 2)] == [1, 2]   # two places really: behind the clean ones it ties with
     assert [x["id"] for x in R.rank_down([_w(0, 3), _w(1, 1)], 2)] == [1, 0]   # with nothing clean to take it, a warned text stays
     assert R.rank_down([], 3) == []
+
+
+def test_the_texts_are_still_cut_when_the_check_fails(monkeypatch):
+    def down(*a, **k):
+        raise ConnectionError("graph down")
+    monkeypatch.setattr(R, "superseded", down)
+    chunks = [_chunk(i, f"ep-{i}") for i in range(4)]
+    passages = [{"id": 100 + i, "text": "t", "origin": None} for i in range(3)]
+    out, cur, old, docs = R.mark_superseded(chunks, [], [], {None: "g"}, {}, passages, None, keep=(2, 1))
+    assert [c["id"] for c in out] == [0, 1] and [p["id"] for p in docs] == [100] and cur == old == []
 
 
 OLD = {"uuid": "old", "fact": "La wiki corre en altair", "source_uuid": "wiki", "target_uuid": "altair", "name": "RUNS_ON", "valid_at": "2026-01-01T00:00:00Z",
@@ -113,3 +124,24 @@ def test_the_recall_uses_both_only_when_on(client, monkeypatch):  # noqa: F811
     assert seen == {"k": 5, "skip": frozenset({"wiki"})}
     seen, _ = _recall(monkeypatch, common_terms=False, superseded_rank=False)              # and simulated off
     assert seen == {"k": 3, "skip": frozenset()}
+
+
+def test_each_brain_drops_its_own_common_terms_from_its_passages(monkeypatch):
+    seen = {}
+    texts = {1: "acme haproxy notes", 2: "acme haproxy setup"}
+
+    def search(bid, qvec, query, k=8, pool=40, source_id=None, skip=frozenset()):
+        seen[bid] = (k, skip)
+        return [{"id": bid, "text": texts[bid], "similarity": 0.60}]
+    from mimirsynth import docindex
+    monkeypatch.setattr(docindex, "search", search)
+    monkeypatch.setattr(R.index, "enabled", lambda: True)
+    monkeypatch.setattr(terms, "common", lambda bid: {"chunks": frozenset(), "docs": frozenset({"acme"}) if bid == 1 else frozenset()})
+    lender = [R.Source(2, "g2", "otro", "Otro", "docs")]
+    out, state = R.search_documents(1, [0.0], "acme haproxy", 4, lender, 0.66, True)
+    assert state == "ok" and seen == {1: (6, frozenset({"acme"})), 2: (6, frozenset())}   # each brain, its own common terms
+    assert [p["text"] for p in out] == [texts[2]]         # «acme» is common here, not in the lender: only the lent one shares two
+    out, _ = R.search_documents(1, [0.0], "acme haproxy", 8, lender, 0.66)
+    assert len(out) == 2 and seen[1] == (6, frozenset())   # off: as before, 6 looked at whatever the number of passages
+    R.search_documents(1, [0.0], "acme haproxy", 10, lender, 0.66, False, 2)
+    assert seen == {1: (8, frozenset()), 2: (8, frozenset())}   # with the rank penalty, two more in each brain

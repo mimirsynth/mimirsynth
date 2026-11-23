@@ -22,10 +22,16 @@ MAX_TERMS = 200       # common terms kept per corpus, the most frequent first
 CACHE_SECONDS = 600   # what a process keeps in memory before reading the stored measurement again
 STORED_DAYS = 2       # a stored measurement older than this is not used
 
-_CORPORA = {   # the texts of each corpus, for `ts_stat`; `{b}` is the brain's id, an integer
+_CORPORA = {   # the texts of each corpus, for `ts_stat`, which takes its query as a value; `{b}` is the brain's id, an integer
     "chunks": "SELECT tsv FROM episode_chunks WHERE brain_id = {b}",
     "docs": "SELECT c.tsv FROM doc_chunks c JOIN documents d ON d.id = c.document_id WHERE c.brain_id = {b} AND d.status = 'active'",
 }
+_COUNT = {     # how many texts each corpus has, with the brain bound as a parameter
+    "chunks": text("SELECT count(*) FROM episode_chunks WHERE brain_id = :b"),
+    "docs": text("SELECT count(*) FROM doc_chunks c JOIN documents d ON d.id = c.document_id WHERE c.brain_id = :b AND d.status = 'active'"),
+}
+_STAT = text("SELECT word, ndoc FROM ts_stat(:q) WHERE ndoc > :min AND length(word) >= 3 AND NOT (word = ANY(:stop)) "   # what a query keeps
+                 "ORDER BY ndoc DESC, word LIMIT :k")
 _cache: dict[int, tuple[float, dict]] = {}
 _lock = threading.Lock()
 
@@ -41,11 +47,10 @@ def measure(brain_id: int) -> dict:
     out = {}
     with engine().begin() as c:
         for name, sql in _CORPORA.items():
-            n = c.execute(text(f"SELECT count(*) FROM ({sql.format(b=b)}) t")).scalar() or 0
+            n = c.execute(_COUNT[name], {"b": b}).scalar() or 0
             common = {}
             if n >= MIN_TEXTS:
-                for word, ndoc in c.execute(text("SELECT word, ndoc FROM ts_stat(:q) WHERE ndoc > :min ORDER BY ndoc DESC, word LIMIT :k"),
-                                            {"q": sql.format(b=b), "min": COMMON_SHARE * n, "k": MAX_TERMS}):
+                for word, ndoc in c.execute(_STAT, {"q": sql.format(b=b), "min": COMMON_SHARE * n, "k": MAX_TERMS, "stop": sorted(index._STOP)}):
                     common[word] = round(ndoc / n, 3)
             out[name] = {"texts": n, "common": common}
     return out
@@ -82,9 +87,15 @@ def common(brain_id: int) -> dict[str, frozenset[str]]:
     if hit and time.monotonic() - hit[0] < CACHE_SECONDS:
         m = hit[1]
     else:
+        t = time.monotonic()
         try:
             m = _stored(brain_id)
         except Exception:  # noqa: BLE001  (without it the recall is what it was before)
             m = {}
-        remember(brain_id, m)
+        with _lock:   # a health run that finished while this was read keeps its fresher measurement
+            now = _cache.get(brain_id)
+            if now is not None and now[0] > t:
+                m = now[1]
+            else:
+                _cache[brain_id] = (time.monotonic(), m)
     return {k: frozenset((m.get(k) or {}).get("common") or {}) for k in _CORPORA}

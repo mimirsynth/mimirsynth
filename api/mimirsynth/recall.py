@@ -105,17 +105,20 @@ def relevant(text: str, sim: float | None, terms: list[str], min_sim: float) -> 
     return sim >= min_sim - WORDS_LEEWAY and sum(1 for t in terms if re.search(rf"\b{re.escape(t)}", text.lower())) >= 2
 
 
-def pick_passages(hits: list[dict], query: str, n: int, min_sim: float, skip: frozenset[str] = frozenset()) -> list[dict]:
+def pick_passages(hits: list[dict], query: str, n: int, min_sim: float, skip: dict | None = None) -> list[dict]:
     """Se queda con pasajes realmente relevantes (ver `relevant`): mejor no devolver nada que meter ruido en cada prompt. Un pasaje con
     el mismo texto que otro ya elegido (el mismo contenido en dos documentos, o en el brain y en un origen prestado) se salta: con un
-    presupuesto de 2, un duplicado se comería la mitad. `skip`: terms that do not count as shared (#459)."""
-    terms = query_terms(query, skip)
+    presupuesto de 2, un duplicado se comería la mitad. `skip`: per origin (None: the brain's own), the terms that do not count as
+    shared in its passages (#459)."""
+    skip = skip or {}
+    terms = {o: query_terms(query, s) for o, s in skip.items()}
+    plain = query_terms(query)
     out, seen = [], set()
     for h in hits:
         key = " ".join(h["text"].lower().split())
         if key in seen:
             continue
-        if relevant(h["text"], h.get("similarity", 0.0), terms, min_sim):
+        if relevant(h["text"], h.get("similarity", 0.0), terms.get(h.get("origin"), plain), min_sim):
             out.append({**h, "text": _cut(h["text"], DOC_CHARS)}); seen.add(key)
         if len(out) >= n:
             break
@@ -141,31 +144,33 @@ def docs_block(passages: list[dict], lang: str = "es") -> str:
 
 
 def search_documents(brain_id: int, qvec: list[float], query: str, n: int, sources: list[Source] | None = None,
-                     min_sim: float | None = None, common: bool = False) -> tuple[list[dict], str]:
+                     min_sim: float | None = None, common: bool = False, extra: int = 0) -> tuple[list[dict], str]:
     """Búsqueda documental (se ejecuta en un hilo; el tiempo máximo lo controla `recall`). Estado: ok | error | off.
     Con `sources`, añade los documentos de los brains que prestan los suyos, fusionados con RRF y marcados con su origen. `min_sim`
     sustituye a la similitud mínima de la instancia (para simular otro umbral sin cambiar el ajuste). `common`: each brain's common
-    terms leave the text part of its search, and none counts as shared (#459)."""
+    terms leave the text part of its search, and none counts as shared (#459). `extra`: the passages looked at beyond the 6 of each
+    search, with the rank penalty (#459)."""
     from . import docindex
     if n <= 0 or not index.enabled():
         return [], "off"
     try:
+        k = 6 + extra
         own = _common(brain_id, "docs", common)
-        skip = set(own)
-        hits = docindex.search(brain_id, qvec, query, 6, skip=own)
+        skip = {None: own}
+        hits = docindex.search(brain_id, qvec, query, k, skip=own)
         lists, weights = [hits], [1.0]
         for src in sources or []:
             if src.scope not in ("docs", "both"):
                 continue
             try:
                 lent = _common(src.brain_id, "docs", common)
-                lists.append([{**h, "origin": src.slug} for h in docindex.search(src.brain_id, qvec, query, 6, skip=lent)]); weights.append(FED_WEIGHT)
-                skip |= lent
+                lists.append([{**h, "origin": src.slug} for h in docindex.search(src.brain_id, qvec, query, k, skip=lent)]); weights.append(FED_WEIGHT)
+                skip[src.slug] = lent
             except Exception as e:  # noqa: BLE001  (un origen que falla no tumba la consulta)
                 log.warning("federación: documentos de %s no disponibles: %s", src.slug, e)
         if len(lists) > 1:
             hits = fuse(lists, lambda h: (h.get("origin"), h["id"]), weights)
-        return pick_passages(hits, query, n, appsettings.get("doc_min_similarity") if min_sim is None else min_sim, frozenset(skip)), "ok"
+        return pick_passages(hits, query, n, appsettings.get("doc_min_similarity") if min_sim is None else min_sim, skip), "ok"
     except Exception:  # noqa: BLE001
         return [], "error"
 
@@ -389,9 +394,12 @@ def _states(f: dict, eps: set[str], ents: set[str], repl: dict) -> bool:
 
 
 def rank_down(items: list[dict], n: int) -> list[dict]:
-    """The best `n` of a ranked list after each "may be superseded" warning moved its text WARNING_PLACES down (#459): one warning near
-    the top keeps its place; several give it to a clean text further down."""
-    order = sorted(range(len(items)), key=lambda i: (i + WARNING_PLACES * len(items[i].get("superseded") or []), i))
+    """The best `n` of a ranked list after each "may be superseded" warning moved its text WARNING_PLACES down (#459), behind the clean
+    texts it ties with: one warning near the top still gets in; several give the place to a clean text further down."""
+    def key(i):
+        w = len(items[i].get("superseded") or [])
+        return (i + WARNING_PLACES * w, bool(w), i)
+    order = sorted(range(len(items)), key=key)
     return [items[i] for i in order[:n]]
 
 
@@ -493,7 +501,7 @@ def recall(brain_id: int, graph_name: str, query: str, n_facts: int = 8, n_chunk
     n_docs = appsettings.get("doc_passages") if n_docs is None else n_docs
     t_docs = time.time()
     sources = sources or []
-    docs_fut = _pool.submit(_timed_documents, brain_id, qvec, query, n_docs + extra, sources, min_sim, common) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
+    docs_fut = _pool.submit(_timed_documents, brain_id, qvec, query, n_docs + extra, sources, min_sim, common, extra) if n_docs > 0 else None   # en paralelo con hechos y fragmentos
     from .store import _factory
     with _factory()() as db:
         amap = alias_map(db, brain_id)
