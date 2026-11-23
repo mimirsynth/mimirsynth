@@ -141,9 +141,9 @@ def current(db, brain, g=None, refresh: bool = False) -> dict | None:
         if fresh(stored):
             remember(brain.id, stored)
             return stored
-    try:
+    try:   # the graph is opened here, inside the guard: a graph that is down is «not measured», never an error
         from .db import graph
-        m = measure(g or graph(brain.graph_name), db, brain.id, model)
+        m = measure((g() if callable(g) else g) or graph(brain.graph_name), db, brain.id, model)
     except Exception as e:  # noqa: BLE001  (the panels fall back to the fixed thresholds)
         log.warning("similarity of brain %s: %s", brain.id, e.__class__.__name__)
         _down[brain.id] = time.monotonic()
@@ -208,12 +208,12 @@ def _out(ctx: BrainCtx, m: dict | None) -> dict:
 @router.get("")
 def read(ctx: BrainCtx = Depends(curator)):
     """The brain's similarity distribution and where each threshold sits on it (#468)."""
-    return _out(ctx, current(ctx.db, ctx.brain, ctx.graph))
+    return _out(ctx, current(ctx.db, ctx.brain, lambda: ctx.graph))
 
 
 @router.post("/measure")
 def measure_now(ctx: BrainCtx = Depends(admin)):
     """Measures it again now, with the embedding model in use."""
-    m = current(ctx.db, ctx.brain, ctx.graph, refresh=True)
+    m = current(ctx.db, ctx.brain, lambda: ctx.graph, refresh=True)
     audit(ctx.db, ctx.user, "similarity.measure", ctx.brain, facts=(m or {}).get("facts"))
     return _out(ctx, m)

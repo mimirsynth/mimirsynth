@@ -154,6 +154,13 @@ def test_an_administrator_sees_the_thresholds_against_the_distribution(client, m
     _as("ria@x.com", "Ria")
     assert client.get("/api/brains/sim5/similarity").status_code == 403
     app.dependency_overrides.clear()
+
+    def down(name):
+        raise ConnectionError("graph down")
+    monkeypatch.setattr(deps, "graph", down)                                                   # a graph that is down: «not measured»
+    similarity.forget(bid)
+    r = client.get("/api/brains/sim5/similarity")
+    assert r.status_code == 200 and r.json()["measurement"] is None
     with _factory()() as db:
         assert db.get(Brain, bid) is not None
 
