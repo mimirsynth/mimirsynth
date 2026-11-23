@@ -1,5 +1,6 @@
 import { T, locale, tr, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
+import { LADDER } from "./SimilarityBlock";
 import type { TFunction } from "i18next";
 import { Group, Loader, Stack, Text } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
@@ -539,6 +540,8 @@ type Ops = {
 type RelatedFact = { uuid: string; fact: string; name: string; source: string; target: string; source_uuid?: string | null; target_uuid?: string | null;
   source_type?: string | null; target_type?: string | null;
   valid_at: string | null; invalid_at: string | null; score?: number | null; relevance?: "repeats" | "close" | "related";
+  /** The plain cosine, and where it sits among this brain's facts (issue 468): unmeasured, null. */ similarity?: number | null;
+  standing?: "well_above" | "above" | "usual" | null;
   /** More than half of the proposal's words are not in this fact (the API's `mostly_new`). */ mostly_new?: boolean };
 /** What the brain already knows close to a pending proposal that adds knowledge: one query, shared by the panel, the decision and the
  *  A key. Opening it also refreshes the verdict the queue ranks by. */
@@ -590,13 +593,20 @@ function FactCard({ f, label }: { f: RelatedFact; label?: string }) {
     : f.relevance === "repeats" ? <Pill tone="neutral">{t("Casi igual")}</Pill>
       : f.relevance === "close" && !f.mostly_new ? <Pill tone="neutral">{t("Muy parecido")}</Pill> : undefined;
   const when = f.invalid_at ? `${fmtDay(f.valid_at)} → ${fmtDay(f.invalid_at)}` : f.valid_at ? t("desde {{date}}", { date: fmtDay(f.valid_at) }) : "";
-  const data = [f.score != null ? `${t("sim")} ${fmtNum(f.score, 2)}` : "", when].filter(Boolean).join(" · ");
+  // how close it is to the proposal against what two facts of this brain usually score, in the words of Ask → Quality (issue 468);
+  // «the usual» says nothing on a card, so it is left out. The number stays: the plain similarity when the brain is measured.
+  const level = f.standing === "well_above" || f.standing === "above" ? t("similitud {{where}}", { where: t(LADDER[f.standing]) }) : "";
+  const num = f.similarity ?? f.score;
+  // each piece whole, so a line breaks between them and never inside one («desde» and its date together)
+  const pieces = [level, num != null ? (level ? fmtNum(num, 2) : t("similitud {{v}}", { v: fmtNum(num, 2) })) : "", when].filter(Boolean);
+  const data = pieces.length > 0;
   return (<ListCard title={label} aside={mark} invalid={!!f.invalid_at}
     tags={<>
       <EntityChip name={f.source} type={f.source_type} to={f.source_uuid ? `/entidad/${f.source_uuid}` : undefined} />
       <span className="ms-listcard-meta" title={f.name}>{humanRelation(f.name)}</span>
       <EntityChip name={f.target} type={f.target_type} to={f.target_uuid ? `/entidad/${f.target_uuid}` : undefined} />
-      {data && <span className="ms-listcard-meta ms-data ms-fact-data" title={f.invalid_at ? t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) }) : undefined}>{data}</span>}
+      {data && <span className="ms-listcard-meta ms-fact-data" title={f.invalid_at ? t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) }) : undefined}>
+        {pieces.map((x, i) => <span key={i} className={`ms-nowrap${x === level ? "" : " ms-data"}`}>{i ? "· " : ""}{x}</span>)}</span>}
     </>}>{f.fact}</ListCard>);
 }
 

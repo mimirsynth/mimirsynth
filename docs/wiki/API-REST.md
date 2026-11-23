@@ -40,7 +40,8 @@ Todas cuelgan de `/api/brains/{slug}/…`. El rol es el **mínimo** que piden su
 | **Hechos a revisar** | `GET /review/stale` · `POST /review/stale/{uuid}/confirm` | curador |
 | **Contradicciones** | `GET /conflicts` · `POST /conflicts/dismiss` · `DELETE /conflicts/dismiss/{did}` · `POST /conflicts/resolve` | curador |
 | **Consultas de referencia** | `GET/POST /refqueries` · `PATCH/DELETE /refqueries/{qid}` · `GET /refqueries/export` · `POST /refqueries/import` · `GET/POST /refqueries/runs` · `GET /refqueries/runs/{rid}` | curador |
-| **Salud de la memoria** | `GET /health` · `POST /health/run` | curador |
+| **Salud de la memoria** | `GET /health` · `POST /health/run` · `GET /similarity` | curador |
+| | `POST /similarity/measure` | administrador |
 | **Muestra para repetir** | `GET/PUT /replay/settings` · `GET/DELETE /replay/samples` · `GET/POST /replay/runs` · `GET /replay/runs/{rid}` · `POST /replay/samples/{sid}/promote` | administrador |
 | **Curador** | `PUT /curator/distil/{pid}` · `GET /curator/settings` · `POST /curator/preview` · `GET /curator/runs` · `POST /curator/run` · `POST /curator/runs/{rid}/confirm` · `POST /curator/runs/{rid}/discard` | curador |
 | | `PUT /curator/settings` | administrador |
