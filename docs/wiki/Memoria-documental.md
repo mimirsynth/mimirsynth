@@ -15,7 +15,7 @@ Además de la memoria «destilada» (episodios → hechos), MimirSynth guarda **
 2. Se **extrae el texto** (Markdown, texto plano, HTML, PDF, y Office: Word, PowerPoint, Excel y texto de OpenDocument). Las páginas escaneadas y las imágenes se leen con **OCR** (ver abajo).
 3. El **detector de secretos** busca credenciales en el texto y, según la política del brain, las enmascara o deja el documento sin indexar (ver abajo).
 4. Si el mismo texto (sin contar mayúsculas ni espacios) **ya está indexado** en otro documento del brain, el documento queda como **duplicado** y se para aquí (ver abajo).
-5. Si el texto son sobre todo los turnos de una **transcripción de chat o de reunión**, el documento queda como **conversación sin indexar** y se para aquí, hasta que una persona decida (ver abajo).
+5. Si el texto son sobre todo los turnos de una **transcripción de chat o de reunión**, el documento queda como **conversación** y se para aquí, hasta que una persona decida (ver abajo).
 6. Se **trocea por títulos y secciones**, conservando la ruta de títulos («Instalación › Requisitos»).
 7. Se calculan los **embeddings** de cada trozo y se guardan junto con el texto para la búsqueda de texto completo.
 8. Cuando el documento cambia, los trozos se **reemplazan de una sola vez**: nunca queda un documento sin índice.
@@ -59,10 +59,11 @@ Un documento cuyo texto extraído coincide con el de otro ya indexado en el brai
 ## Transcripciones de chat
 Una conversación en bruto exportada de un chat o de una reunión (Slack, WhatsApp, la transcripción de una reunión, un chat con una IA guardado como Markdown) no es documentación curada. Si se indexara como una página, sus pasajes volverían en el recall con el mismo peso que la documentación.
 - **Cómo se reconoce:** la mayor parte del texto son turnos, uno detrás de otro, de al menos dos interlocutores: líneas como `Ana: …`, `[10:15] Ana: …` o `12/03/24, 10:15 - Ana: …`, o un rol en su propia línea antes de cada mensaje (`## User`, `**Assistant:**`). Unas preguntas frecuentes (`P:` / `R:`), una lista de claves (`Host:`, `Port:`) o una página con un breve diálogo de ejemplo siguen siendo documentos.
-- **Qué pasa:** el documento se guarda y se puede leer y descargar, pero no se trocea ni se calculan sus embeddings. Su estado es **Conversación sin indexar**.
+- **Qué pasa:** el documento se guarda y se puede leer y descargar, pero no se trocea ni se calculan sus embeddings. Su estado es **Conversación**.
 - **Decide un administrador del brain** en su detalle en [[Conocimiento]]:
   - **Indexar como conversación:** sus pasajes quedan **por debajo de los documentos igual de relevantes** en el recall, y al agente le llegan marcados como conversación de chat.
-  - **No es una conversación:** se indexa como un documento más.
+  - **Indexar como documento:** se indexa como un documento más.
+  - Cualquiera de las dos decisiones se puede cambiar después desde el mismo detalle.
 - La decisión **se mantiene** cuando se vuelve a sincronizar su carpeta, wiki o repositorio, y al [exportar e importar el brain](Exportar-un-brain). Una conversación sobre la que nadie ha decidido se vuelve a comprobar cuando cambia su texto.
 
 ## Secretos en los documentos

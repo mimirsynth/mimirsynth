@@ -1,7 +1,7 @@
 import { T, locale, translateServer } from "../i18n";
 import { useTranslation } from "react-i18next";
 import { Group, Stack, Text } from "@mantine/core";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { fmt, get, langHeaders, send } from "../api";
 import { Block, Btn, CellText, Check, Toggle, ClearFilters, ColHead, DataState, DataTable, DialogActions, FillArea, Loading, Modal, Notice, NumberField, Page, Pager, PasswordField, Sheet, SheetRow, ViewBar, Pill, ProgressBar, SelectField, SidePanel, Tabs, TextArea, TextField, useTableView, type ColSort, type SortDir, type Tone, MutationError, ConfirmDialog, EmptyState, PageHeader, Segments, SearchBar, useServerTableView, useTabParam, ListCard, FilePicker } from "../ui";
@@ -27,7 +27,7 @@ type Up = { key: string; name: string; size: number; done: number; state: "subie
 const UP_LABEL: Record<Up["state"], string> = { subiendo: T("subiendo"), listo: T("subido"), duplicado: T("duplicado"), error: T("error") };
 
 const TONE: Record<string, Tone> = { active: "success", indexing: "warn", pending: "warn", error: "danger", duplicate: "neutral", transcript: "neutral" };
-const LABEL: Record<string, string> = { active: T("indexado"), indexing: T("indexando"), pending: T("en cola"), error: T("error"), duplicate: T("duplicado"), transcript: T("conversación sin indexar"), blocked: T("bloqueado por un derecho al olvido") };
+const LABEL: Record<string, string> = { active: T("indexado"), indexing: T("indexando"), pending: T("en cola"), error: T("error"), duplicate: T("duplicado"), transcript: T("conversación"), blocked: T("bloqueado por un derecho al olvido") };
 // what a source is, in the table and its filter
 const KIND: Record<string, string> = { upload: T("subidas"), wiki: T("wiki"), git: T("repositorio"), directory: T("carpeta") };
 // the paths a new Git source indexes, one per line in the form (the server checks them again)
@@ -38,6 +38,16 @@ const noFiles = (s: Source) => s.kind === "git" && !!s.config.matched && Object.
 type Repo = { name: string; url: string; branch: string; include: string; username: string; token: string; interval: number | "" };
 const human = (n: number) => (n >= 1 << 30 ? `${(n / (1 << 30)).toFixed(1)} GB` : n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`);
 const ACCEPT = ".md,.markdown,.txt,.rst,.log,.html,.htm,.pdf,.docx,.pptx,.xlsx,.odt,.png,.jpg,.jpeg";
+
+type IndexAsKind = "transcript" | "document";
+const INDEX_AS: Record<IndexAsKind, string> = { transcript: T("Indexar como conversación"), document: T("Indexar como documento") };
+
+// an administrator's choice about a chat transcript (issue 466); both buttons wait while one is being sent
+function IndexAs({ id, to, m }: { id: number; to: IndexAsKind[]; m: UseMutationResult<unknown, Error, { id: number; as: IndexAsKind }> }) {
+  const { t } = useTranslation();
+  return <Group gap={8}>{to.map((k) => (
+    <Btn key={k} size="row" loading={m.isPending && m.variables?.as === k} disabled={m.isPending} onClick={() => m.mutate({ id, as: k })}>{t(INDEX_AS[k])}</Btn>))}</Group>;
+}
 
 function OcrNotice({ ocr }: { ocr?: OcrInfo | null }) {
   const { t } = useTranslation();
@@ -125,7 +135,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
   useEffect(() => { if (dedupeDone) { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["docs-sources", graph] }); } }, [dedupeDone, graph, qc]);
   const reindex = useMutation({ mutationFn: (id: number) => send("POST", `docs/${id}/reindex`, undefined, { graph }), onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["doc", graph] }); } });
   // a person decides about a chat transcript (issue 466)
-  const indexAs = useMutation({ mutationFn: (b: { id: number; as: "transcript" | "document" }) => send("POST", `docs/${b.id}/transcript`, { as: b.as }, { graph }),
+  const indexAs = useMutation({ mutationFn: (b: { id: number; as: IndexAsKind }) => send("POST", `docs/${b.id}/transcript`, { as: b.as }, { graph }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["docs", graph] }); qc.invalidateQueries({ queryKey: ["doc", graph] }); } });
 
   const roots = useQuery({ queryKey: ["docs-roots", graph], enabled: isAdmin, queryFn: () => get<{ roots: { name: string; available: boolean }[] }>("docs/roots", { graph }) });
@@ -263,7 +273,8 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
                       <DataTable.Td>{d.source}</DataTable.Td>
                       <DataTable.Td>{human(d.size)}</DataTable.Td>
                       <DataTable.Td>{d.status === "indexing" && d.progress ? `${d.progress.done}/${d.progress.total}` : d.chunks}</DataTable.Td>
-                      <DataTable.Td><Pill tone={TONE[d.status] ?? "neutral"} title={d.error || undefined}>{t(LABEL[d.status] ?? d.status)}</Pill></DataTable.Td>
+                      <DataTable.Td><CellText sub={d.status === "active" && d.transcript === "transcript" ? t("como conversación") : undefined}>
+                        <Pill tone={TONE[d.status] ?? "neutral"} title={d.error || undefined}>{t(LABEL[d.status] ?? d.status)}</Pill></CellText></DataTable.Td>
                       <DataTable.Td>{fmt(d.updated_at)}</DataTable.Td>
                       <DataTable.Td><Btn size="row" onClick={() => setOpen(d.id)}>{t("Ver")}</Btn></DataTable.Td>
                     </DataTable.Tr>))}</DataTable.Tbody>
@@ -362,20 +373,21 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
             </Notice>}
             {detail.data.status === "transcript" && <Notice title={t("Parece una conversación")}>
               <Stack gap={4}>
-                <Text size="sm">{t("Su texto son sobre todo turnos de un chat o de una reunión, así que no se trocea ni llega al recall: lo que se dijo en una conversación no vale lo mismo que la documentación. Puedes leerlo y descargarlo.")}</Text>
-                {isAdmin ? <>
-                  <Text size="sm">{t("Si quieres que el agente lo encuentre, indéxalo como conversación: sus pasajes quedarán por debajo de los documentos igual de relevantes. Si no es una conversación, indéxalo como un documento más.")}</Text>
-                  <Group gap={6}>
-                    <Btn size="row" loading={indexAs.isPending && indexAs.variables?.as === "transcript"} onClick={() => indexAs.mutate({ id: detail.data!.id, as: "transcript" })}>{t("Indexar como conversación")}</Btn>
-                    <Btn size="row" loading={indexAs.isPending && indexAs.variables?.as === "document"} onClick={() => indexAs.mutate({ id: detail.data!.id, as: "document" })}>{t("No es una conversación")}</Btn>
-                  </Group>
-                </> : <Text size="sm">{t("Un administrador del brain puede indexarlo como conversación o como documento.")}</Text>}
+                <Text size="sm">{t("Casi todo su texto son turnos de un chat o de una reunión, así que no se trocea ni llega al recall hasta que un administrador decida.")}</Text>
+                <Text size="sm">{t("Como conversación, sus pasajes quedan por debajo de los documentos igual de relevantes.")}</Text>
+                {isAdmin && <IndexAs id={detail.data.id} to={["transcript", "document"]} m={indexAs} />}
               </Stack>
             </Notice>}
             {detail.data.status === "active" && detail.data.transcript === "transcript" && <Notice title={t("Indexado como conversación")}>
               <Stack gap={4}>
                 <Text size="sm">{t("En el recall, sus pasajes quedan por debajo de los documentos igual de relevantes, y al agente le llegan marcados como conversación de chat.")}</Text>
-                {isAdmin && <Group><Btn size="row" loading={indexAs.isPending} onClick={() => indexAs.mutate({ id: detail.data!.id, as: "document" })}>{t("No es una conversación")}</Btn></Group>}
+                {isAdmin && <IndexAs id={detail.data.id} to={["document"]} m={indexAs} />}
+              </Stack>
+            </Notice>}
+            {detail.data.status === "active" && detail.data.transcript === "document" && <Notice title={t("Indexado como documento")}>
+              <Stack gap={4}>
+                <Text size="sm">{t("Un administrador decidió que no es una conversación: sus pasajes pesan como los de cualquier documento.")}</Text>
+                {isAdmin && <IndexAs id={detail.data.id} to={["transcript"]} m={indexAs} />}
               </Stack>
             </Notice>}
             <MutationError error={indexAs.error} />
@@ -385,7 +397,7 @@ export default function Knowledge({ graph, role, instanceAdmin = false }: { grap
               {detail.data.url && (sources.data?.sources.find((x) => x.name === detail.data!.source)?.kind === "git"
                 ? <Btn size="row" icon="repo" component="a" href={detail.data.url} target="_blank" rel="noreferrer">{t("Abrir en el repositorio")}</Btn>
                 : <Btn size="row" icon="docs" component="a" href={detail.data.url} target="_blank" rel="noreferrer">{t("Abrir en la wiki")}</Btn>)}
-              {isAdmin && <Btn size="row" icon="refresh" loading={reindex.isPending} onClick={() => reindex.mutate(detail.data!.id)}>{t("Reindexar")}</Btn>}
+              {isAdmin && detail.data.status !== "transcript" && <Btn size="row" icon="refresh" loading={reindex.isPending} onClick={() => reindex.mutate(detail.data!.id)}>{t("Reindexar")}</Btn>}
               {(isAdmin || canUpload) && detail.data.source !== undefined && !sources.data?.sources.some((x) => x.name === detail.data!.source && x.kind === "directory") && <Btn kind="danger" size="row" icon="trash" onClick={() => setDel(detail.data!)}>{t("Borrar")}</Btn>}
             </Group>
             <MutationError error={reindex.error} />

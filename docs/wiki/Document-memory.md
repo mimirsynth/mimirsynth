@@ -15,7 +15,7 @@ Besides the "distilled" memory (episodes → facts), MimirSynth stores **documen
 2. The **text is extracted** (Markdown, plain text, HTML, PDF, and Office: Word, PowerPoint, Excel and OpenDocument text). Scanned pages and images are read with **OCR** (see below).
 3. The **secret detector** looks for credentials in the text and, depending on the brain's policy, masks them or leaves the document unindexed (see below).
 4. If the same text (ignoring case and spacing) is **already indexed** in another document of the brain, the document is marked **duplicate** and stops here (see below).
-5. If the text is mostly the turns of a **chat or meeting transcript**, the document is held as a **conversation, not indexed** and stops here, until a person decides (see below).
+5. If the text is mostly the turns of a **chat or meeting transcript**, the document is held as a **conversation** and stops here, until a person decides (see below).
 6. It is **chunked by headings and sections**, keeping the heading path ("Installation › Requirements").
 7. The **embeddings** of each chunk are computed and stored with the text for full-text search.
 8. When the document changes, the chunks are **replaced all at once**: a document is never left without an index.
@@ -59,10 +59,11 @@ A document whose extracted text matches one already indexed in the brain is mark
 ## Chat transcripts
 A raw conversation exported from a chat or a meeting (Slack, WhatsApp, a meeting transcript, an AI chat saved as Markdown) is not curated documentation. If it were indexed like a page, its passages would come back in recall with the same weight as the documentation.
 - **How it is recognised:** most of the text is turns, one after another, by at least two speakers: lines like `Ana: …`, `[10:15] Ana: …` or `12/03/24, 10:15 - Ana: …`, or a role on its own line before each message (`## User`, `**Assistant:**`). An FAQ (`Q:` / `A:`), a list of keys (`Host:`, `Port:`) or a page with a short example dialogue stays a document.
-- **What happens:** the document is kept and can be read and downloaded, but it is not chunked and gets no embeddings. Its state is **Conversation, not indexed**.
+- **What happens:** the document is kept and can be read and downloaded, but it is not chunked and gets no embeddings. Its state is **Conversation**.
 - **A brain administrator decides** in its detail in [[Knowledge]]:
   - **Index as a conversation:** its passages rank **below documents of equal relevance** in recall, and they reach the agent marked as a chat conversation.
-  - **It's not a conversation:** it is indexed as an ordinary document.
+  - **Index as a document:** it is indexed as an ordinary document.
+  - Either choice can be changed later from the same detail.
 - The choice **stands** when its folder, wiki or repository is synced again and through [brain export and import](Export-a-brain). A conversation nobody decided about is checked again when its text changes.
 
 ## Secrets in documents
