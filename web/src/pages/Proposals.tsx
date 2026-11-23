@@ -16,7 +16,7 @@ import { fmt, fmtDay, fmtNum, get, send } from "../api";
 
 type Prop = { id: number; name: string; body: string; source: string; source_description: string; confidence: number | null; status: string; author: string;
   /** The author's name to show; `author` is the address (or the name when there is none), for its tooltip. */ author_name?: string;
-  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; collapsed?: Joined[]; dropped?: Dropped[]; quality_error?: boolean; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string; retirement?: Retired;
+  created_at: string; reviewed_at: string | null; reviewer?: string | null; ingest_report?: { entities: number; edges: number; ontology: boolean; off_ontology: string[]; untyped_entities: number; aliased_edges?: number; collapsed?: Joined[]; dropped?: Dropped[]; quality_error?: boolean; subject_skipped?: string; subject_error?: boolean; auto_merged?: string[]; merge_ambiguous?: string[]; distil?: DistilOut; distil_error?: string; retirement?: Retired;
     /** Names the extraction dropped because they were a detail of a fact, not an entity, by kind (issue 467). */ not_entities?: Record<string, number> } | null; review_note: string; review_kind: string; decision: any; ingest_error: string; episode_uuid: string | null; ingested_at: string | null; purged_at?: string | null; secrets?: SecretFinding[];
   kind?: string; correction?: Correction | null; secrets_notice?: string; related_verdict?: string; claims?: Claim[] | null; category?: string;
   /** Whether its new facts came back to a control question after ingesting (issue 296). */
@@ -359,7 +359,7 @@ function DistilDetail({ d, ops }: { d: Prop; ops: Ops }) {
 }
 
 type Joined = { uuid?: string; fact?: string; kept: string; with?: "episode" | "current"; why: string };
-type Dropped = { uuid?: string; fact?: string; rule: string; why: string };
+type Dropped = { uuid?: string; fact?: string; rule: string; why: string; prob?: number };
 /** The topic reviews a fact of the ingestion asked for, saying an entity was retired or replaced (issue 455). */
 type RetiredOne = { entity: string; name?: string; facts: string[]; review?: number; why?: string };
 type Retired = { queued?: RetiredOne[]; joined?: RetiredOne[]; not_queued?: RetiredOne[]; error?: string };
@@ -398,11 +398,19 @@ function IngestReport({ r, id }: { r: NonNullable<Prop["ingest_report"]>; id: nu
   const tidy = [joined.length ? (joined.length === 1 ? t("1 duplicado unido") : t("{{n}} duplicados unidos", { n: joined.length })) : "",
     dropped.length ? (dropped.length === 1 ? t("1 hecho vacío descartado") : t("{{n}} hechos vacíos descartados", { n: dropped.length })) : "",
     r.quality_error ? t("no se pudo buscar duplicados") : ""].filter(Boolean);
+  // the decider's check of issue 465, when it could not run: its own line, since it is a sentence and wraps
+  const subject = r.subject_skipped ? t("No se consultó al decisor sobre los hechos que solo repiten el tema del brain: el brain agotó su presupuesto de IA.")
+    : r.subject_error ? t("No se pudo consultar al decisor sobre los hechos que solo repiten el tema del brain: se quedan todos.") : "";
+  // why a fact was dropped: the sure rules of issue 458, or the decider of issue 465
+  const droppedWhy = (e: Dropped) => e.rule === "subject"
+    ? (e.prob === undefined ? t("solo repetía el tema del brain, según el decisor") : t("solo repetía el tema del brain, según el decisor ({{p}} %)", { p: Math.round(e.prob * 100) }))
+    : e.rule === "meta" ? t("habla de la propia memoria, no del mundo que describe") : t("un extremo es un comodín («it», «algo»), no una cosa del mundo");
   const listed = [...joined.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.with === "current" ? t("ya lo decía un hecho del brain: el episodio queda enlazado a él") : t("repetía otro hecho de este episodio") })),
-    ...dropped.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.rule === "meta" ? t("habla de la propia memoria, no del mundo que describe") : t("un extremo es un comodín («it», «algo»), no una cosa del mundo") }))];
+    ...dropped.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: droppedWhy(e) }))];
   const total = joined.length + dropped.length + notEntities;
   return (<Stack gap={4}>
     <div><span className="ms-nowrap">{r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })}</span>{r.untyped_entities ? ` (${t("{{n}} sin tipo", { n: r.untyped_entities })})` : ""}{notEntities ? <> (<span className="ms-nowrap">{notEntities === 1 ? t("1 nombre no era una entidad") : t("{{n}} nombres no eran entidades", { n: notEntities })}</span>)</> : ""} · <span className="ms-nowrap">{r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })}</span>{tidy.length ? <> ({tidy.map((x, i) => <Fragment key={i}>{i ? ", " : ""}<span className="ms-nowrap">{x}</span></Fragment>)})</> : ""}{r.ontology ? (r.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: r.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{r.aliased_edges ? <span className="ms-nowrap">{r.aliased_edges === 1 ? t(" · 1 relación normalizada por alias") : t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: r.aliased_edges })}</span> : ""}{r.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: r.auto_merged.join(", ") }) : ""}{r.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: r.merge_ambiguous.join(", ") }) : ""}</div>
+    {subject && <div>{subject}</div>}
     {r.retirement && <RetiredLines r={r.retirement} />}
     {total > 0 && <Group><Btn kind="link" className="ms-hit" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls={`ms-tidy-${id}`}
       onClick={() => setOpen(!open)}>{t("Qué se unió o descartó")}</Btn></Group>}
