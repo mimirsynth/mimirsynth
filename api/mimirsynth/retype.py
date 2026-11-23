@@ -4,7 +4,7 @@ Qué se revisa y qué se descarta antes del decisor lo decide el paquete de onto
 import logging
 import re
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -251,8 +251,18 @@ def _out(s: RetypeSuggestion, rules: frozenset[str]) -> dict:
             "reason": s.reason or (doubtful_reason(s.name, rules) if s.status == "pending" else ("ninguno de los tipos de la ontología encaja" if st == "none" else ""))}
 
 
+FOLDING_STUCK = timedelta(minutes=10)   # a fold still «folding» after this was cut short (a restart): the row is doubtful again
+
+
+def _stuck(s: RetypeSuggestion) -> bool:
+    at = s.applied_at
+    return s.status == "folding" and (at is None or (at if at.tzinfo else at.replace(tzinfo=timezone.utc)) < datetime.now(timezone.utc) - FOLDING_STUCK)
+
+
 def _eff_status(s: RetypeSuggestion, rules: frozenset[str]) -> str:
     """Las propuestas antiguas cuyo nombre no es una entidad concreta (según las reglas del brain) pasan a «dudosas» sin volver a analizarlas."""
+    if _stuck(s):
+        return "doubtful"
     if s.status == "pending" and doubtful_reason(s.name, rules):
         return "doubtful"
     if s.status == "same" and not s.suggested_type:  # el decisor contestó «ninguno de los anteriores»: no es lo mismo que «ya correcto»
@@ -356,7 +366,9 @@ def apply_as(sid: int, body: TypeIn, ctx: BrainCtx = Depends(admin_of_brain)):
     if new == s.current_type:
         raise HTTPException(409, "la entidad ya tiene ese tipo")
     _set_label(ctx.brain.graph_name, s.entity_uuid, s.current_type, new)
-    s.chosen_type, s.previous_type, s.status, s.applied_at, s.alone = new, s.current_type, "applied", datetime.now(timezone.utc), True
+    # the type the decider proposed, picked from the list, is still the decider's: only another one is a miss
+    s.chosen_type = new if new != s.suggested_type else ""
+    s.previous_type, s.status, s.applied_at, s.alone = s.current_type, "applied", datetime.now(timezone.utc), True
     ctx.db.commit()
     audit(ctx.db, ctx.user, "retype.apply", ctx.brain, count=1, id=sid, type=new)
     return {"applied": 1}
@@ -397,7 +409,7 @@ def fold(sid: int, body: FoldIn, ctx: BrainCtx = Depends(admin_of_brain)):
     duplicates does; the node is left as a `Merged` tombstone, so no orphan is left. Recorded as a vocabulary change: undone from this
     row or from Recent changes."""
     from sqlalchemy import update
-    from .entity_types import _merge_all, _record, snapshot_graph
+    from .entity_types import _merge_all, _record, done
     s = ctx.db.get(RetypeSuggestion, sid)
     rules = profile(get_ontology(ctx.db, ctx.brain.id))["rules"]
     if not s or s.brain_id != ctx.brain.id or _eff_status(s, rules) != "doubtful":
@@ -410,23 +422,25 @@ def fold(sid: int, body: FoldIn, ctx: BrainCtx = Depends(admin_of_brain)):
     if not found:
         raise HTTPException(404, "la entidad ya no está en el grafo")
     # one fold of this row at a time: a double click or a second administrator finds it taken
-    took = ctx.db.execute(update(RetypeSuggestion).where(RetypeSuggestion.id == sid, RetypeSuggestion.status.in_(("pending", "doubtful")))
-                          .values(status="folding")).rowcount
+    now = datetime.now(timezone.utc)
+    free = RetypeSuggestion.status.in_(("pending", "doubtful")) | ((RetypeSuggestion.status == "folding") & (RetypeSuggestion.applied_at < now - FOLDING_STUCK))
+    took = ctx.db.execute(update(RetypeSuggestion).where(RetypeSuggestion.id == sid, free).values(status="folding", applied_at=now)).rowcount
     ctx.db.commit()
     if not took:
         raise HTTPException(409, "esa propuesta ya se está fusionando o ya se fusionó")
     keeper = {"uuid": into, "name": str(near[into]["name"] or into)}
     label = f"«{s.name[:80]}» no es una entidad: fusionada en «{keeper['name'][:80]}»"
-    snap, entries = "", []
+    # no copy of the graph: one entity's facts are undone from the merge's own record, and a copy per fold would push out the
+    # snapshots of larger merges (they keep the last two)
+    snap, entries = None, []
     try:
-        snap = snapshot_graph(ctx.brain.graph_name, "fold")
         _merge_all(ctx.graph, keeper, [{"uuid": s.entity_uuid, "name": found[0]["name"] or s.name}], entries)
         _keep_between(ctx.graph, keeper["uuid"], s.entity_uuid, entries[0])
     except Exception as e:  # what was already moved is recorded, so it can be undone like the rest
         log.warning("retype fold %s: %s", sid, e.__class__.__name__)
         ctx.db.rollback()
         s = ctx.db.get(RetypeSuggestion, sid)
-        entries = [x for x in entries if any(x["moved"].values()) or x["alias_added"]]
+        entries = done(entries)
         if entries:
             op = _record(ctx, "entity.merge", label + " (incompleto)", keeper=keeper, entries=entries, snapshot=snap, onto_before=None, suggestion=sid)
             s.status, s.op_id, s.applied_at, s.alone = "folded", op.id, datetime.now(timezone.utc), True

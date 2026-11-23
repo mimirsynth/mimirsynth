@@ -3,6 +3,7 @@ entity into the one it belongs to, duplicate names ignore dots and the prefixes 
 the decider's confidence has been measured against the curators' own decisions."""
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -45,6 +46,7 @@ def test_details_of_a_fact_are_not_entities(name, kind):
     "nginx.service", "docker.socket", "backup.timer", "docs.rs", "bun.sh", "AC -DC", "Jean -Luc", "Plan -B", "Ryzen 7 -X",
     "el Ministerio de Sanidad y Consumo de España", "de la Fuente y García Abogados", "de Havilland Aircraft Company of Canada",
     "la Caixa Bank foundation of Spain", "3.12.10", "2.1.10", "1.26.10", "user.email", "gpt-4o-mini",
+    "Node.js/Express", "ASP.NET/C#", "Vue.js/Nuxt", "Proxmox.local", "Gitea.home", "Django.contrib", "Amazon.com", "React.Component",
 ])
 def test_names_that_may_be_entities_are_kept(name):
     assert hygiene.kind(name) is None
@@ -210,22 +212,26 @@ def test_a_fold_is_taken_once_and_one_that_fails_halfway_can_be_undone(client, m
             return []
     monkeypatch.setattr(retype, "rows", lambda res: res)
     monkeypatch.setattr(entity_types, "rows", lambda res: res)
-    monkeypatch.setattr(entity_types, "snapshot_graph", lambda name, tag="": "_snap_x")
     monkeypatch.setattr(deps, "graph", lambda name: G("SET d:Merged"))
     r = client.post(f"/api/brains/hyg5/retype/{ids[0]}/fold", json={})
     assert r.status_code == 500 and "Fusionadas" in r.json()["detail"]
     with _factory()() as db:
         s = db.get(RetypeSuggestion, ids[0])
         op = db.get(VocabOp, s.op_id)
-        assert s.status == "folded" and op.kind == "entity.merge" and op.detail["snapshot"] == "_snap_x" and op.detail["entries"][0]["moved"]
-    monkeypatch.setattr(entity_types, "snapshot_graph", lambda name, tag="": (_ for _ in ()).throw(ConnectionError("no copy")))
+        assert s.status == "folded" and op.kind == "entity.merge" and op.detail["entries"][0]["moved"] and not op.detail["entries"][0]["merged"]
+    monkeypatch.setattr(deps, "graph", lambda name: G("RETURN r.uuid AS u"))                  # fails before the first move
     r = client.post(f"/api/brains/hyg5/retype/{ids[1]}/fold", json={})                       # nothing done: back to doubtful
     assert r.status_code == 500
     with _factory()() as db:
         assert db.get(RetypeSuggestion, ids[1]).status == "doubtful" and db.get(RetypeSuggestion, ids[1]).op_id is None
         db.get(RetypeSuggestion, ids[2]).status = "folding"                                 # another administrator is folding it
+        db.get(RetypeSuggestion, ids[2]).applied_at = datetime.now(timezone.utc)
         db.commit()
     assert client.post(f"/api/brains/hyg5/retype/{ids[2]}/fold", json={}).status_code == 404
+    with _factory()() as db:                                                                   # cut short by a restart: doubtful again
+        db.get(RetypeSuggestion, ids[2]).applied_at = datetime.now(timezone.utc) - retype.FOLDING_STUCK - timedelta(minutes=1)
+        db.commit()
+    assert {i["id"] for i in client.get("/api/brains/hyg5/retype", params={"status": "doubtful"}).json()["items"]} >= {ids[1], ids[2]}
 
 
 def test_the_facts_between_both_ends_become_facts_of_the_entity(monkeypatch):
@@ -305,6 +311,13 @@ def test_bulk_apply_waits_for_twenty_decisions_taken_one_by_one(client, monkeypa
     assert client.post(f"{url}/{xid}/apply-as", json={"type": "Host"}).status_code == 200
     after = client.get(url, params={"min_conf": 0.9}).json()["calibration"]
     assert after["above"] == cal["above"] + 1 and after["precision"] == round(len(kept) / (len(above) + 1), 3)
+    with _factory()() as db:   # the proposed type picked from the list is still the decider's hit
+        y = RetypeSuggestion(brain_id=bid, entity_uuid="ey", name="Thing y", current_type="Object", suggested_type="Service", confidence=0.95, status="pending")
+        db.add(y)
+        db.commit()
+        yid = y.id
+    assert client.post(f"{url}/{yid}/apply-as", json={"type": "Service"}).status_code == 200
+    assert client.get(url, params={"min_conf": 0.9}).json()["calibration"]["above"] == after["above"] + 1
     shown = {i["id"]: i for i in client.get(url, params={"status": "applied"}).json()["items"]}[xid]
     assert shown["suggested_type"] == "Service" and shown["chosen_type"] == "Host"
     labels = []

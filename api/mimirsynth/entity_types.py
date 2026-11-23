@@ -441,6 +441,7 @@ def merge_entities(body: MergeIn, ctx: BrainCtx = Depends(admin_of_brain)):
     try:
         _merge_all(g, keeper, dups, entries)
     except Exception as e:  # deja constancia de lo ya hecho para poder deshacerlo
+        entries = done(entries)
         if entries:
             _record(ctx, "entity.merge", f"Fusión incompleta → {keeper['name']} (error: {str(e)[:120]})", keeper=keeper, entries=entries, snapshot=snap, onto_before=None)
         raise HTTPException(500, f"la fusión falló: {e}")
@@ -468,7 +469,7 @@ def other_names(name: str, aliases) -> list[str]:
 def _merge_all(g, keeper: dict, dups: list[dict], entries: list[dict]) -> None:
     for d in dups:
         moved: dict = {}
-        entry = {"uuid": d["uuid"], "name": d["name"], "moved": moved, "alias_added": False}
+        entry = {"uuid": d["uuid"], "name": d["name"], "moved": moved, "alias_added": False, "merged": False}
         entries.append(entry)   # before anything moves: a merge that fails halfway records what it already moved (#467)
         for t in REL_TYPES:
             for direction in ("out", "in"):
@@ -485,7 +486,12 @@ def _merge_all(g, keeper: dict, dups: list[dict], entries: list[dict]) -> None:
         g.query("MATCH (d:Entity {uuid:$d}), (k:Entity {uuid:$k}) REMOVE d:Entity SET d:Merged, d.merged_into=$k, d.merged_at=$at"
                 + (" SET k.aliases = coalesce(k.aliases, []) + [$name]" if add else ""),
                 {"d": d["uuid"], "k": keeper["uuid"], "at": datetime.now(timezone.utc).isoformat(), "name": d["name"]})
-        entry["alias_added"] = add
+        entry["alias_added"], entry["merged"] = add, True
+
+
+def done(entries: list[dict]) -> list[dict]:
+    """The entries of a merge that changed something: a merge that failed before its first move leaves nothing to undo (#467)."""
+    return [e for e in entries if any(e["moved"].values()) or e.get("alias_added") or e.get("merged")]
 
 
 def _undo_merge(ctx: BrainCtx, d: dict) -> None:

@@ -117,8 +117,8 @@ export default function Retype({ graph, role }: { graph: string; role: string })
                     <Pill tone="success">{i.chosen_type || i.suggested_type}</Pill></CellText></DataTable.Td>
                     <DataTable.Td><Pill tone={tone(i.confidence)}>{pct(i.confidence)}</Pill></DataTable.Td></>
                 : status === "none" ? <><DataTable.Td><Pill>{i.current_type || t("sin tipo")}</Pill></DataTable.Td><DataTable.Td>{i.reason || "—"}</DataTable.Td></>
-                : <DataTable.Td>{i.fold ? <Group gap={6} wrap="wrap"><EntityChip wrap name={i.fold.name} to={`/entidad/${encodeURIComponent(i.fold.uuid)}`} />
-                    {i.fold.confidence != null && <span title={t("Confianza del decisor")}><Pill tone={tone(i.fold.confidence)}>{pct(i.fold.confidence)}</Pill></span>}</Group> : "—"}</DataTable.Td>}
+                : <DataTable.Td>{i.fold ? <CellText sub={i.fold.confidence != null ? t("confianza del decisor: {{p}}", { p: pct(i.fold.confidence) }) : undefined}>
+                    <EntityChip wrap name={i.fold.name} to={`/entidad/${encodeURIComponent(i.fold.uuid)}`} /></CellText> : "—"}</DataTable.Td>}
               {status === "folded" && <DataTable.Td className="ms-data">{fmt(i.applied_at)}</DataTable.Td>}
               {status === "pending" && <DataTable.Td><Group gap={6} wrap="nowrap">
                 <Btn size="row" icon="check" loading={apply.isPending && apply.variables?.length === 1 && apply.variables[0] === i.id} onClick={() => apply.mutate([i.id])}
@@ -126,10 +126,10 @@ export default function Retype({ graph, role }: { graph: string; role: string })
                 {/* icon only, with its name as a tooltip: the row keeps «Apply» in view on a tablet */}
                 <IconButton icon="edit" label={t("Aplicar como… otro tipo a «{{name}}»", { name: i.name })} onClick={() => { applyAs.reset(); setAs(i); }} /></Group></DataTable.Td>}
               {status === "doubtful" && <DataTable.Td><Group gap={6} wrap="nowrap">
-                {/* «Merge into…» first: it stays in one column whether or not the decider proposed where */}
-                <Btn size="row" onClick={() => { fold.reset(); setFoldOf(i); }} aria-label={t("Fusionar en… otra entidad «{{name}}»", { name: i.name })}>{t("Fusionar en…")}</Btn>
+                {/* the decider's proposal first, one click; «Merge into…» to choose another */}
                 {i.fold && <Btn size="row" icon="merge" loading={fold.isPending && fold.variables?.item.id === i.id} onClick={() => { fold.reset(); setDone(null); fold.mutate({ item: i, into: i.fold!.uuid, name: i.fold!.name }); }}
-                  aria-label={t("Fusionar «{{name}}» en «{{into}}»", { name: i.name, into: i.fold.name })}>{t("Fusionar")}</Btn>}</Group></DataTable.Td>}
+                  aria-label={t("Fusionar «{{name}}» en «{{into}}»", { name: i.name, into: i.fold.name })}>{t("Fusionar")}</Btn>}
+                <Btn size="row" onClick={() => { fold.reset(); setFoldOf(i); }} aria-label={t("Fusionar en… otra entidad «{{name}}»", { name: i.name })}>{t("Fusionar en…")}</Btn></Group></DataTable.Td>}
               {(status === "applied" || status === "folded") && <DataTable.Td><Btn size="row" loading={revert.isPending && revert.variables === i.id} onClick={() => revert.mutate(i.id)} icon="undo">{t("Deshacer")}</Btn></DataTable.Td>}
             </DataTable.Tr>))}
         </DataTable.Tbody>

@@ -32,7 +32,9 @@ _FLAG_WORD = r"(\s+(flag|option|opción|parameter|parámetro|switch))"
 _FLAG = re.compile(rf"^--?[A-Za-z][\w-]*{_FLAG_WORD}?$"                          # --help, -config-file flag
                    rf"|^\S+(\s+\S+)?\s+--[A-Za-z][\w-]*{_FLAG_WORD}?$"           # tool --help, tool --help flag
                    rf"|^\S+(\s+\S+)?\s+-[a-z][\w-]*{_FLAG_WORD}$", re.I)         # tool -v flag (not «AC -DC», «Plan -B»)
-_URL = re.compile(r"^(https?|ftp|ssh|git)://\S+$|^www\.\S+$|^[\w-]+(\.[\w-]+)+\.[a-z]{2,}/\S*$|^[\w-]+\.[a-z]{2,}/\S+$", re.I)
+_URL = re.compile(r"^(https?|ftp|ssh|git)://\S+$|^www\.\S+$", re.I)
+# a host and a path with no scheme («github.com/org/repo»): written in lower case, as hosts are; «Node.js/Express» is two products
+_HOST_PATH = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}/\S*$")
 # with a directory, any of these; a bare name only with an extension that is not also how products are named (.js, .rs, .sh, .io…)
 _EXT = re.compile(r"\.(py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|rb|php|c|h|cpp|hpp|cs|json|ya?ml|toml|ini|cfg|conf|env|sh|bash|ps1|md|txt|log|"
                   r"html|css|scss|sql|service|socket|timer|lock|xml|csv)$")
@@ -63,7 +65,8 @@ def _field(n: str) -> bool:
     last = parts[-1]
     return (n.endswith("()") or parts[0] in _RECEIVERS or any("_" in p for p in parts)
             or any(p[:1].islower() and re.search(r"[a-z][A-Z]", p) for p in parts[1:])        # obj.maxRetries
-            or (parts[0][:1].isupper() and last[:1].islower() and len(last) > 3))               # SectionVMInfo.uptime
+            # SectionVMInfo.uptime: a type with capitals inside and a member; not «Proxmox.local», «Django.contrib»
+            or (bool(re.search(r"[a-z][A-Z]|[A-Z]{2}[a-z]", parts[0])) and last[:1].islower() and len(last) > 3))
 
 
 def _clause(n: str) -> bool:
@@ -83,7 +86,7 @@ def kind(name: str | None) -> str | None:
     n = " ".join(str(name or "").split())
     if not n:
         return None
-    if _URL.match(n):
+    if _URL.match(n) or _HOST_PATH.match(n):
         return "url"
     if _FLAG.match(n):
         return "flag"
