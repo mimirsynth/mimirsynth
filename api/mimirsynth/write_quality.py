@@ -56,7 +56,10 @@ def may_judge(p) -> bool:
     """Whether the decider may drop facts of this proposal (#465). Not those it never decides on its own in the triage either: a
     correction, one with claims (it may replace facts: its new value must stay), a flagged possible secret, a distilled note."""
     from .secretguard import flagged
-    return not (p.kind == "correction" or p.claims or flagged(p.secret_findings) or (p.category or "") == "curator.distil")
+    try:
+        return not (p.kind == "correction" or p.claims or flagged(p.secret_findings) or (p.category or "") == "curator.distil")
+    except Exception:  # noqa: BLE001 — an odd stored value: the episode is in, so this must not fail it; nothing is judged
+        return False
 
 
 class Subject:
@@ -110,7 +113,8 @@ class Subject:
             context = decider.scope(b.name, b.description or "") or f"Brain «{b.name}»"
             state = decider.with_scope(f"Hecho: {_plain(f.get('fact'), 500)}\nExtremos: «{_plain(f.get('source'), 120)}» → «{_plain(f.get('target'), 120)}»", context)
             with usage.scope(b.id, "decider"):
-                r = decider.decide(d["base_url"], d["model"], d["key"], state, QUESTION, OPTIONS, timeout=CALL_TIMEOUT)
+                left = DEADLINE - (time.monotonic() - self.started)   # the last call also ends near the deadline
+                r = decider.decide(d["base_url"], d["model"], d["key"], state, QUESTION, OPTIONS, timeout=max(5.0, min(CALL_TIMEOUT, left)))
             verdict = {"prob": float(r["prob"])} if r["index"] == 0 and r["prob"] >= max(d["threshold"], MIN_PROB) else None
         except Exception:  # noqa: BLE001 — the fact stays; the ingestion goes on (an odd answer too)
             log.warning("no se pudo consultar al decisor sobre un hecho ingerido", exc_info=True)

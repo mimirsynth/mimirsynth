@@ -398,6 +398,7 @@ def test_the_decider_never_judges_corrections_claims_secrets_or_distilled_notes(
     assert not W.may_judge(P(kind="correction")) and not W.may_judge(P(claims=[{"verdict": "replaces"}]))
     assert not W.may_judge(P(secret_findings=[{"rule": "aws", "action": "flagged"}])) and W.may_judge(P(secret_findings=[{"rule": "aws", "action": "masked"}]))
     assert not W.may_judge(P(category="curator.distil"))
+    assert not W.may_judge(P(secret_findings=["not a finding"]))   # an odd stored value: nothing judged, nothing fails
 
 
 def test_a_correction_is_never_sent_to_the_decider(client, monkeypatch):  # noqa: F811
