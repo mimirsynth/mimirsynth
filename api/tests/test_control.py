@@ -560,8 +560,9 @@ def test_retype_doubtful_rules_depend_on_the_pack():
     for n in ("MimirSynth 0.7.1", "Bug del login", "org/website", "ARCHITECTURE.md", "v0.5.0 (2026-10-25)"):
         assert retype.doubtful_reason(n, sw) == "", n
     assert retype.doubtful_reason("--dry-run", sw)
-    for n in ("Receta 1.5", "notas/2026.md", "Fix de la cocina", "Lucía (hija)"):  # en infraestructura se conserva todo
+    for n in ("notas/2026.md", "Fix de la cocina", "Lucía (hija)"):  # en infraestructura se conserva todo
         assert retype.doubtful_reason(n, infra), n
+    assert retype.doubtful_reason("Receta 1.5", infra) == ""   # salvo la versión: el paquete tiene el tipo Software para eso (#467)
     assert retype.doubtful_reason("una frase de cinco palabras", fam) == "frase, no un nombre propio"  # la de frase vale siempre
 
 
@@ -592,9 +593,8 @@ def test_retype_old_doubtful_becomes_applicable_in_non_technical_brain(client, m
     assert o["counts"] == {"pending": 1} and o["items"][0]["reason"] == ""
     assert client.post("/api/brains/fam56/retype/apply", json={"ids": [o["items"][0]["id"]]}).json()["applied"] == 1
     assert calls == [("r1", "Topic", "Document")]
-    assert client.get("/api/brains/inf56/retype").json()["counts"] == {"doubtful": 1}                 # en infraestructura sigue dudosa
-    d = client.get("/api/brains/inf56/retype?status=doubtful").json()["items"]
-    assert d[0]["reason"].startswith("versión") and client.post("/api/brains/inf56/retype/apply", json={"ids": [d[0]["id"]]}).json()["applied"] == 0
+    # in infrastructure too, since its pack has a Software type for versioned names (#467)
+    assert client.get("/api/brains/inf56/retype").json()["counts"] == {"pending": 1}
 
 
 def test_delete_brain_with_confirmation(client, monkeypatch):

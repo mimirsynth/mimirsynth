@@ -1,11 +1,15 @@
 """Entity hygiene at extraction (#467): names the LLM extracts that are a detail of a fact, never an entity of their own, are dropped
 before graphiti-core resolves and writes them. The edges are then extracted among the entities that remain, so the detail stays in
-the fact's text («run the tool with --help» is a fact about the tool, not an entity «--help flag»).
+the text of their facts («run the vault tool with --help on the Ops host» is a fact about the tool and the host, not about an entity
+«--help flag»). When the dropped name was the only other end of a fact, that fact is not created: the episode keeps the sentence,
+and recall still finds it among the episode's fragments.
 
-What is dropped, by kind: a command-line flag, a dotted field path, a file path or source file, a URL, a date alone, and a clause
-(five or more words starting in lower case). Kept on purpose: host names (`api.example.com`), `Node.js`, `TCP/IP`, proper names of
-five or more words («Ministry of Health and Social Services»), versioned products («Debian 13») and `key=value` names, which the type
-corrector reviews instead."""
+What is dropped, by kind: a command-line flag, a field path in code, a file path or source file, a URL, a date alone, and a clause
+(five or more words starting with a lower-case word, most of them not capitalised). Kept on purpose: host names (`api.example.com`),
+products written like files (`Node.js`, `three.js`, `Newtonsoft.Json`, `docs.rs`), systemd units (`nginx.service`), dotted .NET
+namespaces (`Microsoft.AspNetCore`), `TCP/IP`, proper names that start with a particle («el Ministerio de Sanidad y Consumo»),
+versioned products («Debian 13»), bare versions («3.12.10») and `key=value` names, which the type corrector reviews instead. The
+rules err on the side of keeping: a missed detail is still caught later by the corrector, a dropped entity is not."""
 from __future__ import annotations
 
 import contextvars
@@ -17,47 +21,61 @@ log = logging.getLogger("mimirsynth.hygiene")
 KINDS = ("flag", "field", "path", "url", "date", "clause")
 _MONTHS = ("january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|"
            "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre")
+_DAY = r"\d{1,2}(st|nd|rd|th)?"
 _DATE = re.compile(
-    r"^(\d{4}-\d{1,2}(-\d{1,2})?([T ]\d{1,2}:\d{2}(:\d{2})?)?"             # 2026-10-01, 2026-10, with a time
-    r"|\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}"                                       # 01/10/2026
-    rf"|(\d{{1,2}}(st|nd|rd|th)?\s+(de\s+)?)?({_MONTHS})\.?,?(\s+(de\s+)?\d{{1,2}}(st|nd|rd|th)?,?)?(\s+(de\s+|del\s+)?\d{{4}})?"   # 1 October 2026, octubre de 2026
+    r"^(\d{4}[-/]\d{1,2}([-/]\d{1,2})?([T ]\d{1,2}:\d{2}(:\d{2})?)?"          # 2026-10-01, 2026/10/01, 2026-10, with a time
+    r"|\d{1,2}([/-])\d{1,2}\5(\d{2}|\d{4})"                                     # 01/10/2026, 1-10-26
+    r"|\d{1,2}\.\d{1,2}\.\d{4}"                                                 # 01.10.2026 (a bare «3.12.10» is a version)
+    rf"|((el|the)\s+)?({_DAY}\s+((of|de)\s+)?)?({_MONTHS})\.?,?(\s+{_DAY},?)?(\s+((de|del|of)\s+)?\d{{4}})?"   # 1st of October 2026, el 1 de octubre
     r")$", re.I)
-_FLAG = re.compile(r"^--?[A-Za-z][\w-]*(\s+(flag|option|opción|parameter|parámetro|switch))?$"
-                   r"|^\S+(\s+\S+)?\s+--?[A-Za-z][\w-]*(\s+(flag|option|opción|parameter|parámetro|switch))?$", re.I)
-_URL = re.compile(r"^(https?|ftp|ssh|git)://\S+$|^www\.\S+$", re.I)
+_FLAG_WORD = r"(\s+(flag|option|opción|parameter|parámetro|switch))"
+_FLAG = re.compile(rf"^--?[A-Za-z][\w-]*{_FLAG_WORD}?$"                          # --help, -config-file flag
+                   rf"|^\S+(\s+\S+)?\s+--[A-Za-z][\w-]*{_FLAG_WORD}?$"           # tool --help, tool --help flag
+                   rf"|^\S+(\s+\S+)?\s+-[a-z][\w-]*{_FLAG_WORD}$", re.I)         # tool -v flag (not «AC -DC», «Plan -B»)
+_URL = re.compile(r"^(https?|ftp|ssh|git)://\S+$|^www\.\S+$|^[\w-]+(\.[\w-]+)+\.[a-z]{2,}/\S*$|^[\w-]+\.[a-z]{2,}/\S+$", re.I)
+# with a directory, any of these; a bare name only with an extension that is not also how products are named (.js, .rs, .sh, .io…)
 _EXT = re.compile(r"\.(py|js|mjs|cjs|ts|tsx|jsx|go|rs|java|kt|rb|php|c|h|cpp|hpp|cs|json|ya?ml|toml|ini|cfg|conf|env|sh|bash|ps1|md|txt|log|"
-                  r"html|css|scss|sql|service|socket|timer|lock|xml|csv)$", re.I)
+                  r"html|css|scss|sql|service|socket|timer|lock|xml|csv)$")
+_BARE_EXT = re.compile(r"\.(py|ya?ml|toml|ini|cfg|conf|env|ps1|txt|log|sql|lock|csv|md)$")
 _FIELD = re.compile(r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+(\(\))?$")
+_RECEIVERS = {"self", "this", "cls"}
+_PARTICLES = {"a", "an", "the", "of", "to", "from", "in", "on", "at", "for", "with", "by", "and", "or", "per", "into", "over",
+              "de", "del", "la", "el", "los", "las", "en", "con", "por", "para", "y", "o", "al", "un", "una", "van", "der", "den", "von",
+              "da", "di", "le", "du", "des"}
 
 
 def _path(n: str) -> bool:
     if " " in n:
         return False
-    if n.startswith(("/", "./", "../", "~/")) or re.match(r"^[A-Za-z]:\\", n):
+    if n.startswith(("/", "./", "../", "~/")) or re.match(r"^[A-Za-z]:\\", n) or (n.endswith("/") and len(n) > 1):
         return True
-    m = _EXT.search(n)
-    if not m:
-        return False
     if "/" in n or "\\" in n:
-        return True
-    # a bare file name («README.md», «docker-compose.yml»), but not a product named like one («Node.js», «Vue.js»)
-    return not (m.group(1).lower() == "js" and n[:1].isupper())
+        return bool(_EXT.search(n))
+    return bool(_BARE_EXT.search(n))     # «README.md», «docker-compose.yml»; not «three.js», «Newtonsoft.Json», «docs.rs»
 
 
 def _field(n: str) -> bool:
-    """`SectionVMInfo.uptime`, `config.max_retries`: a code identifier with a dot. A host name or a product (`api.example.com`,
-    `Node.js`, `ASP.NET`) has no underscore and no camel case inside a part."""
-    if not _FIELD.match(n) or _EXT.search(n):
+    """A field or call in code: `SectionVMInfo.uptime`, `config.max_retries`, `self.db`, `os.path.join()`, `obj.maxRetries`. A host
+    name, a product or a namespace (`api.example.com`, `Node.js`, `Microsoft.AspNetCore`, `pandas.DataFrame`) is none of those."""
+    if not _FIELD.match(n):
         return False
     parts = n.rstrip("()").split(".")
-    return any("_" in p or re.search(r"[a-z][A-Z]|[A-Z]{2}[a-z]", p) for p in parts)
+    last = parts[-1]
+    return (n.endswith("()") or parts[0] in _RECEIVERS or any("_" in p for p in parts)
+            or any(p[:1].islower() and re.search(r"[a-z][A-Z]", p) for p in parts[1:])        # obj.maxRetries
+            or (parts[0][:1].isupper() and last[:1].islower() and len(last) > 3))               # SectionVMInfo.uptime
 
 
 def _clause(n: str) -> bool:
-    """Five or more words whose first is a lower-case word: a phrase («sync push from A to B», «budget limit of 5 dollars a month»).
-    A proper name starts in upper case («Ministry of Health and Social Services»), and so does a brand like «iPhone 15 Pro Max case»."""
+    """Five or more words, the first a lower-case word, and most of the rest not capitalised: a phrase («sync push from A to B»,
+    «budget limit of 5 dollars a month»). A proper name that starts with a particle («el Ministerio de Sanidad y Consumo», «de
+    Havilland Aircraft Company») has most of its words capitalised."""
     words = n.split()
-    return len(words) >= 5 and bool(re.fullmatch(r"[a-zß-öø-ÿ]+", words[0]))
+    if len(words) < 5 or not re.fullmatch(r"[a-zß-öø-ÿ]+", words[0]):
+        return False
+    content = [w for w in words if w.lower() not in _PARTICLES]
+    caps = sum(1 for w in content if w[:1].isupper())
+    return caps * 2 <= len(content)
 
 
 def kind(name: str | None) -> str | None:

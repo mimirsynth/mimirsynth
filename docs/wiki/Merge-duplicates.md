@@ -2,7 +2,7 @@
 
 # Merge duplicates
 
-The **Duplicates** tab of [[Content quality]]. It shows **groups of entities that are probably the same thing**: same name except for capitalisation, spaces, `_`, `-` and `.`, or a version written as a separate word (for example "VM 201", "vm201" and "VM.201", or "Nextcloud" and "Nextcloud 29.0.1"). The brain's ontology package can also declare **equivalent prefixes**: `infrastructure` treats `CT` and `LXC`, and `VM` and `QEMU`, as the same, so "CT147" and "LXC 147" are one group. A number glued to the name is part of it ("ups@10.0.0.4", "min_similarity=0.55"), and a name that is only an address is compared whole. The name is only a hint: check that the members really are the same thing before merging.
+The **Duplicates** tab of [[Content quality]]. It shows **groups of entities that are probably the same thing**: same name except for capitalisation, spaces, `_`, `-` and a dot beside a letter (a dot between digits is part of an address), or a version written as a separate word (for example "VM 201", "vm201" and "VM.201", or "Nextcloud" and "Nextcloud 29.0.1"). The brain's ontology package can also declare **equivalent prefixes**: `infrastructure` treats `CT` and `LXC`, and `VM` and `QEMU`, as the same, so "CT147" and "LXC 147" are one group. A number glued to the name is part of it ("ups@10.0.0.4", "min_similarity=0.55"), and a name that is only an address is compared whole. The name is only a hint: check that the members really are the same thing before merging.
 
 ## Why they are a nuisance
 If the same entity exists twice, its facts are split: a search finds half, the graph shows two nodes and the [[Overview]] over-counts.

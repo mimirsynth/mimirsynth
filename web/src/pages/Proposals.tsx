@@ -382,8 +382,9 @@ function RetiredLines({ r }: { r: Retired }) {
 }
 
 /** Kinds of names that are a detail of a fact, never an entity of their own (issue 467). */
-const NOT_ENTITY: Record<string, string> = { flag: T("opciones de línea de comandos"), field: T("campos de código"), path: T("rutas o ficheros"),
-  url: T("direcciones web"), date: T("fechas"), clause: T("frases") };
+const NOT_ENTITY: Record<string, [string, string]> = { flag: [T("1 opción de línea de comandos"), T("{{n}} opciones de línea de comandos")],
+  field: [T("1 campo de código"), T("{{n}} campos de código")], path: [T("1 ruta o fichero"), T("{{n}} rutas o ficheros")],
+  url: [T("1 dirección web"), T("{{n}} direcciones web")], date: [T("1 fecha"), T("{{n}} fechas")], clause: [T("1 frase"), T("{{n}} frases")] };
 
 /** What an ingestion wrote, and what it tidied as it wrote (issue 458): duplicates merged into one fact and empty facts dropped, each
  * listed with why behind a fold. Their text is gone once an entity is forgotten; the counts stay. */
@@ -395,20 +396,19 @@ function IngestReport({ r, id }: { r: NonNullable<Prop["ingest_report"]>; id: nu
   const notEntities = kinds.reduce((s, [, n]) => s + n, 0);
   const tidy = [joined.length ? (joined.length === 1 ? t("1 duplicado unido") : t("{{n}} duplicados unidos", { n: joined.length })) : "",
     dropped.length ? (dropped.length === 1 ? t("1 hecho vacío descartado") : t("{{n}} hechos vacíos descartados", { n: dropped.length })) : "",
-    notEntities ? (notEntities === 1 ? t("1 nombre que no era una entidad") : t("{{n}} nombres que no eran entidades", { n: notEntities })) : "",
     r.quality_error ? t("no se pudo buscar duplicados") : ""].filter(Boolean);
   const listed = [...joined.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.with === "current" ? t("ya lo decía un hecho del brain: el episodio queda enlazado a él") : t("repetía otro hecho de este episodio") })),
     ...dropped.filter((e) => e.fact).map((e) => ({ fact: e.fact!, why: e.rule === "meta" ? t("habla de la propia memoria, no del mundo que describe") : t("un extremo es un comodín («it», «algo»), no una cosa del mundo") }))];
   const total = joined.length + dropped.length + notEntities;
   return (<Stack gap={4}>
-    <div><span className="ms-nowrap">{r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })}</span>{r.untyped_entities ? ` (${t("{{n}} sin tipo", { n: r.untyped_entities })})` : ""} · <span className="ms-nowrap">{r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })}</span>{tidy.length ? <> ({tidy.map((x, i) => <Fragment key={i}>{i ? ", " : ""}<span className="ms-nowrap">{x}</span></Fragment>)})</> : ""}{r.ontology ? (r.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: r.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{r.aliased_edges ? <span className="ms-nowrap">{r.aliased_edges === 1 ? t(" · 1 relación normalizada por alias") : t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: r.aliased_edges })}</span> : ""}{r.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: r.auto_merged.join(", ") }) : ""}{r.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: r.merge_ambiguous.join(", ") }) : ""}</div>
+    <div><span className="ms-nowrap">{r.entities === 1 ? t("1 entidad") : t("{{n}} entidades", { n: r.entities })}</span>{r.untyped_entities ? ` (${t("{{n}} sin tipo", { n: r.untyped_entities })})` : ""}{notEntities ? <> (<span className="ms-nowrap">{notEntities === 1 ? t("1 nombre no lo era") : t("{{n}} nombres no lo eran", { n: notEntities })}</span>)</> : ""} · <span className="ms-nowrap">{r.edges === 1 ? t("1 hecho") : t("{{n}} hechos", { n: r.edges })}</span>{tidy.length ? <> ({tidy.map((x, i) => <Fragment key={i}>{i ? ", " : ""}<span className="ms-nowrap">{x}</span></Fragment>)})</> : ""}{r.ontology ? (r.off_ontology.length ? t(" · fuera de la ontología: {{v}}", { v: r.off_ontology.join(", ") }) : t(" · todos dentro de la ontología")) : t(" · sin ontología")}{r.aliased_edges ? <span className="ms-nowrap">{r.aliased_edges === 1 ? t(" · 1 relación normalizada por alias") : t(" · {{aliased_edges}} relaciones normalizadas por alias", { aliased_edges: r.aliased_edges })}</span> : ""}{r.auto_merged?.length ? t(" · fusionadas con su principal: {{v}}", { v: r.auto_merged.join(", ") }) : ""}{r.merge_ambiguous?.length ? t(" · sin fusionar por ambiguas: {{v}}", { v: r.merge_ambiguous.join(", ") }) : ""}</div>
     {r.retirement && <RetiredLines r={r.retirement} />}
     {total > 0 && <Group><Btn kind="link" className="ms-hit" icon={open ? "chevronDown" : "chevronRight"} aria-expanded={open} aria-controls={`ms-tidy-${id}`}
       onClick={() => setOpen(!open)}>{t("Qué se unió o descartó")}</Btn></Group>}
     {total > 0 && <Stack gap={6} id={`ms-tidy-${id}`} className="ms-fold ms-wrap-any" hidden={!open}>
       {listed.map((e, i) => <CellText key={i} sub={e.why}>{t("«{{fact}}»", { fact: e.fact })}</CellText>)}
-      {kinds.length > 0 && <CellText sub={t("No se crearon como entidades: son un detalle del hecho, que los conserva en su texto.")}>
-        {kinds.map(([k, n]) => t("{{kind}}: {{n}}", { kind: t(NOT_ENTITY[k] ?? k), n })).join(" · ")}</CellText>}
+      {kinds.length > 0 && <CellText sub={t("Nombres que no se crearon como entidades: son un detalle de un hecho, que los guarda en su texto, y el episodio conserva la frase.")}>
+        {kinds.map(([k, n], i) => <Fragment key={k}>{i ? " · " : ""}<span className="ms-nowrap">{NOT_ENTITY[k] ? (n === 1 ? t(NOT_ENTITY[k][0]) : t(NOT_ENTITY[k][1], { n })) : `${k}: ${n}`}</span></Fragment>)}</CellText>}
       {joined.length + dropped.length > listed.length && <CellText>{t("El texto de {{n}} ya no se guarda: se olvidó su entidad.", { n: joined.length + dropped.length - listed.length })}</CellText>}
     </Stack>}
   </Stack>);

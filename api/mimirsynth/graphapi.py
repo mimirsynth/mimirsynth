@@ -428,11 +428,13 @@ GENERIC_RELS = {"RELATES_TO", "MENTIONED_IN", "PARTICIPATES_IN", "ASSOCIATED_WIT
 # «-» or «/» it is part of what the entity is («ups@10.0.0.4», «min_similarity=0.55»), and stripping it grouped different things.
 # Up to three parts: a four-part number is more often an address («AdGuard 10.0.100.101») than a version.
 _VERSION = re.compile(r"\s+[\(\[]?v?\d+(\.\d+){1,2}(?![.\d])[\w.\-]*[\)\]]?$", re.I)
-_SEPARATORS = re.compile(r"[\s_.\-\N{HYPHEN}-\N{HORIZONTAL BAR}]+")
+_SEPARATORS = re.compile(r"[\s_\-\N{HYPHEN}-\N{HORIZONTAL BAR}]+")
+_LETTER_DOT = re.compile(r"(?<=[^\W\d_])\.|\.(?=[^\W\d_])")   # a dot beside a letter («VM.201»); between digits it is part of an address
 
 
 def _entity_key(name: str, prefixes: dict[str, str] | None = None) -> str:
-    """How the duplicates tab compares entity names: case, spacing, «_», «-», «.» and a trailing version do not count, so «VM 201»,
+    """How the duplicates tab compares entity names: case, spacing, «_», «-», a dot beside a letter and a trailing version do not
+    count (a dot between digits does: «10.0.1.12» and «10.0.11.2» are two addresses), so «VM 201»,
     «vm201», «VM.201» and «VM-201 1.2» are one group. A name that is only numbers and dots (an address, a bare version) is compared
     whole: stripping its «version» used to leave it with an empty key, so even two identical addresses never showed up. `prefixes`
     maps a prefix to the one it is equivalent to, as the brain's ontology pack declares them (#467), so «LXC147» and «CT147» are one
@@ -441,7 +443,7 @@ def _entity_key(name: str, prefixes: dict[str, str] | None = None) -> str:
     base = _VERSION.sub("", s)
     if not re.search(r"[^\W\d_]", base):
         return s
-    key = _SEPARATORS.sub("", base)
+    key = _LETTER_DOT.sub("", _SEPARATORS.sub("", base))
     for alt, canon in (prefixes or {}).items():
         if key.startswith(alt) and key[len(alt):][:1].isdigit():
             return canon + key[len(alt):]

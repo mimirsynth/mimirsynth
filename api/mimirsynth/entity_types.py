@@ -14,7 +14,7 @@ from .deps import BrainCtx, admin_of_brain, audit, curator_of_brain, reader
 from .graphdb import backend
 from .roles import allows
 from .models import BrainOntology, VocabAlias, VocabOp
-from .ontology import NAME
+from .ontology import NAME, get_ontology
 
 router = APIRouter(prefix="/api/brains/{slug}/vocab")
 EMPTY = {"entity_types": [], "edge_types": [], "edge_type_map": [], "instructions": ""}
@@ -467,7 +467,9 @@ def other_names(name: str, aliases) -> list[str]:
 
 def _merge_all(g, keeper: dict, dups: list[dict], entries: list[dict]) -> None:
     for d in dups:
-        moved = {}
+        moved: dict = {}
+        entry = {"uuid": d["uuid"], "name": d["name"], "moved": moved, "alias_added": False}
+        entries.append(entry)   # before anything moves: a merge that fails halfway records what it already moved (#467)
         for t in REL_TYPES:
             for direction in ("out", "in"):
                 pat = f"(d)-[r:{t}]->(b)" if direction == "out" else f"(b)-[r:{t}]->(d)"
@@ -483,7 +485,7 @@ def _merge_all(g, keeper: dict, dups: list[dict], entries: list[dict]) -> None:
         g.query("MATCH (d:Entity {uuid:$d}), (k:Entity {uuid:$k}) REMOVE d:Entity SET d:Merged, d.merged_into=$k, d.merged_at=$at"
                 + (" SET k.aliases = coalesce(k.aliases, []) + [$name]" if add else ""),
                 {"d": d["uuid"], "k": keeper["uuid"], "at": datetime.now(timezone.utc).isoformat(), "name": d["name"]})
-        entries.append({"uuid": d["uuid"], "name": d["name"], "moved": moved, "alias_added": add})
+        entry["alias_added"] = add
 
 
 def _undo_merge(ctx: BrainCtx, d: dict) -> None:
@@ -492,10 +494,11 @@ def _undo_merge(ctx: BrainCtx, d: dict) -> None:
         for key, ids in e["moved"].items():
             t, direction = key.split(":")
             p = {"d": e["uuid"], "k": d["keeper"]["uuid"], "u": ids}
-            if direction == "out":
-                g.query(f"MATCH (d:Merged {{uuid:$d}}), (k:Entity {{uuid:$k}})-[r:{t}]->(b) WHERE r.uuid IN $u CREATE (d)-[r2:{t}]->(b) SET r2 = properties(r) DELETE r", p)
-            else:
-                g.query(f"MATCH (d:Merged {{uuid:$d}}), (k:Entity {{uuid:$k}}), (b)-[r:{t}]->(k) WHERE r.uuid IN $u CREATE (b)-[r2:{t}]->(d) SET r2 = properties(r) DELETE r", p)
+            for label in ("Merged", "Entity"):   # «Entity»: a merge that failed before the node became a tombstone
+                if direction == "out":
+                    g.query(f"MATCH (d:{label} {{uuid:$d}}), (k:Entity {{uuid:$k}})-[r:{t}]->(b) WHERE r.uuid IN $u CREATE (d)-[r2:{t}]->(b) SET r2 = properties(r) DELETE r", p)
+                else:
+                    g.query(f"MATCH (d:{label} {{uuid:$d}}), (k:Entity {{uuid:$k}}), (b)-[r:{t}]->(k) WHERE r.uuid IN $u CREATE (b)-[r2:{t}]->(d) SET r2 = properties(r) DELETE r", p)
         g.query("MATCH (d:Merged {uuid:$d}) REMOVE d:Merged SET d:Entity REMOVE d.merged_into, d.merged_at", {"d": e["uuid"]})
         if e.get("alias_added", True):  # merges recorded before #194 always added it
             g.query("MATCH (k:Entity {uuid:$k}) SET k.aliases = [x IN coalesce(k.aliases, []) WHERE x <> $n]", {"k": d["keeper"]["uuid"], "n": e["name"]})
@@ -504,8 +507,8 @@ def _undo_merge(ctx: BrainCtx, d: dict) -> None:
 @router.post("/duplicates/ignore", status_code=201)
 def ignore_group(body: KeyIn, ctx: BrainCtx = Depends(admin_of_brain)):
     """Marca un grupo de posibles duplicados como «no son duplicados» (reutiliza vocab_aliases con kind='dup_ignore')."""
-    from .graphapi import _entity_key
-    key = _entity_key(body.key)
+    from .graphapi import _entity_key, equivalent_prefixes
+    key = _entity_key(body.key, equivalent_prefixes(get_ontology(ctx.db, ctx.brain.id)))
     if not ctx.db.scalar(select(VocabAlias.id).where(VocabAlias.brain_id == ctx.brain.id, VocabAlias.kind == "dup_ignore", VocabAlias.alias == key)):
         ctx.db.add(VocabAlias(brain_id=ctx.brain.id, kind="dup_ignore", alias=key, canonical="", created_by=ctx.user.id))
         ctx.db.commit()
@@ -515,10 +518,11 @@ def ignore_group(body: KeyIn, ctx: BrainCtx = Depends(admin_of_brain)):
 
 @router.delete("/duplicates/ignore")
 def unignore_group(key: str, ctx: BrainCtx = Depends(admin_of_brain)):
-    from .graphapi import _entity_key
-    k = _entity_key(key)  # also the rows saved in the older key format, which the list shows normalised
+    from .graphapi import _entity_key, equivalent_prefixes
+    prefixes = equivalent_prefixes(get_ontology(ctx.db, ctx.brain.id))
+    k = _entity_key(key, prefixes)  # also the rows saved in the older key format, which the list shows normalised
     gone = [a for a in ctx.db.scalars(select(VocabAlias).where(VocabAlias.brain_id == ctx.brain.id, VocabAlias.kind == "dup_ignore"))
-            if _entity_key(a.alias) == k]
+            if _entity_key(a.alias, prefixes) == k]
     for a in gone:
         ctx.db.delete(a)
     if gone:

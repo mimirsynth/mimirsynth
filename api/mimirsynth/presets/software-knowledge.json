@@ -35,7 +35,7 @@
   },
   {
    "name": "Model",
-   "description": "An AI or machine-learning model, identified by its name or id. Use for: LLMs, embedding and speech models ('gpt-4o-mini', 'Qwen3 4B', 'nomic-embed-text'). Not for: the service or provider that serves it (Service/Organization)."
+   "description": "An AI or machine-learning model, identified by its name or id. Use for: LLMs, embedding and speech models. Not for: the service or provider that serves it (Service/Organization). Examples: 'gpt-4o-mini', 'Qwen3 4B', 'nomic-embed-text'."
   },
   {
    "name": "Language",

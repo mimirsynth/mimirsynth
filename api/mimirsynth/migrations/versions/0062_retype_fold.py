@@ -2,7 +2,8 @@
 
 `fold_uuid`, `fold_name` and `fold_confidence` hold the entity the decider says a doubtful one belongs to; `op_id` is the vocabulary
 change that folded it (undone from there); `alone` marks a suggestion a curator decided by itself, not in bulk: those measure how far
-the decider's confidence can be trusted before bulk apply is allowed.
+the decider's confidence can be trusted before bulk apply is allowed; `chosen_type` is the type a curator applied instead of the
+proposed one, which counts as a miss of the decider.
 
 Revision ID: 0062
 Revises: 0061
@@ -29,9 +30,11 @@ def upgrade() -> None:
             t.add_column(sa.Column("op_id", sa.Integer(), nullable=True))
         if "alone" not in have:
             t.add_column(sa.Column("alone", sa.Boolean(), nullable=False, server_default=sa.false()))
+        if "chosen_type" not in have:
+            t.add_column(sa.Column("chosen_type", sa.String(64), nullable=False, server_default=""))
 
 
 def downgrade() -> None:
     with op.batch_alter_table("retype_suggestions") as t:
-        for c in ("alone", "op_id", "fold_confidence", "fold_name", "fold_uuid"):
+        for c in ("chosen_type", "alone", "op_id", "fold_confidence", "fold_name", "fold_uuid"):
             t.drop_column(c)

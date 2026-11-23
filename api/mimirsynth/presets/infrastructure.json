@@ -50,11 +50,11 @@
   },
   {
    "name": "Software",
-   "description": "A software product, package or library as such, at any version, as opposed to a running instance of it. Use for: an operating system or distribution, a package, a library, an app as released ('Debian 13', 'Web-Vault 2026.4.1', 'nginx 1.26'). Not for: the instance that runs and serves something (Service) or the machine it is installed on (Host/Guest)."
+   "description": "A software product, package or library as such, at any version, as opposed to a running instance of it. Use for: an operating system or distribution, a package, a library, an app as released. Not for: the instance that runs and serves something (Service) or the machine it is installed on (Host/Guest). Examples: 'Debian 13', 'Web-Vault 2026.4.1', 'nginx 1.26'."
   },
   {
    "name": "Model",
-   "description": "An AI or machine-learning model, identified by its name or id. Use for: LLMs, embedding and speech models ('gpt-4o-mini', 'Qwen3 4B', 'nomic-embed-text'). Not for: the service or provider that serves it (Service/Organization)."
+   "description": "An AI or machine-learning model, identified by its name or id. Use for: LLMs, embedding and speech models. Not for: the service or provider that serves it (Service/Organization). Examples: 'gpt-4o-mini', 'Qwen3 4B', 'nomic-embed-text'."
   },
   {
    "name": "Workflow",

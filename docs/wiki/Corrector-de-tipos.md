@@ -15,7 +15,7 @@ No supone ningún dominio: lo que mira sale de la [[Ontología]] del brain, por 
 
 El resto no se toca. Una ontología escrita a mano, o cuyo paquete ya no existe, revisa `Object`, `Thing` y `Topic`.
 
-Algunos nombres se apartan como **Dudosas** sin preguntar al decisor: los de cinco palabras o más en cualquier brain y, solo si el paquete lo activa, los nombres técnicos (rutas de fichero, opciones de línea de comandos, código, versiones al final del nombre, descripciones de un problema). `infrastructure` los activa todos, `software-knowledge` solo las opciones de línea de comandos y el resto de paquetes ninguno. Detalles: «Corrector de tipos» en [`docs/es/ONTOLOGY.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/ONTOLOGY.md).
+Como `infrastructure` tiene un tipo `Software`, una versión al final del nombre (`Debian 13`) ya no es motivo para apartarlo en los brains con ese tipo. Algunos nombres se apartan como **Dudosas** sin preguntar al decisor: los de cinco palabras o más en cualquier brain y, solo si el paquete lo activa, los nombres técnicos (rutas de fichero, opciones de línea de comandos, código, versiones al final del nombre, descripciones de un problema). `infrastructure` los activa todos, `software-knowledge` solo las opciones de línea de comandos y el resto de paquetes ninguno. Detalles: «Corrector de tipos» en [`docs/es/ONTOLOGY.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/es/ONTOLOGY.md).
 
 ## Requisitos
 - Una **ontología** aplicada al brain (si no, verás un aviso: [[Ontología]]).
@@ -27,22 +27,22 @@ Algunos nombres se apartan como **Dudosas** sin preguntar al decisor: los de cin
    | Estado | Qué hay |
    |---|---|
    | **Propuestos** | El decisor propone un tipo, con su confianza en porcentaje |
-   | **Dudosas** | Nombres que no parecen una entidad concreta (ver arriba). No tiene sentido darles tipo: únelas a la entidad de la que son un detalle (más abajo) o descártalas |
+   | **Dudosas** | Nombres que no parecen una entidad concreta (ver arriba). No tiene sentido darles tipo: fusiónalas en la entidad de la que son un detalle (más abajo) o descártalas |
    | **Sin tipo adecuado** | Ningún tipo de la ontología encaja. Si hay muchas de una misma clase, **falta un tipo en la ontología** |
    | **Aplicados** | Ya corregidos |
-   | **Unidas** | Nombres que no eran una entidad y se unieron a aquella de la que son un detalle |
+   | **Fusionadas** | Nombres que no eran una entidad y se fusionaron en aquella de la que son un detalle |
    | **Rechazados** | Los que descartaste; no se vuelven a ofrecer |
    | **Ya correctos** | El decisor confirma el tipo actual |
 3. En **Propuestos**, ajusta **Confianza mínima** con el deslizador (0,5–0,99) para ver solo las propuestas más seguras. Una nota indica cuántas quedan ocultas por debajo del umbral, con **Ver todas**.
 4. **Aplicar** en una fila aplica esa propuesta sola. **Selecciona** las que quieras (hay «seleccionar todo») o actúa sobre todo lo que muestra el filtro:
-   - **Aplicar seleccionadas** / **Aplicar todas las visibles**: una confirmación muestra un resumen por tipo propuesto antes de cambiar nada. Aplicar más de una a la vez está **desactivado hasta que hayas decidido 20 propuestas una a una** en este brain (aplicadas, aplicadas como otro tipo o rechazadas, cada una por separado): la confianza del decisor dice poco hasta medirla con tus propias decisiones. Después, junto al umbral, el corrector dice qué parte de las propuestas por encima de él que decidiste una a una aplicaste y mantuviste (ni rechazadas ni deshechas).
-   - **Aplicar como…** en una fila: la aplica con otro tipo de la ontología distinto del propuesto, cuando el decisor acierta en la clase pero no en el tipo.
+   - **Aplicar seleccionadas** / **Aplicar todas las visibles**: una confirmación muestra un resumen por tipo propuesto antes de cambiar nada. Aplicar más de una a la vez está **desactivado hasta que hayas decidido 20 propuestas una a una** en este brain (aplicadas, aplicadas como otro tipo o rechazadas, cada una por separado; descartar una dudosa no cuenta): la confianza del decisor dice poco hasta medirla con tus propias decisiones. Después, junto al umbral, el corrector dice qué parte de las propuestas por encima de él que decidiste una a una aplicaste tal como se propusieron y mantuviste (ni rechazadas, ni aplicadas como otro tipo, ni deshechas).
+   - **Aplicar como…** (el lápiz de una fila): la aplica con otro tipo de la ontología distinto del propuesto, cuando el decisor acierta en la clase pero no en el tipo.
    - **Rechazar seleccionadas** / **Rechazar todas las visibles** (esta última pide confirmación). En **Dudosas**, **Descartar seleccionadas**.
 
    Solo se aplican o rechazan las filas que muestra el filtro: las ocultas por el umbral de confianza no se tocan nunca.
-4b. En **Dudosas**, un nombre que es un detalle de otra entidad (la opción de una herramienta, el fichero de un proyecto, el campo de una API) se puede **unir** a ella. Cuando el análisis aparta un nombre, el decisor dice además de cuál de las entidades con las que comparte hechos vigentes es un detalle (hasta 8, o de ninguna); la fila lo muestra en **Es un detalle de**, con su confianza. **Unir** mueve sus hechos a esa entidad y deja su nombre como alias de ella, como al fusionar duplicados ([[Fusionar duplicados]]); el nodo antiguo no se queda huérfano. **Elegir…** deja escoger otra de esas entidades, o una si el decisor no propuso ninguna. Se deshace con **Deshacer** en **Unidas**, o en Vocabulario → Cambios recientes.
+4b. En **Dudosas**, un nombre que es un detalle de otra entidad (la opción de una herramienta, el fichero de un proyecto, el campo de una API) se puede **fusionar** en ella. Cuando el análisis aparta un nombre, el decisor dice además de cuál de las entidades con las que comparte hechos vigentes es un detalle (hasta 8, o de ninguna); la fila lo muestra en **Es un detalle de**, con su confianza. **Fusionar** mueve sus hechos a esa entidad y deja su nombre como alias de ella, como al fusionar duplicados ([[Fusionar duplicados]]); un hecho entre las dos («tool has a --help flag») pasa a ser un hecho de la propia entidad, y el nodo antiguo no se queda huérfano. Antes se hace una copia del grafo, como con los duplicados. **Fusionar en…** dice cuántos hechos se mueven y deja escoger otra de esas entidades, o una si el decisor no propuso ninguna; si no hay ninguna en la que fusionarla, ofrece descartar el nombre. Se deshace con **Deshacer** en el mensaje, en **Fusionadas** o en Vocabulario → Cambios recientes; como ahí, se deshace primero el cambio más reciente. Si una fusión falla a medias, lo que ya movió queda registrado y se deshace igual.
 5. Un mensaje informa del resultado, incluido cuántos cambios **no encajaban en la ontología actual** (por ejemplo, un tipo quitado después del análisis) y no se aplicaron.
-6. Si te equivocas, cada cambio aplicado tiene su propio **Deshacer** en **Aplicados**, y cada unión en **Unidas**.
+6. Si te equivocas, cada cambio aplicado tiene su propio **Deshacer** en **Aplicados**, y cada fusión en **Fusionadas**.
 
 Un curador también puede corregir **una entidad** sin el corrector, con **Cambiar tipo** en su [[Página de entidad]]. Su propuesta, si la tenía, deja entonces de estar pendiente.
 

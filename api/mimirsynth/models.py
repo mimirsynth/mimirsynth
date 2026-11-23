@@ -428,6 +428,7 @@ class RetypeSuggestion(Base):
     fold_confidence: Mapped[float | None] = mapped_column(nullable=True)
     op_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     alone: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # decided by itself, not in bulk: calibrates the decider
+    chosen_type: Mapped[str] = mapped_column(String(64), default="", server_default="")  # applied as another type than the one proposed
 
 
 class SummarySuggestion(Base):

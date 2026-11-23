@@ -45,8 +45,9 @@ def profile(onto: dict | None) -> dict:
     """Cómo revisa el corrector un brain: el bloque `retype` de su paquete de ontología (o el mínimo) y los tipos que tiene."""
     name = ((onto or {}).get("preset") or {}).get("name", "")
     block = (presets().get(ALIASES.get(name, name)) or {}).get("retype") or MINIMAL
-    return {"review_first": list(block["review_first"]), "rules": frozenset(block["doubtful_rules"]),
-            "types": {t["name"] for t in (onto or {}).get("entity_types", [])}}
+    types = {t["name"] for t in (onto or {}).get("entity_types", [])}
+    rules = set(block["doubtful_rules"]) - ({"version"} if "Software" in types else set())   # «Debian 13» is a Software (#467)
+    return {"review_first": list(block["review_first"]), "rules": frozenset(rules), "types": types}
 
 
 def doubtful_reason(name: str, rules: frozenset[str] | set[str]) -> str:
@@ -112,13 +113,19 @@ def neighbours(g, uuid: str) -> list[dict]:
     return rows(g.query(_NEIGHBOURS, {"u": uuid, "n": NEIGHBOURS}))
 
 
+def _one_line(s) -> str:
+    """A name as the decider reads it: on one line, so it cannot forge another option or line of the prompt."""
+    return " ".join(str(s or "").split())[:120]
+
+
 def _fold_target(d, key: str, state: str, name: str, near: list[dict]) -> tuple[str, str, float | None]:
-    """The neighbour the decider says this name is a detail of (a flag of a tool, a file of a project), or nothing."""
+    """The neighbour the decider says this name is a detail of (a flag of a tool, a file of a project), or nothing. The name itself is
+    in the state (the data block); the question only refers to it."""
     if not near:
         return "", "", None
     r = decider.decide(d.base_url, d.model, key, state,
-                       f"«{name[:120]}» no parece una entidad propia. ¿De cuál de estas entidades es un detalle (una opción, un fichero, un campo, "
-                       "una versión, una fecha, una parte)?", [x["name"][:120] for x in near] + ["De ninguna de ellas"])
+                       "La entidad descrita no parece una entidad propia. ¿De cuál de estas entidades es un detalle (una opción, un fichero, "
+                       "un campo, una versión, una fecha, una parte)?", [_one_line(x["name"]) for x in near] + ["De ninguna de ellas"])
     if r["index"] >= len(near):
         return "", "", None
     return near[r["index"]]["uuid"], near[r["index"]]["name"][:500], r["prob"]
@@ -177,7 +184,7 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
                     try:
                         fu, fn, fc = _fold_target(d, key, state, c["name"], neighbours(graph(graph_name), c["uuid"]))
                     except Exception as e:  # noqa: BLE001  (without a place to fold it, it is still doubtful)
-                        log.warning("retype %s: no fold target: %s", c["name"], e.__class__.__name__)
+                        log.warning("retype %s: no fold target: %s", c["uuid"], e.__class__.__name__)
                         fu, fn, fc = "", "", None
                     db.add(RetypeSuggestion(brain_id=brain_id, entity_uuid=c["uuid"], name=c["name"][:500], current_type=c["type"], status="doubtful",
                                             reason=why, confidence=conf, fold_uuid=fu, fold_name=fn, fold_confidence=fc))
@@ -191,7 +198,7 @@ def scan(brain_id: int, graph_name: str, limit: int, job=None) -> None:
                                         confidence=r["prob"], status=status))
                 db.commit()
             except Exception as e:  # noqa: BLE001
-                log.warning("retype %s: %s", c["name"], e)
+                log.warning("retype %s: %s", c["uuid"], e.__class__.__name__)
                 if job:
                     job.note(f"«{c['name'][:60]}»: {str(e)[:150]}")
                 db.rollback()
@@ -238,7 +245,8 @@ def _ontology_type(ctx: BrainCtx, name: str) -> str:
 def _out(s: RetypeSuggestion, rules: frozenset[str]) -> dict:
     st = _eff_status(s, rules)
     return {"id": s.id, "entity_uuid": s.entity_uuid, "name": s.name, "current_type": s.current_type, "suggested_type": s.suggested_type,
-            "confidence": s.confidence, "status": st, "previous_type": s.previous_type,
+            "confidence": s.confidence, "status": st, "previous_type": s.previous_type, "chosen_type": s.chosen_type or None,
+            "applied_at": s.applied_at,
             "fold": {"uuid": s.fold_uuid, "name": s.fold_name, "confidence": s.fold_confidence} if s.fold_uuid else None, "op": s.op_id,
             "reason": s.reason or (doubtful_reason(s.name, rules) if s.status == "pending" else ("ninguno de los tipos de la ontología encaja" if st == "none" else ""))}
 
@@ -279,7 +287,7 @@ def calibration(allrows, min_conf: float) -> dict:
     and of those at or above `min_conf`, the share applied and kept (not rejected, not reverted). Bulk apply waits for CALIBRATION."""
     alone = [r for r in allrows if r.alone and r.suggested_type and r.status in ("applied", "rejected", "reverted")]
     above = [r for r in alone if (r.confidence or 0) >= min_conf]
-    kept = sum(1 for r in above if r.status == "applied")
+    kept = sum(1 for r in above if r.status == "applied" and not r.chosen_type)   # applied as another type: the decider missed
     return {"needed": CALIBRATION, "decided": len(alone), "above": len(above), "precision": round(kept / len(above), 3) if above else None}
 
 
@@ -331,8 +339,9 @@ def reject(body: IdsIn, ctx: BrainCtx = Depends(admin_of_brain)):
     items = list(ctx.db.scalars(select(RetypeSuggestion).where(RetypeSuggestion.brain_id == ctx.brain.id, RetypeSuggestion.id.in_(body.ids),
                                                               RetypeSuggestion.status.in_(["pending", "doubtful"]))))
     alone = len(set(body.ids)) == 1
-    for s in items:
-        s.status, s.alone = "rejected", alone
+    rules = profile(get_ontology(ctx.db, ctx.brain.id))["rules"]
+    for s in items:   # a doubtful one was never offered as a type to apply: rejecting it says nothing of the decider's types
+        s.status, s.alone = "rejected", alone and _eff_status(s, rules) == "pending"
     ctx.db.commit()
     return {"rejected": len(items)}
 
@@ -347,7 +356,7 @@ def apply_as(sid: int, body: TypeIn, ctx: BrainCtx = Depends(admin_of_brain)):
     if new == s.current_type:
         raise HTTPException(409, "la entidad ya tiene ese tipo")
     _set_label(ctx.brain.graph_name, s.entity_uuid, s.current_type, new)
-    s.suggested_type, s.previous_type, s.status, s.applied_at, s.alone = new, s.current_type, "applied", datetime.now(timezone.utc), True
+    s.chosen_type, s.previous_type, s.status, s.applied_at, s.alone = new, s.current_type, "applied", datetime.now(timezone.utc), True
     ctx.db.commit()
     audit(ctx.db, ctx.user, "retype.apply", ctx.brain, count=1, id=sid, type=new)
     return {"applied": 1}
@@ -361,7 +370,7 @@ def revert(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
         return revert_op(s.op_id, ctx)   # the vocabulary change puts the entity, its facts and this row back
     if not s or s.brain_id != ctx.brain.id or s.status != "applied":
         raise HTTPException(404, "no hay un cambio aplicado con ese id")
-    _set_label(ctx.brain.graph_name, s.entity_uuid, s.suggested_type, s.previous_type)
+    _set_label(ctx.brain.graph_name, s.entity_uuid, s.chosen_type or s.suggested_type, s.previous_type)
     s.status = "reverted"
     ctx.db.commit()
     audit(ctx.db, ctx.user, "retype.revert", ctx.brain, id=sid)
@@ -378,7 +387,8 @@ def fold_options(sid: int, ctx: BrainCtx = Depends(admin_of_brain)):
     s = ctx.db.get(RetypeSuggestion, sid)
     if not s or s.brain_id != ctx.brain.id:
         raise HTTPException(404, "no hay una propuesta con ese id")
-    return {"items": neighbours(ctx.graph, s.entity_uuid), "proposed": s.fold_uuid or None}
+    moves = rows(ctx.graph.query("MATCH (n:Entity {uuid:$u})-[r:RELATES_TO]-() RETURN count(r) AS n", {"u": s.entity_uuid}))
+    return {"items": neighbours(ctx.graph, s.entity_uuid), "proposed": s.fold_uuid or None, "moves": moves[0]["n"] if moves else 0}
 
 
 @router.post("/{sid}/fold")
@@ -386,7 +396,8 @@ def fold(sid: int, body: FoldIn, ctx: BrainCtx = Depends(admin_of_brain)):
     """«Not an entity → fold into X» (#467): the doubtful entity's facts move to X and its name becomes an alias of X, as a merge of
     duplicates does; the node is left as a `Merged` tombstone, so no orphan is left. Recorded as a vocabulary change: undone from this
     row or from Recent changes."""
-    from .entity_types import _merge_all, _record
+    from sqlalchemy import update
+    from .entity_types import _merge_all, _record, snapshot_graph
     s = ctx.db.get(RetypeSuggestion, sid)
     rules = profile(get_ontology(ctx.db, ctx.brain.id))["rules"]
     if not s or s.brain_id != ctx.brain.id or _eff_status(s, rules) != "doubtful":
@@ -398,17 +409,53 @@ def fold(sid: int, body: FoldIn, ctx: BrainCtx = Depends(admin_of_brain)):
     found = rows(ctx.graph.query("MATCH (n:Entity {uuid:$u}) RETURN n.name AS name", {"u": s.entity_uuid}))
     if not found:
         raise HTTPException(404, "la entidad ya no está en el grafo")
-    keeper = {"uuid": into, "name": near[into]["name"]}
-    entries: list[dict] = []
-    _merge_all(ctx.graph, keeper, [{"uuid": s.entity_uuid, "name": found[0]["name"] or s.name}], entries)
-    op = _record(ctx, "entity.merge", f"«{s.name[:80]}» no es una entidad: unido a «{keeper['name'][:80]}»", keeper=keeper, entries=entries,
-                 snapshot=None, onto_before=None, suggestion=s.id)
+    # one fold of this row at a time: a double click or a second administrator finds it taken
+    took = ctx.db.execute(update(RetypeSuggestion).where(RetypeSuggestion.id == sid, RetypeSuggestion.status.in_(("pending", "doubtful")))
+                          .values(status="folding")).rowcount
+    ctx.db.commit()
+    if not took:
+        raise HTTPException(409, "esa propuesta ya se está fusionando o ya se fusionó")
+    keeper = {"uuid": into, "name": str(near[into]["name"] or into)}
+    label = f"«{s.name[:80]}» no es una entidad: fusionada en «{keeper['name'][:80]}»"
+    snap, entries = "", []
+    try:
+        snap = snapshot_graph(ctx.brain.graph_name, "fold")
+        _merge_all(ctx.graph, keeper, [{"uuid": s.entity_uuid, "name": found[0]["name"] or s.name}], entries)
+        _keep_between(ctx.graph, keeper["uuid"], s.entity_uuid, entries[0])
+    except Exception as e:  # what was already moved is recorded, so it can be undone like the rest
+        log.warning("retype fold %s: %s", sid, e.__class__.__name__)
+        ctx.db.rollback()
+        s = ctx.db.get(RetypeSuggestion, sid)
+        entries = [x for x in entries if any(x["moved"].values()) or x["alias_added"]]
+        if entries:
+            op = _record(ctx, "entity.merge", label + " (incompleto)", keeper=keeper, entries=entries, snapshot=snap, onto_before=None, suggestion=sid)
+            s.status, s.op_id, s.applied_at, s.alone = "folded", op.id, datetime.now(timezone.utc), True
+        else:
+            s.status = "doubtful"
+        ctx.db.commit()
+        if entries:
+            raise HTTPException(500, "no se pudo fusionar del todo; lo hecho se puede deshacer en «Fusionadas»") from None
+        raise HTTPException(500, "no se pudo fusionar; no se ha cambiado nada") from None
+    op = _record(ctx, "entity.merge", label, keeper=keeper, entries=entries, snapshot=snap, onto_before=None, suggestion=sid)
+    s = ctx.db.get(RetypeSuggestion, sid)
     s.status, s.op_id, s.applied_at, s.alone = "folded", op.id, datetime.now(timezone.utc), True
     if body.into and body.into != s.fold_uuid:
         s.fold_uuid, s.fold_name, s.fold_confidence = into, keeper["name"][:500], None
     ctx.db.commit()
     audit(ctx.db, ctx.user, "retype.fold", ctx.brain, id=sid)
     return {"folded": 1, "op": op.id}
+
+
+def _keep_between(g, keeper: str, gone: str, entry: dict) -> None:
+    """The facts between the folded name and the entity it joins («tool has a --help flag») would stay on the tombstone, out of
+    recall. They become facts of the entity itself, and are recorded in the merge's own lists, so undoing the merge puts them back
+    between the two ends."""
+    for direction, pat in (("out", "(d)-[r:RELATES_TO]->(k)"), ("in", "(k)-[r:RELATES_TO]->(d)")):
+        p = {"d": gone, "k": keeper}
+        ids = [x["u"] for x in rows(g.query(f"MATCH (d:Merged {{uuid:$d}}), (k:Entity {{uuid:$k}}), {pat} RETURN r.uuid AS u", p))]
+        if ids:
+            g.query(f"MATCH (d:Merged {{uuid:$d}}), (k:Entity {{uuid:$k}}), {pat} CREATE (k)-[r2:RELATES_TO]->(k) SET r2 = properties(r) DELETE r", p)
+            entry["moved"].setdefault(f"RELATES_TO:{direction}", []).extend(ids)
 
 
 def unfold(db, brain_id: int, sid: int | None) -> None:

@@ -54,7 +54,8 @@ KEPT_ON_PURPOSE = {("infrastructure", "Fix: restart zigbee bridge")}
 def test_pack_rules_do_not_discard_its_own_examples(name):
     """Las reglas técnicas de un paquete no marcan como dudosos los ejemplos de sus propios tipos."""
     from mimirsynth import retype
-    rules = set(PACKS[name]["retype"]["doubtful_rules"])
+    # as the corrector applies them to a brain with this pack: a pack with a Software type keeps versions in names (#467)
+    rules = retype.profile({"preset": {"name": name}, "entity_types": PACKS[name]["entity_types"]})["rules"]
     bad = []
     for t in PACKS[name]["entity_types"]:
         m = re.search(r"Examples?:(.*)", t["description"])
