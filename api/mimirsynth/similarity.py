@@ -92,7 +92,7 @@ def measure(g, db, brain_id: int, model: dict | None = None, seed: int | None = 
     out: dict = {"model": model.get("model"), "dim": model.get("dim"), "facts": len(current),
                  "measured_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if len(current) < MIN_FACTS:
-        return {**out, "too_few": True, "baseline": None, "same": None}
+        return {**out, "too_few": True, "reason": "facts", "baseline": None, "same": None}
     rnd = random.Random(seed if seed is not None else brain_id)
     pairs: list[tuple[str, str]] = []
     for _ in range(PAIRS * 4):   # two facts about different entity pairs, so a pair of near-repeats is not taken for the baseline
@@ -105,7 +105,7 @@ def measure(g, db, brain_id: int, model: dict | None = None, seed: int | None = 
     vec = _vectors(g, list(dict.fromkeys([u for p in pairs + same for u in p])))
     base = [_cosine(vec[a], vec[b]) for a, b in pairs if a in vec and b in vec and len(vec[a]) == len(vec[b])]
     if len(base) < MIN_PAIRS:   # nothing to stand on: every fact between the same entities, or the embeddings missing
-        return {**out, "too_few": True, "baseline": None, "same": None}
+        return {**out, "too_few": True, "reason": "pairs", "baseline": None, "same": None}
     baseline = {"pairs": len(base), "p50": _pct(base, 0.5), "p90": _pct(base, 0.9), "p95": _pct(base, 0.95), "p99": _pct(base, 0.99)}
     sims = [_cosine(vec[a], vec[b]) for a, b in same if a in vec and b in vec and len(vec[a]) == len(vec[b])]
     p99 = baseline["p99"]
@@ -178,7 +178,15 @@ def remember(brain_id: int, m: dict, db=None) -> None:
     with _lock:
         before = _cache.get(brain_id)
         _cache[brain_id] = (time.monotonic(), m)
-    if db is not None and (before is None or abs(close_cosine(before[1]) - close_cosine(m)) >= 0.005):
+    if db is None:
+        return
+    if before is not None:
+        prev = before[1]
+    else:   # a restart: the threshold the verdicts were taken with is the one kept with the last health run (or the fixed one)
+        from .models import HealthRun
+        run = db.scalar(select(HealthRun).where(HealthRun.brain_id == brain_id, HealthRun.status == "done").order_by(HealthRun.day.desc()).limit(1))
+        prev = (run.metrics or {}).get("similarity") if run else None
+    if abs(close_cosine(prev) - close_cosine(m)) >= 0.005:
         try:
             from .proposals import reset_verdicts
             reset_verdicts(db, brain_id)

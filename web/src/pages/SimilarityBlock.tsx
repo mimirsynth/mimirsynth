@@ -8,7 +8,8 @@ import { Block, Btn, CellText, DataState, DataTable, EmptyState, MutationError }
 
 type Baseline = { pairs: number; p50: number | null; p90: number | null; p95: number | null; p99: number | null };
 type Same = { pairs: number; p10: number | null; p50: number | null; under_p99: number | null };
-type Measurement = { model: string | null; dim: number | null; facts: number; measured_at: string; too_few: boolean; baseline: Baseline | null; same: Same | null };
+type Measurement = { model: string | null; dim: number | null; facts: number; measured_at: string; too_few: boolean; reason?: "facts" | "pairs";
+  baseline: Baseline | null; same: Same | null };
 type Sim = { measurement: Measurement | null; thresholds: { key: string; cosine: number }[]; suggested_recall_min: number | null; min_facts: number };
 type Rung = { key: string; label: string; sub?: ReactNode; cosine: number; reference?: boolean };
 
@@ -34,14 +35,18 @@ export default function SimilarityBlock({ graph, canAdmin }: { graph: string; ca
   const again = useMutation({ mutationFn: () => send<Sim>("POST", `brains/${graph}/similarity/measure`), onSuccess: (r) => qc.setQueryData(key, r) });
   const d = q.data, m = d?.measurement, b = m && !m.too_few ? m.baseline : null;
   const pct = (x: number) => new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 0 }).format(x);
-  const where = (c: number) => (!b || b.p50 == null || b.p95 == null || b.p99 == null ? "—"
-    : t(c >= b.p99 ? LADDER.well_above : c >= b.p95 ? LADDER.above : c >= b.p50 ? LADDER.usual : LADDER.below));
+  // «well above» starts where «very similar» does (the p99, never under the fixed floor), as on a proposal's fact cards
+  const closeCut = d?.thresholds.find((x) => x.key === "close")?.cosine ?? Infinity;
+  const where = (c: number) => (!b || b.p50 == null || b.p95 == null ? "—"
+    : t(c >= closeCut ? LADDER.well_above : c >= b.p95 ? LADDER.above : c >= b.p50 ? LADDER.usual : LADDER.below));
   const tryIt = d?.suggested_recall_min != null
     ? <>{t("por probar en este brain: {{v}}", { v: fmtNum(d.suggested_recall_min, 2) })} · <Btn kind="link" className="ms-link-inline" component={Link} to="/preguntar?tab=referencia">{t("Consultas de referencia")}</Btn></>
     : undefined;
   const rungs: Rung[] = [
     ...(d?.thresholds ?? []).map((x) => ({ key: x.key, label: THRESHOLD[x.key] ? t(THRESHOLD[x.key][0]) : x.key,
-      sub: x.key === "recall_min" && tryIt ? tryIt : x.key === "close" && !b ? t("fijo, hasta que se mida el brain")
+      // «very similar» is calibrated only when the brain's p99 sets it; otherwise it is the fixed minimum
+      sub: x.key === "recall_min" && tryIt ? <>{t(THRESHOLD.recall_min[1])} · {tryIt}</>
+        : x.key === "close" && !(b && b.p99 != null && x.cosine === b.p99) ? t("mínimo fijo")
         : THRESHOLD[x.key] ? t(THRESHOLD[x.key][1]) : undefined, cosine: x.cosine })),
     ...(b && b.p50 != null && b.p95 != null && b.p99 != null ? [
       { key: "p50", label: t("Mediana de dos hechos cualesquiera"), sub: t("{{n}} pares al azar sobre cosas distintas", { n: b.pairs }), cosine: b.p50, reference: true },
@@ -51,12 +56,13 @@ export default function SimilarityBlock({ graph, canAdmin }: { graph: string; ca
       sub: m.same.under_p99 ? t("{{n}} pares; {{p}} quedan donde llegan dos hechos cualesquiera", { n: m.same.pairs, p: pct(m.same.under_p99) }) : t("{{n}} pares", { n: m.same.pairs }) }] : []),
   ].sort((x, y) => x.cosine - y.cosine);
   const table = <DataTable fz="sm" aria-label={t("Umbrales en uso")}>
-    <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Umbral o referencia")}</DataTable.Th><DataTable.Th ta="right">{t("Similitud")}</DataTable.Th><DataTable.Th>{t("Dónde cae")}</DataTable.Th></DataTable.Tr></DataTable.Thead>
+    <DataTable.Thead><DataTable.Tr><DataTable.Th>{t("Umbral")}</DataTable.Th><DataTable.Th ta="right">{t("Similitud")}</DataTable.Th>{b && <DataTable.Th>{t("Dónde cae")}</DataTable.Th>}</DataTable.Tr></DataTable.Thead>
     <DataTable.Tbody>{rungs.map((r) => (
       <DataTable.Tr key={r.key}>
-        <DataTable.Td><CellText sub={r.sub}>{r.label}</CellText></DataTable.Td>
+        {/* the brain's own reference points, muted: the rows a curator acts on are the thresholds */}
+        <DataTable.Td><CellText sub={r.sub}>{r.reference ? <span className="ms-listcard-meta">{r.label}</span> : r.label}</CellText></DataTable.Td>
         <DataTable.Td ta="right" className="ms-data">{fmtNum(r.cosine, 2)}</DataTable.Td>
-        <DataTable.Td>{r.reference ? t("referencia del brain") : where(r.cosine)}</DataTable.Td>
+        {b && <DataTable.Td>{r.reference ? <span className="ms-listcard-meta">—</span> : where(r.cosine)}</DataTable.Td>}
       </DataTable.Tr>))}</DataTable.Tbody>
   </DataTable>;
   return (
@@ -67,7 +73,9 @@ export default function SimilarityBlock({ graph, canAdmin }: { graph: string; ca
       <MutationError error={again.error} />
       {!d ? <DataState query={q} /> : <>
         {!m ? <EmptyState>{t("No se ha podido medir: el grafo no responde. Mientras, se usan los umbrales fijos.")}</EmptyState>
-          : m.too_few ? <EmptyState>{t("Este brain tiene {{n}} hechos vigentes sobre cosas distintas; hacen falta {{min}} para medirlo. Mientras, se usan los umbrales fijos.", { n: m.facts, min: d.min_facts })}</EmptyState>
+          : m.too_few ? <EmptyState>{m.reason === "pairs"
+            ? t("Sus hechos vigentes no dan pares sobre cosas distintas con los que medirlo (casi todos unen las mismas entidades, o les falta el embedding). Mientras, se usan los umbrales fijos.")
+            : t("Este brain tiene {{n}} hechos vigentes; hacen falta {{min}} para medirlo. Mientras, se usan los umbrales fijos.", { n: m.facts, min: d.min_facts })}</EmptyState>
           : null}
         {table}
       </>}

@@ -587,13 +587,16 @@ function FactCard({ f, label }: { f: RelatedFact; label?: string }) {
   // «the usual» says nothing on a card, so it is left out. The number stays: the plain similarity when the brain is measured.
   const level = f.standing === "well_above" || f.standing === "above" ? t("similitud {{where}}", { where: t(LADDER[f.standing]) }) : "";
   const num = f.similarity ?? f.score;
-  const data = [num != null ? (level ? fmtNum(num, 2) : `${t("sim")} ${fmtNum(num, 2)}`) : "", when].filter(Boolean).join(" · ");
+  // each piece whole, so a line breaks between them and never inside one («desde» and its date together)
+  const pieces = [level, num != null ? (level ? fmtNum(num, 2) : t("similitud {{v}}", { v: fmtNum(num, 2) })) : "", when].filter(Boolean);
+  const data = pieces.length > 0;
   return (<ListCard title={label} aside={mark} invalid={!!f.invalid_at}
     tags={<>
       <EntityChip name={f.source} type={f.source_type} to={f.source_uuid ? `/entidad/${f.source_uuid}` : undefined} />
       <span className="ms-listcard-meta" title={f.name}>{humanRelation(f.name)}</span>
       <EntityChip name={f.target} type={f.target_type} to={f.target_uuid ? `/entidad/${f.target_uuid}` : undefined} />
-      {(level || data) && <span className="ms-listcard-meta ms-fact-data">{level}{level && data ? " " : ""}{data && <span className="ms-data" title={f.invalid_at ? t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) }) : undefined}>{level ? `· ${data}` : data}</span>}</span>}
+      {data && <span className="ms-listcard-meta ms-fact-data" title={f.invalid_at ? t("ya no es cierto: invalidado el {{date}}", { date: fmtDay(f.invalid_at) }) : undefined}>
+        {pieces.map((x, i) => <span key={i} className={`ms-nowrap${x === level ? "" : " ms-data"}`}>{i ? "· " : ""}{x}</span>)}</span>}
     </>}>{f.fact}</ListCard>);
 }
 

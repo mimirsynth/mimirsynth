@@ -163,7 +163,7 @@ def test_a_brain_with_no_usable_pairs_is_not_measured(client, monkeypatch):  # n
         f["s"], f["t"] = "a", "b"
     with _factory()() as db:
         m = similarity.measure(g, db, bid, {"model": "m1", "dim": DIM})
-    assert m["too_few"] and m["baseline"] is None and similarity.close_cosine(m) == similarity.CLOSE_FLOOR
+    assert m["too_few"] and m["reason"] == "pairs" and m["baseline"] is None and similarity.close_cosine(m) == similarity.CLOSE_FLOOR
 
 
 def test_a_new_close_threshold_clears_the_pending_verdicts(client, monkeypatch):  # noqa: F811
@@ -174,6 +174,8 @@ def test_a_new_close_threshold_clears_the_pending_verdicts(client, monkeypatch):
                     Proposal(brain_id=bid, author_id=1, name="b", body="b", status="pending", related_verdict="similar", category="curator.redundancy"),
                     Proposal(brain_id=bid, author_id=1, name="c", body="c", status="approved", related_verdict="similar")])
         db.commit()
+        similarity.remember(bid, {"too_few": True, "baseline": None}, db)          # a restart with the fixed threshold: nothing moved
+        assert db.scalar(select(Proposal.related_verdict).where(Proposal.brain_id == bid, Proposal.name == "a")) == "similar"
         similarity.remember(bid, {"too_few": False, "baseline": {"p50": 0.6, "p95": 0.72, "p99": 0.75}}, db)
         got = {p.name: p.related_verdict for p in db.scalars(select(Proposal).where(Proposal.brain_id == bid))}
         assert got == {"a": "", "b": "similar", "c": "similar"}                  # the curator's and decided ones keep theirs
