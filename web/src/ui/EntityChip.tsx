@@ -8,12 +8,14 @@ export const humanRelation = (name: string) => name.replace(/([a-z0-9])([A-Z])/g
 /** An entity, named the same way everywhere it appears: a chip with the colour of its type (a dot and the edge) and its name as written.
  *  The type is the chip's tooltip and part of its accessible name, so colour is never the only signal. With `to` it is a link; the
  *  entity of the page itself (`current`) is plain, never a link to where you already are. */
-export function EntityChip({ name, type, to, current }: { name: string; type?: string | null; to?: string; current?: boolean }) {
+export function EntityChip({ name, type, to, current, wrap }: { name: string; type?: string | null; to?: string; current?: boolean;
+  /** a long name breaks across lines instead of widening its column (a table cell) */ wrap?: boolean }) {
   const label = type ? `${name} (${type})` : name;
   const style = { "--ms-type": typeColor(type) } as CSSProperties;
   const body = <><span className="ms-entchip-dot" aria-hidden="true" />{name}</>;
-  if (to && !current) return <Link to={to} className="ms-entchip" style={style} title={type ?? undefined} aria-label={label}>{body}</Link>;
-  return <span className="ms-entchip" data-current={current ? "" : undefined} style={style} title={type ?? undefined} aria-label={label}>{body}</span>;
+  const w = wrap ? "" : undefined;
+  if (to && !current) return <Link to={to} className="ms-entchip" data-wrap={w} style={style} title={type ?? undefined} aria-label={label}>{body}</Link>;
+  return <span className="ms-entchip" data-current={current ? "" : undefined} data-wrap={w} style={style} title={type ?? undefined} aria-label={label}>{body}</span>;
 }
 
 /** The relation between two entity chips, in words and in the muted style, with the name as written in its tooltip. */

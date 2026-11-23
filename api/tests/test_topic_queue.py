@@ -28,18 +28,20 @@ FACTS = [_f("m1", "mail", "Mailer", "sg", "Sendgrid", "Mailer sends through Send
 
 
 class _Graph:
-    def __init__(self, facts):
-        self.facts = facts
+    def __init__(self, facts, vectors=None):
+        self.facts, self.vectors, self.asked = facts, vectors or {}, []
 
     def query(self, q, params=None):
         if q == tq.FACTS:
             return self.facts[:(params or {}).get("n", len(self.facts))]
-        return []   # no embeddings: repeats are found by their text
+        self.asked += params["u"]
+        return [{"uuid": u, "e": self.vectors[u]} for u in params["u"] if u in self.vectors]   # none given: repeats by their text
 
 
-def _brain(client, slug, monkeypatch, facts=FACTS):  # noqa: F811
+def _brain(client, slug, monkeypatch, facts=FACTS, graph=None):  # noqa: F811
     assert client.post("/api/brains", json={"slug": slug, "name": slug}).status_code == 201
-    monkeypatch.setattr(deps, "graph", lambda name: _Graph(facts))
+    g = graph or _Graph(facts)
+    monkeypatch.setattr(deps, "graph", lambda name: g)
     monkeypatch.setattr(tq, "rows", lambda res: res)
     with _factory()() as db:
         return db.scalar(select(Brain.id).where(Brain.slug == slug))
@@ -53,8 +55,9 @@ def test_the_queue_ranks_by_traffic_size_and_noise_and_shows_why(client, monkeyp
                     FactRecall(brain_id=other, fact_uuid="m1", count=99),          # another brain's traffic never counts here
                     FactProbe(brain_id=bid, fact_uuid="s1", verifier="http", state="refuted"),
                     FactProbe(brain_id=bid, fact_uuid="p1", verifier="http", state="verified"),
+                    # a retirement review ready after the newest fact, with an action to decide: still work to do, it keeps its weight
                     TopicReview(brain_id=bid, entity_uuid="sg", name="Sendgrid", status="ready", trigger="retirement",
-                                actions=[{"decision": "pending"}]),
+                                actions=[{"decision": "pending"}, {"decision": "approved"}], finished_at=datetime(2026, 1, 1, tzinfo=timezone.utc)),
                     # Mailer was reviewed after its newest fact: nothing new, it drops down
                     TopicReview(brain_id=bid, entity_uuid="mail", name="Mailer", status="ready", actions=[],
                                 finished_at=datetime(2026, 1, 1, tzinfo=timezone.utc))])
@@ -65,7 +68,8 @@ def test_the_queue_ranks_by_traffic_size_and_noise_and_shows_why(client, monkeyp
     assert [x["uuid"] for x in out["items"]][:3] == ["pm", "sg", "mail"] and "q" not in by and "wh" not in by   # one fact is no topic
     assert by["pm"]["recalls"] == 10 and by["pm"]["facts"] == 2 and by["pm"]["flagged"] == 0 and by["pm"]["last_review"] is None
     assert by["sg"]["recalls"] == 0 and by["sg"]["repeats"] == 1 and by["sg"]["flagged"] == 1 and by["sg"]["flagged_share"] == 0.333
-    assert by["sg"]["retirement"] and by["sg"]["waiting"]["trigger"] == "retirement"
+    assert by["sg"]["retirement"] and by["sg"]["waiting"]["trigger"] == "retirement" and by["sg"]["waiting"]["pending"] == 1
+    assert by["sg"]["score"] == tq.score(0, 3, 1, 1 / 3, True, 1)
     assert by["mail"]["recalls"] == 10 and by["mail"]["facts"] == 4 and by["mail"]["repeats"] == 1 and by["mail"]["waiting"] is None
     assert by["mail"]["last_review"]["new_facts"] == 0 and by["mail"]["type"] == "Service" and by["pm"]["type"] is None
     assert by["mail"]["score"] == tq.score(10, 4, 1, 0, False, tq.REVIEWED)
@@ -120,6 +124,95 @@ def test_an_empty_brain_has_an_empty_queue(client, monkeypatch):  # noqa: F811
     _brain(client, "tq5", monkeypatch, facts=[])
     out = client.get("/api/brains/tq5/topics/queue").json()
     assert out["items"] == [] and out["entities"] == 0
+
+
+def test_a_fact_from_an_entity_to_itself_counts_once(client, monkeypatch):  # noqa: F811
+    _brain(client, "tq6", monkeypatch, facts=[_f("s1", "a", "A", "a", "A", "A relates to itself"), _f("s2", "a", "A", "b", "B", "A uses B"),
+                                               _f("s3", "c", "C", "c", "C", "C relates to itself")])
+    by = {x["uuid"]: x for x in client.get("/api/brains/tq6/topics/queue").json()["items"]}
+    assert by["a"]["facts"] == 2 and by["a"]["repeats"] == 0 and "c" not in by      # one fact of its own is no topic
+
+
+def test_a_retirement_review_still_counts_when_a_newer_manual_review_also_waits(client, monkeypatch):  # noqa: F811
+    bid, other = _brain(client, "tq7", monkeypatch), other_brain(client)
+    from mimirsynth.models import Job
+    with _factory()() as db:
+        live, dead = Job(brain_id=bid, kind="topic.review", title="t", status="running", params={}), \
+            Job(brain_id=bid, kind="topic.review", title="t", status="failed", params={})
+        db.add_all([live, dead])
+        db.flush()
+        db.add_all([TopicReview(brain_id=bid, entity_uuid="sg", name="Sendgrid", status="ready", trigger="retirement", actions=[{"decision": "pending"}]),
+                    TopicReview(brain_id=bid, entity_uuid="sg", name="Sendgrid", status="ready", trigger="manual", actions=[{"decision": "applying"}]),
+                    TopicReview(brain_id=bid, entity_uuid="pm", name="Postmark", status="running", job_id=live.id),
+                    TopicReview(brain_id=bid, entity_uuid="mail", name="Mailer", status="queued", job_id=dead.id),   # its job died: not waiting
+                    TopicReview(brain_id=other, entity_uuid="mail", name="Mailer", status="ready", trigger="retirement",
+                                actions=[{"decision": "pending"}])])                                             # another brain's
+        db.commit()
+    by = {x["uuid"]: x for x in client.get("/api/brains/tq7/topics/queue").json()["items"]}
+    assert by["sg"]["retirement"] and by["sg"]["waiting"]["trigger"] == "manual"          # the newest one is shown, the retirement still counts
+    assert by["pm"]["waiting"]["status"] == "running" and not by["pm"]["retirement"]
+    assert by["mail"]["waiting"] is None and not by["mail"]["retirement"] and by["mail"]["last_review"] is None
+
+
+def other_brain(client):  # noqa: F811
+    """Another brain of the instance, created once."""
+    with _factory()() as db:
+        bid = db.scalar(select(Brain.id).where(Brain.slug == "tq-other"))
+    if bid is None:
+        assert client.post("/api/brains", json={"slug": "tq-other", "name": "other"}).status_code == 201
+        with _factory()() as db:
+            bid = db.scalar(select(Brain.id).where(Brain.slug == "tq-other"))
+    return bid
+
+
+def test_flagged_facts_come_from_the_shelf_life_and_the_probes_of_this_brain(client, monkeypatch):  # noqa: F811
+    from mimirsynth import shelflife
+    bid, other = _brain(client, "tq8", monkeypatch), other_brain(client)
+    with _factory()() as db:
+        db.add_all([FactProbe(brain_id=bid, fact_uuid="m3", verifier="http", state="refuted"),
+                    FactProbe(brain_id=other, fact_uuid="m4", verifier="http", state="refuted")])
+        db.commit()
+    monkeypatch.setattr(shelflife, "scan", lambda db, brain, limit: {"items": [{"uuid": "m1"}]})
+    by = {x["uuid"]: x for x in client.get("/api/brains/tq8/topics/queue").json()["items"]}
+    assert by["mail"]["flagged"] == 2 and by["mail"]["flagged_share"] == 0.5 and by["sg"]["flagged"] == 1 and by["pm"]["flagged"] == 1
+
+    def down(db, brain, limit):
+        raise ConnectionError("graph down")
+    monkeypatch.setattr(shelflife, "scan", down)
+    by = {x["uuid"]: x for x in client.get("/api/brains/tq8/topics/queue").json()["items"]}
+    assert by["mail"]["flagged"] == 1                                                     # only the probe: the list still stands
+
+
+def test_another_brains_sample_never_counts(client, monkeypatch):  # noqa: F811
+    bid, other = _brain(client, "tq9", monkeypatch), other_brain(client)
+    with _factory()() as db:
+        db.get(Brain, bid).replay = {"enabled": True}
+        db.add_all([RecallSample(brain_id=bid, query="q", items=[{"kind": "fact", "id": "p1"}]),
+                    RecallSample(brain_id=other, query="q", items=[{"kind": "fact", "id": "m1"}] * 3)])
+        db.commit()
+    by = {x["uuid"]: x for x in client.get("/api/brains/tq9/topics/queue").json()["items"]}
+    assert by["pm"]["recalls"] == 1 and by["mail"]["recalls"] == 0 and by["sg"]["recalls"] == 0
+
+
+def test_repeats_use_the_embeddings_and_a_large_group_is_measured_by_its_text(client, monkeypatch):  # noqa: F811
+    big = [_f(f"b{n}", "x", "X", "y", "Y", f"X talks to Y on port {n}") for n in range(tq.GROUP_CAP + 1)]
+    big += [_f("bdup", "x", "X", "y", "Y", "X talks to Y on port 0")]                        # one repeat by its text
+    small = [_f("s1", "x", "X", "z", "Z", "X stores its backups in Z"), _f("s2", "x", "X", "z", "Z", "Backups of X are kept in Z")]
+    g = _Graph(big + small, vectors={"s1": [1.0, 0.0], "s2": [0.999, 0.01]})
+    _brain(client, "tq10", monkeypatch, graph=g)
+    by = {x["uuid"]: x for x in client.get("/api/brains/tq10/topics/queue").json()["items"]}
+    assert by["z"]["repeats"] == 1                       # two wordings, the same thing, by their embeddings
+    assert by["y"]["repeats"] == 1 and by["x"]["repeats"] == 2
+    assert set(g.asked) == {"s1", "s2"}                  # the large group never asks for its embeddings
+
+
+def test_a_graph_that_is_down_answers_in_words(client, monkeypatch):  # noqa: F811
+    class Down:
+        def query(self, q, params=None):
+            raise ConnectionError("redis refused")
+    _brain(client, "tq11", monkeypatch, graph=Down())
+    r = client.get("/api/brains/tq11/topics/queue", headers={"Accept-Language": "en"})
+    assert r.status_code == 503 and r.json()["detail"] == "The brain's graph could not be read. Try again in a moment."
 
 
 # --- against the graph -------------------------------------------------------------------------------

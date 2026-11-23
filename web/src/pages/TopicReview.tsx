@@ -55,7 +55,7 @@ export default function TopicReviews({ graph }: { graph: string }) {
     queryFn: () => get<List>(`brains/${graph}/topics`) });
   if (open) return <ReviewDetail graph={graph} id={open} back={() => go(null)} />;
   const switcher = <Segments label={t("Ver")} value={view} onChange={setView}
-    data={[{ value: "reviews", label: t("Revisiones") }, { value: "queue", label: t("Por revisar") }]} />;
+    data={[{ value: "reviews", label: t("Revisiones") }, { value: "queue", label: t("Por dónde empezar") }]} />;
   if (view === "queue") return <TopicQueue graph={graph} switcher={switcher} />;
   const d = q.data;
   // what waits for a decision first, then the newest
@@ -63,11 +63,11 @@ export default function TopicReviews({ graph }: { graph: string }) {
   return (
     <>
       <ViewBar title={t("Revisiones de tema")}
-        help={<>{t("Una revisión de tema lee todo lo que la memoria sabe de una entidad (sus hechos, los episodios que la mencionan y los hechos de sus vecinos) y propone qué invalidar, qué unir, qué reescribir y qué falta, citando en cada caso sus pruebas. Se pide desde la página de la entidad, en Curación, o desde «Por revisar». Cada acción la decide un curador: al aprobarla se convierte en una corrección, que se aplica en el momento y se puede deshacer, o, si es algo que falta, en una propuesta de la cola.")} {t("Además, cuando se ingiere un hecho que dice que una entidad se retiró o se sustituyó, se pide sola una revisión de esa entidad, marcada «Por una retirada».")}</>}>
+        help={<>{t("Una revisión de tema lee todo lo que la memoria sabe de una entidad (sus hechos, los episodios que la mencionan y los hechos de sus vecinos) y propone qué invalidar, qué unir, qué reescribir y qué falta, citando en cada caso sus pruebas. Se pide desde la página de la entidad, en Curación, o desde «Por dónde empezar». Cada acción la decide un curador: al aprobarla se convierte en una corrección, que se aplica en el momento y se puede deshacer, o, si es algo que falta, en una propuesta de la cola.")} {t("Además, cuando se ingiere un hecho que dice que una entidad se retiró o se sustituyó, se pide sola una revisión de esa entidad, marcada «Por una retirada».")}</>}>
         {switcher}
       </ViewBar>
       {d && !d.engine && <Notice tone="warn">{t("No hay ningún motor LLM configurado (Administración → Proveedores IA).")}</Notice>}
-      {!d ? <DataState query={q} /> : items.length === 0 && <EmptyState>{t("Aún no hay revisiones de tema. Se piden desde la página de una entidad (Curación → Revisar este tema) o desde «Por revisar», que ordena los temas donde una revisión rinde más.")}</EmptyState>}
+      {!d ? <DataState query={q} /> : items.length === 0 && <EmptyState>{t("Aún no hay revisiones de tema. Se piden desde la página de una entidad (Curación → Revisar este tema) o desde «Por dónde empezar», que ordena los temas donde una revisión rinde más.")}</EmptyState>}
       {items.map((r) => (
         <ListCard key={r.id} onOpen={() => go(r.id)} title={r.name || r.entity_uuid} aside={fmt(r.created_at)} tags={<RowState r={r} />}
           note={r.status === "failed" ? t(FAILURE[r.error_code] ?? FAILURE.failed) : undefined} />))}

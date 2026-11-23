@@ -515,10 +515,10 @@ def list_reviews(entity: str = Query("", max_length=64), limit: int = Query(50, 
 
 
 @router.get("/queue")
-def topic_queue(limit: int = Query(20, ge=1, le=100), ctx: BrainCtx = Depends(curator)):
+def topic_queue(request: Request, limit: int = Query(20, ge=1, le=100), ctx: BrainCtx = Depends(curator)):
     """Topics to review (#456): the entities where a review would pay off, best first, with what put each one there."""
     from .topic_queue import ranking
-    return {"engine": _engine() is not None, **ranking(ctx, limit)}
+    return {"engine": _engine() is not None, **ranking(ctx, limit, lang=language(request))}
 
 
 @router.get("/{rid}")
