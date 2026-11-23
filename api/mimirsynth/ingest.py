@@ -78,6 +78,8 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
     if not eng:
         raise RuntimeError("no hay motor LLM configurado")
     llm_summaries()
+    from . import hygiene
+    hygiene.install()   # names that are a detail of a fact never become entities (#467)
     import httpx
     from openai import AsyncOpenAI
 
@@ -93,6 +95,8 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
     g = Graphiti(graph_driver=backend().graphiti_driver(graph_name),
                  llm_client=llm, embedder=emb, cross_encoder=NoRerank())
     started = datetime.now(timezone.utc) - timedelta(seconds=5)
+    not_entities: dict[str, int] = {}
+    token = hygiene.dropped.set(not_entities)
     try:
         res = await g.add_episode(name=name, episode_body=body, source=EpisodeType[source if source in EpisodeType.__members__ else "text"],
                                   source_description=description or "mimirsynth", reference_time=reference_time or datetime.now(timezone.utc),
@@ -106,8 +110,11 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
                            "_edges": [(str(e.uuid), e.name) for e in res.edges],
                            "_new_edges": [str(e.uuid) for e in res.edges if e.created_at and e.created_at >= started],
                            "_nodes": [(str(n.uuid), n.name, bool(n.created_at and n.created_at >= started)) for n in res.nodes]})
+            if not_entities:
+                report["not_entities"] = dict(sorted(not_entities.items()))   # by kind, never the names
         return str(res.episode.uuid)
     finally:
+        hygiene.dropped.reset(token)
         await g.close()
 
 
