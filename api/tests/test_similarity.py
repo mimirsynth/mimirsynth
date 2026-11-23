@@ -261,7 +261,7 @@ def test_the_measurement_reads_the_current_facts_of_the_graph(client, monkeypatc
     g = c.graph(GRAPH)
     src = _Graph(n=40)
     for i, f in enumerate(src.facts):
-        g.query("MERGE (a:Entity {uuid:$s}) MERGE (b:Entity {uuid:$t}) CREATE (a)-[:RELATES_TO {uuid:$u, fact:$u, fact_embedding:vecf32($e)}]->(b)",
+        g.query(f"MERGE (a:Entity {{uuid:$s}}) MERGE (b:Entity {{uuid:$t}}) CREATE (a)-[:RELATES_TO {{uuid:$u, fact:$u, fact_embedding:{c.vector('$e')}}}]->(b)",
                 {"s": f["s"], "t": f["t"], "u": f["uuid"], "e": src.vec[f["uuid"]]})
     g.query("MATCH ()-[r:RELATES_TO {uuid:'f39'}]->() SET r.invalid_at = '2026-01-01T00:00:00Z'")   # no longer current: not sampled
     try:
