@@ -1,8 +1,17 @@
 """Quality at write time (#458): right after an episode is ingested, the facts it just created that repeat each other, or a current
 fact already in the brain, word for word become one, and those with a placeholder or the memory itself at one end are dropped. Only
 edges this same ingestion created are ever deleted; what was already in the brain is never touched beyond linking the episode to it.
-Near-duplicates and the subtler noise stay curator proposals: without a person a wrong merge would lose information silently."""
+Near-duplicates and the subtler noise stay curator proposals: without a person a wrong merge would lose information silently.
+
+A fact that only restates the brain's subject («network N belongs to Acme», in a brain about Acme) is judged by the default decider
+(#465): only a new current fact with an end that names the subject (a phrase of the brain's name or description) is sent, at most
+MAX_ASK per ingestion and never while the brain's budget is paused, and it goes only when the decider says so with at least its own
+threshold. A failure of the decider keeps the fact and never fails the ingestion. It deletes with no person in the loop, so it runs
+only with the instance setting `write_subject_check` on (off by default): until the decider is calibrated, its confidence is no
+signal (#467 measured noise proposed at 81-97 %)."""
 import logging
+import re
+import time
 
 from .curator import META, NOISE_RULES, PLACEHOLDERS, _name
 from .db import graph, rows
@@ -29,6 +38,98 @@ _NOT_AT_WRITE = frozenset("user the-user usuario el-usuario la le lo él ella".s
 # Only pronouns count when capitalised («It runs on…»); any other placeholder or memory word only in lower case: «Thing» (AWS IoT),
 # «Episode», «Entity» or «The Graph» can be real things and stay with the curator. A name in capitals («IT») never counts.
 _PRONOUNS = frozenset("it this that these those them they something someone esto eso ello ellos ellas algo alguien".split())
+SUBJECT = "it only restates what the brain is about, as the decider judged"
+MAX_ASK = 10   # decider calls per ingestion, one per distinct text
+MIN_PROB = 0.8   # a delete with no person: never on a less sure answer, whatever the decider's own threshold
+DEADLINE = 90.0   # seconds the whole check may take; a slow decider leaves the rest of the facts as they are
+CALL_TIMEOUT = 30.0
+SUBJECT_CHARS = 200   # of the description, its first sentence at most: the subject, not everything the brain names
+QUESTION = ("Todo lo que guarda este brain trata de su tema. ¿Este hecho solo dice que algo pertenece al tema del brain, forma parte de "
+            "él o se relaciona con él, sin añadir nada más?")
+OPTIONS = ["Sí: solo repite el tema del brain", "No: dice algo más"]
+
+
+def _plain(s, n: int) -> str:
+    """Extracted text as the decider reads it: one line, cut, and with no angle brackets that could close its `<state>` block."""
+    return " ".join(str(s or "").split())[:n].replace("<", "‹").replace(">", "›")
+
+
+def enabled() -> bool:
+    """Whether the subject check (#465) runs at all: the instance setting `write_subject_check`, off by default."""
+    from . import appsettings
+    return appsettings.get("write_subject_check") == "yes"
+
+
+def may_judge(p) -> bool:
+    """Whether the decider may drop facts of this proposal (#465). Not those it never decides on its own in the triage either: a
+    correction, one with claims (it may replace facts: its new value must stay), a flagged possible secret, a distilled note."""
+    from .secretguard import flagged
+    try:
+        return not (p.kind == "correction" or p.claims or flagged(p.secret_findings) or (p.category or "") == "curator.distil")
+    except Exception:  # noqa: BLE001 — an odd stored value: the episode is in, so this must not fail it; nothing is judged
+        return False
+
+
+class Subject:
+    """The check of #465 for one ingestion: `judge(f)` returns the decider's verdict when a fact only restates the brain's subject
+    ({"prob": p}), or None to keep it. Says afterwards whether it was skipped for the budget (`skipped`) or failed (`error`)."""
+
+    def __init__(self, brain):
+        self.brain = brain
+        first = re.split(r"(?<=[.!?])\s|\n", (getattr(brain, "description", "") or "").strip(), maxsplit=1)[0][:SUBJECT_CHARS]
+        self.texts = [" ".join(str(x or "").lower().split()) for x in (getattr(brain, "name", ""), first)]
+        self.asked: dict[str, dict | None] = {}
+        self.calls, self.skipped, self.error, self._d, self.started = 0, None, False, False, None
+
+    def names(self, end) -> bool:
+        """The end names the brain's subject: its name, as a whole phrase, is in the brain's name or in the first sentence of its
+        description."""
+        n = " ".join(str(end or "").lower().split())
+        if len(n) < 3 or _name(n) in PLACEHOLDERS or _name(n) in META:
+            return False
+        return any(re.search(rf"(?<!\w){re.escape(n)}(?!\w)", t) for t in self.texts)
+
+    def _decider(self):
+        if self._d is False:
+            from .deciders_admin import default_decider
+            from .secretbox import unseal
+            from .store import _factory
+            with _factory()() as db:
+                d = default_decider(db)
+                self._d = d and {"base_url": d.base_url, "model": d.model, "key": unseal(d.api_key_enc), "threshold": d.threshold}
+        return self._d
+
+    def __call__(self, f: dict) -> dict | None:
+        if self.error or self.skipped or not (self.names(f.get("source")) or self.names(f.get("target"))):
+            return None
+        key = same_text(f.get("fact"))
+        if key in self.asked:
+            return self.asked[key]
+        if self.calls >= MAX_ASK or (self.started is not None and time.monotonic() - self.started > DEADLINE):
+            return None
+        from . import decider, usage
+        try:
+            d = self._decider()
+            if not d:
+                return None
+            if usage.paused(self.brain.id):   # the brain spent its AI budget: nothing more is asked
+                self.skipped = "budget" if self.calls == 0 else "budget_partial"
+                return None
+            self.calls += 1
+            self.started = time.monotonic() if self.started is None else self.started
+            b = self.brain
+            context = decider.scope(b.name, b.description or "") or f"Brain «{b.name}»"
+            state = decider.with_scope(f"Hecho: {_plain(f.get('fact'), 500)}\nExtremos: «{_plain(f.get('source'), 120)}» → «{_plain(f.get('target'), 120)}»", context)
+            with usage.scope(b.id, "decider"):
+                left = DEADLINE - (time.monotonic() - self.started)   # the last call also ends near the deadline
+                r = decider.decide(d["base_url"], d["model"], d["key"], state, QUESTION, OPTIONS, timeout=max(5.0, min(CALL_TIMEOUT, left)))
+            verdict = {"prob": float(r["prob"])} if r["index"] == 0 and r["prob"] >= max(d["threshold"], MIN_PROB) else None
+        except Exception:  # noqa: BLE001 — the fact stays; the ingestion goes on (an odd answer too)
+            log.warning("no se pudo consultar al decisor sobre un hecho ingerido", exc_info=True)
+            self.error = True
+            return None
+        self.asked[key] = verdict
+        return verdict
 
 
 def same_text(text) -> str:
@@ -66,10 +167,11 @@ def new_of(found: list[dict], episode: str, created: set[str]) -> list[dict]:
     return [f for f in found if f["uuid"] in created and list(f.get("episodes") or []) == [episode]]
 
 
-def decide(found: list[dict], episode: str, current: list[dict], created: set[str]) -> dict:
+def decide(found: list[dict], episode: str, current: list[dict], created: set[str], judge=None) -> dict:
     """What to do with the facts of an ingest report. `found`: the report's facts as read from the graph; `current`: the current facts
-    already in the brain between the ends of the new ones; `created`: the uuids graphiti created in this ingestion. Returns the uuids
-    to delete, the existing facts to link the episode to, and the entries of the report (each with the uuid it removes)."""
+    already in the brain between the ends of the new ones; `created`: the uuids graphiti created in this ingestion; `judge`: asked about
+    each new current fact that stays (see `Subject`). Returns the uuids to delete, the existing facts to link the episode to, and the
+    entries of the report (each with the uuid it removes)."""
     new = new_of(found, episode, created)
     ids = {f["uuid"] for f in new}
     # Graphiti looks for what a new fact invalidates in the whole brain, not only between its entities: when this episode invalidated
@@ -103,6 +205,16 @@ def decide(found: list[dict], episode: str, current: list[dict], created: set[st
             for e in collapsed:
                 if e["kept"] == uuid:   # its repeats end in the brain's fact too
                     e["kept"], e["with"], e["why"] = match["uuid"], "current", SAME_CURRENT
+    if judge and not replaced:   # #465, after the sure rules: what is left of the new current facts
+        by_uuid = {f["uuid"]: f for f in new}
+        for (_a, _b, _text, old), uuid in kept.items():
+            if old or uuid in gone or not (verdict := judge(by_uuid[uuid])):
+                continue
+            gone.append(uuid)
+            dropped.append({"uuid": uuid, "fact": by_uuid[uuid]["fact"], "rule": "subject", "why": SUBJECT, **verdict})
+            for e in [e for e in collapsed if e["kept"] == uuid]:   # its repeats in this episode go with it
+                collapsed.remove(e)
+                dropped.append({"uuid": e["uuid"], "fact": e["fact"], "rule": "subject", "why": SUBJECT, **verdict})
     return {"gone": gone, "link": sorted(set(link)), "collapsed": collapsed, "dropped": dropped}
 
 
@@ -118,9 +230,10 @@ def without_text(rep: dict) -> dict:
     return out
 
 
-def apply(brain, rep: dict, episode: str) -> None:
+def apply(brain, rep: dict, episode: str, judge=None) -> None:
     """Applies `decide` to the edges add_episode left in rep['_edges'] (and the ones it created, rep['_new_edges']), keeps in
-    rep['_edges'] only the ones that stay, and adds what it did to the ingest report. A failure here never fails the ingestion."""
+    rep['_edges'] only the ones that stay, and adds what it did to the ingest report. A failure here never fails the ingestion.
+    `judge`: the subject check (#465), by default the decider's (`Subject`) when `write_subject_check` is on; False: none."""
     created = set(rep.pop("_new_edges", None) or [])
     edges = rep.get("_edges") or []
     if not edges or not episode or not created:
@@ -132,7 +245,13 @@ def apply(brain, rep: dict, episode: str) -> None:
         new = [f for f in new_of(found, episode, created) if not _old(f)]
         ends = sorted({str(f[k]) for f in new for k in ("su", "tu")})
         current = rows(g.query(_CURRENT, {"ends": ends, "new": [f["uuid"] for f in new]})) if ends else []
-        out = decide(found, episode, current, created)
+        if judge is None:   # off: no decider call and nothing about it in the report
+            judge = Subject(brain) if enabled() else None
+        out = decide(found, episode, current, created, judge)
+        if getattr(judge, "skipped", None):
+            rep["subject_skipped"] = judge.skipped
+        if getattr(judge, "error", False):
+            rep["subject_error"] = True
         if not out["gone"]:
             return
         for u in out["link"]:   # first the link: a failure after it leaves a copy, never a fact without its episode

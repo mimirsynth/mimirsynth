@@ -169,7 +169,9 @@ def ingest_proposal(pid: int, job=None) -> str:
                     time.sleep(wait)
             from . import retirement, vocab_apply, write_quality
             created = list(rep.get("_new_edges") or [])   # both lists are consumed below; the retirement check reads what is left
-            write_quality.apply(brain, rep, uuid)   # repeats become one, trivial facts go (#458); never fails the ingestion
+            # repeats become one, trivial facts go (#458), and the decider judges what only restates the brain's subject (#465, not for a
+            # correction, claims, a flagged secret or a distilled note); never fails the ingestion
+            write_quality.apply(brain, rep, uuid, None if write_quality.may_judge(p) else False)
             kept = list(rep.get("_edges") or [])
             vocab_apply.apply(db, brain, rep)
             # a new fact saying an entity was retired or replaced queues a review of it (#455); never fails the ingestion

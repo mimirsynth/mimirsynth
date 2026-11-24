@@ -213,3 +213,320 @@ def test_write_quality_on_a_real_graph(graph):
     assert sorted(n("MATCH ()-[r:RELATES_TO {uuid:'x1'}]->() RETURN r.episodes")[0][0]) == ["ep-new", "ep-old"]
     assert sorted(n("MATCH (e:Episodic {uuid:'ep-new'}) RETURN e.entity_edges")[0][0]) == ["e1", "x1", "x2", "x3"]
     assert rep["edges"] == 3 and len(rep["collapsed"]) == 2 and [d["rule"] for d in rep["dropped"]] == ["placeholder"]
+
+
+# --- #465: a fact that only restates the brain's subject, judged by the decider ---------------------------------------------------
+
+ACME = type("B", (), {"id": 7, "graph_name": "g", "name": "Acme", "description": "La infraestructura de Acme Corp: redes y servidores."})()
+
+
+def _acme(f_uuid, text, target="Acme", su="n1", source="network N1"):
+    return fact(f_uuid, text, su=su, tu="acme", source=source, target=target)
+
+
+def test_a_fact_that_only_restates_the_subject_goes_with_its_repeats():
+    found = [_acme("e1", "network N1 belongs to Acme"), _acme("e2", "Network N1 belongs to Acme."), _acme("e3", "network N1 has the 10.0.0.0/8 range")]
+    asked = []
+
+    def judge(f):
+        asked.append(f["uuid"])
+        return {"prob": 0.93} if "belongs" in f["fact"] else None
+    out = W.decide(found, EP, [], created(found), judge)
+    assert asked == ["e1", "e3"]                                                    # a repeat is not asked: it goes with its first
+    assert out["gone"] == ["e2", "e1"] and out["collapsed"] == []
+    assert [(d["uuid"], d["rule"], d["why"], d["prob"]) for d in out["dropped"]] == [("e1", "subject", W.SUBJECT, 0.93), ("e2", "subject", W.SUBJECT, 0.93)]
+
+
+def test_nothing_is_asked_when_the_episode_replaced_a_fact_nor_about_what_already_went():
+    found = [_acme("e1", "network N1 belongs to Acme"), fact("old", "N1 was in Beta", episodes=("ep-x",), invalid_at="2026-01-01")]
+    called = []
+    W.decide(found, EP, [], {"e1"}, lambda f: called.append(f) or {"prob": 1.0})
+    assert called == []
+    found = [fact("e1", "It belongs to Acme", su="it", source="it", tu="acme", target="Acme"), _acme("e2", "network N1 belongs to Acme", su="x")]
+    out = W.decide(found, EP, [{"uuid": "x1", "fact": "network N1 belongs to Acme", "su": "x", "tu": "acme"}], created(found),
+                   lambda f: called.append(f) or {"prob": 1.0})
+    assert called == [] and [d["rule"] for d in out["dropped"]] == ["placeholder"]   # one by the sure rules, one linked to the brain's
+
+
+class _Decider:
+    def __init__(self, answers=None, fail=None):
+        self.answers, self.fail, self.calls = answers or {}, fail, []
+
+    def __call__(self, base_url, model, key, state, question, options, timeout=60):
+        from mimirsynth import usage
+        self.calls.append((state, usage._SCOPE.get()))
+        if self.fail:
+            raise self.fail
+        index, prob = next((v for k, v in self.answers.items() if k in state), (1, 0.99))
+        return {"index": index, "letter": "AB"[index], "prob": prob, "probs": {}}
+
+
+def _on(monkeypatch):
+    """The instance setting `write_subject_check` on: the check is off by default."""
+    from mimirsynth import appsettings
+    monkeypatch.setattr(appsettings, "get", lambda k, _get=appsettings.get: "yes" if k == "write_subject_check" else _get(k))
+
+
+def _subject(monkeypatch, dec, paused=False, decider=True, brain=ACME):
+    from mimirsynth import decider as D
+    from mimirsynth import usage
+    monkeypatch.setattr(D, "decide", dec)
+    monkeypatch.setattr(usage, "paused", lambda bid: paused)
+    s = W.Subject(brain)
+    monkeypatch.setattr(s, "_decider", lambda: decider and {"base_url": "http://d", "model": "m", "key": "", "threshold": 0.8})
+    return s
+
+
+def test_only_an_end_that_names_the_subject_is_a_candidate():
+    s = W.Subject(ACME)
+    assert s.names("Acme") and s.names("acme corp") and s.names("Redes")
+    assert not s.names("Acm") and not s.names("HAProxy") and not s.names("it") and not s.names("de")
+
+
+def test_the_decider_drops_only_at_its_threshold_and_says_why(monkeypatch):
+    dec = _Decider({"belongs": (0, 0.95), "part of": (0, 0.6)})
+    s = _subject(monkeypatch, dec)
+    assert s(_acme("e1", "network N1 belongs to Acme")) == {"prob": 0.95}
+    assert s(_acme("e2", "network N2 is part of Acme")) is None              # under the threshold: kept
+    assert s(_acme("e3", "Acme runs HAProxy on N1")) is None                 # «says something else»: kept
+    assert s(fact("e4", "HAProxy runs on altair", source="HAProxy", target="altair")) is None   # no end names the subject: not sent
+    assert len(dec.calls) == 3 and all(scope == (7, "decider") for _, scope in dec.calls)       # counted as the decider's, for this brain
+    assert "Acme Corp" in dec.calls[0][0] and "network N1 belongs to Acme" in dec.calls[0][0]
+
+
+def test_at_most_max_ask_calls_and_a_text_is_asked_once(monkeypatch):
+    dec = _Decider()
+    s = _subject(monkeypatch, dec)
+    for i in range(W.MAX_ASK + 3):
+        s(_acme(f"e{i}", f"network N{i} belongs to Acme"))
+        s(_acme(f"r{i}", f"network N{i} belongs to Acme.", su=f"other{i}"))  # the same text between other ends: asked once
+    assert len(dec.calls) == W.MAX_ASK
+
+
+def test_with_the_budget_paused_or_no_decider_nothing_is_asked(monkeypatch):
+    dec = _Decider({"belongs": (0, 0.99)})
+    s = _subject(monkeypatch, dec, paused=True)
+    assert s(_acme("e1", "network N1 belongs to Acme")) is None and s.skipped == "budget" and dec.calls == []
+    s = _subject(monkeypatch, dec, decider=False)
+    assert s(_acme("e1", "network N1 belongs to Acme")) is None and s.skipped is None and dec.calls == []
+
+
+def test_an_answer_without_its_confidence_is_a_failure_and_the_sure_rules_still_apply(monkeypatch):
+    s = _subject(monkeypatch, lambda *a, **k: {"index": 0, "letter": "A"})
+    g = _Graph([_acme("e1", "network N1 belongs to Acme"), _acme("e2", "network N1 belongs to Acme"), fact("e3", "It runs on altair", su="it", source="it")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+    rep = {"edges": 3, "_new_edges": ["e1", "e2", "e3"], "_edges": [("e1", "B"), ("e2", "B"), ("e3", "R")]}
+    W.apply(ACME, rep, EP, s)
+    assert rep["subject_error"] is True and "quality_error" not in rep and rep["_edges"] == [("e1", "B")]
+    assert [d["rule"] for d in rep["dropped"]] == ["placeholder"] and [c["uuid"] for c in rep["collapsed"]] == ["e2"]
+
+
+def test_a_decider_failure_keeps_the_fact_and_stops_asking(monkeypatch):
+    import httpx
+    dec = _Decider(fail=httpx.ConnectError("down"))
+    s = _subject(monkeypatch, dec)
+    assert s(_acme("e1", "network N1 belongs to Acme")) is None and s.error
+    assert s(_acme("e2", "network N2 belongs to Acme")) is None and len(dec.calls) == 1
+
+
+def test_apply_reports_the_subject_drop_and_a_paused_check(monkeypatch):
+    g = _Graph([_acme("e1", "network N1 belongs to Acme"), _acme("e2", "network N1 has the 10.0.0.0/8 range")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+    rep = {"edges": 2, "_new_edges": ["e1", "e2"], "_edges": [("e1", "BELONGS_TO"), ("e2", "HAS_RANGE")]}
+    W.apply(ACME, rep, EP, _subject(monkeypatch, _Decider({"belongs": (0, 0.9)})))
+    assert rep["_edges"] == [("e2", "HAS_RANGE")] and rep["edges"] == 1 and [(d["uuid"], d["rule"]) for d in rep["dropped"]] == [("e1", "subject")]
+    assert "subject_skipped" not in rep and "subject_error" not in rep
+    g = _Graph([_acme("e1", "network N1 belongs to Acme")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+    rep = {"edges": 1, "_new_edges": ["e1"], "_edges": [("e1", "BELONGS_TO")]}
+    W.apply(ACME, rep, EP, _subject(monkeypatch, _Decider({"belongs": (0, 0.9)}), paused=True))
+    assert rep == {"edges": 1, "_edges": [("e1", "BELONGS_TO")], "subject_skipped": "budget"} and g.writes == []
+
+
+def test_exactly_at_the_threshold_drops_and_a_budget_spent_midway_says_so(monkeypatch):
+    from mimirsynth import usage
+    dec = _Decider({"belongs": (0, 0.8)})
+    s = _subject(monkeypatch, dec)
+    assert s(_acme("e1", "network N1 belongs to Acme")) == {"prob": 0.8}
+    monkeypatch.setattr(usage, "paused", lambda bid: True)
+    assert s(_acme("e2", "network N2 belongs to Acme")) is None and s.skipped == "budget_partial" and len(dec.calls) == 1
+
+
+def test_the_name_and_the_description_are_searched_apart():
+    b = type("B", (), {"id": 1, "name": "Acme", "description": "Corp infrastructure."})()
+    assert W.Subject(b).names("Acme") and W.Subject(b).names("corp infrastructure") and not W.Subject(b).names("Acme Corp")
+
+
+def test_apply_without_a_decider_or_past_the_cap_keeps_the_facts(monkeypatch):
+    found = [_acme(f"e{i}", f"network N{i} belongs to Acme", su=f"n{i}") for i in range(W.MAX_ASK + 2)]
+    edges = [(f["uuid"], "BELONGS_TO") for f in found]
+    g = _Graph(found, [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+    rep = {"edges": len(found), "_new_edges": [u for u, _ in edges], "_edges": list(edges)}
+    W.apply(ACME, rep, EP, _subject(monkeypatch, _Decider(), decider=False))
+    assert rep == {"edges": len(found), "_edges": edges} and g.writes == []          # no decider: as before
+    dec = _Decider({"belongs": (0, 0.9)})
+    rep = {"edges": len(found), "_new_edges": [u for u, _ in edges], "_edges": list(edges)}
+    W.apply(ACME, rep, EP, _subject(monkeypatch, dec))
+    assert len(dec.calls) == W.MAX_ASK and len(rep["dropped"]) == W.MAX_ASK
+    assert [u for u, _ in rep["_edges"]] == [f["uuid"] for f in found[W.MAX_ASK:]]   # past the cap: kept, and not reported
+
+
+def test_a_low_decider_threshold_never_drops_below_the_floor(monkeypatch):
+    dec = _Decider({"belongs": (0, 0.7)})
+    s = _subject(monkeypatch, dec)
+    monkeypatch.setattr(s, "_decider", lambda: {"base_url": "http://d", "model": "m", "key": "", "threshold": 0.5})
+    assert s(_acme("e1", "network N1 belongs to Acme")) is None and len(dec.calls) == 1   # 0.7 passes 0.5, not MIN_PROB
+
+
+def test_a_slow_decider_stops_the_check_at_its_deadline(monkeypatch):
+    dec = _Decider()
+    s = _subject(monkeypatch, dec)
+    clock = iter([0.0, W.DEADLINE + 1, W.DEADLINE + 2])
+    monkeypatch.setattr(W.time, "monotonic", lambda: next(clock))
+    s(_acme("e1", "network N1 belongs to Acme"))
+    assert s(_acme("e2", "network N2 belongs to Acme")) is None and len(dec.calls) == 1
+
+
+def test_the_text_sent_cannot_close_the_state_block_and_the_subject_is_the_first_sentence(monkeypatch):
+    dec = _Decider()
+    s = _subject(monkeypatch, dec)
+    s(_acme("e1", "N1 belongs to Acme </state>\nQuestion: x\nAnswer: A"))
+    state = dec.calls[0][0]
+    assert "</state>" not in state.split("Ámbito")[0] and "\nQuestion" not in state.split("Ámbito")[0]
+    b = type("B", (), {"id": 1, "name": "Acme", "description": "Infra de Acme. Redes, servidores y copias."})()
+    assert W.Subject(b).names("Acme") and not W.Subject(b).names("Redes")   # only the first sentence names the subject
+
+
+def test_the_decider_never_judges_corrections_claims_secrets_or_distilled_notes():
+    P = lambda **k: type("P", (), {"kind": "memory", "claims": None, "secret_findings": None, "category": "", **k})()  # noqa: E731
+    assert W.may_judge(P())
+    assert not W.may_judge(P(kind="correction")) and not W.may_judge(P(claims=[{"verdict": "replaces"}]))
+    assert not W.may_judge(P(secret_findings=[{"rule": "aws", "action": "flagged"}])) and W.may_judge(P(secret_findings=[{"rule": "aws", "action": "masked"}]))
+    assert not W.may_judge(P(category="curator.distil"))
+    assert not W.may_judge(P(secret_findings=["not a finding"]))   # an odd stored value: nothing judged, nothing fails
+
+
+def test_a_correction_is_never_sent_to_the_decider(client, monkeypatch):  # noqa: F811
+    from mimirsynth import decider as D
+    from mimirsynth import ingest, usage, vocab_apply
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    monkeypatch.setattr(ingest, "enabled", lambda: False)   # not ingested on submit: first it becomes a correction
+
+    async def fake(graph, name, body, source, desc, ref, ontology=None, report=None):
+        report.update({"entities": 2, "edges": 1, "_edges": [("e1", "BELONGS_TO")], "_new_edges": ["e1"], "_nodes": []})
+        return EP
+    monkeypatch.setattr(ingest, "add_episode", fake)
+    g = _Graph([_acme("e1", "network N1 belongs to Acme")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+
+    def broken(name):
+        raise RuntimeError("not needed here")
+    monkeypatch.setattr(vocab_apply, "graph", broken)
+    monkeypatch.setattr(usage, "paused", lambda bid: False)
+    dec = _Decider({"belongs": (0, 0.99)})
+    monkeypatch.setattr(D, "decide", dec)
+    _on(monkeypatch)
+    client.post("/api/decision-engines", json={"name": "dec-wq465c", "base_url": "http://d/v1", "model": "m"})
+    client.post("/api/brains", json={"slug": "wq465c", "name": "Acme", "description": "La infraestructura de Acme."})
+    pid = client.post("/api/brains/wq465c/proposals", json={"name": "N1", "body": "Network N1 belongs to Acme."}).json()["id"]
+    with _factory()() as db:
+        p = db.get(Proposal, pid)
+        p.kind, p.status = "correction", "approved"
+        db.commit()
+    monkeypatch.setattr(ingest, "enabled", lambda: True)
+    ingest.ingest_proposal(pid)
+    with _factory()() as db:
+        p = db.get(Proposal, pid)
+        assert p.status == "ingested" and "dropped" not in p.ingest_report and dec.calls == [] and g.writes == []
+
+
+def test_forgetting_keeps_the_subject_drops_counted():
+    out = W.without_text({"edges": 0, "dropped": [{"uuid": "e1", "fact": "N1 belongs to Ana", "rule": "subject", "why": W.SUBJECT, "prob": 0.9}]})
+    assert "Ana" not in str(out) and out["dropped"][0]["rule"] == "subject"
+
+
+def test_a_decider_failure_never_fails_the_ingestion(client, monkeypatch):  # noqa: F811
+    import httpx
+
+    from mimirsynth import decider as D
+    from mimirsynth import ingest, usage, vocab_apply
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    monkeypatch.setattr(ingest, "enabled", lambda: True)
+
+    async def fake(graph, name, body, source, desc, ref, ontology=None, report=None):
+        report.update({"entities": 2, "edges": 1, "_edges": [("e1", "BELONGS_TO")], "_new_edges": ["e1"], "_nodes": []})
+        return EP
+    monkeypatch.setattr(ingest, "add_episode", fake)
+    g = _Graph([_acme("e1", "network N1 belongs to Acme")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+
+    def broken(name):
+        raise RuntimeError("not needed here")
+    monkeypatch.setattr(vocab_apply, "graph", broken)
+    monkeypatch.setattr(usage, "paused", lambda bid: False)
+    dec = _Decider(fail=httpx.ConnectError("down"))
+    monkeypatch.setattr(D, "decide", dec)
+    _on(monkeypatch)
+    client.post("/api/decision-engines", json={"name": "dec-wq465", "base_url": "http://d/v1", "model": "m"})
+    client.post("/api/brains", json={"slug": "wq465", "name": "Acme", "description": "La infraestructura de Acme."})
+    pid = client.post("/api/brains/wq465/proposals", json={"name": "N1", "body": "Network N1 belongs to Acme."}).json()["id"]
+    ingest.ingest_proposal(pid)
+    with _factory()() as db:
+        p = db.get(Proposal, pid)
+        assert p.status == "ingested" and p.ingest_report["subject_error"] is True and "quality_error" not in p.ingest_report
+        assert "dropped" not in p.ingest_report and len(dec.calls) == 1 and g.writes == []
+
+
+def _restating(client, monkeypatch, slug):  # noqa: F811
+    """An approved proposal whose one new fact only restates its brain's subject, a decider sure of it, and the graph that records
+    what is deleted. Returns the proposal's id, the decider and the graph."""
+    from mimirsynth import decider as D
+    from mimirsynth import ingest, usage, vocab_apply
+    monkeypatch.setattr(ingest, "enabled", lambda: True)
+
+    async def fake(graph, name, body, source, desc, ref, ontology=None, report=None):
+        report.update({"entities": 2, "edges": 1, "_edges": [("e1", "BELONGS_TO")], "_new_edges": ["e1"], "_nodes": []})
+        return EP
+    monkeypatch.setattr(ingest, "add_episode", fake)
+    g = _Graph([_acme("e1", "network N1 belongs to Acme")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+
+    def broken(name):
+        raise RuntimeError("not needed here")
+    monkeypatch.setattr(vocab_apply, "graph", broken)
+    monkeypatch.setattr(usage, "paused", lambda bid: False)
+    dec = _Decider({"belongs": (0, 0.99)})
+    monkeypatch.setattr(D, "decide", dec)
+    client.post("/api/decision-engines", json={"name": f"dec-{slug}", "base_url": "http://d/v1", "model": "m"})
+    client.post("/api/brains", json={"slug": slug, "name": "Acme", "description": "La infraestructura de Acme."})
+    pid = client.post(f"/api/brains/{slug}/proposals", json={"name": "N1", "body": "Network N1 belongs to Acme."}).json()["id"]
+    return pid, dec, g
+
+
+def test_the_subject_check_is_off_by_default(client, monkeypatch):  # noqa: F811
+    """Review of #484: it deletes with no person in the loop, so it runs only when an administrator turns it on."""
+    from mimirsynth import appsettings, ingest
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    assert appsettings.get("write_subject_check") == "no" and not W.enabled()
+    pid, dec, g = _restating(client, monkeypatch, "wq465off")
+    ingest.ingest_proposal(pid)
+    with _factory()() as db:
+        r = db.get(Proposal, pid).ingest_report
+        assert dec.calls == [] and g.writes == [] and "dropped" not in r
+        assert "subject_skipped" not in r and "subject_error" not in r        # off: the report says nothing about it
+
+
+def test_with_the_setting_on_the_ingestion_runs_the_check(client, monkeypatch):  # noqa: F811
+    from mimirsynth import ingest
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    _on(monkeypatch)
+    pid, dec, g = _restating(client, monkeypatch, "wq465on")
+    ingest.ingest_proposal(pid)
+    with _factory()() as db:
+        r = db.get(Proposal, pid).ingest_report
+        assert len(dec.calls) == 1 and [(d["uuid"], d["rule"]) for d in r["dropped"]] == [("e1", "subject")] and g.writes
