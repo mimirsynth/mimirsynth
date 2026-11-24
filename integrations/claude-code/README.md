@@ -60,7 +60,7 @@ MimirSynth can show a row in Claude Code's status line, so you can tell what the
 ```
 ● mimirsynth  my-brain · contributor · capture off · recall: 4 facts
 ```
-- **The dot:** green when the last call worked, amber when the recall token expires within 7 days (the row says how many), red when MimirSynth could not be reached (`offline`), rejected the token or failed (`server error`, `unexpected answer`), grey before anything was asked.
+- **The dot:** green when the last call worked, amber when the recall token expires within 7 days (the row says how many), red when MimirSynth could not be reached (`offline`), rejected the token or failed (`server error`, `unexpected answer`), grey before anything was asked (`ready`: the role came from the hour's cache and nothing at this start reached the server).
 - **Then:** the brain, the recall token's role, the capture mode and the drafts waiting, and **what the memory last did**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. A failed recall shows here instead of passing unnoticed, and the prompt still carries on.
 
 A plugin cannot add a status line by itself. `/mimirsynth:setup` offers it, or run:

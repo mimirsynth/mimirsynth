@@ -52,7 +52,7 @@ MimirSynth puede mostrar una fila en la línea de estado de Claude Code, para sa
 ```
 ● mimirsynth  mi-brain · contributor · capture off · recall: 4 facts
 ```
-- **El punto:** verde si la última llamada salió bien, ámbar si el token de recall caduca en menos de 7 días (la fila dice cuántos), rojo si no se pudo llegar a MimirSynth (`offline`), rechazó el token o falló (`server error`, `unexpected answer`), gris si aún no se preguntó nada.
+- **El punto:** verde si la última llamada salió bien, ámbar si el token de recall caduca en menos de 7 días (la fila dice cuántos), rojo si no se pudo llegar a MimirSynth (`offline`), rechazó el token o falló (`server error`, `unexpected answer`), gris si aún no se preguntó nada (`ready`: el rol salió de la caché de la hora y nada en este inicio llegó al servidor).
 - **Después:** el brain, el rol del token de recall, el modo de captura y los borradores en espera, y **lo último que hizo la memoria**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. Un recall que falla se ve aquí en vez de pasar inadvertido, y el prompt sigue adelante igual.
 
 Un plugin no puede añadir una línea de estado por sí solo. `/mimirsynth:setup` lo ofrece, o ejecuta:

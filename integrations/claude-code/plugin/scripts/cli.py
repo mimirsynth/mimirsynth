@@ -249,14 +249,12 @@ def _save_settings(s: dict) -> bool:
         p.parent.mkdir(parents=True, exist_ok=True)
         tmp = p.with_name(f".{p.name}.mimirsynth.{os.getpid()}.tmp")
         try:
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-                f.write(json.dumps(s, indent=2, ensure_ascii=False) + "\n")
-            os.chmod(tmp, mode)
+            with os.fdopen(mimir._create(tmp), "wb") as f:   # owner-only until it replaces the file, then the file's own mode
+                f.write((json.dumps(s, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
             os.replace(tmp, p)
+            os.chmod(p, mode)
         finally:
-            if tmp.exists():
-                tmp.unlink()
+            mimir._drop(tmp)
     except OSError as e:
         print(f"{_settings_path()} could not be written, and it was left as it is: {e}")
         return False

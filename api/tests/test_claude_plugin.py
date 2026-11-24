@@ -454,3 +454,30 @@ def test_reserved_names_are_never_a_session_and_leftovers_go(plugin, monkeypatch
 def test_a_token_that_expires_today_says_so(plugin):
     soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3 * 3600))
     assert plugin.line.row({"brain": "b1", "role": "reader", "expires_at": soon, "health": "ok"}, colour=False).endswith("reader · token expires today")
+
+
+def test_a_cached_whoami_no_call_confirmed_is_ready_not_green(plugin, monkeypatch, capsys):
+    """QA, second pass: with news off (or a resumed session) nothing at the start reaches the server, so the row does not claim it."""
+    _configure(monkeypatch, news="off")
+    plugin.answers["/brains/b1/whoami"] = {"role": "reader", "token": {}}
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    assert _row(plugin, "s1").endswith("connected")                                         # asked now: it answered
+    _run(plugin, "session-start", {"session_id": "s2"}, capsys)
+    st = plugin.line.current("s2", plugin.tmp / "status")
+    assert _row(plugin, "s2").endswith("reader · capture off · ready") and plugin.line.health(st) == "grey"
+
+
+def test_a_setup_during_the_session_shows_at_the_next_prompt_even_without_a_recall(plugin, monkeypatch, capsys):
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    _configure(monkeypatch)
+    _run(plugin, "prompt", {"prompt": "hi", "session_id": "s1"}, capsys)                      # too short to recall
+    assert _row(plugin, "s1") == "● mimirsynth  b1 · capture off · configured" and plugin.calls == []
+
+
+def test_odd_values_never_reach_the_row(plugin, monkeypatch, capsys):
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/recall"] = {"context": 5, "facts": "abc"}
+    _run(plugin, "prompt", {"prompt": "where does the database run now?", "session_id": "s1"}, capsys)
+    assert _row(plugin, "s1").endswith("recall: nothing relevant")
+    line = plugin.line.row({"brain": "b‮1​", "capture": "off", "drafts": True, "action": "x y"}, colour=False)
+    assert line == "● mimirsynth  b1 · capture off · xy"

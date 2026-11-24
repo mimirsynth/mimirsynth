@@ -23,6 +23,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 import urllib.request  # noqa: F401  (the library calls urllib.request.urlopen; tests replace it here)
 from pathlib import Path
 
@@ -128,8 +129,29 @@ FIELD_CHARS = 80
 
 
 def clean(v, n: int = FIELD_CHARS):
-    """A text for the row: no control characters (a server could send terminal escapes or new lines), at most `n` characters."""
-    return _CONTROL.sub("", str(v))[:n] if isinstance(v, str) else v
+    """A text for the row: no control characters (a server could send terminal escapes or new lines) nor invisible ones (a
+    right-to-left override would show it reversed), at most `n` characters."""
+    if not isinstance(v, str):
+        return v
+    return "".join(c for c in _CONTROL.sub("", v) if unicodedata.category(c) not in ("Cf", "Zl", "Zp"))[:n]
+
+
+def _create(path: Path):
+    """A new temporary file, never through a link someone left at its name: created exclusively, an old leftover removed first."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
+    try:
+        return os.open(path, flags, 0o600)
+    except FileExistsError:
+        path.unlink()
+        return os.open(path, flags, 0o600)
+
+
+def _drop(path: Path) -> None:
+    try:
+        if path.exists() or path.is_symlink():
+            path.unlink()
+    except OSError:
+        pass
 
 
 def ident(v) -> str:
@@ -153,13 +175,11 @@ def _write_json(path: Path, data: dict) -> None:
         pass
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(json.dumps(data, ensure_ascii=False))
+        with os.fdopen(_create(tmp), "wb") as f:
+            f.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
         os.replace(tmp, path)   # the status line never reads a half-written file
     finally:
-        if tmp.exists():   # the replace failed (on Windows, while the status line reads the file): no leftover
-            tmp.unlink()
+        _drop(tmp)   # the replace failed (on Windows, while the status line reads the file): no leftover
 
 
 def _read_json(path: Path) -> dict:
@@ -168,6 +188,16 @@ def _read_json(path: Path) -> dict:
     except Exception:  # noqa: BLE001
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def configured_here(session: str, fields: dict) -> None:
+    """After a setup made during the session: the row stops saying «not configured» at the next prompt, recalled or not."""
+    try:
+        name = session if SESSION.fullmatch(session or "") else ""
+        if name and _read_json(status_dir() / f"{name}.json").get("configured") is False:
+            status(name, **fields, health=None, action="configured")
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def status(session: str, **fields) -> None:
@@ -211,14 +241,15 @@ def prune_status(now: float | None = None) -> None:
 
 def whoami() -> dict:
     """The recall token's role and expiry, from /whoami, asked at most once every WHOAMI_HOURS per server, brain and token. On a
-    failure: {"health": "offline" | "rejected" | "error", "why": what happened} and nothing cached, so the next start asks again. Never raises."""
+    failure: {"health": "offline" | "rejected" | "error", "why": what happened} and nothing cached. From the cache, "cached": True:
+    nothing was asked, so the caller cannot say the server answered, so the next start asks again. Never raises."""
     token = cfg("token") or ""
     key = hashlib.sha256(f"{cfg('url')}|{cfg('brain')}|{token}".encode()).hexdigest()[:16]
     cache = status_dir() / "_whoami.json"
     known = _read_json(cache).get(key)
     try:
         if isinstance(known, dict) and time.time() - float(known.get("at") or 0) < WHOAMI_HOURS * 3600:
-            return {"role": clean(known.get("role")), "expires_at": clean(known.get("expires_at")), "health": "ok"}
+            return {"role": clean(known.get("role")), "expires_at": clean(known.get("expires_at")), "health": "ok", "cached": True}
     except (TypeError, ValueError):   # a damaged cache: asked again
         pass
     try:
@@ -267,13 +298,11 @@ def install_statusline() -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
     try:
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
+        with os.fdopen(_create(tmp), "wb") as f:
             f.write(STATUSLINE.read_bytes())
         os.replace(tmp, dst)
     finally:
-        if tmp.exists():
-            tmp.unlink()
+        _drop(tmp)
 
 
 def refresh_statusline() -> None:

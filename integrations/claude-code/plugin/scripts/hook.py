@@ -56,6 +56,7 @@ def _row() -> dict:
             return {**row, "action": "recall off"}
         row.update(mimir.whoami())
         why = row.pop("why", None)
+        row["cached"] = row.pop("cached", False)
         row["action"] = ("connected" if mimir.cfg("recall") else "recall off") if row["health"] == "ok" else why or _WHY[row["health"]]
         return row
     except Exception:  # noqa: BLE001  (the row never stops the session start)
@@ -116,6 +117,8 @@ def session_start(data: dict) -> None:
                 messages.append(_auth_message(e))
         except Exception as e:  # noqa: BLE001
             _failed(row, e)
+    if row.pop("cached", False) and row.get("health") == "ok" and row.get("action") == "connected":
+        row["health"], row["action"] = None, "ready"   # /whoami came from the cache and nothing at this start reached the server
     mimir.status(sid, **row)
     _out("\n".join(context), "SessionStart", " ".join(messages))
 
@@ -127,10 +130,12 @@ def prompt(data: dict) -> None:
         if not rec.get("first_prompt"):
             rec.update(first_prompt=mimir.redact(text[:1500]), cwd=data.get("cwd"), project=Path(data.get("cwd") or ".").name)
             mimir.save(rec)
-    if not (mimir.configured() and mimir.cfg("recall")) or len(text) < 12 or text.startswith("/"):
-        return
     sid = data.get("session_id") or ""
     here = {"configured": True, "brain": mimir.cfg("brain"), "capture": mimir.capture_mode()}   # also after a setup in this session
+    if mimir.configured():
+        mimir.configured_here(sid, here)
+    if not (mimir.configured() and mimir.cfg("recall")) or len(text) < 12 or text.startswith("/"):
+        return
     try:
         r = mimir.call("POST", "/recall", body={"query": text[:1500], "facts": 6, "chunks": 3, "max_chars": int(mimir.cfg("max_chars"))},
                        token=mimir.cfg("token"))
@@ -142,7 +147,8 @@ def prompt(data: dict) -> None:
         if isinstance(e, mimir.ApiError) and e.status in (401, 403):   # an expired or revoked token is also said in the conversation
             _out(message=f"MimirSynth could not recall: {e.detail}")
         return
-    ctx = (r.get("context") or "").strip()
+    ctx = r.get("context") if isinstance(r.get("context"), str) else ""
+    ctx = ctx.strip()
     facts, passages = mimir.count(r.get("facts")), mimir.count(r.get("chunks")) + mimir.count(r.get("documents"))
     found = [f"{facts} fact{'' if facts == 1 else 's'}" if facts else "", f"{passages} passage{'' if passages == 1 else 's'}" if passages else ""]
     mimir.status(sid, **here, health="ok",

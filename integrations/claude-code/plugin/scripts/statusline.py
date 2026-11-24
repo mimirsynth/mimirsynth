@@ -18,6 +18,7 @@ import os
 import re
 import sys
 import time
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -56,7 +57,7 @@ def days_left(expires_at, now: float | None = None) -> int | None:
 
 def _text(v, n: int = FIELD_CHARS) -> str:
     """A field as printed: a file someone else wrote could hold terminal escapes or new lines; the row has neither."""
-    return _CONTROL.sub("", str(v))[:n]
+    return "".join(c for c in _CONTROL.sub("", str(v)) if unicodedata.category(c) not in ("Cf", "Zl", "Zp"))[:n]
 
 
 def health(s: dict, now: float | None = None) -> str:
@@ -84,7 +85,7 @@ def row(s: dict, colour: bool = True, now: float | None = None) -> str:
                                          else " · token expires today" if left == 0
                                          else f" · token expires in {left} day{'' if left == 1 else 's'}"))
     if s.get("capture"):
-        n = s.get("drafts") if isinstance(s.get("drafts"), int) else 0
+        n = s.get("drafts") if isinstance(s.get("drafts"), int) and not isinstance(s.get("drafts"), bool) else 0
         parts.append(f"capture {_text(s['capture'], 16)}" + (f" · {n} draft{'' if n == 1 else 's'}" if n > 0 else ""))
     if s.get("action"):
         parts.append(_text(s["action"]))
