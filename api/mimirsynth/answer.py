@@ -119,8 +119,10 @@ def evidence(out: dict) -> tuple[list[dict], str]:
         ref = f"D{i}"
         where = p["title"] + (f" › {p['heading_path']}" if p.get("heading_path") else "")
         sources.append({"ref": ref, "kind": "document", "id": p["document_id"], "chunk": p.get("chunk_idx"), "title": where,
-                        "text": (p.get("text") or "")[:300], "origin": p.get("origin"), **({"superseded": _superseded(p)} if p.get("superseded") else {})})
-        lines.append(f"[{ref}] document passage «{_clean(where)}»{_superseded_line(p)}: {_clean(p.get('text') or '')}")
+                        "text": (p.get("text") or "")[:300], "origin": p.get("origin"), **({"superseded": _superseded(p)} if p.get("superseded") else {}),
+                        **({"transcript": True} if p.get("transcript") else {})})
+        kind = "chat conversation passage" if p.get("transcript") else "document passage"   # what was said in a chat, not documentation (#466)
+        lines.append(f"[{ref}] {kind} «{_clean(where)}»{_superseded_line(p)}: {_clean(p.get('text') or '')}")
     return sources, "\n".join(lines)
 
 

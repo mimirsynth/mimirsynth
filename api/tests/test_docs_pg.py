@@ -119,6 +119,32 @@ def test_recall_includes_documents_with_budget_and_threshold(client, monkeypatch
     client.post("/api/brains/pr/delete", json={"confirm": "pr"})
 
 
+def test_a_transcript_ranks_below_a_document_of_equal_relevance(client):
+    """#466: a chat transcript is held out of the index until a person asks; indexed as a conversation, its passage comes after a
+    document's passage with the very same words (same vector, same full-text rank), and recall says what it is."""
+    client.post("/api/brains", json={"slug": "tr", "name": "TR", "graph_name": "g-tr"})
+    lines = [f"[10:{i:02d}] {'Ana' if i % 2 else 'Luis'}: el nodo de copias {i} vuelve a responder tras el reinicio" for i in range(8)]
+    chat = up(client, "tr", "chat.txt", "\n".join(lines) + "\n")                                    # uploaded first: the older one
+    same = up(client, "tr", "chat.txt", "\n".join(lines[:-2] + lines[-1:] + lines[-2:-1]) + "\n")   # same words, another order
+    for d in (chat, same):
+        assert client.get(f"/api/brains/tr/docs/{d['id']}").json()["status"] == "transcript"
+    q = {"q": "nodo de copias reinicio"}
+    assert client.get("/api/brains/tr/docs/search", params=q).json()["results"] == []             # held: nothing in the index
+    assert client.post(f"/api/brains/tr/docs/{chat['id']}/transcript", json={"as": "transcript"}).status_code == 200
+    assert client.post(f"/api/brains/tr/docs/{same['id']}/transcript", json={"as": "document"}).status_code == 200
+    r = client.get("/api/brains/tr/docs/search", params=q).json()["results"]
+    assert [x["document_id"] for x in r] == [same["id"], chat["id"]] and r[0]["similarity"] == r[1]["similarity"]
+    from mimirsynth import docindex, recall
+    from mimirsynth.models import Brain
+    from mimirsynth.store import _factory
+    with _factory()() as db:
+        bid = db.query(Brain).filter(Brain.slug == "tr").one().id
+    hits = docindex.search(bid, vec(q["q"]), q["q"], 6)
+    assert [h["transcript"] for h in hits] == [False, True] and hits[0]["score"] > hits[1]["score"]
+    assert "conversación de chat" in recall.docs_block(hits[1:], "es") and "conversación" not in recall.docs_block(hits[:1], "es")
+    client.post("/api/brains/tr/delete", json={"confirm": "tr"})
+
+
 def test_mentions_phrase_search_and_isolation(client):
     client.post("/api/brains", json={"slug": "mn-a", "name": "A", "graph_name": "g-mn-a"})
     client.post("/api/brains", json={"slug": "mn-b", "name": "B", "graph_name": "g-mn-b"})
