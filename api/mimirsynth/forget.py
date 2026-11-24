@@ -38,6 +38,7 @@ router = APIRouter(prefix="/api/brains/{slug}/forget")
 KIND = "forget.run"
 MAX_ITEMS = 200       # items listed per layer to review
 MAX_ROWS = 200_000    # rows read per table or graph query
+MAX_TEXT = 500_000_000   # characters of stored document text read to find documents with no chunks
 MAX_REWRITES = 50     # episodes the LLM writes again in one deletion; the rest are deleted without a rewrite
 MIN_TERM = 3
 GONE = "[olvidado]"
@@ -158,9 +159,22 @@ def _documents(db, brain_id: int, m: Matcher) -> dict[int, int]:
 def _named_documents(db, brain_id: int, m: Matcher, docs: dict[int, int]) -> dict[int, int]:
     """Adds the documents whose title or file name names it, or whose stored text does when it has no chunks to search."""
     from .models import Document
-    for d in db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status != "deleted")):
-        if d.id not in docs and (m(d.title) or m(d.filename) or (d.chunks == 0 and d.status != "blocked" and m(_stored_text(d)))):
+    for d in db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status != "deleted").limit(MAX_ROWS)):
+        if d.id not in docs and (m(d.title) or m(d.filename)):
             docs[d.id] = 0
+    chunkless = select(Document).where(Document.brain_id == brain_id, Document.chunks == 0, Document.text_ref != "",
+                                       Document.status.not_in(("deleted", "blocked")))
+    read = 0
+    for d in db.scalars(chunkless.limit(MAX_ROWS)):
+        if d.id in docs:
+            continue
+        text = _stored_text(d)
+        read += len(text)
+        if m(text):
+            docs[d.id] = 0
+        if read > MAX_TEXT:
+            log.warning("forget: stopped reading stored document texts after %d characters", read)
+            break
     return docs
 
 

@@ -415,7 +415,7 @@ def _scan_git(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         sha = hashlib.sha256(data).hexdigest()
         ext = docstore.ext_of(path)
         meta = {"repo": gitsource.web_base(url) or url, "branch": branch or None, "commit": head.commit, "blob": blob, "path": path, "title_auto": False,
-                **transcripts.kept(doc.meta if doc else None)}
+                **transcripts.kept(transcripts.fresh(db, doc))}
         link = gitsource.web_link(url, head.commit, path) or ""
         if doc:
             old_dir = docstore.doc_dir(doc.brain_id, doc.source_id, doc.id)
@@ -545,7 +545,7 @@ def _scan(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
             errors += 1
             ctx.note(f"{rel}: no se pudo leer ({str(e)[:100]})")
             continue
-        meta = {**(d.meta if d else {"title_auto": True}), "mtime": mtime}
+        meta = {**(transcripts.fresh(db, d) if d else {"title_auto": True}), "mtime": mtime}
         stamp = datetime.fromtimestamp(mtime, tz=timezone.utc)
         if d and d.sha256 == sha:  # solo cambió la fecha
             d.meta, d.size, d.source_updated_at = meta, st.st_size, stamp
@@ -645,7 +645,7 @@ def _scan_wiki(db, s: DocSource, ctx: "jobs.JobCtx", manual: bool) -> dict:
         if not body:
             unchanged += 1  # página vacía: no hay nada que indexar
             continue
-        meta = {"collection": pg.collection, "collection_id": pg.collection_id, "title_auto": False, **transcripts.kept(d.meta if d else None)}
+        meta = {"collection": pg.collection, "collection_id": pg.collection_id, "title_auto": False, **transcripts.kept(transcripts.fresh(db, d))}
         if d and d.sha256 == sha:  # solo cambió la fecha o el título no afecta al texto
             d.source_updated_at, d.meta, d.url = stamp, meta, pg.url
             unchanged += 1

@@ -54,9 +54,24 @@ def _line(ln: str) -> str:
 
 
 def kept(meta: dict | None) -> dict:
-    """What a re-sync that rebuilds a document's metadata must carry over: the transcript mark, above all a person's choice."""
+    """What a re-sync that rebuilds a document's metadata must carry over: the transcript mark, above all a person's choice, and where
+    an inherited choice came from."""
     v = (meta or {}).get("transcript")
-    return {"transcript": v} if v in (HELD, *CHOSEN) else {}
+    if v not in (HELD, *CHOSEN):
+        return {}
+    return {"transcript": v, **({"transcript_from": meta["transcript_from"]} if meta.get("transcript_from") else {})}
+
+
+def fresh(db, doc) -> dict:
+    """A document's metadata as committed now: a scan loads its documents up front and can run for minutes, while an administrator
+    makes a choice. Rebuilding from the copy it loaded would undo that choice."""
+    if doc is None:
+        return {}
+    try:
+        db.refresh(doc, ["meta"])
+    except Exception:  # noqa: BLE001  (a row being added in this same scan has nothing newer to read)
+        pass
+    return doc.meta or {}
 
 
 def _speaker(m: re.Match) -> str | None:

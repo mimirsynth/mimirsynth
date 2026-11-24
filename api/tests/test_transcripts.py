@@ -288,3 +288,72 @@ def test_the_secret_scan_reads_held_transcripts(client, fake_index):
     with _factory()() as db:
         brain = db.query(Brain).filter(Brain.slug == slug).one()
         assert secretguard.audit_existing(db, brain)["documents"] == 1
+
+
+def test_an_inherited_choice_holds_for_its_text_only(client, lib):
+    (lib / "chat.txt").write_text(CHAT, encoding="utf-8", newline="")
+    (lib / "copia.txt").write_text(CHAT, encoding="utf-8", newline="")
+    slug = _brain(client)
+    base = f"/api/brains/{slug}/docs"
+    sid = client.post(f"{base}/sources", json={"name": "Notas", "root": "notas"}).json()["id"]
+    ds = _docs(client, slug)
+    a, b = ds["chat.txt"]["id"], ds["copia.txt"]["id"]
+    client.post(f"{base}/{a}/transcript", json={"as": "document"})
+    client.post(f"{base}/{b}/reindex")                                                # now a duplicate of a document chosen as one
+    d = client.get(f"{base}/{b}").json()
+    assert (d["status"], d["transcript"]) == ("duplicate", "document")
+    other = WHATSAPP + "\n12/03/24, 11:00 - Ana: y una cosa más que contar del backup\n"
+    (lib / "copia.txt").write_text(other, encoding="utf-8", newline="")               # another chat in the copy
+    _scan(client, slug, sid)
+    d = client.get(f"{base}/{b}").json()
+    assert (d["status"], d["transcript"]) == ("transcript", "held")                    # looked at again, not indexed at full weight
+    with _factory()() as db:
+        assert "transcript_from" not in (db.get(Document, b).meta or {})
+
+
+def test_a_scan_reads_the_choice_committed_meanwhile(client, fake_index):
+    slug = _brain(client)
+    _, r = _upload(client, slug, "chat.txt", CHAT.encode())
+    did = r.json()["id"]
+    with _factory()() as scan, _factory()() as admin:
+        stale = scan.get(Document, did)                                               # a scan loaded it before the choice
+        assert stale.meta["transcript"] == "held"
+        admin.get(Document, did).meta = {**admin.get(Document, did).meta, "transcript": "document"}
+        admin.commit()
+        assert transcripts.kept(transcripts.fresh(scan, stale)) == {"transcript": "document"}
+    assert transcripts.fresh(None, None) == {}
+
+
+def test_a_copy_follows_its_original_when_the_choice_changes(client, fake_index):
+    slug = _brain(client)
+    base = f"/api/brains/{slug}/docs"
+    _, r = _upload(client, slug, "chat.txt", CHAT.encode())
+    a = r.json()["id"]
+    client.post(f"{base}/{a}/transcript", json={"as": "transcript"})
+    _, r = _upload(client, slug, "copia.txt", (CHAT + "\n\n").encode())
+    b = r.json()["id"]
+    assert client.get(f"{base}/{b}").json()["transcript"] == "transcript"
+    client.post(f"{base}/{a}/transcript", json={"as": "document"})                   # the administrator changes their mind
+    assert client.get(f"{base}/{b}").json()["transcript"] == "document"
+    assert client.delete(f"{base}/{a}").status_code == 200
+    d = client.get(f"{base}/{b}").json()
+    assert (d["status"], d["transcript"]) == ("active", "document")
+
+
+def test_find_duplicates_passes_the_choice_on(client, fake_index):
+    slug = _brain(client)
+    base = f"/api/brains/{slug}/docs"
+    _, r = _upload(client, slug, "chat.txt", CHAT.encode())
+    a = r.json()["id"]
+    client.post(f"{base}/{a}/transcript", json={"as": "transcript"})
+    _, r = _upload(client, slug, "copia.txt", (CHAT + "\n\n").encode())
+    b = r.json()["id"]
+    with _factory()() as db:                                                          # as if indexed before duplicates were checked
+        d = db.get(Document, b)
+        d.status, d.meta = "active", {}
+        db.commit()
+        bid = d.brain_id
+    from mimirsynth import docs
+    assert docs.find_duplicates(bid)["marked"] == 1
+    d = client.get(f"{base}/{b}").json()
+    assert (d["status"], d["transcript"]) == ("duplicate", "transcript")

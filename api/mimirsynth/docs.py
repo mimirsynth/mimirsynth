@@ -92,6 +92,8 @@ def run_index(doc_id: int, job: "jobs.JobCtx | None" = None) -> str:
             db.commit()  # el hash, visible ya para quien se indexe a la vez
             promote = bool(before and before != h)  # cambió el texto: sus duplicados ya no lo son
             held = False
+            if (d.meta or {}).get("transcript_from") and promote:   # a choice taken from an original holds for that text only
+                d.meta = {k: v for k, v in (d.meta or {}).items() if k not in ("transcript", "transcript_from")}
             if (d.meta or {}).get("transcript") not in transcripts.CHOSEN:   # a person's choice stands; otherwise look (again: the text may have changed)
                 held = transcripts.looks_like(text)
                 d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "transcript"}, **({"transcript": transcripts.HELD} if held else {})}
@@ -186,9 +188,13 @@ def _demote_newer(db, d: Document) -> None:
 def _inherit_choice(dup: Document, orig: Document) -> None:
     """A copy takes the original's transcript choice (#466): with the same text the decision is the same, and when the copy is promoted
     because the original went away, it is indexed the way a person decided instead of being held again."""
-    v = (orig.meta or {}).get("transcript")
-    if v in transcripts.CHOSEN and (dup.meta or {}).get("transcript") not in transcripts.CHOSEN:
-        dup.meta = {**(dup.meta or {}), "transcript": v}
+    v, mine = (orig.meta or {}).get("transcript"), dup.meta or {}
+    if mine.get("transcript") in transcripts.CHOSEN and not mine.get("transcript_from"):
+        return   # a person decided about this copy itself
+    if v in transcripts.CHOSEN:   # the original's latest choice, also when an administrator changed it
+        dup.meta = {**mine, "transcript": v, "transcript_from": orig.id}
+    elif mine.get("transcript_from"):
+        dup.meta = {k: x for k, x in mine.items() if k not in ("transcript", "transcript_from")}
 
 
 def promote_duplicates(original_id: int) -> int | None:
@@ -214,7 +220,7 @@ def find_duplicates(brain_id: int, job: "jobs.JobCtx | None" = None) -> dict:
     #117 no tienen huella: se calcula desde su texto normalizado, sin volver a extraer). Quita del índice sus trozos."""
     hashed = marked = 0
     with _factory()() as db:
-        first: dict[str, int] = {}
+        first: dict[str, Document] = {}
         rows = db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status == "active").order_by(Document.id)).all()
         for n, d in enumerate(rows, 1):
             if job:
@@ -232,10 +238,11 @@ def find_duplicates(brain_id: int, job: "jobs.JobCtx | None" = None) -> dict:
                 d.norm_hash, hashed = h, hashed + 1
             if h in first:
                 docindex.delete_document(d.id)
-                d.status, d.chunks, d.meta = "duplicate", 0, {**(d.meta or {}), "duplicate_of": first[h]}
+                d.status, d.chunks, d.meta = "duplicate", 0, {**(d.meta or {}), "duplicate_of": first[h].id}
+                _inherit_choice(d, first[h])
                 marked += 1
             else:
-                first[h] = d.id
+                first[h] = d
         db.commit()
     return {"hashed": hashed, "marked": marked}
 
@@ -475,7 +482,7 @@ def index_as(doc_id: int, body: TranscriptIn, ctx: BrainCtx = Depends(contributo
         raise HTTPException(409, "ya se está indexando")
     if d.status == "blocked":   # a right-to-be-forgotten deletion took it out (#134): only a deliberate reindex brings it back
         raise HTTPException(409, "bloqueado por un derecho al olvido: corrígelo en su origen o vuelve a indexarlo a propósito (unblock=true)")
-    d.meta = {**(d.meta or {}), "transcript": body.index_as}
+    d.meta = {**{k: v for k, v in (d.meta or {}).items() if k != "transcript_from"}, "transcript": body.index_as}   # now a person's own
     ctx.db.commit()
     start_index(d.id, ctx.user.id)
     audit(ctx.db, ctx.user, "document.transcript", ctx.brain, id=doc_id, index_as=body.index_as)
