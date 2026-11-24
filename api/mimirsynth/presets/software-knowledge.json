@@ -1,6 +1,6 @@
 {
  "title": "Software and technical knowledge",
- "version": 1,
+ "version": 2,
  "description": "Repositories, applications, components, libraries, APIs, environments, releases, bugs and design decisions (ADRs), with how they depend on each other. For engineering notes and technical documentation.",
  "standards": [
   "DOAP (Description of a Project)",
@@ -32,6 +32,10 @@
   {
    "name": "Library",
    "description": "A third-party or shared library, framework or SDK used as a dependency. Not for: the team's own deployable software (Application) or a language (Language). Examples: 'React 19', 'SQLAlchemy', 'pydantic'."
+  },
+  {
+   "name": "Model",
+   "description": "An AI or machine-learning model, identified by its name or id. Use for: LLMs, embedding and speech models. Not for: the service or provider that serves it (Service/Organization). Examples: 'gpt-4o-mini', 'Qwen3 4B', 'nomic-embed-text'."
   },
   {
    "name": "Language",
@@ -392,6 +396,20 @@
    "target": "Entity",
    "edge_types": [
     "RelatesTo"
+   ]
+  },
+  {
+   "source": "Application",
+   "target": "Model",
+   "edge_types": [
+    "Uses"
+   ]
+  },
+  {
+   "source": "Component",
+   "target": "Model",
+   "edge_types": [
+    "Uses"
    ]
   }
  ],

@@ -120,6 +120,8 @@ def fakes(monkeypatch):
     monkeypatch.setattr(R, "recall", fake_recall)
     monkeypatch.setattr(H, "redundancy", lambda g: {"redundancy": 0.05, "redundant_facts": 5, "current_facts": 100,
                                                     "redundancy_sampled": False, "facts_truncated": False})
+    from mimirsynth import similarity   # how similar two facts usually are (#468): measured against the graph, not here
+    monkeypatch.setattr(similarity, "measure", lambda g, db, brain_id, model=None, seed=None: {"too_few": True, "facts": 0, "baseline": None, "same": None})
 
 
 def _brain(client, slug):  # noqa: F811

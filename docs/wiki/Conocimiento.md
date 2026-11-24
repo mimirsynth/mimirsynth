@@ -32,12 +32,22 @@ Columnas: **Documento** (título y nombre de fichero), **Fuente**, **Tamaño**, 
 | En cola | Esperando turno |
 | Error | Falló (el motivo aparece en el detalle) |
 | Duplicado | Mismo texto que otro documento del brain: no se indexa otra vez (ver abajo) |
+| En espera | Una transcripción de chat o de reunión: se guarda, pero queda fuera del recall hasta que un administrador decida (ver abajo) |
 
 ### Documentos duplicados
 La misma nota puede llegar dos veces: desde dos carpetas, desde una carpeta y una wiki, o subida con otro nombre. Cuando el texto extraído de un documento coincide con el de otro ya indexado en el brain (sin contar mayúsculas ni espacios), queda como **Duplicado**: no se trocea ni se calculan sus embeddings, y el recall usa el original.
 - El filtro de estado **Duplicado** los lista, y el detalle de un duplicado tiene **Ver el original**.
 - Si el original se borra, desaparece de su fuente, cambia o no se puede indexar, se indexa en su lugar el **duplicado más antiguo**. Si dos copias se indexan a la vez, gana siempre la más antigua.
 - **Buscar duplicados** (administradores del brain), junto a los filtros, revisa los documentos indexados antes de que existiera esta comprobación y saca del índice los repetidos. Corre como un trabajo con progreso ([[Trabajos]]) e indica cuántos ha sacado. **No se borra nada del origen.**
+
+### Conversaciones
+Un documento cuyo texto son sobre todo los turnos de un chat o de una reunión queda **En espera**: se guarda y se puede leer, pero no se trocea ni se calculan sus embeddings, así que no llega al recall. Su detalle explica por qué y, para los administradores del brain, tiene dos botones:
+- **Indexar como conversación:** se indexa, y en el recall sus pasajes quedan por debajo de los documentos igual de relevantes y le llegan al agente marcados como conversación de chat. Su fila dice *como conversación* bajo el estado.
+- **Indexar como documento:** se indexa como un documento más.
+
+El detalle de cualquiera de los dos dice qué se decidió (**Indexado como conversación** o **Indexado como documento**), con el otro botón para cambiarlo.
+
+La decisión se mantiene al volver a sincronizar su fuente. Cómo se reconoce una conversación: [[Memoria documental]].
 
 ### Detalle de un documento
 Al pulsar un documento se abre su panel:

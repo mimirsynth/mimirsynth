@@ -15,6 +15,8 @@ stale fact.
   shelf life; none if no relation has one), as their screens count them.
 - **Common terms** (`terms`, #459): the words in more than a share of the brain's episode fragments or document passages, which the
   recall can leave out of its text search (`terms.py`). Not a headline number.
+- **Similarity** (#468): how similar two current facts of the brain usually are, and those a curator judged the same (see
+  similarity.py). Not a headline number: kept here so the review panels read their «close» against the brain's own distribution.
 
 A brain is measured once a UTC day (`due`, called by the notification loop every few minutes): the day is the run's key in the
 database, so a restart never measures twice and never skips a day. A curator can measure again (`POST /health/run`): that day's numbers
@@ -273,6 +275,14 @@ def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
         extra = {"sources": src} if src else {}
         part("probes", lambda: probes(lambda text: recall(brain_id, gname, text, 8, 4, 6000, lang=lang, **extra), queries, check))
     part("redundancy", lambda: redundancy(g))
+
+    def similar():   # how close two facts of this brain usually are (#468), kept for the panels that compare against it
+        from . import similarity
+        with _factory()() as db:
+            m = similarity.measure(g, db, brain_id)
+            similarity.remember(brain_id, m, db)
+        return {"similarity": m}
+    part("similarity", similar)
     part("contradictions", lambda: {"contradictions": conflicts.scan(g, amap, functional, dismissed=dismissed)["total"]
                                     if functional else None})
 

@@ -108,7 +108,8 @@ function Movement({ graph }: { graph: string }) {
 
 // ---- What the brain knows ----
 
-const DOC_STATUS: Record<string, string> = { indexing: T("indexando"), pending: T("en cola"), error: T("con error") };
+// a chat transcript waiting for an administrator (issue 466) is set aside, not a problem
+const DOC_STATUS: Record<string, string> = { indexing: T("indexando"), pending: T("en cola"), error: T("con error"), transcript: T("en espera") };
 
 /** The volume of the brain, how it grew week by week, and what is most connected. For everyone who can read the brain. */
 function Knowledge({ graph, data }: { graph: string; data: O }) {
@@ -147,7 +148,7 @@ function Knowledge({ graph, data }: { graph: string; data: O }) {
             <Group gap={8} align="baseline"><span className="ms-figure">{fmtNum(a.documents.by_status.active ?? 0)}</span>
               <Text size="sm" c="dimmed">{t("indexados · {{n}} trozos", { n: fmtNum(a.documents.chunks) })}</Text></Group>
             <Group gap={6}>{Object.entries(a.documents.by_status).filter(([k, v]) => k !== "active" && v > 0).map(([k, v]) => (
-              <Pill key={k} tone={k === "error" ? "danger" : "warn"}>{v} {t(DOC_STATUS[k] ?? k)}</Pill>))}</Group>
+              <Pill key={k} tone={k === "error" ? "danger" : k === "transcript" ? "neutral" : "warn"}>{v} {t(DOC_STATUS[k] ?? k)}</Pill>))}</Group>
           </> : <Loading />}
         </Block>
       </ColGrid>
@@ -170,7 +171,8 @@ type Health = { items: HealthRun[]; latest: HealthRun | null; measuring: boolean
 /** The parts of a measurement that can fail on their own, as the sentence «Could not measure: …» names them. */
 const HEALTH_PARTS: Record<string, string> = {
   probes: T("las preguntas de prueba"), redundancy: T("la redundancia"), contradictions: T("las contradicciones"), stale_facts: T("los hechos a revisar"),
-  retrievable: T("las propuestas que se recuperan"), terms: T("los términos comunes"),
+  retrievable: T("las propuestas que se recuperan"), similarity: T("la similitud entre hechos"),
+  terms: T("los términos comunes"),
 };
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 }));

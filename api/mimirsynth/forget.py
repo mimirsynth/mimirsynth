@@ -38,6 +38,7 @@ router = APIRouter(prefix="/api/brains/{slug}/forget")
 KIND = "forget.run"
 MAX_ITEMS = 200       # items listed per layer to review
 MAX_ROWS = 200_000    # rows read per table or graph query
+MAX_TEXT = 500_000_000   # characters of stored document text read to find documents with no chunks
 MAX_REWRITES = 50     # episodes the LLM writes again in one deletion; the rest are deleted without a rewrite
 MIN_TERM = 3
 GONE = "[olvidado]"
@@ -152,10 +153,41 @@ def _documents(db, brain_id: int, m: Matcher) -> dict[int, int]:
     for did, txt in db.execute(q.limit(MAX_ROWS)):
         if m(txt):
             docs[did] = docs.get(did, 0) + 1
-    for d in db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status != "deleted")):
+    return _named_documents(db, brain_id, m, docs)
+
+
+def _named_documents(db, brain_id: int, m: Matcher, docs: dict[int, int]) -> dict[int, int]:
+    """Adds the documents whose title or file name names it, or whose stored text does when it has no chunks to search."""
+    from .models import Document
+    for d in db.scalars(select(Document).where(Document.brain_id == brain_id, Document.status != "deleted").limit(MAX_ROWS)):
         if d.id not in docs and (m(d.title) or m(d.filename)):
             docs[d.id] = 0
+    chunkless = select(Document).where(Document.brain_id == brain_id, Document.chunks == 0, Document.text_ref != "",
+                                       Document.status.not_in(("deleted", "blocked")))
+    read = 0
+    for d in db.scalars(chunkless.limit(MAX_ROWS)):
+        if d.id in docs:
+            continue
+        text = _stored_text(d)
+        read += len(text)
+        if m(text):
+            docs[d.id] = 0
+        if read > MAX_TEXT:
+            log.warning("forget: stopped reading stored document texts after %d characters", read)
+            break
     return docs
+
+
+def _stored_text(d) -> str:
+    """The normalised text of a document with no chunks to search: a chat transcript held out of the index (#466), a duplicate, one
+    that failed after extraction. A person indexing it later must not bring the forgotten entity back."""
+    if not d.text_ref:
+        return ""
+    from . import docstore
+    try:
+        return docstore.resolve(d.text_ref).read_text(encoding="utf-8", errors="replace")
+    except (OSError, ValueError):
+        return ""
 
 
 def _proposals(db, brain_id: int, m: Matcher) -> list:
@@ -199,7 +231,7 @@ def _db_targets(db, brain_id: int, facts: set[str], m: Matcher, entity: str = ""
         "curator_runs": _scan(db, CuratorRun, brain_id, ["findings", "error"], m),
         "summary_suggestions": _scan(db, SummarySuggestion, brain_id, ["name", "current", "proposed", "applied"], m,
                                      ["name", "current", "proposed", "applied"]),
-        "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name"], m, ["name"]),
+        "retype_suggestions": _scan(db, RetypeSuggestion, brain_id, ["name", "fold_name"], m, ["name", "fold_name"]),
         "topic_reviews": _topic_reviews(db, brain_id, entity, set(facts) | set(episodes or ()), m),
         "jobs": _scan(db, Job, brain_id, ["title", "params", "log", "error", "result"], m),
         "notifications": _scan(db, Notification, brain_id, ["title", "body"], m, ["title", "body"]),

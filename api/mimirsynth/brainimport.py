@@ -795,7 +795,7 @@ def _doc_chunks(job: jobs.JobCtx, db: Session, stage: Path, bid: int, dmap: dict
         by_doc: dict[int, list[dict]] = {}
         for c in _lines(stage / "vectors" / "doc_chunks.jsonl"):
             new = dmap[c["document_id"]]
-            if new in texts and docs[new].status != "duplicate":
+            if new in texts and docs[new].status not in ("duplicate", "transcript"):
                 by_doc.setdefault(new, []).append({"idx": c["chunk_idx"], "heading_path": c.get("heading_path") or "", "char_start": c.get("char_start") or 0,
                                                     "char_end": c.get("char_end") or 0, "page": c.get("page"), "text": c["text"], "vec": c["embedding"]})
         for did, chunks in by_doc.items():
@@ -803,7 +803,8 @@ def _doc_chunks(job: jobs.JobCtx, db: Session, stage: Path, bid: int, dmap: dict
             docs[did].chunks, docs[did].status = len(chunks), "active"
             done.add(did)
             out["copied"] += len(chunks)
-    todo = [d for d in docs.values() if d.id in texts and d.id not in done and d.status != "duplicate"]
+    # a chat transcript nobody asked to index stays out, as it was (#466)
+    todo = [d for d in docs.values() if d.id in texts and d.id not in done and d.status not in ("duplicate", "transcript")]
     if todo:
         emb, dim = get_embedder(), resolve_embedding()["dim"]
         with gate.writing():

@@ -20,10 +20,10 @@ A **package** is a ready-made starting ontology. Every type says what it is, whe
 | Package | For | Entity types | Relation types |
 |---|---|---|---|
 | `general` | A mixed or personal notebook: people, organizations, places, events, documents, projects, decisions, topics | 8 | 10 |
-| `infrastructure` | Infrastructure and IT operations: hosts, guests, services, networks, storage, incidents, changes, runbooks | 16 | 15 |
+| `infrastructure` | Infrastructure and IT operations: hosts, guests, services, software, AI models, networks, storage, incidents, changes, runbooks | 18 | 15 |
 | `team-projects` | Team and project work: people, teams, projects, tasks, milestones, meetings, decisions, risks | 11 | 14 |
 | `personal-family` | Family life: people, household, pets, places, trips, appointments, belongings, subscriptions, documents | 12 | 11 |
-| `software-knowledge` | Software engineering: repositories, applications, components, libraries, APIs, environments, releases, bugs, decisions | 14 | 15 |
+| `software-knowledge` | Software engineering: repositories, applications, components, libraries, AI models, APIs, environments, releases, bugs, decisions | 15 | 15 |
 
 The former `generic` package is now `general` (the old name still works). Brains that applied it keep their ontology. When you choose a package under **Apply package**, its description, size, version and the standards it follows (**Based on:**) are shown. Details: [`docs/ONTOLOGY.md`](https://github.com/MimirSynth/mimirsynth/blob/main/docs/ONTOLOGY.md).
 
@@ -68,6 +68,9 @@ The LLM decides by looking at the descriptions. Good ones:
 - Say **when yes** and **when no**, with real examples.
 - Resolve your domain's typical confusions ("physical servers are *Host*, never *Location*").
 - Are specific and short.
+
+## What never becomes an entity
+Whatever the ontology, some names the LLM extracts are a detail of a fact, not a thing of their own: a command-line flag (`--help`, `tool --help flag`), a field path in code (`SectionVMInfo.uptime`), a file path or source file (`utils/secrets.py`), a URL, a date alone (`1 October 2026`) or a phrase (five or more words starting in lower case, such as «sync push from A to B»). They are dropped before the entities are written, so the facts are extracted among the entities that remain and the detail stays in their text. When the dropped name was the only other end of a fact, that fact is not created: the episode keeps the sentence, and recall finds it among the episode's fragments. Kept on purpose, since a missed detail is still caught later by the [[Type corrector]] but a dropped entity is not: host names (`api.example.com`), products written like files (`Node.js`, `three.js`, `Newtonsoft.Json`, `docs.rs`), systemd units (`nginx.service`), namespaces (`Microsoft.AspNetCore`), `TCP/IP`, proper names that start with a particle («el Ministerio de Sanidad y Consumo»), bare versions (`3.12.10`) and versioned products (`Debian 13`), which the `Software` type of `infrastructure` is for. The [[Proposals]] report counts what was dropped, by kind.
 
 ## What happens if an extraction goes outside the ontology
 Ingestion does not block it: the **proposal report** ([[Proposals]]) says how many entities ended up *untyped* and which types fell outside. That is how you see what the ontology is missing. The [[Type corrector]] reviews those entities later.

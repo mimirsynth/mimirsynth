@@ -417,11 +417,18 @@ class RetypeSuggestion(Base):
     current_type: Mapped[str] = mapped_column(String(64), default="")
     suggested_type: Mapped[str] = mapped_column(String(64), default="")
     confidence: Mapped[float | None] = mapped_column(nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | doubtful | same | applied | rejected | reverted
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | doubtful | same | applied | rejected | reverted | folded
     previous_type: Mapped[str] = mapped_column(String(64), default="")
     reason: Mapped[str] = mapped_column(String(200), default="")  # por qué es dudosa (status=doubtful)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # not an entity → fold into X (#467): the entity the decider says it belongs to, and the vocabulary change that folded it
+    fold_uuid: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    fold_name: Mapped[str] = mapped_column(String(500), default="", server_default="")
+    fold_confidence: Mapped[float | None] = mapped_column(nullable=True)
+    op_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    alone: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")  # decided by itself, not in bulk: calibrates the decider
+    chosen_type: Mapped[str] = mapped_column(String(64), default="", server_default="")  # applied as another type than the one proposed
 
 
 class SummarySuggestion(Base):

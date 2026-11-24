@@ -4,6 +4,7 @@ from sqlalchemy import Computed, Index, Integer, String, Text, UniqueConstraint,
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
+from . import transcripts
 from .config import settings
 from .index import IndexBase, _tsquery, enabled, rrf
 from .store import engine
@@ -73,7 +74,7 @@ def list_chunks(document_id: int, limit: int = 200, offset: int = 0) -> list[dic
 
 
 _SEL = ("c.id AS id, c.document_id, c.chunk_idx, c.heading_path, c.char_start, c.char_end, c.page, c.text, d.title, d.filename, d.url, d.source_id, "
-        "d.source_updated_at, d.last_seen_at")
+        "d.source_updated_at, d.last_seen_at, d.meta->>'transcript' AS transcript")
 
 
 def search(brain_id: int, qvec: list[float], qtext: str, k: int = 8, pool: int = 40, source_id: int | None = None,
@@ -92,12 +93,17 @@ def search(brain_id: int, qvec: list[float], qtext: str, k: int = 8, pool: int =
                              f"WHERE c.brain_id=:b AND d.status='active'{src} AND c.tsv @@ to_tsquery('simple', :t) ORDER BY score DESC LIMIT :n"), {**par, "t": tsq}).mappings().all() if tsq else []
     byid = {r["id"]: dict(r) for r in [*vec, *fts]}
     vscore = {r["id"]: float(r["score"]) for r in vec}
+    # a chat transcript indexed on request ranks below documentation of equal relevance (#466); the similarity stays as it is,
+    # so the recall threshold judges it like any passage
+    weighed = [(cid, sc * (transcripts.WEIGHT if byid[cid].get("transcript") == transcripts.TRANSCRIPT else 1.0))
+               for cid, sc in rrf([[r["id"] for r in vec], [r["id"] for r in fts]])]
     out = []
-    for cid, sc in rrf([[r["id"] for r in vec], [r["id"] for r in fts]])[:k]:
+    for cid, sc in sorted(weighed, key=lambda x: -x[1])[:k]:
         d = byid[cid]
         d["rrf"] = round(sc, 5)
         d["similarity"] = round(vscore.get(cid, 0.0), 4)  # coseno; 0 si solo salió por texto completo
         d["score"] = d["rrf"]
+        d["transcript"] = d.get("transcript") == transcripts.TRANSCRIPT
         out.append(d)
     return out
 
