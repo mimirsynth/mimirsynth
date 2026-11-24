@@ -6,7 +6,9 @@ Near-duplicates and the subtler noise stay curator proposals: without a person a
 A fact that only restates the brain's subject («network N belongs to Acme», in a brain about Acme) is judged by the default decider
 (#465): only a new current fact with an end that names the subject (a phrase of the brain's name or description) is sent, at most
 MAX_ASK per ingestion and never while the brain's budget is paused, and it goes only when the decider says so with at least its own
-threshold. A failure of the decider keeps the fact and never fails the ingestion."""
+threshold. A failure of the decider keeps the fact and never fails the ingestion. It deletes with no person in the loop, so it runs
+only with the instance setting `write_subject_check` on (off by default): until the decider is calibrated, its confidence is no
+signal (#467 measured noise proposed at 81-97 %)."""
 import logging
 import re
 import time
@@ -50,6 +52,12 @@ OPTIONS = ["Sí: solo repite el tema del brain", "No: dice algo más"]
 def _plain(s, n: int) -> str:
     """Extracted text as the decider reads it: one line, cut, and with no angle brackets that could close its `<state>` block."""
     return " ".join(str(s or "").split())[:n].replace("<", "‹").replace(">", "›")
+
+
+def enabled() -> bool:
+    """Whether the subject check (#465) runs at all: the instance setting `write_subject_check`, off by default."""
+    from . import appsettings
+    return appsettings.get("write_subject_check") == "yes"
 
 
 def may_judge(p) -> bool:
@@ -225,7 +233,7 @@ def without_text(rep: dict) -> dict:
 def apply(brain, rep: dict, episode: str, judge=None) -> None:
     """Applies `decide` to the edges add_episode left in rep['_edges'] (and the ones it created, rep['_new_edges']), keeps in
     rep['_edges'] only the ones that stay, and adds what it did to the ingest report. A failure here never fails the ingestion.
-    `judge`: the subject check (#465), by default the decider's (`Subject`)."""
+    `judge`: the subject check (#465), by default the decider's (`Subject`) when `write_subject_check` is on; False: none."""
     created = set(rep.pop("_new_edges", None) or [])
     edges = rep.get("_edges") or []
     if not edges or not episode or not created:
@@ -237,7 +245,8 @@ def apply(brain, rep: dict, episode: str, judge=None) -> None:
         new = [f for f in new_of(found, episode, created) if not _old(f)]
         ends = sorted({str(f[k]) for f in new for k in ("su", "tu")})
         current = rows(g.query(_CURRENT, {"ends": ends, "new": [f["uuid"] for f in new]})) if ends else []
-        judge = Subject(brain) if judge is None else judge
+        if judge is None:   # off: no decider call and nothing about it in the report
+            judge = Subject(brain) if enabled() else None
         out = decide(found, episode, current, created, judge)
         if getattr(judge, "skipped", None):
             rep["subject_skipped"] = judge.skipped

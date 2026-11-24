@@ -261,6 +261,12 @@ class _Decider:
         return {"index": index, "letter": "AB"[index], "prob": prob, "probs": {}}
 
 
+def _on(monkeypatch):
+    """The instance setting `write_subject_check` on: the check is off by default."""
+    from mimirsynth import appsettings
+    monkeypatch.setattr(appsettings, "get", lambda k, _get=appsettings.get: "yes" if k == "write_subject_check" else _get(k))
+
+
 def _subject(monkeypatch, dec, paused=False, decider=True, brain=ACME):
     from mimirsynth import decider as D
     from mimirsynth import usage
@@ -421,6 +427,7 @@ def test_a_correction_is_never_sent_to_the_decider(client, monkeypatch):  # noqa
     monkeypatch.setattr(usage, "paused", lambda bid: False)
     dec = _Decider({"belongs": (0, 0.99)})
     monkeypatch.setattr(D, "decide", dec)
+    _on(monkeypatch)
     client.post("/api/decision-engines", json={"name": "dec-wq465c", "base_url": "http://d/v1", "model": "m"})
     client.post("/api/brains", json={"slug": "wq465c", "name": "Acme", "description": "La infraestructura de Acme."})
     pid = client.post("/api/brains/wq465c/proposals", json={"name": "N1", "body": "Network N1 belongs to Acme."}).json()["id"]
@@ -462,6 +469,7 @@ def test_a_decider_failure_never_fails_the_ingestion(client, monkeypatch):  # no
     monkeypatch.setattr(usage, "paused", lambda bid: False)
     dec = _Decider(fail=httpx.ConnectError("down"))
     monkeypatch.setattr(D, "decide", dec)
+    _on(monkeypatch)
     client.post("/api/decision-engines", json={"name": "dec-wq465", "base_url": "http://d/v1", "model": "m"})
     client.post("/api/brains", json={"slug": "wq465", "name": "Acme", "description": "La infraestructura de Acme."})
     pid = client.post("/api/brains/wq465/proposals", json={"name": "N1", "body": "Network N1 belongs to Acme."}).json()["id"]
@@ -470,3 +478,55 @@ def test_a_decider_failure_never_fails_the_ingestion(client, monkeypatch):  # no
         p = db.get(Proposal, pid)
         assert p.status == "ingested" and p.ingest_report["subject_error"] is True and "quality_error" not in p.ingest_report
         assert "dropped" not in p.ingest_report and len(dec.calls) == 1 and g.writes == []
+
+
+def _restating(client, monkeypatch, slug):  # noqa: F811
+    """An approved proposal whose one new fact only restates its brain's subject, a decider sure of it, and the graph that records
+    what is deleted. Returns the proposal's id, the decider and the graph."""
+    from mimirsynth import decider as D
+    from mimirsynth import ingest, usage, vocab_apply
+    monkeypatch.setattr(ingest, "enabled", lambda: True)
+
+    async def fake(graph, name, body, source, desc, ref, ontology=None, report=None):
+        report.update({"entities": 2, "edges": 1, "_edges": [("e1", "BELONGS_TO")], "_new_edges": ["e1"], "_nodes": []})
+        return EP
+    monkeypatch.setattr(ingest, "add_episode", fake)
+    g = _Graph([_acme("e1", "network N1 belongs to Acme")], [])
+    monkeypatch.setattr(W, "graph", lambda name: g)
+
+    def broken(name):
+        raise RuntimeError("not needed here")
+    monkeypatch.setattr(vocab_apply, "graph", broken)
+    monkeypatch.setattr(usage, "paused", lambda bid: False)
+    dec = _Decider({"belongs": (0, 0.99)})
+    monkeypatch.setattr(D, "decide", dec)
+    client.post("/api/decision-engines", json={"name": f"dec-{slug}", "base_url": "http://d/v1", "model": "m"})
+    client.post("/api/brains", json={"slug": slug, "name": "Acme", "description": "La infraestructura de Acme."})
+    pid = client.post(f"/api/brains/{slug}/proposals", json={"name": "N1", "body": "Network N1 belongs to Acme."}).json()["id"]
+    return pid, dec, g
+
+
+def test_the_subject_check_is_off_by_default(client, monkeypatch):  # noqa: F811
+    """Review of #484: it deletes with no person in the loop, so it runs only when an administrator turns it on."""
+    from mimirsynth import appsettings, ingest
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    assert appsettings.get("write_subject_check") == "no" and not W.enabled()
+    pid, dec, g = _restating(client, monkeypatch, "wq465off")
+    ingest.ingest_proposal(pid)
+    with _factory()() as db:
+        r = db.get(Proposal, pid).ingest_report
+        assert dec.calls == [] and g.writes == [] and "dropped" not in r
+        assert "subject_skipped" not in r and "subject_error" not in r        # off: the report says nothing about it
+
+
+def test_with_the_setting_on_the_ingestion_runs_the_check(client, monkeypatch):  # noqa: F811
+    from mimirsynth import ingest
+    from mimirsynth.models import Proposal
+    from mimirsynth.store import _factory
+    _on(monkeypatch)
+    pid, dec, g = _restating(client, monkeypatch, "wq465on")
+    ingest.ingest_proposal(pid)
+    with _factory()() as db:
+        r = db.get(Proposal, pid).ingest_report
+        assert len(dec.calls) == 1 and [(d["uuid"], d["rule"]) for d in r["dropped"]] == [("e1", "subject")] and g.writes
