@@ -3,6 +3,7 @@ run of `count` and `sample` against a disposable FalkorDB graph and the test dat
 import importlib.util
 import os
 import random
+from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -65,7 +66,7 @@ def test_episode_census_counts_deleted_episodes_and_dates():
     ]
     c = census.episode_census(episodes, proposals)
     strata = {r["key"]: r["n"] for r in c["by_stratum"]}
-    assert strata == {"person": 1, "capture": 1, "no-proposal": 1}
+    assert strata == {"person": 1, "capture": 1, "no-proposal: (none)": 1}
     assert {r["key"]: r["n"] for r in c["date"]} == {"own date": 1, "ingest time": 1, "no proposal": 1}
     pr = c["proposals"]
     assert pr["ingested"] == 5
@@ -95,9 +96,54 @@ def test_fact_census_separates_automatic_invalidations():
     assert {r["key"]: r["n"] for r in c["by_state"]} == {"current": 3, "invalidated": 3, "expired": 1, "future": 1}
     assert c["identical_current"] == {"groups": 1, "facts": 2, "extra": 1}
     iv = c["invalidations"]
-    assert (iv["total"], iv["through_mimirsynth"], iv["graphiti_born_invalid"], iv["graphiti_later"]) == (4, 1, 1, 2)
+    assert (iv["total"], iv["through_mimirsynth"], iv["graphiti"]) == (4, 1, 3)
+    assert [(w["minutes"], w["born_invalid"], w["later"]) for w in iv["by_window"]] == [(1, 0, 3), (5, 1, 2), (15, 1, 2)]
     assert c["per_episode"]["episodes_without_facts"] == 1
     assert c["without_episode"] == 1
+
+
+def test_a_fact_invalidated_minutes_later_shows_in_the_wider_windows_only():
+    """A bulk import: episode 2 comes 3 minutes after episode 1 and its fact invalidates episode 1's. Within 1 minute it is
+    invalidated later; at 5 and 15 minutes it is taken as dated as past at creation. The table shows how much hangs on the window."""
+    edges = [{"uuid": "old", "fact": "X runs on node 1", "episodes": ["e1"], "created_at": "2026-11-05T10:00:00Z",
+              "valid_at": "2026-01-01", "invalid_at": "2026-06-01", "expired_at": "2026-11-05T10:03:10Z"},
+             {"uuid": "new", "fact": "X runs on node 2", "episodes": ["e2"], "created_at": "2026-11-05T10:03:00Z",
+              "valid_at": "2026-06-01"}]
+    iv = census.fact_census(edges, ["e1", "e2"], manual=set(), now=NOW)["invalidations"]
+    assert {w["minutes"]: w["later"] for w in iv["by_window"]} == {1: 1, 5: 0, 15: 0}
+    assert census.born_invalid(edges[0], 1) is False and census.born_invalid(edges[0], 5) is True
+
+
+def test_episodes_without_a_proposal_are_split_by_their_source():
+    episodes = [{"uuid": f"m{i}", "source_description": f"migrated from «layer {i % 2}» batch {i}"} for i in range(4)]
+    episodes += [{"uuid": "c1", "source_description": "Claude Code session in «toro»"},
+                 {"uuid": "c2", "source_description": "Claude Code session in «lidia»"},
+                 {"uuid": "x", "source_description": ""}, {"uuid": "p", "source_description": "mcp"}]
+    st = census.episode_strata(episodes, [P(id=1, origin="person", episode_uuid="p")])
+    assert st["m0"] == st["m3"] == "no-proposal: migrated from «…» batch N"   # names and numbers taken out
+    assert st["c1"] == st["c2"] == "no-proposal: Claude Code session in «…»"
+    assert st["x"] == "no-proposal: (none)" and st["p"] == "person"
+    many = [{"uuid": f"u{i}", "source_description": f"src {chr(97 + i)}"} for i in range(6)] + [{"uuid": "u9", "source_description": "src a"}]
+    assert Counter(census.episode_strata(many, []).values())["no-proposal: other"] == 2   # beyond the top 4
+    c = census.census(episodes, [P(id=1, origin="person", episode_uuid="p")], [], set(), [], [], [])
+    assert {r["key"] for r in c["episodes"]["by_stratum"]} == {"person", "no-proposal: migrated from «…» batch N",
+                                                                "no-proposal: Claude Code session in «…»", "no-proposal: (none)"}
+    assert "toro" not in census.to_markdown(c) and "layer" not in census.to_markdown(c)
+
+
+def test_facts_backed_by_several_strata_are_counted_and_marked():
+    episodes = [{"uuid": "p", "content": "a"}, {"uuid": "c", "content": "b"}, {"uuid": "q", "content": "c"}]
+    proposals = [P(id=1, origin="person", episode_uuid="p"), P(id=3, origin="person", episode_uuid="q"),
+                 P(id=2, origin="auto", source_description="Codex session", episode_uuid="c")]
+    edges = [{"uuid": "both", "fact": "f", "episodes": ["p", "c"]}, {"uuid": "one", "fact": "g", "episodes": ["p", "q"]}]
+    c = census.census(episodes, proposals, edges, set(), [], [], [], now=NOW)
+    assert c["facts"]["mixed_strata"] == {"facts": 1, "current": 1}
+    _, _, keys = census.blind_sheets(episodes, proposals, edges, n_eps=3, n_facts=2, seed=1, now=NOW)
+    marks = {k["uuid"]: k for k in keys if k["kind"] == "fact"}
+    assert (marks["both"]["stratum"], marks["both"]["mixed"], marks["one"]["mixed"]) == ("person", "true", "")
+    rows = [{"id": marks["both"]["id"], "label": "true"}, {"id": marks["one"]["id"], "label": "wrong"}]
+    s = census.summarize_labels(rows, keys, census.FACT_LABELS, skip_mixed=True)
+    assert s["by_stratum"]["person"]["wrong"] == 100.0 and s["mixed_skipped"] == 1
 
 
 def test_prompt_census_counts_the_hooks_samples():
@@ -263,7 +309,7 @@ def test_count_and_sample_read_a_brain_and_write_nothing(client, monkeypatch, tm
         md = (tmp_path / "census.md").read_text(encoding="utf-8")
         assert "2 episodes, 2 facts" in md
         assert "| capture | 1 | 50.0 |" in md and "| person | 1 | 50.0 |" in md
-        assert "by Graphiti later, through a newer fact: **1** (100.0 %)" in md   # an op that is not `fact.invalidate` does not count
+        assert "| 15 min | 0 | **1** | 100.0 |" in md   # an op that is not `fact.invalidate` does not count
         assert census.main(["sample", "--brain", "cen", "--out", str(tmp_path), "--episodes", "2", "--facts", "2"]) == 0
         keys = census._read_csv(tmp_path / "keys.csv")
         assert sorted(k["stratum"] for k in keys if k["kind"] == "episode") == ["capture", "person"]

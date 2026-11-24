@@ -24,6 +24,7 @@ import json
 import math
 import os
 import random
+import re
 import statistics
 import sys
 from collections import Counter, defaultdict
@@ -64,6 +65,35 @@ def stratum(p: dict | None) -> str:
     if origin == "auto" and desc.endswith(" session"):
         return "capture"
     return origin if origin in ("person", "agent", "auto") else "unknown"
+
+
+NO_PROPOSAL_TOP = 4   # an episode with no proposal is split by its most common source descriptions; the rest go to "other"
+
+
+def source_key(desc: str | None) -> str:
+    """An episode's source description with what varies taken out: a quoted name («project», «hook») and numbers. Similar sources
+    group together, and no project or service name reaches the counts posted in #491."""
+    d = re.sub(r"«[^»]*»", "«…»", desc or "")
+    d = " ".join(re.sub(r"\d+", "N", d).split())[:60]
+    return d or "(none)"
+
+
+def episode_strata(episodes: list[dict], proposals: list[dict]) -> dict[str, str]:
+    """Each episode's stratum. One with no proposal (an adopted or imported graph) gets a sub-stratum from its own source description
+    in the graph, so the labels can tell which of them are curated."""
+    by_ep: dict[str, list[dict]] = defaultdict(list)
+    for p in proposals:
+        if p.get("episode_uuid"):
+            by_ep[p["episode_uuid"]].append(p)
+    st, loose = {}, {}
+    for e in episodes:
+        st[e["uuid"]] = stratum(pick(by_ep.get(e["uuid"], [])))
+        if st[e["uuid"]] == "no-proposal":
+            loose[e["uuid"]] = source_key(e.get("source_description"))
+    top = {k for k, _ in Counter(loose.values()).most_common(NO_PROPOSAL_TOP)}
+    for u, k in loose.items():
+        st[u] = f"no-proposal: {k if k in top else 'other'}"
+    return st
 
 
 def approved_by(p: dict | None) -> str:
@@ -112,10 +142,10 @@ def episode_census(episodes: list[dict], proposals: list[dict]) -> dict:
         if p.get("episode_uuid"):
             by_ep[p["episode_uuid"]].append(p)
     n = len(episodes)
-    strata, who, cats, dated, bands = Counter(), Counter(), Counter(), Counter(), Counter()
+    st = episode_strata(episodes, proposals)
+    strata, who, cats, dated, bands = Counter(st.values()), Counter(), Counter(), Counter(), Counter()
     for e in episodes:
         p = pick(by_ep.get(e["uuid"], []))
-        strata[stratum(p)] += 1
         who[approved_by(p)] += 1
         if p is not None and p.get("category"):
             cats[p["category"]] += 1
@@ -172,20 +202,24 @@ def _state(f: dict, now: datetime | None = None) -> str:
     return "current"
 
 
-BORN_INVALID = timedelta(minutes=15)   # expired within one ingestion of its creation: extracted as already past, not invalidated later
+BORN_INVALID_MINUTES = (1, 5, 15)   # the windows the split is reported at: during a bulk ingestion a newer fact can come minutes later
 
 
-def born_invalid(f: dict) -> bool:
+def born_invalid(f: dict, minutes: int = 15) -> bool:
     """Graphiti stores a fact that the text itself dates as past ("X ran on Y until 2023"), or that is older than one it already has,
-    as expired at creation (graphiti_core edge_operations). That is history, not knowledge the memory later took back."""
+    as expired at creation (graphiti_core edge_operations). That is history, not knowledge the memory later took back. It is told
+    apart only by how soon after creation the fact expired, and a newer fact ingested within the window looks the same, so the split
+    is reported at several windows."""
     c, e = _ts(f.get("created_at")), _ts(f.get("expired_at"))
-    return bool(c and e and abs(e - c) <= BORN_INVALID)
+    return bool(c and e and abs(e - c) <= timedelta(minutes=minutes))
 
 
-def fact_census(edges: list[dict], episode_ids: list[str], manual: set[str], now: datetime | None = None) -> dict:
+def fact_census(edges: list[dict], episode_ids: list[str], manual: set[str], now: datetime | None = None,
+                strata: dict[str, str] | None = None) -> dict:
     """`manual`: the uuids of facts whose last change through MimirSynth was an invalidation (vocab_ops `fact.invalidate`: a
     correction, a claim, a contradiction resolved, or by hand). Every other invalidated fact was invalidated by Graphiti: either at
-    creation (`born_invalid`) or later, by a newer fact."""
+    creation (`born_invalid`) or later, by a newer fact. `strata`: each episode's stratum, to count the facts that episodes of more
+    than one stratum back."""
     n = len(edges)
     st = {id(f): _state(f, now) for f in edges}
     states = Counter(st.values())
@@ -199,7 +233,12 @@ def fact_census(edges: list[dict], episode_ids: list[str], manual: set[str], now
     inval = [f for f in edges if st[id(f)] in ("invalidated", "expired")]
     by_hand = [f for f in inval if f.get("uuid") in manual]
     auto = [f for f in inval if f.get("uuid") not in manual]
-    born = sum(1 for f in auto if born_invalid(f))
+    windows = []
+    for m in BORN_INVALID_MINUTES:
+        born = sum(1 for f in auto if born_invalid(f, m))
+        windows.append({"minutes": m, "born_invalid": born, "later": len(auto) - born, "later_pct": pct(len(auto) - born, len(inval))})
+    strata = strata or {}
+    mixed = [f for f in edges if len({strata[e] for e in f.get("episodes") or [] if e in strata}) > 1]
     return {
         "facts": n,
         "by_state": table(states, n),
@@ -207,9 +246,9 @@ def fact_census(edges: list[dict], episode_ids: list[str], manual: set[str], now
                         "episodes_without_facts": sum(1 for c in counts if c == 0)},
         "identical_current": {"groups": len(dup_groups), "facts": sum(dup_groups.values()),
                               "extra": sum(k - 1 for k in dup_groups.values())},
-        "invalidations": {"total": len(inval), "through_mimirsynth": len(by_hand), "graphiti_born_invalid": born,
-                          "graphiti_later": len(auto) - born, "graphiti_later_pct": pct(len(auto) - born, len(inval))},
+        "invalidations": {"total": len(inval), "through_mimirsynth": len(by_hand), "graphiti": len(auto), "by_window": windows},
         "without_episode": sum(1 for f in edges if not f.get("episodes")),
+        "mixed_strata": {"facts": len(mixed), "current": sum(1 for f in mixed if st[id(f)] == "current")},
     }
 
 
@@ -269,9 +308,12 @@ CURATED = ("person", "agent")   # the candidates for the clean corpus of #516, u
 def census(episodes, proposals, edges, manual, logs, samples, usage, now: datetime | None = None) -> dict:
     ep = episode_census(episodes, proposals)
     strata = {r["key"]: r["n"] for r in ep["by_stratum"]}
-    arms = {"all episodes": len(episodes), "person + agent": sum(strata.get(s, 0) for s in CURATED)}
+    curated = sum(strata.get(s, 0) for s in CURATED)
+    loose = sum(n for s, n in strata.items() if s.startswith("no-proposal"))
+    arms = {"all episodes": len(episodes), "person + agent": curated, "person + agent + no proposal": curated + loose}
     extracted = [p.get("ingested_at") for p in proposals if p.get("status") == "ingested" and p.get("episode_uuid")]
-    return {"episodes": ep, "facts": fact_census(edges, [e["uuid"] for e in episodes], manual, now),
+    st = episode_strata(episodes, proposals)
+    return {"episodes": ep, "facts": fact_census(edges, [e["uuid"] for e in episodes], manual, now, st),
             "prompts": prompt_census(logs, samples), "cost": cost_estimate(usage, extracted, arms)}
 
 
@@ -328,14 +370,11 @@ def blind_sheets(episodes, proposals, edges, n_eps: int, n_facts: int, seed: int
     the episode's title, which names the system writer in several strata («Curador: …», «Corrección: …»). The key also records each
     stratum's size, so the overall share can be weighted back to the brain."""
     rng = random.Random(seed)
-    by_ep: dict[str, list[dict]] = defaultdict(list)
-    for p in proposals:
-        if p.get("episode_uuid"):
-            by_ep[p["episode_uuid"]].append(p)
-    st = {e["uuid"]: stratum(pick(by_ep.get(e["uuid"], []))) for e in episodes}
+    st = episode_strata(episodes, proposals)
     eps = stratified(episodes, lambda e: st[e["uuid"]], n_eps, rng)
     current = [f for f in edges if f.get("episodes") and _state(f, now) == "current"]
-    fact_st = lambda f: st.get(f["episodes"][0], "no-proposal")
+    fact_st = lambda f: st.get(f["episodes"][0], "no-proposal")   # its first episode's; `mixed` says when others differ
+    mixed = lambda f: len({st[e] for e in f["episodes"] if e in st}) > 1
     facts = stratified(current, fact_st, n_facts, rng)
     ep_pop, fact_pop = Counter(st[e["uuid"]] for e in episodes), Counter(fact_st(f) for f in current)
     rng.shuffle(eps)
@@ -345,13 +384,15 @@ def blind_sheets(episodes, proposals, edges, n_eps: int, n_facts: int, seed: int
         sid = f"E{i:03d}"
         ep_rows.append({"id": sid, "date": str(e.get("valid_at") or "")[:10], "text": _cell(e.get("content") or ""),
                         "label": "", "comment": ""})
-        keys.append({"id": sid, "kind": "episode", "uuid": e["uuid"], "stratum": st[e["uuid"]], "population": ep_pop[st[e["uuid"]]]})
+        keys.append({"id": sid, "kind": "episode", "uuid": e["uuid"], "stratum": st[e["uuid"]], "population": ep_pop[st[e["uuid"]]],
+                     "mixed": ""})
     for i, f in enumerate(facts, 1):
         sid = f"F{i:03d}"
         fact_rows.append({"id": sid, "fact": _cell(f.get("fact") or ""), "source": _cell(f.get("source") or ""),
                           "target": _cell(f.get("target") or ""), "valid_from": str(f.get("valid_at") or "")[:10],
                           "label": "", "comment": ""})
-        keys.append({"id": sid, "kind": "fact", "uuid": f["uuid"], "stratum": fact_st(f), "population": fact_pop[fact_st(f)]})
+        keys.append({"id": sid, "kind": "fact", "uuid": f["uuid"], "stratum": fact_st(f), "population": fact_pop[fact_st(f)],
+                     "mixed": "true" if mixed(f) else ""})
     return ep_rows, fact_rows, keys
 
 
@@ -363,15 +404,18 @@ def margin(n: int) -> float:
     return round(100 * z * math.sqrt(0.25 / n + z * z / (4 * n * n)) / (1 + z * z / n), 1)
 
 
-def summarize_labels(rows: list[dict], keys: list[dict], allowed: tuple[str, ...]) -> dict:
+def summarize_labels(rows: list[dict], keys: list[dict], allowed: tuple[str, ...], skip_mixed: bool = False) -> dict:
     """Share of each label per stratum, with its margin. The overall row weights each stratum by its size in the brain (the sample
     gives every stratum the same number of rows, so an unweighted total would misstate the brain). Rows with no label, or a label
-    outside `allowed`, are counted apart and left out."""
+    outside `allowed`, are counted apart and left out; with `skip_mixed`, so are the facts backed by episodes of several strata."""
     key = {k["id"]: k for k in keys}
     per: dict[str, Counter] = defaultdict(Counter)
     pop: dict[str, int] = {}
-    unlabelled, unknown = 0, 0
+    unlabelled, unknown, skipped = 0, 0, 0
     for r in rows:
+        if skip_mixed and key.get(r["id"], {}).get("mixed") == "true":
+            skipped += 1
+            continue
         lab = (r.get("label") or "").strip().lower()
         if not lab:
             unlabelled += 1
@@ -389,7 +433,7 @@ def summarize_labels(rows: list[dict], keys: list[dict], allowed: tuple[str, ...
     if out and total:
         out["(brain, weighted)"] = {"n": sum(r["n"] for r in out.values()), "margin": None,
                                     **{lab: round(sum(out[s][lab] * pop[s] for s in pop) / total, 1) for lab in allowed}}
-    return {"by_stratum": out, "unlabelled": unlabelled, "unknown_label": unknown}
+    return {"by_stratum": out, "unlabelled": unlabelled, "unknown_label": unknown, "mixed_skipped": skipped}
 
 
 # --- markdown -----------------------------------------------------------------------------------------------------------------------
@@ -420,10 +464,16 @@ def to_markdown(c: dict) -> str:
     pe, ic, iv = f["per_episode"], f["identical_current"], f["invalidations"]
     lines += [f"- facts per episode: median {pe['median']}, p90 {pe['p90']}; episodes with no fact: {pe['episodes_without_facts']}",
               f"- identical current texts: {ic['groups']} groups, {ic['extra']} extra copies",
-              (f"- invalidated or expired: {iv['total']}; by Graphiti later, through a newer fact: **{iv['graphiti_later']}** "
-               f"({iv['graphiti_later_pct']} %); by Graphiti at creation (dated as past): {iv['graphiti_born_invalid']}; "
-               f"through MimirSynth (correction, claim, by hand): {iv['through_mimirsynth']}"),
-              f"- facts with no source episode: {f['without_episode']}", ""]
+              f"- facts with no source episode: {f['without_episode']}",
+              (f"- facts backed by episodes of more than one stratum: {f['mixed_strata']['facts']} "
+               f"({f['mixed_strata']['current']} current)"), "",
+              (f"Invalidated or expired: {iv['total']}; through MimirSynth (correction, claim, by hand): {iv['through_mimirsynth']}; "
+               f"by Graphiti: {iv['graphiti']}. Graphiti's are split by how soon after creation the fact expired: within the window "
+               "it is taken as dated as past at creation, after it as invalidated later by a newer fact. A newer fact ingested within "
+               "the window (a bulk import) is counted as at creation, and one dated as past that took longer to resolve as later: read the "
+               "rows together, not one of them."), "",
+              "| window | at creation | later, by a newer fact | later % |", "|--:|--:|--:|--:|"]
+    lines += [f"| {w['minutes']} min | {w['born_invalid']} | **{w['later']}** | {w['later_pct']} |" for w in iv["by_window"]] + [""]
     lines += ["### Real prompts available", "",
               f"- recall_logs: {p['recall_logs']} ({p['recall_logs_with_text']} with text)",
               f"- recall_samples: {p['recall_samples']}, hook-like: {p['samples_hook_like']}"
@@ -448,7 +498,9 @@ def labels_markdown(name: str, s: dict, allowed: tuple[str, ...]) -> str:
         lines.append(f"| {st} | {r['n']} | {m} | " + " | ".join(str(r[a]) for a in allowed) + " |")
     return "\n".join(lines + ["", ("± is the widest a share in that row can be off (95 % Wilson interval at 50 %). The weighted row "
                               "gives each stratum its size in the brain."),
-                              f"Unlabelled: {s['unlabelled']}; unknown label: {s['unknown_label']}", ""])
+                              (f"Unlabelled: {s['unlabelled']}; unknown label: {s['unknown_label']}"
+                               + (f"; left out as backed by several strata: {s['mixed_skipped']}" if s["mixed_skipped"] else "")),
+                              ""])
 
 
 # --- reading the snapshot (read-only) -----------------------------------------------------------------------------------------------
@@ -501,7 +553,8 @@ def read_snapshot(slug: str, allow_sqlite: bool = False) -> tuple[dict, dict]:
         conn.rollback()
     manual = manual_invalidations(ops)
     g = graph(brain["graph_name"])
-    episodes = rows(g.ro_query("MATCH (e:Episodic) RETURN e.uuid AS uuid, e.content AS content, e.valid_at AS valid_at"))
+    episodes = rows(g.ro_query("MATCH (e:Episodic) RETURN e.uuid AS uuid, e.content AS content, e.valid_at AS valid_at, "
+                               "e.source_description AS source_description"))
     edges = rows(g.ro_query("MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity) RETURN r.uuid AS uuid, r.fact AS fact, r.episodes AS episodes, "
                             "r.valid_at AS valid_at, r.invalid_at AS invalid_at, r.expired_at AS expired_at, "
                             "r.created_at AS created_at, a.name AS source, b.name AS target"))
@@ -562,13 +615,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--seed", type=int, default=514)
     s = sub.add_parser("summarize")
     s.add_argument("--out", type=Path, default=OUT)
+    s.add_argument("--skip-mixed", action="store_true", help="leave out the facts backed by episodes of several strata")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
 
     if a.cmd == "summarize":
         keys = _read_csv(a.out / "keys.csv", ("id", "stratum", "population"))
         eps = summarize_labels(_read_csv(a.out / "episodes.csv", ("id", "label")), keys, EPISODE_LABELS)
-        facts = summarize_labels(_read_csv(a.out / "facts.csv", ("id", "label")), keys, FACT_LABELS)
+        facts = summarize_labels(_read_csv(a.out / "facts.csv", ("id", "label")), keys, FACT_LABELS, a.skip_mixed)
         md = "## Blind labels by stratum\n\n" + labels_markdown("Episodes", eps, EPISODE_LABELS) + "\n" + \
              labels_markdown("Facts (by the stratum of their source episode)", facts, FACT_LABELS)
         (a.out / "labels.md").write_text(md, encoding="utf-8")

@@ -25,9 +25,14 @@ to run on anything but PostgreSQL: an unset `MIMIRSYNTH_DATABASE_URL` would othe
 - **Invalidations** are split three ways:
   - *through MimirSynth*: the fact's last change in the vocabulary history is an applied `fact.invalidate` (a correction, a claim, a
     contradiction resolved, or by hand); a later `fact.reactivate` takes it out;
-  - *by Graphiti at creation*: expired within 15 minutes of being created, because the text dated it as past or it was older than a
-    fact already there. That is history, not knowledge taken back;
+  - *by Graphiti at creation*: expired within a few minutes of being created, because the text dated it as past or it was older than
+    a fact already there. That is history, not knowledge taken back;
   - *by Graphiti later*: the rest, invalidated by a newer fact. This is the number root cause 1 of #491 is about.
+
+  Only the time between creation and expiry tells the last two apart, and in a bulk import a newer fact can arrive within minutes,
+  so the split is given at 1, 5 and 15 minutes. If the rows differ a lot, the number depends on the window: say so with it.
+- **Mixed facts**: facts backed by episodes of more than one stratum. A fact takes its first episode's stratum; `keys.csv` marks
+  the others `mixed=true`, and `summarize --skip-mixed` leaves them out.
 - **Cost** divides the `extraction` LLM calls by the proposals that reached extraction (ingested into an episode), since the day the
   counters start. Failed calls are shown apart.
 
@@ -56,10 +61,14 @@ Each episode gets the stratum of the proposal that produced it (`stratum()` in t
 | `document` | a document passage promoted to memory |
 | `distil`, `forget-rewrite`, `machine` | written by the system: distil, forget, curator passes, verifier, topic-review gaps |
 | `correction` | the replacement text of a correction |
-| `no-proposal` | no proposal points to it: an adopted or imported graph |
+| `no-proposal: …` | no proposal points to it: an adopted or imported graph. Split by the episode's own source description in the graph, the 4 most common and `other` |
 | `unknown` | a proposal from before `origin` existed |
 
-These strata come from metadata the client declares. The 100 labelled episodes are what defines "curated" in the end.
+These strata come from metadata the client declares. The 100 labelled episodes are what defines "curated" in the end, including
+which `no-proposal` sources belong in the clean arm of #516.
+
+The `no-proposal` source descriptions are shown with quoted names and numbers taken out (`Claude Code session in «…»`), so no
+project or service name reaches the counts. Read `census.md` before posting it all the same.
 
 ## Labelling
 
@@ -84,7 +93,8 @@ Every stratum gets about the same number of rows, so a small stratum is measured
 - **The weighted row** gives each stratum its size in the brain. That is the brain's overall share; an unweighted total would not
   be.
 - **Each row has a margin** (95 % Wilson interval at 50 %). With 10 strata, a stratum has about 10 rows and a share can be off by
-  about ±28 points, so compare strata that differ by more than that, or label more rows (`sample --episodes 200`).
+  about ±28 points; the `no-proposal` sub-strata add up to 5 more. Compare strata that differ by more than that, or label more rows
+  (`sample --episodes 200`).
 
 ## Real prompts
 
