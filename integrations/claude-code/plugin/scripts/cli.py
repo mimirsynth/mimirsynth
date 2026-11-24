@@ -8,6 +8,7 @@
                                     proposes a memory with the write token (redacted first)
   cli.py drafts                     the sessions the capture recorded and has not sent (capture = draft)
   cli.py send-draft <session>       proposes one of them; cli.py drop-draft <session> forgets it
+  cli.py statusline [--remove]      adds MimirSynth's row to Claude Code's status line, unless ~/.claude/settings.json already has one
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import argparse
 import getpass
 import json
 import os
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -86,6 +88,10 @@ def status(_a=None) -> int:
     others = mimir.other_memory()
     if others:
         lines.append("Other memory hooks here: " + "; ".join(others))
+    last = mimir.last_status()
+    if last:
+        lines.append(f"Last thing the memory did: {last['action']} ({time.strftime('%Y-%m-%d %H:%M', time.localtime(float(last['at'])))})")
+    lines.append("Status row: " + ("on" if _ours(_settings().get("statusLine")) else "off (add it with: cli.py statusline)"))
     print("\n".join(lines))
     return 0
 
@@ -112,11 +118,22 @@ def remember(a) -> int:
         body["confidence"] = a.confidence
     try:
         r = mimir.call("POST", "/proposals", body=body, token=mimir.cfg("write_token") or mimir.cfg("token"), timeout=20)
-    except mimir.ApiError as e:
+    except Exception as e:  # noqa: BLE001
+        health, what = mimir.failure(e)
+        mimir.status("", health=health, action=f"proposal not sent: {what}")
+        if not isinstance(e, mimir.ApiError):
+            raise
         print(f"MimirSynth answered {e.status}: {e.detail}")
         return 1
+    _proposed(r)
     print(f"Proposal #{r.get('id')}: {r.get('status')}" + (" (waiting for a curator)" if r.get("status") == "pending" else ""))
     return 0
+
+
+def _proposed(r: dict) -> None:
+    """The status row's last action after a proposal. It belongs to no session: a command does not know which one it runs in."""
+    state = "queued for review" if r.get("status") == "pending" else str(r.get("status") or "sent")
+    mimir.status("", health="ok", action=f"proposal #{r.get('id')} {state}")
 
 
 def _draft(rec: dict) -> bool:
@@ -144,6 +161,7 @@ def send_draft(a) -> int:
     except mimir.ApiError as e:
         print(f"MimirSynth answered {e.status}: {e.detail}")
         return 1
+    _proposed(r)
     print(f"Proposal #{r.get('id')}: {r.get('status')}")
     return 0
 
@@ -152,6 +170,68 @@ def drop_draft(a) -> int:
     mimir.drop(a.session)
     print("Forgotten.")
     return 0
+
+
+def _settings_path() -> Path:
+    return Path.home() / ".claude" / "settings.json"
+
+
+def _settings() -> dict:
+    try:
+        s = json.loads(_settings_path().read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except Exception:  # noqa: BLE001  (unreadable: never rewritten, see statusline)
+        return {"_unreadable": True}
+    return s if isinstance(s, dict) else {"_unreadable": True}
+
+
+def _ours(line) -> bool:
+    """Whether a `statusLine` is the one `statusline` added: it runs the copy next to the configuration."""
+    return isinstance(line, dict) and mimir.statusline_copy().as_posix() in str(line.get("command") or "").replace(chr(92), "/")
+
+
+def statusline(a) -> int:
+    """A plugin cannot install a status line, so this copies the row's script next to the configuration, at a path that does not change
+    with the plugin's version (session start keeps the copy up to date). It then adds `statusLine` to ~/.claude/settings.json, only when
+    the user has none. With --remove it takes out only its own."""
+    s = _settings()
+    if s.get("_unreadable"):
+        print(f"{_settings_path()} is not valid JSON: nothing was changed.")
+        return 1
+    dst = mimir.statusline_copy()
+    command = f'python3 "{dst.as_posix()}"'   # on Windows Claude Code runs it through Git Bash: forward slashes
+    current = s.get("statusLine")
+    if a.remove:
+        if not _ours(current):
+            print("The status line is not MimirSynth's: nothing was changed." if current else "There is no status line to remove.")
+            return 0
+        del s["statusLine"]
+        _save_settings(s)
+        dst.unlink(missing_ok=True)
+        print(f"MimirSynth's status row removed from {_settings_path()}.")
+        return 0
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(mimir.STATUSLINE, dst)
+    if _ours(current):
+        print(f"MimirSynth's status row is already on ({_settings_path()}), and its script is up to date.")
+        return 0
+    if current:
+        print(f"{_settings_path()} already has a status line, and it was left as it is. To show MimirSynth's row too, have your script "
+              f"pass the JSON it reads on stdin to:\n  {command}\nand print what it prints.")
+        return 0
+    s["statusLine"] = {"type": "command", "command": command, "padding": 0}
+    _save_settings(s)
+    print(f"MimirSynth's status row added to {_settings_path()}. It shows after the next message. Remove it with: cli.py statusline --remove")
+    return 0
+
+
+def _save_settings(s: dict) -> None:
+    p = _settings_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(f".{p.name}.mimirsynth.tmp")
+    tmp.write_text(json.dumps(s, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def main(argv: list[str]) -> int:
@@ -176,6 +256,9 @@ def main(argv: list[str]) -> int:
         s = sub.add_parser(name)
         s.add_argument("session")
         s.set_defaults(fn=fn)
+    s = sub.add_parser("statusline")
+    s.add_argument("--remove", action="store_true")
+    s.set_defaults(fn=statusline)
     a = ap.parse_args(argv)
     return a.fn(a)
 

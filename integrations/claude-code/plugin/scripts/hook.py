@@ -10,6 +10,10 @@
 
 Every hook fails open: whatever goes wrong, it exits 0 and Claude Code carries on. With capture off (the default) the last three do
 nothing at all, and nothing about the session is written or sent.
+
+Session start and the recall also write what happened to the session's status file, for the status row (`statusline.py`, #481): the
+brain, the token's role and expiry, the capture mode and the drafts, and the recall's outcome, a failure included. It holds nothing
+of the session itself (no prompt, file or answer), so it is written with capture off too.
 """
 from __future__ import annotations
 
@@ -35,8 +39,24 @@ def _auth_message(e: mimir.ApiError) -> str:
     return f"MimirSynth: {e.detail}" if e.status in (401, 403) else ""
 
 
+_WHY = {"offline": "offline", "rejected": "token rejected", "error": "server error"}
+
+
+def _row() -> dict:
+    """The status row's fields at session start: the brain and the recall token's role and expiry (/whoami, cached), and the health."""
+    mimir.prune_status()
+    mimir.refresh_statusline()
+    if not mimir.configured():
+        return {"configured": False, "action": "not configured"}
+    row = {"configured": True, "brain": mimir.cfg("brain"), "capture": mimir.capture_mode(), "drafts": 0, **mimir.whoami()}
+    row["action"] = ("connected" if mimir.cfg("recall") else "recall off") if row["health"] == "ok" else _WHY[row["health"]]
+    return row
+
+
 def session_start(data: dict) -> None:
     messages, context = [], []
+    sid = data.get("session_id") or ""
+    row = _row()
     others = mimir.other_memory()
     if others:
         messages.append("MimirSynth: other memory hooks also inject context here (" + "; ".join(others) + "). "
@@ -51,9 +71,11 @@ def session_start(data: dict) -> None:
                 mimir.drop(rec["session"])
             elif mimir.capture_mode() == "send":
                 try:
-                    mimir.send(rec)
+                    r = mimir.send(rec)
+                    row["action"] = f"last session proposed (#{r.get('id')})"
                 except mimir.ApiError as e:
                     messages.append(f"MimirSynth did not propose the last session: {e.detail}")
+                    row["action"] = "last session not proposed"
                     break
                 except Exception:  # noqa: BLE001  (the server is away: it is tried again at the next start)
                     break
@@ -61,6 +83,7 @@ def session_start(data: dict) -> None:
                 waiting += 1
         if waiting:
             messages.append(f"MimirSynth: {waiting} session draft(s) waiting; review them with /mimirsynth:remember.")
+        row["drafts"] = waiting
     if mimir.configured() and mimir.cfg("news") and data.get("source", "startup") in ("startup", "clear", "compact"):
         try:
             r = mimir.call("POST", "/news", token=mimir.cfg("token"), query="limit=20&max_chars=4000")
@@ -71,6 +94,7 @@ def session_start(data: dict) -> None:
                 messages.append(_auth_message(e))
         except Exception:  # noqa: BLE001
             pass
+    mimir.status(sid, **row)
     _out("\n".join(context), "SessionStart", " ".join(messages))
 
 
@@ -86,12 +110,17 @@ def prompt(data: dict) -> None:
     try:
         r = mimir.call("POST", "/recall", body={"query": text[:1500], "facts": 6, "chunks": 3, "max_chars": int(mimir.cfg("max_chars"))},
                        token=mimir.cfg("token"))
-    except mimir.ApiError as e:   # an expired or revoked token is said, so recall does not stop without anyone noticing
-        _out(message=f"MimirSynth could not recall: {e.detail}" if e.status in (401, 403) else "")
-        return
-    except Exception:  # noqa: BLE001  (fail open: nothing injected, the prompt goes on)
+    except Exception as e:  # noqa: BLE001  (fail open: nothing injected, the prompt goes on; the row says why)
+        health, what = mimir.failure(e)
+        mimir.status(data.get("session_id") or "", health=health, action=f"recall: {what}")
+        if isinstance(e, mimir.ApiError) and e.status in (401, 403):   # an expired or revoked token is also said in the conversation
+            _out(message=f"MimirSynth could not recall: {e.detail}")
         return
     ctx = (r.get("context") or "").strip()
+    facts, passages = len(r.get("facts") or []), len(r.get("chunks") or []) + len(r.get("documents") or [])
+    found = [f"{facts} fact{'' if facts == 1 else 's'}" if facts else "", f"{passages} passage{'' if passages == 1 else 's'}" if passages else ""]
+    mimir.status(data.get("session_id") or "", health="ok",
+                 action="recall: " + (", ".join(x for x in found if x) if ctx and any(found) else "nothing relevant" if not ctx else "context"))
     if ctx:
         _out(f"<mimirsynth-memory brain=\"{mimir.cfg('brain')}\">\n{ctx}\n</mimirsynth-memory>", "UserPromptSubmit")
 

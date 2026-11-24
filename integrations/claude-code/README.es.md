@@ -55,6 +55,20 @@ Qué se guarda y se envía:
 - **Secretos:** antes de escribir nada en disco o enviarlo, se redacta con el propio detector del servidor (`scripts/mimirsynth_agent/secretscan.py` es el mismo fichero que `api/mimirsynth/secretscan.py`, y un test los mantiene iguales). Funciona por patrones y no es infalible: si dudas, lee los borradores.
 - **Cuándo sale del equipo:** al empezar la siguiente sesión, no al terminar, porque Claude Code solo da 1,5 s a un plugin al cerrar.
 
+### Fila de estado
+MimirSynth puede mostrar una fila en la línea de estado de Claude Code, para saber qué ha hecho la memoria sin preguntar:
+```
+● mimirsynth  mi-brain · contributor · capture off · recall: 4 facts
+```
+- **El punto:** verde si la última llamada salió bien, ámbar si el token de recall caduca en menos de 7 días (la fila dice cuántos), rojo si no se pudo llegar a MimirSynth, rechazó el token o falló.
+- **Después:** el brain, el rol del token de recall, el modo de captura y los borradores en espera, y **lo último que hizo la memoria**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. Un recall que falla se ve aquí en vez de pasar inadvertido, y el prompt sigue adelante igual.
+
+Un plugin no puede añadir una línea de estado por sí solo. `/mimirsynth:setup` lo ofrece, o ejecuta:
+```bash
+python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
+```
+Copia el script de la fila a `~/.config/mimirsynth/statusline.py`, una ruta que no cambia al actualizar el plugin (cada inicio de sesión mantiene la copia al día), y añade `statusLine` a `~/.claude/settings.json`. **Si ya tienes una línea de estado, no se toca**, y el comando dice qué puede llamar tu propio script para añadir la fila de MimirSynth. `cli.py statusline --remove` quita solo la de MimirSynth. La fila solo lee ficheros que escribieron los hooks, así que no hace ninguna llamada de red. `/whoami` se pregunta al empezar la sesión, como mucho una vez por hora. `NO_COLOR` quita los colores.
+
 ### Otros plugins de memoria
 
 Si otro plugin o hook también inyecta memoria, el inicio de sesión lo avisa (sin bloquear nada). Los bloques de MimirSynth van marcados para distinguirlos. Si `mimirsynth_recall.py` sigue en `settings.json`, también lo dice.

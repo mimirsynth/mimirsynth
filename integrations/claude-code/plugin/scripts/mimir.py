@@ -17,10 +17,13 @@ Nothing here ever blocks Claude Code: every network call has a short timeout and
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
+import shutil
 import sys
+import time
 import urllib.request  # noqa: F401  (the library calls urllib.request.urlopen; tests replace it here)
 from pathlib import Path
 
@@ -111,6 +114,129 @@ def proposal(rec: dict) -> dict:
 def send(rec: dict) -> dict:
     """Sends a recorded session as one proposal, only with a contributor token: a curator's would be approved at once."""
     return capture.send(client(), _store(), rec, AGENT, SOURCE)
+
+
+# --- the status row (#481) ----------------------------------------------------------------------
+# The hooks write what the memory did, per session, to small files next to the configuration; `statusline.py` only reads them. Never a
+# token, a prompt or a fact: the brain, the token's role and expiry, the capture mode, the drafts, the health and the last action.
+
+STATUS_KEEP_DAYS = 7
+WHOAMI_HOURS = 1   # session start asks /whoami again only after this, per server, brain and token
+STATUS_KEYS = ("configured", "brain", "role", "expires_at", "capture", "drafts", "health", "action")
+
+
+def status_dir() -> Path:
+    return CONFIG.parent / "status"
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path.parent, 0o700)
+    except OSError:
+        pass
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    os.replace(tmp, path)   # the status line never reads a half-written file
+
+
+def _read_json(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def status(session: str, **fields) -> None:
+    """Merges `fields` into the session's status file (or the shared one, for an action outside any session). Never fails."""
+    try:
+        name = session if re.fullmatch(r"[\w.-]{1,128}", session or "") else "_shared"
+        p = status_dir() / f"{name}.json"
+        cur = _read_json(p)
+        cur.update({k: v for k, v in fields.items() if k in STATUS_KEYS})
+        if "action" in fields:
+            cur["at"] = time.time()
+        _write_json(p, cur)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def last_status() -> dict:
+    """The most recent action written on this machine, for `/mimirsynth:status`."""
+    best: dict = {}
+    try:
+        for p in status_dir().glob("*.json"):
+            s = _read_json(p)
+            if s.get("action") and float(s.get("at") or 0) > float(best.get("at") or 0):
+                best = s
+    except Exception:  # noqa: BLE001
+        pass
+    return best
+
+
+def prune_status(now: float | None = None) -> None:
+    now = time.time() if now is None else now
+    try:
+        for p in status_dir().glob("*.json"):
+            if now - p.stat().st_mtime > STATUS_KEEP_DAYS * 86400:
+                p.unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def whoami() -> dict:
+    """The recall token's role, expiry and brain, from /whoami, asked at most once every WHOAMI_HOURS per server, brain and token. On a
+    failure: {"health": "offline" | "rejected" | "error"} and nothing cached, so the next start asks again."""
+    token = cfg("token") or ""
+    key = hashlib.sha256(f"{cfg('url')}|{cfg('brain')}|{token}".encode()).hexdigest()[:16]
+    cache = status_dir() / "_whoami.json"
+    known = _read_json(cache).get(key) or {}
+    if known and time.time() - float(known.get("at") or 0) < WHOAMI_HOURS * 3600:
+        return {k: known.get(k) for k in ("role", "expires_at")} | {"health": "ok"}
+    try:
+        w = call("GET", "/whoami", token=token)
+    except ApiError as e:
+        return {"health": "rejected" if e.status in (401, 403) else "error"}
+    except Exception:  # noqa: BLE001
+        return {"health": "offline"}
+    out = {"role": w.get("role"), "expires_at": (w.get("token") or {}).get("expires_at")}
+    try:
+        _write_json(cache, {key: {**out, "at": time.time()}})   # only the current key: a rotated token leaves nothing behind
+    except Exception:  # noqa: BLE001
+        pass
+    return out | {"health": "ok"}
+
+
+def failure(e: BaseException) -> tuple[str, str]:
+    """A failed call as the row says it: (health, what happened)."""
+    if isinstance(e, ApiError):
+        if e.status in (401, 403):
+            return "rejected", f"token rejected ({e.status})"
+        return "error", f"server error {e.status}" if e.status >= 500 else f"error {e.status}"
+    return "offline", "offline"
+
+
+STATUSLINE = Path(__file__).resolve().parent / "statusline.py"
+
+
+def statusline_copy() -> Path:
+    """Where `cli.py statusline` puts the script: a path that does not change with the plugin's version."""
+    return CONFIG.parent / "statusline.py"
+
+
+def refresh_statusline() -> None:
+    """An installed copy follows the plugin's own script when the plugin updates."""
+    try:
+        dst = statusline_copy()
+        if dst.exists() and dst.read_bytes() != STATUSLINE.read_bytes():
+            shutil.copyfile(STATUSLINE, dst)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 # --- other memory hooks on this machine ---------------------------------------------------------
