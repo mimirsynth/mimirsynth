@@ -1,8 +1,0 @@
-{
- "1 hecho que solo repetía el tema del brain": "1 fact that only restated the brain's subject",
- "El brain agotó su presupuesto de IA de este mes mientras se consultaba al decisor: los hechos que quedaban por consultar se quedan.": "The brain used up its AI budget for this month while the decider was being asked: the facts not asked yet were kept.",
- "No se consultó al decisor sobre los hechos que solo repiten el tema del brain: el brain ha agotado su presupuesto de IA de este mes, así que se quedan todos.": "The decider was not asked about facts that only restate the brain's subject: the brain has used up its AI budget for this month, so all of them were kept.",
- "No se pudo consultar al decisor sobre los hechos que solo repiten el tema del brain, así que se quedan todos.": "The decider could not be asked about facts that only restate the brain's subject, so all of them were kept.",
- "solo repetía el tema del brain (confianza del decisor: {{p}})": "it only restated the brain's subject (decider's confidence: {{p}})",
- "{{n}} hechos que solo repetían el tema del brain": "{{n}} facts that only restated the brain's subject"
-}

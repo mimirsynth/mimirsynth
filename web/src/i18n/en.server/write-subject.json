@@ -1,4 +1,0 @@
-{
- "Descartar los hechos que solo repiten el tema del brain": "Drop facts that only restate the brain's subject",
- "Tras ingerir una propuesta, el decisor predeterminado juzga los hechos nuevos que nombran el tema del brain y descarta, sin que lo revise una persona, los que solo lo repiten (con una confianza de al menos su umbral, y nunca menor de 0,8). Hasta 10 consultas por ingesta. Un hecho descartado no vuelve: actívalo solo cuando el decisor esté calibrado.": "After a proposal is ingested, the default decider judges the new facts that name the brain's subject and drops, with no person reviewing them, those that only restate it (with a confidence of at least its threshold, and never below 0.8). At most 10 calls per ingestion. A dropped fact does not come back: turn it on only once the decider is calibrated."
-}
