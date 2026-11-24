@@ -52,19 +52,19 @@ MimirSynth can show a row in Claude Code's status line, so you can tell what the
 ```
 ● mimirsynth  my-brain · contributor · capture off · recall: 4 facts
 ```
-- **The dot:** green when the last call worked, amber when the recall token expires within 7 days (the row says how many), red when MimirSynth could not be reached, rejected the token or failed.
+- **The dot:** green when the last call worked, amber when the recall token expires within 7 days (the row says how many), red when MimirSynth could not be reached (`offline`), rejected the token or failed (`server error`, `unexpected answer`), grey before anything was asked.
 - **Then:** the brain, the recall token's role, the capture mode and the drafts waiting, and **what the memory last did**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. A failed recall shows here instead of passing unnoticed, and the prompt still carries on.
 
 A plugin cannot add a status line by itself. `/mimirsynth:setup` offers it, or run:
 ```bash
 python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
 ```
-It copies the row's script to `~/.config/mimirsynth/statusline.py`, a path that does not change when the plugin updates (each session start keeps the copy current), and adds `statusLine` to `~/.claude/settings.json`. **If you already have a status line it is left alone**, and the command prints what your own script can call to add MimirSynth's row. `cli.py statusline --remove` takes out only MimirSynth's. The row reads only files the hooks wrote, so it makes no network call. `/whoami` is asked at session start, at most once an hour. `NO_COLOR` turns the colours off.
+It copies the row's script to `~/.config/mimirsynth/statusline.py`, a path that does not change when the plugin updates (each session start keeps the copy current), and adds `statusLine` to `~/.claude/settings.json`. **If you already have a status line it is left alone**, and the command prints what your own script can call to add MimirSynth's row. `cli.py statusline --remove` takes out only MimirSynth's. The row reads only files the hooks wrote, so it makes no network call. `/whoami` is asked at session start, at most once an hour, and not at all with `recall` and `news` both off; if it cannot reach the server, that start asks nothing else. What the server sends is shown without control characters. `NO_COLOR` turns the colours off.
 
 ### What it writes on your machine
 - `~/.config/mimirsynth/config.json`, the shared configuration (by `setup`).
 - With capture on: one file per session in the plugin's data folder (`$CLAUDE_PLUGIN_DATA/sessions`), or in `~/.config/mimirsynth/state/sessions/`, readable only by you, deleted after 14 days.
-- For the status row: one small file per session in `~/.config/mimirsynth/status/` with the brain, the token's role and expiry, the capture mode, the drafts and the last action (never a token, a prompt or a fact), deleted after 7 days. With `cli.py statusline`, the row's script in `~/.config/mimirsynth/statusline.py` and the `statusLine` entry in `~/.claude/settings.json`.
+- For the status row, in `~/.config/mimirsynth/status/` (deleted after 7 days): one small file per session with the brain, the token's role and expiry, the capture mode, the drafts and the last action (never a token, a prompt or a fact); `_shared.json`, the last proposal sent with `/mimirsynth:remember`; and `_whoami.json`, the recall token's role and expiry under a short hash of the server, the brain and the token. With `cli.py statusline`, the row's script in `~/.config/mimirsynth/statusline.py` and the `statusLine` entry in `~/.claude/settings.json`.
 
 If another plugin or hook also injects memory, the session start says so; it does not block anything, and MimirSynth's blocks are marked so you can tell them apart.
 

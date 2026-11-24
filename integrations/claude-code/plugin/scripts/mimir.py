@@ -21,7 +21,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sys
 import time
 import urllib.request  # noqa: F401  (the library calls urllib.request.urlopen; tests replace it here)
@@ -123,6 +122,23 @@ def send(rec: dict) -> dict:
 STATUS_KEEP_DAYS = 7
 WHOAMI_HOURS = 1   # session start asks /whoami again only after this, per server, brain and token
 STATUS_KEYS = ("configured", "brain", "role", "expires_at", "capture", "drafts", "health", "action")
+SESSION = re.compile(r"[A-Za-z0-9][\w.-]{0,127}")   # Claude Code's session ids; a leading «_» is kept for the shared files
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+FIELD_CHARS = 80
+
+
+def clean(v, n: int = FIELD_CHARS):
+    """A text for the row: no control characters (a server could send terminal escapes or new lines), at most `n` characters."""
+    return _CONTROL.sub("", str(v))[:n] if isinstance(v, str) else v
+
+
+def ident(v) -> str:
+    """A proposal's id as the row shows it: a number, or «?»."""
+    return str(v) if isinstance(v, int) and not isinstance(v, bool) else "?"
+
+
+def count(v) -> int:
+    return len(v) if isinstance(v, list) else 0
 
 
 def status_dir() -> Path:
@@ -136,12 +152,14 @@ def _write_json(path: Path, data: dict) -> None:
     except OSError:
         pass
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     try:
-        os.chmod(tmp, 0o600)
-    except OSError:
-        pass
-    os.replace(tmp, path)   # the status line never reads a half-written file
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, ensure_ascii=False))
+        os.replace(tmp, path)   # the status line never reads a half-written file
+    finally:
+        if tmp.exists():   # the replace failed (on Windows, while the status line reads the file): no leftover
+            tmp.unlink()
 
 
 def _read_json(path: Path) -> dict:
@@ -155,10 +173,10 @@ def _read_json(path: Path) -> dict:
 def status(session: str, **fields) -> None:
     """Merges `fields` into the session's status file (or the shared one, for an action outside any session). Never fails."""
     try:
-        name = session if re.fullmatch(r"[\w.-]{1,128}", session or "") else "_shared"
+        name = session if SESSION.fullmatch(session or "") else "_shared"
         p = status_dir() / f"{name}.json"
         cur = _read_json(p)
-        cur.update({k: v for k, v in fields.items() if k in STATUS_KEYS})
+        cur.update({k: clean(v) for k, v in fields.items() if k in STATUS_KEYS})
         if "action" in fields:
             cur["at"] = time.time()
         _write_json(p, cur)
@@ -180,45 +198,56 @@ def last_status() -> dict:
 
 
 def prune_status(now: float | None = None) -> None:
+    """Status files older than STATUS_KEEP_DAYS, and a temporary file a failed write left behind more than an hour ago."""
     now = time.time() if now is None else now
     try:
-        for p in status_dir().glob("*.json"):
-            if now - p.stat().st_mtime > STATUS_KEEP_DAYS * 86400:
-                p.unlink(missing_ok=True)
+        for p in status_dir().iterdir():
+            age = now - p.stat().st_mtime
+            if (p.suffix == ".json" and age > STATUS_KEEP_DAYS * 86400) or (p.suffix == ".tmp" and age > 3600):
+                p.unlink()
     except Exception:  # noqa: BLE001
         pass
 
 
 def whoami() -> dict:
-    """The recall token's role, expiry and brain, from /whoami, asked at most once every WHOAMI_HOURS per server, brain and token. On a
-    failure: {"health": "offline" | "rejected" | "error"} and nothing cached, so the next start asks again."""
+    """The recall token's role and expiry, from /whoami, asked at most once every WHOAMI_HOURS per server, brain and token. On a
+    failure: {"health": "offline" | "rejected" | "error", "why": what happened} and nothing cached, so the next start asks again. Never raises."""
     token = cfg("token") or ""
     key = hashlib.sha256(f"{cfg('url')}|{cfg('brain')}|{token}".encode()).hexdigest()[:16]
     cache = status_dir() / "_whoami.json"
-    known = _read_json(cache).get(key) or {}
-    if known and time.time() - float(known.get("at") or 0) < WHOAMI_HOURS * 3600:
-        return {k: known.get(k) for k in ("role", "expires_at")} | {"health": "ok"}
+    known = _read_json(cache).get(key)
+    try:
+        if isinstance(known, dict) and time.time() - float(known.get("at") or 0) < WHOAMI_HOURS * 3600:
+            return {"role": clean(known.get("role")), "expires_at": clean(known.get("expires_at")), "health": "ok"}
+    except (TypeError, ValueError):   # a damaged cache: asked again
+        pass
     try:
         w = call("GET", "/whoami", token=token)
-    except ApiError as e:
-        return {"health": "rejected" if e.status in (401, 403) else "error"}
-    except Exception:  # noqa: BLE001
-        return {"health": "offline"}
-    out = {"role": w.get("role"), "expires_at": (w.get("token") or {}).get("expires_at")}
+        t = w.get("token") if isinstance(w, dict) else None
+        if not isinstance(w, dict) or not (t is None or isinstance(t, dict)):
+            raise ValueError("an unexpected answer from /whoami")
+    except Exception as e:  # noqa: BLE001
+        health, why = failure(e)
+        return {"health": health, "why": why}
+    role = w.get("role") if isinstance(w.get("role"), str) and re.fullmatch(r"[a-z_]{1,32}", w["role"]) else None
+    exp = (t or {}).get("expires_at")
+    out = {"role": role, "expires_at": clean(exp, 40) if isinstance(exp, str) else None}
     try:
         _write_json(cache, {key: {**out, "at": time.time()}})   # only the current key: a rotated token leaves nothing behind
     except Exception:  # noqa: BLE001
         pass
-    return out | {"health": "ok"}
+    return {**out, "health": "ok"}
 
 
-def failure(e: BaseException) -> tuple[str, str]:
-    """A failed call as the row says it: (health, what happened)."""
+def failure(e: BaseException) -> tuple:
+    """A failed call as the row says it: (health, what happened). Only a network failure is «offline»."""
     if isinstance(e, ApiError):
         if e.status in (401, 403):
             return "rejected", f"token rejected ({e.status})"
         return "error", f"server error {e.status}" if e.status >= 500 else f"error {e.status}"
-    return "offline", "offline"
+    if isinstance(e, OSError):   # refused, unreachable, timed out (URLError, TimeoutError and socket errors are OSError)
+        return "offline", "offline"
+    return "error", "unexpected answer"
 
 
 STATUSLINE = Path(__file__).resolve().parent / "statusline.py"
@@ -229,12 +258,30 @@ def statusline_copy() -> Path:
     return CONFIG.parent / "statusline.py"
 
 
+def install_statusline() -> None:
+    """Writes the plugin's script to `statusline_copy()`: through a temporary file and a rename, so the status line never runs half a
+    file, and never through a link (it could point anywhere)."""
+    dst = statusline_copy()
+    if dst.is_symlink():
+        raise OSError(f"{dst} is a link: not written")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as f:
+            f.write(STATUSLINE.read_bytes())
+        os.replace(tmp, dst)
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def refresh_statusline() -> None:
     """An installed copy follows the plugin's own script when the plugin updates."""
     try:
         dst = statusline_copy()
-        if dst.exists() and dst.read_bytes() != STATUSLINE.read_bytes():
-            shutil.copyfile(STATUSLINE, dst)
+        if dst.is_file() and not dst.is_symlink() and dst.read_bytes() != STATUSLINE.read_bytes():
+            install_statusline()
     except Exception:  # noqa: BLE001
         pass
 

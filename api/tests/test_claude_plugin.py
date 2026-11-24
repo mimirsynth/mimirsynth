@@ -216,7 +216,10 @@ def test_the_row_shows_the_brain_the_role_and_what_the_recall_did(plugin, monkey
     (TimeoutError("timed out"), "recall: offline", False),
     (urllib.error.URLError("refused"), "recall: offline", False),
     (_http(401, "token expired on 2026-11-01"), "recall: token rejected (401)", True),
+    (_http(403, "no recall scope"), "recall: token rejected (403)", True),
+    (_http(404, "no such brain"), "recall: error 404", False),
     (_http(503, "unavailable"), "recall: server error 503", False),
+    (ValueError("not JSON"), "recall: unexpected answer", False),       # a proxy's HTML page: not «offline»
 ])
 def test_a_failed_recall_shows_in_the_row_and_the_prompt_goes_on(plugin, monkeypatch, capsys, error, says, message):
     _configure(monkeypatch)
@@ -261,7 +264,7 @@ def test_whoami_is_asked_once_an_hour_and_a_close_expiry_turns_the_dot_amber(plu
     monkeypatch.setenv("MIMIRSYNTH_TOKEN", "mst_rotated")                                     # another token: asked again
     plugin.answers["/brains/b1/whoami"] = _http(401, "revoked")
     _run(plugin, "session-start", {"session_id": "s3"}, capsys)
-    assert _row(plugin, "s3").endswith("token rejected") and [c["path"] for c in plugin.calls].count("/brains/b1/whoami") == 2
+    assert _row(plugin, "s3").endswith("token rejected (401)") and [c["path"] for c in plugin.calls].count("/brains/b1/whoami") == 2
     assert plugin.line.health({"health": "ok", "expires_at": "2020-01-01T00:00:00Z"}) == "red"
 
 
@@ -329,3 +332,125 @@ def test_status_says_the_last_action_and_whether_the_row_is_on(plugin, monkeypat
     plugin.cli.main(["status"])
     out = capsys.readouterr().out
     assert "Last thing the memory did: recall: 1 fact" in out and "Status row: off" in out
+
+
+# --- answers to the reviews of #481 -------------------------------------------------------------
+
+def test_remove_leaves_a_users_own_line_that_calls_the_row(plugin, capsys):
+    """Code review, QA and security: a user's line that also runs the copy is theirs, and --remove leaves it."""
+    settings = plugin.tmp / ".claude" / "settings.json"
+    settings.parent.mkdir()
+    mine = {"statusLine": {"type": "command", "command": f"bash -c 'mine.sh; python3 {plugin.tmp.as_posix()}/statusline.py'"}}
+    settings.write_text(json.dumps(mine), encoding="utf-8")
+    assert plugin.cli.main(["statusline", "--remove"]) == 0 and json.loads(settings.read_text(encoding="utf-8")) == mine
+    assert "not MimirSynth's" in capsys.readouterr().out
+
+
+def test_a_config_folder_with_shell_characters_stays_a_path(plugin, monkeypatch):
+    """Security: the command is quoted for the shell, so `$(…)`, backticks and `$VAR` in the folder's name are never run."""
+    import shlex
+    odd = plugin.tmp / "a$(touch PWNED) `id` $HOME"
+    odd.mkdir()
+    monkeypatch.setattr(plugin.mimir, "CONFIG", odd / "config.json")
+    assert plugin.cli.main(["statusline"]) == 0
+    command = json.loads((plugin.tmp / ".claude" / "settings.json").read_text(encoding="utf-8"))["statusLine"]["command"]
+    assert shlex.split(command) == ["python3", (odd / "statusline.py").as_posix()] and command.count("'") == 2
+    assert plugin.cli.main(["statusline", "--remove"]) == 0 and not (odd / "statusline.py").exists()
+
+
+def test_the_row_never_prints_terminal_escapes_or_new_lines(plugin, monkeypatch, capsys):
+    """Security: what a server or a file sends reaches the row without control characters, and the role must look like one."""
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/whoami"] = {"role": "reader\x1b]0;owned\x07\nsecond", "token": {"expires_at": "\x1b[2J"}}
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    st = json.loads((plugin.tmp / "status" / "s1.json").read_text(encoding="utf-8"))
+    assert st["role"] is None and st["expires_at"] == "[2J"
+    (plugin.tmp / "status" / "_shared.json").write_text(json.dumps({"action": "x\x1b]52;c;Zm9v\x07\ny" + "z" * 500, "at": time.time() + 9}))
+    line = _row(plugin, "s1")
+    assert "\x1b" not in line and "\n" not in line and "\x07" not in line and len(line) < 140
+
+
+def test_a_cached_whoami_never_hides_a_server_that_is_down_now(plugin, monkeypatch, capsys):
+    """Code review and QA: /whoami came from the cache, but /news failed at this start: the row says so, not «connected»."""
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/whoami"] = {"role": "reader", "token": {}}
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    plugin.answers["/brains/b1/news"] = _http(401, "revoked")
+    _run(plugin, "session-start", {"session_id": "s2"}, capsys)
+    assert _row(plugin, "s2").endswith("token rejected (401)") and plugin.line.health(plugin.line.current("s2", plugin.tmp / "status")) == "red"
+    plugin.answers["/brains/b1/news"] = urllib.error.URLError("down")
+    _run(plugin, "session-start", {"session_id": "s3"}, capsys)
+    assert _row(plugin, "s3").endswith("offline")
+
+
+def test_an_unreachable_server_is_not_asked_again_at_the_same_start(plugin, monkeypatch, capsys):
+    """Code review: when /whoami cannot reach the server, news and the capture's sends are left for the next start."""
+    _configure(monkeypatch, capture="send")
+    plugin.answers["/brains/b1/whoami"] = urllib.error.URLError("down")
+    _session(plugin, capsys, "old", "Moved the database to db02 and updated the backup job to match the new host and its retention.")
+    n = len(plugin.calls)
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    assert [c["path"] for c in plugin.calls[n:]] == ["/brains/b1/whoami"] and _row(plugin, "s1").endswith("offline")
+
+
+def test_with_recall_and_news_off_the_start_stays_off_the_network(plugin, monkeypatch, capsys):
+    _configure(monkeypatch, recall="off", news="off")
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    assert plugin.calls == [] and _row(plugin, "s1") == "● mimirsynth  b1 · capture off · recall off"
+
+
+def test_a_setup_during_the_session_shows_at_the_next_recall(plugin, monkeypatch, capsys):
+    """QA: the row said «not configured» until the next start, although the recall already worked."""
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/recall"] = {"context": "- x", "facts": [{}]}
+    _run(plugin, "prompt", {"prompt": "where does the database run now?", "session_id": "s1"}, capsys)
+    assert _row(plugin, "s1") == "● mimirsynth  b1 · capture off · recall: 1 fact"
+
+
+@pytest.mark.parametrize("body", [[1], "str", {"role": "reader", "token": "abc"}])
+def test_an_odd_whoami_answer_never_stops_the_session_start(plugin, monkeypatch, capsys, body):
+    """QA: an unexpected /whoami body lost the drafts message and the news."""
+    _configure(monkeypatch, capture="draft")
+    plugin.answers["/brains/b1/whoami"] = body
+    _session(plugin, capsys, "old", "Moved the database to db02 and updated the backup job to match the new host and its retention.")
+    out = _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    assert "1 session draft(s) waiting" in out["systemMessage"] and _row(plugin, "s1").endswith("unexpected answer")
+
+
+def test_a_damaged_whoami_cache_is_asked_again(plugin, monkeypatch, capsys):
+    _configure(monkeypatch)
+    (plugin.tmp / "status").mkdir()
+    (plugin.tmp / "status" / "_whoami.json").write_text(json.dumps({"k": 1, "x": {"at": "soon"}}), encoding="utf-8")
+    plugin.answers["/brains/b1/whoami"] = {"role": "reader", "token": {}}
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    assert _row(plugin, "s1").endswith("reader · capture off · connected")
+
+
+def test_a_failed_remember_still_says_why_and_shows_in_the_row(plugin, monkeypatch, capsys):
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/proposals"] = urllib.error.URLError("down")
+    with pytest.raises(urllib.error.URLError):                                 # the command fails loudly, as before
+        plugin.cli.main(["remember", "--title", "db", "--content", "the database runs on db02"])
+    shared = json.loads((plugin.tmp / "status" / "_shared.json").read_text(encoding="utf-8"))
+    assert shared["action"] == "proposal not sent: offline" and shared["health"] == "offline"
+    plugin.answers["/brains/b1/proposals"] = {"id": "x\x1b[2J", "status": "weird status!"}
+    assert plugin.cli.main(["remember", "--title", "db", "--content", "the database runs on db02"]) == 0
+    assert json.loads((plugin.tmp / "status" / "_shared.json").read_text(encoding="utf-8"))["action"] == "proposal #? sent"
+
+
+def test_reserved_names_are_never_a_session_and_leftovers_go(plugin, monkeypatch, capsys):
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/whoami"] = {"role": "reader", "token": {}}
+    _run(plugin, "session-start", {"session_id": "s1"}, capsys)
+    assert _row(plugin, "_whoami") == _row(plugin, "_shared") == "● mimirsynth  no activity yet"
+    left = plugin.tmp / "status" / ".s1.json.123.tmp"
+    left.write_text("{}", encoding="utf-8")
+    os.utime(left, (time.time() - 7200,) * 2)
+    _run(plugin, "session-start", {"session_id": "s2"}, capsys)
+    assert not left.exists()
+
+
+def test_a_token_that_expires_today_says_so(plugin):
+    soon = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3 * 3600))
+    assert plugin.line.row({"brain": "b1", "role": "reader", "expires_at": soon, "health": "ok"}, colour=False).endswith("reader · token expires today")

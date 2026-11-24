@@ -22,7 +22,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 EXPIRY_DAYS = 7   # a token that expires sooner shows amber, with the days left
-_SESSION = re.compile(r"^[\w.-]{1,128}$")
+_SESSION = re.compile(r"[A-Za-z0-9][\w.-]{0,127}")   # as `mimir.SESSION`: a leading «_» is a shared file, never a session
+_CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+FIELD_CHARS = 80
 COLOURS = {"green": "\033[32m", "amber": "\033[33m", "red": "\033[31m", "grey": "\033[90m"}
 RESET = "\033[0m"
 
@@ -52,6 +54,11 @@ def days_left(expires_at, now: float | None = None) -> int | None:
     return int((exp.timestamp() - (time.time() if now is None else now)) // 86400)
 
 
+def _text(v, n: int = FIELD_CHARS) -> str:
+    """A field as printed: a file someone else wrote could hold terminal escapes or new lines; the row has neither."""
+    return _CONTROL.sub("", str(v))[:n]
+
+
 def health(s: dict, now: float | None = None) -> str:
     if s.get("health") in ("offline", "rejected", "error"):
         return "red"
@@ -70,23 +77,24 @@ def row(s: dict, colour: bool = True, now: float | None = None) -> str:
         return f"{dot} mimirsynth  no activity yet"
     if s.get("configured") is False:
         return f"{dot} mimirsynth  not configured: run /mimirsynth:setup"
-    parts = [str(s.get("brain") or "?")]
+    parts = [_text(s["brain"])] if s.get("brain") else []
     if s.get("role"):
         left = days_left(s.get("expires_at"), now) if s.get("expires_at") else None
-        parts.append(str(s["role"]) + ("" if left is None or left >= EXPIRY_DAYS else " · token expired" if left < 0
-                                       else f" · token expires in {left} day{'' if left == 1 else 's'}"))
+        parts.append(_text(s["role"]) + ("" if left is None or left >= EXPIRY_DAYS else " · token expired" if left < 0
+                                         else " · token expires today" if left == 0
+                                         else f" · token expires in {left} day{'' if left == 1 else 's'}"))
     if s.get("capture"):
-        n = int(s.get("drafts") or 0)
-        parts.append(f"capture {s['capture']}" + (f" · {n} draft{'' if n == 1 else 's'}" if n else ""))
+        n = s.get("drafts") if isinstance(s.get("drafts"), int) else 0
+        parts.append(f"capture {_text(s['capture'], 16)}" + (f" · {n} draft{'' if n == 1 else 's'}" if n > 0 else ""))
     if s.get("action"):
-        parts.append(str(s["action"]))
+        parts.append(_text(s["action"]))
     return f"{dot} mimirsynth  " + " · ".join(parts)
 
 
 def current(session: str, base: Path | None = None) -> dict:
     """What the hooks wrote for this session, with a newer action that belongs to no session (a proposal from /mimirsynth:remember)."""
     base = status_dir() if base is None else base
-    s = _read(base / f"{session}.json") if _SESSION.match(session or "") else {}
+    s = _read(base / f"{session}.json") if _SESSION.fullmatch(session or "") else {}
     shared = _read(base / "_shared.json")
     if shared.get("action") and float(shared.get("at") or 0) > float(s.get("at") or 0):
         s = {**s, "action": shared["action"], "at": shared["at"], **({"health": shared["health"]} if shared.get("health") else {})}

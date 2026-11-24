@@ -60,14 +60,14 @@ MimirSynth puede mostrar una fila en la línea de estado de Claude Code, para sa
 ```
 ● mimirsynth  mi-brain · contributor · capture off · recall: 4 facts
 ```
-- **El punto:** verde si la última llamada salió bien, ámbar si el token de recall caduca en menos de 7 días (la fila dice cuántos), rojo si no se pudo llegar a MimirSynth, rechazó el token o falló.
+- **El punto:** verde si la última llamada salió bien, ámbar si el token de recall caduca en menos de 7 días (la fila dice cuántos), rojo si no se pudo llegar a MimirSynth (`offline`), rechazó el token o falló (`server error`, `unexpected answer`), gris si aún no se preguntó nada.
 - **Después:** el brain, el rol del token de recall, el modo de captura y los borradores en espera, y **lo último que hizo la memoria**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. Un recall que falla se ve aquí en vez de pasar inadvertido, y el prompt sigue adelante igual.
 
 Un plugin no puede añadir una línea de estado por sí solo. `/mimirsynth:setup` lo ofrece, o ejecuta:
 ```bash
 python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
 ```
-Copia el script de la fila a `~/.config/mimirsynth/statusline.py`, una ruta que no cambia al actualizar el plugin (cada inicio de sesión mantiene la copia al día), y añade `statusLine` a `~/.claude/settings.json`. **Si ya tienes una línea de estado, no se toca**, y el comando dice qué puede llamar tu propio script para añadir la fila de MimirSynth. `cli.py statusline --remove` quita solo la de MimirSynth. La fila solo lee ficheros que escribieron los hooks, así que no hace ninguna llamada de red. `/whoami` se pregunta al empezar la sesión, como mucho una vez por hora. `NO_COLOR` quita los colores.
+Copia el script de la fila a `~/.config/mimirsynth/statusline.py`, una ruta que no cambia al actualizar el plugin (cada inicio de sesión mantiene la copia al día), y añade `statusLine` a `~/.claude/settings.json`. **Si ya tienes una línea de estado, no se toca**, y el comando dice qué puede llamar tu propio script para añadir la fila de MimirSynth. `cli.py statusline --remove` quita solo la de MimirSynth. La fila solo lee ficheros que escribieron los hooks, así que no hace ninguna llamada de red. `/whoami` se pregunta al empezar la sesión, como mucho una vez por hora, y nunca con `recall` y `news` apagados; si no llega al servidor, ese inicio no pregunta nada más. Lo que manda el servidor se muestra sin caracteres de control. `NO_COLOR` quita los colores.
 
 ### Otros plugins de memoria
 
