@@ -25,6 +25,7 @@ Una memoria que solo acumula acaba siendo un registro de todo lo que se dijo alg
 - Corre como un trabajo ([[Trabajos]], «Medir la salud de la memoria»), un brain cada vez.
 - La cobertura, lo desactualizado y el ruido salen de **recalls**, un embedding cada uno (las consultas de referencia y ocho preguntas vagas). No se registran para las valoraciones del recall. Un brain que ha llegado a su presupuesto de [[Consumo de IA]] no se prueba ese día; el resto de cifras se mide igual.
 - Cada cifra se mide por su cuenta: la que falla queda vacía y se nombra bajo las cifras, y el resto se conserva.
+- La misma medición cuenta los **términos comunes** del brain: las palabras que salen en más del 20 % de sus fragmentos de episodio o de los pasajes de sus documentos activos (con al menos 50 de ellos). No es una cifra de la pantalla; el recall la usa con *Pesar menos los términos comunes del brain* ([[Recuerdo e ingesta]]).
 - No se escribe nada en el grafo.
 - Las mediciones se guardan 400 días.
 

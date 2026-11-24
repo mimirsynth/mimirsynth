@@ -43,11 +43,13 @@ Every fact in the recall's JSON says its **trust tier** (`trust`), from where it
 
 A token sets the most its proposals can claim (*For an automatic capture* when it is created makes it `auto`), and the `origin` a client sends can only lower it. Facts from before this have no tier.
 
-Two settings, both **off by default** under Administration → Recall, change the order:
+Four settings, all **off by default** under Administration → Recall, change the order:
 - **Weigh facts by their origin**: an agent's fact weighs *Weight of a fact written by an agent* (0.95) and an automatic one *Weight of a fact captured automatically* (0.85).
 - **Age facts by their relation**: a current fact of a relation with a shelf life loses weight little by little, down to *Weight of a fact to review* when its shelf life ends, instead of all at once at the end.
+- **Weigh the brain's common terms less**: a word in more than 20% of the brain's episode fragments or document passages (its subject, for example) is not searched as text in them; only its meaning counts. A question whose only distinctive word is that one no longer brings the many fragments that merely name it, and the word does not count toward the two shared terms that let a fragment in with a little less similarity. The terms are counted with the daily [[Memory health]] measurement; until a brain has been measured, nothing changes. Facts are found by meaning only, so this changes fragments and passages, not facts.
+- **Move down what may be superseded**: each «may be superseded» warning on a fragment or a passage moves it two places down before the ones that go in are chosen. The recall looks at two more than it returns, so one with several warnings gives its place to a clean one that also passed the threshold. Warned texts still go after the clean ones.
 
-Simulate them with the [[Reference queries]] before turning them on.
+Simulate them with the [[Reference queries]] or by replaying the sample ([[Ask]]) before turning them on.
 
 ## Ingestion and jobs
 | Setting | Default | Range | What it does |

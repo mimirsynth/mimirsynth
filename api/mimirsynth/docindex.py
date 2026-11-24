@@ -77,8 +77,10 @@ _SEL = ("c.id AS id, c.document_id, c.chunk_idx, c.heading_path, c.char_start, c
         "d.source_updated_at, d.last_seen_at, d.meta->>'transcript' AS transcript")
 
 
-def search(brain_id: int, qvec: list[float], qtext: str, k: int = 8, pool: int = 40, source_id: int | None = None) -> list[dict]:
-    """Búsqueda híbrida: vectorial (coseno) + texto completo (OR de términos), fusionadas con RRF. Solo documentos activos."""
+def search(brain_id: int, qvec: list[float], qtext: str, k: int = 8, pool: int = 40, source_id: int | None = None,
+           skip: frozenset[str] = frozenset()) -> list[dict]:
+    """Búsqueda híbrida: vectorial (coseno) + texto completo (OR de términos), fusionadas con RRF. Solo documentos activos. `skip`: terms
+    the text part leaves out (#459)."""
     if not enabled():
         return []
     src = " AND d.source_id=:s" if source_id else ""
@@ -86,7 +88,7 @@ def search(brain_id: int, qvec: list[float], qtext: str, k: int = 8, pool: int =
     with engine().begin() as c:
         vec = c.execute(text(f"SELECT {_SEL}, 1 - (c.embedding <=> CAST(:q AS vector)) AS score FROM doc_chunks c JOIN documents d ON d.id=c.document_id "
                              f"WHERE c.brain_id=:b AND d.status='active'{src} ORDER BY c.embedding <=> CAST(:q AS vector) LIMIT :n"), {**par, "q": str(qvec)}).mappings().all()
-        tsq = _tsquery(qtext)
+        tsq = _tsquery(qtext, skip)
         fts = c.execute(text(f"SELECT {_SEL}, ts_rank(c.tsv, to_tsquery('simple', :t)) AS score FROM doc_chunks c JOIN documents d ON d.id=c.document_id "
                              f"WHERE c.brain_id=:b AND d.status='active'{src} AND c.tsv @@ to_tsquery('simple', :t) ORDER BY score DESC LIMIT :n"), {**par, "t": tsq}).mappings().all() if tsq else []
     byid = {r["id"]: dict(r) for r in [*vec, *fts]}

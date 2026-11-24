@@ -150,20 +150,23 @@ todavía aún existiendo existe existen cuál este estos esas esos más muy sin 
 current from that this are was were has have been""".split())
 
 
-def _tsquery(q: str) -> str:
-    toks = {t for t in re.findall(r"[\wáéíóúñü]{3,}", q.lower()) if t not in _STOP}  # solo alfanuméricos: no rompe tsquery
+def _tsquery(q: str, skip: frozenset[str] = frozenset()) -> str:
+    """The query's terms joined with OR. `skip`: terms left out, such as the brain's common terms (#459)."""
+    toks = {t for t in re.findall(r"[\wáéíóúñü]{3,}", q.lower()) if t not in _STOP and t not in skip}  # solo alfanuméricos: no rompe tsquery
     return " | ".join(sorted(toks))
 
 
-def search(brain_id: int, qvec: list[float], qtext: str, k: int = 4, pool: int = 40, recency: float = 0.12) -> list[dict]:
-    """Búsqueda híbrida: vectorial (coseno) + texto completo (OR de términos), fusionadas con RRF."""
+def search(brain_id: int, qvec: list[float], qtext: str, k: int = 4, pool: int = 40, recency: float = 0.12,
+           skip: frozenset[str] = frozenset()) -> list[dict]:
+    """Búsqueda híbrida: vectorial (coseno) + texto completo (OR de términos), fusionadas con RRF. `skip`: terms the text part leaves
+    out (#459); with none left, only the vector part ranks."""
     if not enabled():
         return []
     with engine().begin() as c:
         vec = c.execute(text("SELECT id, name, text, valid_at, episode_uuid, 1 - (embedding <=> CAST(:q AS vector)) AS score, "
                              "1 - (embedding <=> CAST(:q AS vector)) AS similarity FROM episode_chunks "
                              "WHERE brain_id=:b ORDER BY embedding <=> CAST(:q AS vector) LIMIT :n"), {"q": str(qvec), "b": brain_id, "n": pool}).mappings().all()
-        tsq = _tsquery(qtext)
+        tsq = _tsquery(qtext, skip)
         fts = c.execute(text("SELECT id, name, text, valid_at, episode_uuid, ts_rank(tsv, to_tsquery('simple', :t)) AS score, "
                              "1 - (embedding <=> CAST(:q AS vector)) AS similarity FROM episode_chunks "
                              "WHERE brain_id=:b AND tsv @@ to_tsquery('simple', :t) ORDER BY score DESC LIMIT :n"),

@@ -13,6 +13,8 @@ stale fact.
   repeat: they are a change). Past MAX_SAMPLE candidate facts it is estimated on the most recent ones and says so.
 - **Open contradictions** (in the functional relations; none if no relation is functional) and **facts to review** (past their
   shelf life; none if no relation has one), as their screens count them.
+- **Common terms** (`terms`, #459): the words in more than a share of the brain's episode fragments or document passages, which the
+  recall can leave out of its text search (`terms.py`). Not a headline number.
 - **Similarity** (#468): how similar two current facts of the brain usually are, and those a curator judged the same (see
   similarity.py). Not a headline number: kept here so the review panels read their «close» against the brain's own distribution.
 
@@ -296,6 +298,13 @@ def measure(brain_id: int, check=lambda: None, progress=lambda m: None) -> dict:
         with _factory()() as db:
             return retrievability(db, brain_id)
     part("retrievable", retrievable)
+
+    def common_terms():
+        from . import terms
+        m = terms.measure(brain_id)
+        terms.remember(brain_id, m)
+        return {"terms": m}
+    part("terms", common_terms)
     for k in HEADLINE:
         out.setdefault(k, None)
     return out
@@ -436,7 +445,8 @@ def latest(db, since_days: int = 2) -> dict[int, dict]:
 # --- API ----------------------------------------------------------------------------------------
 
 def _out(r: HealthRun) -> dict:
-    return {"id": r.id, "day": r.day.isoformat(), "status": r.status, "reason": r.reason, "metrics": r.metrics, "error": r.error,
+    metrics = {k: v for k, v in r.metrics.items() if k != "terms"} if r.metrics else r.metrics   # the common terms are for the recall
+    return {"id": r.id, "day": r.day.isoformat(), "status": r.status, "reason": r.reason, "metrics": metrics, "error": r.error,
             "job_id": r.job_id, "created_at": r.created_at, "finished_at": r.finished_at}
 
 

@@ -172,6 +172,7 @@ type Health = { items: HealthRun[]; latest: HealthRun | null; measuring: boolean
 const HEALTH_PARTS: Record<string, string> = {
   probes: T("las preguntas de prueba"), redundancy: T("la redundancia"), contradictions: T("las contradicciones"), stale_facts: T("los hechos a revisar"),
   retrievable: T("las propuestas que se recuperan"), similarity: T("la similitud entre hechos"),
+  terms: T("los términos comunes"),
 };
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? "—" : v.toLocaleString(locale(), { style: "percent", maximumFractionDigits: 1 }));

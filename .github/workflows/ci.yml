@@ -90,6 +90,10 @@ jobs:
           MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
           MIMIRSYNTH_TEST_FALKOR: localhost
         run: cd api && .venv/bin/pytest -q tests/test_brain_import_pg.py
+      - name: Términos comunes del recall (PostgreSQL real)
+        env:
+          MIMIRSYNTH_TEST_PG: postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test
+        run: cd api && .venv/bin/pytest -q tests/test_recall_terms_pg.py
   api-neo4j:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.api-neo4j != 'false' }}

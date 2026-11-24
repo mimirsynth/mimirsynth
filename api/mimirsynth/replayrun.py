@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/brains/{slug}/replay")
 KIND = "replay.run"
 RUNS_PER_HOUR = 10
 KEEP_RUNS = 20
-CANDIDATE = ("min_similarity", "min_sim", "docs", "facts", "chunks", "trust", "decay", "state_card")
+CANDIDATE = ("min_similarity", "min_sim", "docs", "facts", "chunks", "trust", "decay", "state_card", "common_terms", "superseded_rank")
 
 
 class CandidateIn(BaseModel):
@@ -39,6 +39,8 @@ class CandidateIn(BaseModel):
     trust: bool | None = None
     decay: bool | None = None
     state_card: bool | None = None
+    common_terms: bool | None = None
+    superseded_rank: bool | None = None
 
 
 class RunIn(BaseModel):
@@ -97,6 +99,7 @@ def _job(ctx: "jobs.JobCtx", p: dict) -> dict:
                 out = recall(bid, gname, query, merged.get("facts", 8), merged.get("chunks", 4), merged.get("max_chars", 6000),
                              n_docs=merged.get("docs"), min_sim=merged.get("min_sim"), min_similarity=merged.get("min_similarity"),
                              trust=merged.get("trust"), decay=merged.get("decay"), state_card=merged.get("state_card"),
+                             common_terms=merged.get("common_terms"), superseded_rank=merged.get("superseded_rank"),
                              **({"sources": src} if src and merged.get("federated", True) else {}))
                 results.append({"sample_id": sid, "query": query[:300], **diff(before, items_of(out)), "outdated": outdated(out)})
             except Exception as e:  # noqa: BLE001  (one question that fails does not stop the run)
