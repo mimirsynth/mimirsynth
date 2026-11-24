@@ -2,6 +2,10 @@
 import asyncio
 import inspect
 from datetime import datetime, timezone
+from types import SimpleNamespace
+
+import httpx
+import pytest
 
 from test_control import client  # noqa: F401  (first: it sets the test environment before mimirsynth reads its settings)
 
@@ -76,3 +80,67 @@ def test_a_graphiti_upgrade_that_drops_the_flag_is_reported(monkeypatch, caplog)
 def test_the_graphiti_names_the_fix_relies_on_are_there():
     assert "skip_fact_appending" in inspect.signature(node_operations.extract_attributes_from_nodes).parameters
     assert hasattr(gg, "extract_attributes_from_nodes")   # add_episode calls it by the name graphiti.py imported
+
+
+def test_an_empty_entity_summary_keeps_the_nodes_and_continues_to_embeddings(monkeypatch):
+    from graphiti_core.llm_client.errors import EmptyResponseError
+    from mimirsynth import usage
+
+    async def attributes(*args, **kwargs):
+        return {}
+
+    async def empty_summary(*args, **kwargs):
+        request = httpx.Request("POST", "http://llm/v1/chat/completions", content=b"{}")
+        response = httpx.Response(200, json={"choices": [{"finish_reason": "length"}],
+                                             "usage": {"prompt_tokens": 120, "completion_tokens": 16384}}, request=request)
+        usage._on_response("llm", "m-summary", response, response.content)
+        raise EmptyResponseError("LLM returned an empty response")
+
+    embedded = []
+
+    async def embeddings(embedder, nodes):
+        embedded.extend(nodes)
+
+    monkeypatch.setattr(node_operations, "_extract_entity_attributes", attributes)
+    monkeypatch.setattr(node_operations, "_process_summary_flight", empty_summary)
+    monkeypatch.setattr(node_operations, "create_entity_node_embeddings", embeddings)
+    monkeypatch.setattr(gg, "extract_attributes_from_nodes", node_operations.extract_attributes_from_nodes)
+    assert ingest.llm_summaries() is True
+
+    node = EntityNode(name="Lyra", group_id="g", labels=["Entity"], summary="")
+    episode = EpisodicNode(name="e", group_id="g", source=EpisodeType.text, source_description="test", content="Lyra runs Pangolin.",
+                           valid_at=datetime.now(timezone.utc))
+    clients = SimpleNamespace(llm_client=object(), embedder=object())
+    failure = {}
+    failure_token = ingest._SUMMARY_FAILURE.set(failure)
+    try:
+        with usage.response_state() as response:
+            response.update({"finish_reason": "length", "prompt_tokens": 120, "completion_tokens": 16384, "estimated": False,
+                             "token_limit": True})
+            asyncio.run(node_operations.extract_attributes_from_nodes(clients, [node], episode, [], None, edges=[], skip_fact_appending=True))
+    finally:
+        ingest._SUMMARY_FAILURE.reset(failure_token)
+
+    assert embedded == [node] and node.summary == "" and node.attributes == {}
+    assert failure == {"step": "entity_summary", "prompt_name": "extract_nodes.extract_entity_summaries_from_episodes",
+                       "reason": "empty response", "status_code": 200, "finish_reason": "length", "prompt_tokens": 120,
+                       "completion_tokens": 16384, "estimated": False, "token_limit": True}
+
+
+def test_non_empty_entity_summary_errors_still_propagate(monkeypatch):
+    async def broken_summary(*args, **kwargs):
+        raise RuntimeError("summary provider failed")
+
+    monkeypatch.setattr(gg, "extract_attributes_from_nodes", node_operations.extract_attributes_from_nodes)
+    monkeypatch.setattr(node_operations, "_process_summary_flight", broken_summary)
+    assert ingest.llm_summaries() is True
+    clients = SimpleNamespace(llm_client=object(), embedder=object())
+    node = EntityNode(name="Lyra", group_id="g", labels=["Entity"], summary="")
+    episode = EpisodicNode(name="e", group_id="g", source=EpisodeType.text, source_description="test", content="Lyra runs Pangolin.",
+                           valid_at=datetime.now(timezone.utc))
+    async def attributes(*args, **kwargs):
+        return {}
+
+    monkeypatch.setattr(node_operations, "_extract_entity_attributes", attributes)
+    with pytest.raises(RuntimeError, match="summary provider failed"):
+        asyncio.run(gg.extract_attributes_from_nodes(clients, [node], episode, [], None, edges=[], skip_fact_appending=True))

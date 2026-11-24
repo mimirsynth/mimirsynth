@@ -22,7 +22,7 @@ Botón **Añadir motor**. Campos:
 - **Clave de API:** se guarda **cifrada**. Para un servicio local sin autenticación suele valer cualquier texto. Al editar, vacío = conservar la actual.
 - **Cargar modelos:** pide al endpoint la lista de modelos disponibles. Si el endpoint no la ofrece, escribe el nombre a mano.
 - **Modelo:** el modelo a usar. En un motor de embeddings no se puede cambiar después de guardarlo (ver más abajo).
-- **Modelo pequeño (solo LLM, opcional):** para tareas ligeras; por defecto el mismo.
+- **Modelo pequeño (solo LLM, opcional):** para tareas ligeras como resúmenes de entidades, deduplicación y resolución de relaciones. Elige un modelo sin razonamiento o desactiva el *thinking*; por defecto se usa el mismo.
 - **Umbral de confianza (solo Decisor):** entre 0,50 y 0,99 (por defecto 0,80). Por debajo, la propuesta va a revisión humana.
 - **Nombre** y **Activado**.
 Pulsa **Guardar**. Después **Probar** hace una llamada real: el resultado («OK…» o el error) aparece bajo el motor.

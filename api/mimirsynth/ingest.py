@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import time
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 
 from . import appsettings, ontology as ontology_mod
@@ -12,6 +13,8 @@ from .graphdb import backend
 
 os.environ.setdefault("SEMAPHORE_LIMIT", str(settings.ingest_concurrency))  # antes de importar graphiti_core
 log = logging.getLogger("mimirsynth.ingest")
+_SUMMARY_PROMPT = "extract_nodes.extract_entity_summaries_from_episodes"
+_SUMMARY_FAILURE: ContextVar[dict[str, object] | None] = ContextVar("mimirsynth_summary_failure", default=None)
 
 
 def llm_summaries() -> bool:
@@ -25,12 +28,38 @@ def llm_summaries() -> bool:
     moved or renamed it, so the change shows instead of failing ingestion."""
     import inspect
     import graphiti_core.graphiti as gg
+    from graphiti_core.llm_client.errors import EmptyResponseError
+    from graphiti_core.utils.maintenance import node_operations
+
     orig = getattr(gg, "extract_attributes_from_nodes", None)
     if getattr(orig, "_mimirsynth_llm_summaries", False):
         return True
     if orig is None or "skip_fact_appending" not in inspect.signature(orig).parameters:
         log.warning("graphiti-core no longer has extract_attributes_from_nodes(skip_fact_appending=…): summaries append raw facts again")
         return False
+
+    flight = getattr(node_operations, "_process_summary_flight", None)
+    if flight is None:
+        log.warning("graphiti-core no longer has _process_summary_flight: empty entity summaries still fail ingestion")
+        return False
+    if not getattr(flight, "_mimirsynth_empty_summary_fallback", False):
+        async def summary_flight(*args: object, **kwargs: object) -> None:
+            from . import usage
+            # Graphiti processes summary flights concurrently; each flight needs its own
+            # response metadata so a sibling model call cannot overwrite this report.
+            with usage.response_state():
+                try:
+                    return await flight(*args, **kwargs)
+                except EmptyResponseError:
+                    failure = _SUMMARY_FAILURE.get()
+                    if failure is not None and not failure:
+                        failure.update({"step": "entity_summary", "prompt_name": _SUMMARY_PROMPT, "reason": "empty response",
+                                        **usage.response_details()})
+                        failure.setdefault("token_limit", "unknown")
+                    log.warning("Graphiti entity summary returned an empty response; keeping existing summaries and continuing ingest")
+                    return None
+        summary_flight._mimirsynth_empty_summary_fallback = True
+        node_operations._process_summary_flight = summary_flight
 
     async def wrapped(*args, **kwargs):
         kwargs["skip_fact_appending"] = True
@@ -97,10 +126,14 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
     started = datetime.now(timezone.utc) - timedelta(seconds=5)
     not_entities: dict[str, int] = {}
     token = hygiene.dropped.set(not_entities)
+    summary_failure: dict[str, object] = {}
+    summary_token = _SUMMARY_FAILURE.set(summary_failure)
     try:
-        res = await g.add_episode(name=name, episode_body=body, source=EpisodeType[source if source in EpisodeType.__members__ else "text"],
-                                  source_description=description or "mimirsynth", reference_time=reference_time or datetime.now(timezone.utc),
-                                  group_id=graph_name, **(ontology_mod.to_graphiti(ontology) if ontology else {}))
+        from . import usage
+        with usage.response_state():
+            res = await g.add_episode(name=name, episode_body=body, source=EpisodeType[source if source in EpisodeType.__members__ else "text"],
+                                      source_description=description or "mimirsynth", reference_time=reference_time or datetime.now(timezone.utc),
+                                      group_id=graph_name, **(ontology_mod.to_graphiti(ontology) if ontology else {}))
         if report is not None:
             allowed = {ontology_mod.canon(t["name"]) for t in (ontology or {}).get("edge_types", [])}
             names = [e.name for e in res.edges]
@@ -112,8 +145,11 @@ async def add_episode(graph_name: str, name: str, body: str, source: str, descri
                            "_nodes": [(str(n.uuid), n.name, bool(n.created_at and n.created_at >= started)) for n in res.nodes]})
             if not_entities:
                 report["not_entities"] = dict(sorted(not_entities.items()))   # by kind, never the names
+            if summary_failure:
+                report["entity_summary"] = {"status": "skipped", **summary_failure}
         return str(res.episode.uuid)
     finally:
+        _SUMMARY_FAILURE.reset(summary_token)
         hygiene.dropped.reset(token)
         await g.close()
 
@@ -167,6 +203,18 @@ def ingest_proposal(pid: int, job=None) -> str:
                     if job:
                         job.retrying(f"error transitorio del LLM (intento {attempt}): reintento en {wait}s")
                     time.sleep(wait)
+            if job and isinstance(rep.get("entity_summary"), dict):
+                summary = rep["entity_summary"]
+                token_limit = summary.get("token_limit", "unknown")
+                token_limit = str(token_limit).lower() if isinstance(token_limit, bool) else token_limit
+                try:
+                    job.note("Graphiti: el paso de resumen de entidades se omitió por una respuesta vacía "
+                             f"(prompt {summary.get('prompt_name', _SUMMARY_PROMPT)}; "
+                             f"límite de tokens: {token_limit}; "
+                             f"tokens de entrada/salida: {summary.get('prompt_tokens', 'unknown')}/"
+                             f"{summary.get('completion_tokens', 'unknown')})")
+                except Exception:  # noqa: BLE001  (the episode is already in the graph; logging must not cause a duplicate ingest)
+                    log.warning("no se pudo guardar el aviso del resumen vacío de la propuesta %s", pid, exc_info=True)
             from . import retirement, vocab_apply, write_quality
             created = list(rep.get("_new_edges") or [])   # both lists are consumed below; the retirement check reads what is left
             # repeats become one, trivial facts go (#458), and the decider judges what only restates the brain's subject (#465, not for a
