@@ -1,6 +1,0 @@
-{
- "Bajar lo que puede estar superado": "Move down what may be superseded",
- "Cada aviso «puede estar superado» de un fragmento o un pasaje lo baja dos puestos antes de elegir los que entran, así que uno con varios avisos deja su sitio a uno limpio. Simúlalo antes con las consultas de referencia.": "Each “may be superseded” warning on a fragment or a passage moves it two places down before the ones that go in are chosen, so one with several warnings gives its place to a clean one. Simulate it first with the reference queries.",
- "Pesar menos los términos comunes del brain": "Weigh the brain's common terms less",
- "Una palabra que sale en más del 20 % de los fragmentos o de los pasajes de un brain (su tema, por ejemplo) no se busca como texto en ellos: solo cuenta su significado. Así, una pregunta cuya única palabra distintiva es esa no trae cientos de fragmentos que solo la nombran. Simúlalo antes con las consultas de referencia.": "A word in more than 20% of a brain's fragments or passages (its subject, for example) is not searched as text in them: only its meaning counts. So a question whose only distinctive word is that one does not bring hundreds of fragments that merely name it. Simulate it first with the reference queries."
-}

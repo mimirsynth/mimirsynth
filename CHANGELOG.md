@@ -8,6 +8,32 @@ Releases publish a container image to `ghcr.io/mimirsynth/mimirsynth` (tags `X.Y
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-24
+### Added
+- a correction can reactivate a fact invalidated by mistake (`action: "reactivate"` in `POST /proposals/corrections` and the MCP tool `correct`); it is decided by a person, recorded in the vocabulary history and can be undone. (#443)
+- a pending free-text proposal says what approving it does: its relations are extracted only after approval, and it never invalidates or reactivates a fact reliably. (#443)
+- ingestion merges facts that repeat word for word (or link the episode to a current fact that already says it) and drops new facts with a placeholder or the memory itself at one end; the proposal's ingest report shows what was merged or dropped and why. (#458) (#470)
+- «Review this topic» on an entity page asks the brain's LLM to read everything known about the entity and propose invalidations, merges, rewrites and missing knowledge, each citing its evidence; a curator approves or rejects each action in Content quality → Topics, and an approved one becomes a correction or a proposal. (#454) (#474)
+- corrections sent together (same author, token and origin) are reviewed as one group and approved at once, each applied as its own undoable correction; a topic review decides its ticked actions at once. (#457) (#476)
+- a newly ingested fact saying an entity was retired or replaced queues a topic review of that entity on its own, with the fact as its anchor, so a curator can invalidate what still describes it as live; relations can mark a retirement in the ontology, and the curator settings `retirement_reviews` and `retirement_daily` bound it. (#455) (#477)
+- Content quality → Topics → «Where to start» ranks the brain's topics where a topic review pays off most, by how often their facts come up in queries, their size, their repeats, their facts past their shelf life or refuted, a retirement review waiting and the time since their last review, with each input shown next to the topic and a button to review it; `GET /api/brains/{slug}/topics/queue` serves it. (#456) (#478)
+- ingestion no longer creates entities from command-line flags, code fields, file paths, URLs, dates or phrases; the type corrector can merge a name that is not an entity into the entity it is a detail of, undoable, and only allows bulk apply after 20 decisions taken one by one; the duplicates tab ignores a dot beside a letter and the prefixes a pack declares equivalent (`CT`/`LXC`); the infrastructure and software-knowledge packs add `Software` and `Model`. (#467) (#480)
+- Each brain measures how similar any two of its facts usually are, and how similar the facts a curator judged the same are, with the daily health run or on demand; Ask → Quality shows it next to the similarity thresholds in use. (#482)
+- Two recall settings, off by default and simulable with the reference queries and the replay sample. The first leaves a brain's common terms (its subject, say) out of the text search of its fragments and passages. The second moves a fragment or passage two places down per "may be superseded" warning. (#483)
+- With the new setting «Drop facts that only restate the brain's subject» turned on (off by default), right after ingestion the default decider judges the new facts with an end that names the brain's subject, and drops those that only restate it («network N1 belongs to Acme», in a brain about Acme). They are listed in the ingest report with the decider's confidence. It never runs for corrections, claims, flagged secrets or distilled notes, and is bounded by the brain's AI budget. (#484)
+- A chat or meeting transcript found among documents is put on hold instead of being chunked, and a brain administrator decides whether to index it as a conversation, whose passages rank below documents of equal relevance and are labelled as chat in recall and Ask, or as an ordinary document. (#485)
+- The Claude Code plugin can show a status row with the server's health, the brain, the token's role, the capture mode and what the memory last did, a failed recall included; `cli.py statusline` adds it to Claude Code's status line without replacing one you already have. (#486)
+
+### Changed
+- The Cypher query is now the «Cypher» tab of the Graph screen. A result with nodes is drawn on the Graph canvas, clicking a node or an edge shows its properties beside it, and «Show as» switches to the table. The sidebar no longer has a separate Cypher query entry, and its old address leads to the tab. (#442)
+- sending a correction while another for the same fact is pending returns that one instead of a second; the review queue shows each proposal's number and, for a correction, which fact it is about, and its search finds proposals by number. (#460) (#475)
+- «Very similar» in a proposal's review is read against the brain's own measurement instead of a fixed threshold, and each related fact says its similarity in words against what is usual in that brain. (#482)
+
+### Fixed
+- the curator's noise pass no longer proposes invalidating a fact that says something was replaced, retired or decommissioned, a change that gives its reason («to free RAM», «para evitar…»), or a fact with a generic relation that says where something is kept. (#462) (#463)
+- the curator's redundancy pass and the memory health no longer treat two facts that name different things («…node A…» and «…node B…») as repeats, and among repeats the pass keeps the more precise fact («…M 7050 Micro» over «…M 7050») instead of the newest. (#461) (#464)
+- the Duplicates tab groups names that differ only in case, spaces, `_` or `-` («VM 201» and «VM201»), compares names that are only an address or a version instead of skipping them, and no longer groups different entities whose names end in a number glued to them («ups@10.0.0.4», «min_similarity=0.55») or in an address; «not duplicates» marks saved before keep working. (#469)
+
 ## [0.16.0] - 2026-11-12
 ### Added
 - `GET /brains/{slug}/changes` returns the counts of the previous period (`previous`) and per-hour or per-day series (`series`); `GET /brains/{slug}/attention` returns the date of the oldest pending proposal (`proposals_oldest`). (#437)
