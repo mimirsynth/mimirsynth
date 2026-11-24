@@ -55,6 +55,20 @@ What is recorded and sent:
 - **Secrets:** before anything is written to disk or sent, it is redacted with the server's own detector (`scripts/mimirsynth_agent/secretscan.py` is the same file as `api/mimirsynth/secretscan.py`, and a test keeps them equal). It works by patterns and is not infallible: read the drafts if in doubt.
 - **When it leaves the machine:** at the next start, not at the end of the session, because Claude Code gives a plugin only 1.5 s when a session ends.
 
+### Status row
+MimirSynth can show a row in Claude Code's status line, so you can tell what the memory did without asking:
+```
+● mimirsynth  my-brain · contributor · capture off · recall: 4 facts
+```
+- **The dot:** green when the last call worked, amber when the recall token expires within 7 days (the row says how many), red when MimirSynth could not be reached (`offline`), rejected the token or failed (`server error`, `unexpected answer`), grey before anything was asked (`ready`: the role came from the hour's cache and nothing at this start reached the server).
+- **Then:** the brain, the recall token's role, the capture mode and the drafts waiting, and **what the memory last did**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. A failed recall shows here instead of passing unnoticed, and the prompt still carries on.
+
+A plugin cannot add a status line by itself. `/mimirsynth:setup` offers it, or run:
+```bash
+python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
+```
+It copies the row's script to `~/.config/mimirsynth/statusline.py`, a path that does not change when the plugin updates (each session start keeps the copy current), and adds `statusLine` to `~/.claude/settings.json`. **If you already have a status line it is left alone**, and the command prints what your own script can call to add MimirSynth's row. `cli.py statusline --remove` takes out only MimirSynth's. The row reads only files the hooks wrote, so it makes no network call. `/whoami` is asked at session start, at most once an hour, and not at all with `recall` and `news` both off; if it cannot reach the server, that start asks nothing else. What the server sends is shown without control characters. `NO_COLOR` turns the colours off.
+
 ### Other memory plugins
 
 If another plugin or hook also injects memory, the session start says so (it does not block anything). MimirSynth's blocks are marked so you can tell them apart. If `mimirsynth_recall.py` is still in `settings.json`, it says that too.

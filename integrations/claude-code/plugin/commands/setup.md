@@ -20,3 +20,11 @@ What it asks for:
 4. The capture mode: `off` (the default: nothing about the sessions is written or sent), `draft` (each session is kept on this machine, redacted, until the user reviews it with `/mimirsynth:remember`), or `send` (at the next session start, each finished session that changed files or ended with a substantial answer becomes one proposal, with low confidence, in quarantine).
 
 When they are done, they can check it with `/mimirsynth:status`.
+
+**Status row.** MimirSynth can also show a row in Claude Code's status line: the server's health, the brain, the token's role, the capture mode and what the memory last did («recall: 4 facts», «recall: offline», «proposal #12 queued for review»). A plugin cannot add a status line by itself, so offer it, and only if the user agrees run:
+
+```
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cli.py" statusline
+```
+
+It never replaces a status line the user already has: then it prints the command their own script can call. `cli.py statusline --remove` takes it out.

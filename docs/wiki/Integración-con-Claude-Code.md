@@ -39,17 +39,32 @@ Si MimirSynth no responde en `timeout`, no se inyecta nada y el prompt sigue; un
 ### Comandos
 | Comando | Qué hace |
 |---|---|
-| `/mimirsynth:setup` | Te dice cómo configurarlo |
-| `/mimirsynth:status` | Conexión, brain, rol, alcance y caducidad de cada token, versión del servidor, modo de captura, borradores y otros hooks de memoria de esta máquina |
+| `/mimirsynth:setup` | Te dice cómo configurarlo y ofrece la fila de estado |
+| `/mimirsynth:status` | Conexión, brain, rol, alcance y caducidad de cada token, versión del servidor, modo de captura, borradores, otros hooks de memoria de esta máquina, lo último que hizo la memoria y si la fila de estado está puesta |
 | `/mimirsynth:search <consulta>` | Recall a demanda, con más resultados |
 | `/mimirsynth:remember [título]` | Claude redacta una memoria a partir de la conversación y la envía cuando estás de acuerdo; sin título, revisa los borradores que dejó la captura |
 
 ### Captura
 Apagada por defecto; la decide `capture`, con las mismas reglas en todos los plugins ([[Configuración de los plugins de agente]]).
 
+### Fila de estado
+MimirSynth puede mostrar una fila en la línea de estado de Claude Code, para saber qué ha hecho la memoria sin preguntar:
+```
+● mimirsynth  mi-brain · contributor · capture off · recall: 4 facts
+```
+- **El punto:** verde si la última llamada salió bien, ámbar si el token de recall caduca en menos de 7 días (la fila dice cuántos), rojo si no se pudo llegar a MimirSynth (`offline`), rechazó el token o falló (`server error`, `unexpected answer`), gris si aún no se preguntó nada (`ready`: el rol salió de la caché de la hora y nada en este inicio llegó al servidor).
+- **Después:** el brain, el rol del token de recall, el modo de captura y los borradores en espera, y **lo último que hizo la memoria**: `recall: 4 facts, 2 passages`, `recall: nothing relevant`, `recall: offline`, `recall: token rejected (401)`, `recall: server error 503`, `proposal #12 queued for review`, `connected`. Un recall que falla se ve aquí en vez de pasar inadvertido, y el prompt sigue adelante igual.
+
+Un plugin no puede añadir una línea de estado por sí solo. `/mimirsynth:setup` lo ofrece, o ejecuta:
+```bash
+python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
+```
+Copia el script de la fila a `~/.config/mimirsynth/statusline.py`, una ruta que no cambia al actualizar el plugin (cada inicio de sesión mantiene la copia al día), y añade `statusLine` a `~/.claude/settings.json`. **Si ya tienes una línea de estado, no se toca**, y el comando dice qué puede llamar tu propio script para añadir la fila de MimirSynth. `cli.py statusline --remove` quita solo la de MimirSynth. La fila solo lee ficheros que escribieron los hooks, así que no hace ninguna llamada de red. `/whoami` se pregunta al empezar la sesión, como mucho una vez por hora, y nunca con `recall` y `news` apagados; si no llega al servidor, ese inicio no pregunta nada más. Lo que manda el servidor se muestra sin caracteres de control. `NO_COLOR` quita los colores.
+
 ### Qué escribe en tu máquina
 - `~/.config/mimirsynth/config.json`, la configuración compartida (lo escribe `setup`).
 - Con la captura encendida: un fichero por sesión en la carpeta de datos del plugin (`$CLAUDE_PLUGIN_DATA/sessions`), o en `~/.config/mimirsynth/state/sessions/`, legible solo por ti, que se borra a los 14 días.
+- Para la fila de estado, en `~/.config/mimirsynth/status/` (se borran a los 7 días): un fichero pequeño por sesión con el brain, el rol y la caducidad del token, el modo de captura, los borradores y la última acción (nunca un token, un prompt ni un hecho); `_shared.json`, la última propuesta enviada con `/mimirsynth:remember`; y `_whoami.json`, el rol y la caducidad del token de recall bajo un hash corto del servidor, el brain y el token. Con `cli.py statusline`, el script de la fila en `~/.config/mimirsynth/statusline.py` y la entrada `statusLine` en `~/.claude/settings.json`.
 
 Si otro plugin u hook inyecta memoria también, el inicio de sesión lo dice; no bloquea nada, y los bloques de MimirSynth van marcados para distinguirlos.
 
@@ -91,6 +106,7 @@ Antes del plugin, el hook de recall era un script suelto, `mimirsynth_recall.py`
 | El contexto aparece dos veces | El hook suelto `mimirsynth_recall.py` sigue en `settings.json`: quítalo |
 | No llega nada | Revisa la URL (sin barra final), el slug del brain y que el token sea de ese mismo brain. Por MCP, un `401` significa que falta la cabecera o que el token no es válido |
 | «token caducado» o «revocado» | Crea o rota el token ([[Conectar agentes]]) y vuelve a ejecutar `setup` |
+| La fila de estado dice `recall: offline` o el punto está en rojo | MimirSynth no respondió dentro de `timeout`, rechazó el token o falló: `/mimirsynth:status` dice cuál |
 
 Todos los detalles: [el README del plugin](https://github.com/mimirsynth/mimirsynth/blob/main/integrations/claude-code/README.es.md).
 
