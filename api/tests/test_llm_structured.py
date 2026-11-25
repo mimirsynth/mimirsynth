@@ -167,6 +167,97 @@ def test_a_failed_ingestion_shows_the_words_and_the_job_keeps_the_raw_error(clie
         assert j.error.startswith("El LLM no devolvió") and any("must be a mapping, not list" in line["msg"] for line in j.log)
 
 
+def test_an_empty_entity_summary_ingests_and_records_the_graphiti_step(client, monkeypatch):  # noqa: F811
+    from mimirsynth import ingest, notify, retirement, selftest, vocab_apply, write_quality
+    from mimirsynth.config import settings
+    from mimirsynth.models import Brain, Proposal, User
+    from mimirsynth.store import _factory
+
+    monkeypatch.setattr(settings, "llm_base_url", "http://x")
+    monkeypatch.setattr(settings, "llm_model", "m")
+    assert client.post("/api/brains", json={"slug": "ing490", "name": "Ing 490"}).status_code == 201
+    with _factory()() as db:
+        brain = db.query(Brain).filter(Brain.slug == "ing490").one()
+        proposal = Proposal(brain_id=brain.id, author_id=db.query(User).first().id, name="empty summary", body="Alice runs Atlas.", status="approved")
+        db.add(proposal)
+        db.commit()
+        pid = proposal.id
+
+    async def fake_add_episode(*args, report=None, **kwargs):
+        report.update({"entities": 1, "edges": 1, "ontology": False, "off_ontology": [], "untyped_entities": 0,
+                       "_edges": [], "_new_edges": [], "_nodes": [],
+                       "entity_summary": {"status": "skipped", "step": "entity_summary",
+                                           "prompt_name": "extract_nodes.extract_entity_summaries_from_episodes",
+                                           "reason": "empty response", "token_limit": True,
+                                           "prompt_tokens": 120, "completion_tokens": 16384}})
+        return "ep-490"
+
+    monkeypatch.setattr(ingest, "add_episode", fake_add_episode)
+    monkeypatch.setattr(retirement, "detect", lambda *args, **kwargs: None)
+    monkeypatch.setattr(vocab_apply, "apply", lambda *args, **kwargs: None)
+    monkeypatch.setattr(write_quality, "apply", lambda *args, **kwargs: None)
+    monkeypatch.setattr(write_quality, "may_judge", lambda *args, **kwargs: False)
+    monkeypatch.setattr(selftest, "submit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(notify, "resolve", lambda *args, **kwargs: False)
+
+    class JobStub:
+        def __init__(self):
+            self.notes = []
+
+        def note(self, message):
+            self.notes.append(message)
+
+    job = JobStub()
+    assert ingest.ingest_proposal(pid, job) == ""
+    with _factory()() as db:
+        saved = db.get(Proposal, pid)
+        assert saved.status == "ingested" and saved.episode_uuid == "ep-490"
+        assert saved.ingest_report["entity_summary"]["token_limit"] is True
+    assert job.notes and "resumen de entidades" in job.notes[0] and "extract_nodes.extract_entity_summaries_from_episodes" in job.notes[0]
+    assert "120/16384" in job.notes[0] and "límite de tokens: alcanzado" in job.notes[0]
+
+
+def test_entity_summary_job_log_failure_does_not_fail_an_ingested_proposal(client, monkeypatch):  # noqa: F811
+    from mimirsynth import ingest, notify, retirement, selftest, vocab_apply, write_quality
+    from mimirsynth.config import settings
+    from mimirsynth.models import Brain, Proposal, User
+    from mimirsynth.store import _factory
+
+    monkeypatch.setattr(settings, "llm_base_url", "http://x")
+    monkeypatch.setattr(settings, "llm_model", "m")
+    assert client.post("/api/brains", json={"slug": "ing490log", "name": "Ing 490 log"}).status_code == 201
+    with _factory()() as db:
+        brain = db.query(Brain).filter(Brain.slug == "ing490log").one()
+        proposal = Proposal(brain_id=brain.id, author_id=db.query(User).first().id, name="empty summary log failure", body="Alice runs Atlas.", status="approved")
+        db.add(proposal)
+        db.commit()
+        pid = proposal.id
+
+    async def fake_add_episode(*args, report=None, **kwargs):
+        report["_edges"] = []
+        report["_new_edges"] = []
+        report["entity_summary"] = {"status": "skipped", "prompt_name": "extract_nodes.extract_entity_summaries_from_episodes",
+                                     "token_limit": True, "prompt_tokens": 1, "completion_tokens": 2}
+        return "ep-490-log"
+
+    monkeypatch.setattr(ingest, "add_episode", fake_add_episode)
+    monkeypatch.setattr(retirement, "detect", lambda *args, **kwargs: None)
+    monkeypatch.setattr(vocab_apply, "apply", lambda *args, **kwargs: None)
+    monkeypatch.setattr(write_quality, "apply", lambda *args, **kwargs: None)
+    monkeypatch.setattr(write_quality, "may_judge", lambda *args, **kwargs: False)
+    monkeypatch.setattr(selftest, "submit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(notify, "resolve", lambda *args, **kwargs: False)
+
+    class BrokenJob:
+        def note(self, message):
+            raise RuntimeError("job database unavailable")
+
+    assert ingest.ingest_proposal(pid, BrokenJob()) == ""
+    with _factory()() as db:
+        saved = db.get(Proposal, pid)
+        assert saved.status == "ingested" and saved.episode_uuid == "ep-490-log"
+
+
 # --- where the check is used --------------------------------------------------------------------------------------------------
 
 @pytest.fixture()
