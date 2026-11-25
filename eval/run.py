@@ -1,21 +1,25 @@
 """Retrieval eval for Phase 0 (#492): per-class metrics on the final context, at two budgets, with intervals, and a paired comparison
 with a verdict fixed in advance.
 
-It runs on the frozen Phase 0 snapshot, with the instance's MIMIRSYNTH_* environment, from `api/`:
+It runs on the frozen Phase 0 snapshot, never on production, with the instance's MIMIRSYNTH_* environment, from `api/`:
 
-    cd api && .venv/bin/python ../eval/run.py split   --gold ../eval/out/gold.jsonl
+    cd api && .venv/bin/python ../eval/run.py hookset --brain SLUG      # real prompts from the replay sample, to label
+    cd api && .venv/bin/python ../eval/run.py split   --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl
     cd api && .venv/bin/python ../eval/run.py run     --brain SLUG --gold ../eval/out/gold.jsonl --split holdout --budget plugin
     cd api && .venv/bin/python ../eval/run.py compare ../eval/out/a.json ../eval/out/b.json
-    cd api && .venv/bin/python ../eval/run.py hookset --brain SLUG      # real prompts from the replay sample, to label
 
-Everything it writes goes to `eval/out/` (ignored by git): the questions and the results hold the brain's own text.
+Its own output goes to `eval/out/` (ignored by git): the questions and the results hold the brain's own text. It does not change the
+brain, but it is not read-only: the app's recall counts its embedding calls in the snapshot's `ai_usage`, as any recall does.
 """
 from __future__ import annotations
 
 import argparse
+import functools
+import importlib.util
 import json
 import math
 import random
+import re
 import sys
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -29,7 +33,6 @@ BUDGETS = {   # the recall parameters each budget runs with
     "2500": {"n_facts": 8, "n_chunks": 4, "max_chars": 2500},
     "plugin": {"n_facts": 6, "n_chunks": 3, "max_chars": 4000},   # what the agent plugins' per-prompt hook sends
 }
-HOOK_PARAMS = {"facts": 6, "chunks": 3}
 # Declared in advance (#492): the co-primaries must fall by at least this much, relative to the baseline; the answer metrics may
 # not lose more than NON_INFERIORITY points at the lower bound of their interval.
 MIN_EFFECT = {"noise": -0.30, "stale_as_current": -0.50}
@@ -38,6 +41,14 @@ ANSWER = ("top3", "coverage", "empty_ok", "hook_precision", "hook_silence")
 NON_INFERIORITY = -3.0
 BOOT = 2000
 SEED = 492
+
+
+@functools.cache
+def _census():
+    spec = importlib.util.spec_from_file_location("census", HERE / "census" / "census.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 # --- questions -----------------------------------------------------------------------------------------------------------------------
@@ -53,113 +64,180 @@ def load_jsonl(path: Path) -> list[dict]:
     return rows
 
 
+def _ids(v) -> list[str] | None:
+    """A list of non-empty strings, or None when it is not one."""
+    if v is None:
+        return []
+    if not isinstance(v, list) or not all(isinstance(x, str) and x.strip() for x in v):
+        return None
+    return v
+
+
 def check_gold(rows: list[dict]) -> list[str]:
     """What is wrong with a gold set, one line per problem; empty when it is usable.
 
     A question: `id`, `class` (one of CLASSES), `query`, `answer_episodes` (the episode uuids that contain the answer; empty only out of
-    domain), optional `answer_docs` (document ids), optional `stale` (for temporal ones: the uuids of the replaced facts, or of the
-    episodes and documents that state the old value), `validated` (the maintainer read and accepted it)."""
+    domain), optional `answer_docs` (document ids), optional `stale` (for temporal ones: what must not show as current), and
+    `validated` (true or false: the maintainer read and accepted it)."""
     problems, seen = [], set()
     for i, q in enumerate(rows, 1):
-        where = f"question {q.get('id') or '#' + str(i)}"
-        if not q.get("id"):
+        if not isinstance(q, dict):
+            problems.append(f"line {i}: not a question object")
+            continue
+        good_id = isinstance(q.get("id"), str) and bool(q["id"].strip())
+        where = f"question {q['id'] if good_id else '#' + str(i)}"
+        if not good_id:
             problems.append(f"{where}: no id")
         elif q["id"] in seen:
             problems.append(f"{where}: repeated id")
-        seen.add(q.get("id"))
+        else:
+            seen.add(q["id"])
         if q.get("class") not in CLASSES:
             problems.append(f"{where}: class must be one of {', '.join(CLASSES)}")
-        if not (q.get("query") or "").strip():
+        if not isinstance(q.get("query"), str) or not q["query"].strip():
             problems.append(f"{where}: no query")
-        answers = list(q.get("answer_episodes") or []) + list(q.get("answer_docs") or [])
-        if q.get("class") == "ood" and answers:
+        lists = {k: _ids(q.get(k)) for k in ("answer_episodes", "answer_docs", "stale")}
+        for k, v in lists.items():
+            if v is None:
+                problems.append(f"{where}: {k} must be a list of ids")
+        if "validated" in q and not isinstance(q["validated"], bool):
+            problems.append(f"{where}: validated must be true or false")
+        eps, docs = set(lists["answer_episodes"] or []), set(lists["answer_docs"] or [])
+        if q.get("class") == "ood" and (eps or docs):
             problems.append(f"{where}: an out-of-domain question has no answer")
-        if q.get("class") not in ("ood", None) and not answers:
+        if q.get("class") in CLASSES and q.get("class") != "ood" and not (eps or docs):
             problems.append(f"{where}: no answer_episodes")
-        if q.get("class") == "entity" and len(q.get("answer_episodes") or []) < 2:
-            problems.append(f"{where}: an entity question has its answer in several episodes")
+        if q.get("class") == "entity" and len(eps) < 2:
+            problems.append(f"{where}: an entity question has its answer in at least two distinct episodes")
     return problems
 
 
 def label_hook(h: dict) -> str | None:
-    """A hook prompt's label: an episode uuid (the note that should have been injected), `nothing`, or empty while unlabelled."""
+    """A hook prompt's label: an episode uuid (the note that should have been injected), `nothing`, or None while unlabelled."""
     lab = (h.get("label") or "").strip()
-    return None if not lab else lab
+    return lab or None
 
 
 # --- split ---------------------------------------------------------------------------------------------------------------------------
 
-def make_split(questions: list[dict], seed: int = SEED, old: dict | None = None) -> dict:
+def make_split(items: list[dict], seed: int = SEED, old: dict | None = None) -> dict:
     """`tune` / `holdout` at 50 / 50 within each class, fixed by id. With `old`, its ids keep their side and only new ones are placed,
     each on the smaller side of its class."""
     old = old or {"tune": [], "holdout": []}
-    side = {i: s for s in ("tune", "holdout") for i in old[s]}
+    side = {i: s for s in ("tune", "holdout") for i in old.get(s, [])}
     by_class: dict[str, list[str]] = defaultdict(list)
-    for q in questions:
-        by_class[q["class"]].append(q["id"])
+    for q in items:
+        by_class[q.get("class") or "hook"].append(q["id"])
     rng = random.Random(seed)
-    out = {"tune": list(old["tune"]), "holdout": list(old["holdout"])}
+    out = {"tune": list(old.get("tune", [])), "holdout": list(old.get("holdout", []))}
     for cls in sorted(by_class):
         ids = sorted(by_class[cls])
         new = [i for i in ids if i not in side]
         rng.shuffle(new)
         count = {s: sum(1 for i in ids if side.get(i) == s) for s in ("tune", "holdout")}
         for i in new:
-            s = "holdout" if count["holdout"] < count["tune"] else "tune" if count["tune"] < count["holdout"] else rng.choice(("tune", "holdout"))
+            if count["holdout"] != count["tune"]:
+                s = "holdout" if count["holdout"] < count["tune"] else "tune"
+            else:
+                s = rng.choice(("tune", "holdout"))
             out[s].append(i)
             count[s] += 1
-    return {"seed": seed, "tune": sorted(out["tune"]), "holdout": sorted(out["holdout"])}
+    return {"tune": sorted(out["tune"]), "holdout": sorted(out["holdout"])}
 
 
-def pick_split(questions: list[dict], split: dict | None, which: str) -> list[dict]:
-    if which == "all":
-        return questions
+def pick_split(items: list[dict], split: dict | None, which: str, what: str = "questions") -> list[dict]:
+    if which == "all" or not items:
+        return items
     if split is None:
         raise SystemExit("no split file: run `split` once first")
-    missing = [q["id"] for q in questions if q["id"] not in split["tune"] and q["id"] not in split["holdout"]]
+    part = split if what == "questions" else split.get("hook") or {"tune": [], "holdout": []}
+    missing = [q["id"] for q in items if q["id"] not in part["tune"] and q["id"] not in part["holdout"]]
     if missing:
-        raise SystemExit(f"{len(missing)} questions are in no split ({', '.join(missing[:5])}…): run `split --add`")
-    keep = set(split[which])
-    return [q for q in questions if q["id"] in keep]
+        raise SystemExit(f"{len(missing)} {what} are in no split ({', '.join(missing[:5])}…): run `split --add`")
+    keep = set(part[which])
+    return [q for q in items if q["id"] in keep]
 
 
 # --- scoring (pure) ------------------------------------------------------------------------------------------------------------------
 
 def context_items(out: dict) -> list[dict]:
-    """The items of a recall that made it into its final `context`, in the order they appear there. An item the budget cut out is not
-    in the context and does not count, for or against."""
+    """The items of a recall that made it into its final `context`, in the order they appear there. An item counts only by its own
+    line, as `build_context` writes it: a fact by a line `- <fact> (`, a fragment or a passage by its text right under a `###` header
+    (a passage's header carries its `[doc N, … M]`). A text quoted inside another line (`[sustituye a «…»]`, a "may be superseded"
+    warning) does not count, and two items with the same text need two lines."""
     ctx = out.get("context") or ""
-    items = []
+    lines = ctx.split("\n")
+    starts, pos = [], 0
+    for ln in lines:
+        starts.append(pos)
+        pos += len(ln) + 1
+    used: set[int] = set()
+    found: list[tuple[int, int, dict]] = []
+
+    def under_header(text: str, header_ok) -> int | None:
+        for i in range(len(lines) - 1):
+            if i in used or not lines[i].startswith("### ") or not header_ok(lines[i]):
+                continue
+            if ctx.startswith(text, starts[i + 1]):
+                used.add(i)
+                return starts[i]
+        return None
+
+    n = 0
+    def own_section(ln: str, prefix: str, current: bool) -> bool:
+        # an old fact's line reads `- <fact> (<since> → <until>)`; a current one's parenthesis has no arrow
+        return ln.startswith(prefix) and ("→" not in ln[len(prefix):].split(")", 1)[0]) == current
+
     for f in out.get("facts") or []:
-        items.append({"kind": "fact", "id": str(f.get("uuid") or ""), "episodes": [str(e) for e in f.get("episodes") or []],
-                      "text": (f.get("fact") or "").strip(), "current": f.get("status") != "invalidated"})
+        text = (f.get("fact") or "").strip()
+        it = {"kind": "fact", "id": str(f.get("uuid") or ""), "episodes": [str(e) for e in f.get("episodes") or []], "text": text,
+              "current": f.get("status") != "invalidated"}
+        for i, ln in enumerate(lines):
+            if text and i not in used and own_section(ln, f"- {text} (", it["current"]):
+                used.add(i)
+                found.append((starts[i], n, it))
+                break
+        n += 1
     for c in out.get("chunks") or []:
-        items.append({"kind": "chunk", "id": str(c.get("id") or ""), "episodes": [str(c["episode_uuid"])] if c.get("episode_uuid") else [],
-                      "text": (c.get("text") or "").strip(), "current": not c.get("superseded")})
-    for p in out.get("documents") or []:
-        items.append({"kind": "doc", "id": str(p.get("document_id") or ""), "episodes": [], "text": (p.get("text") or "").strip(),
-                      "current": not p.get("superseded")})
-    placed = [(ctx.find(it["text"]), n, it) for n, it in enumerate(items) if it["text"]]
-    return [it for pos, _, it in sorted(placed, key=lambda x: (x[0], x[1])) if pos >= 0]
+        text = (c.get("text") or "").strip()
+        it = {"kind": "chunk", "id": str(c.get("id") or ""), "episodes": [str(c["episode_uuid"])] if c.get("episode_uuid") else [],
+              "text": text, "current": not c.get("superseded")}
+        p = under_header(text, lambda h: not re.search(r"\[doc \d+, \S+ \d+\]$", h)) if text else None
+        if p is not None:
+            found.append((p, n, it))
+        n += 1
+    for d in out.get("documents") or []:
+        text = (d.get("text") or "").strip()
+        doc, idx = d.get("document_id"), d.get("chunk_idx")
+        it = {"kind": "doc", "id": str(doc or ""), "episodes": [], "text": text, "current": not d.get("superseded")}
+        marker = re.compile(rf"\[doc {re.escape(str(doc))}, \S+ {re.escape(str(idx))}\]$")
+        p = under_header(text, lambda h, m=marker: bool(m.search(h))) if text else None
+        if p is not None:
+            found.append((p, n, it))
+        n += 1
+    return [it for _, _, it in sorted(found, key=lambda x: (x[0], x[1]))]
 
 
 def _relevant(it: dict, q: dict) -> bool:
     if it["kind"] == "doc":
-        return it["id"] in {str(d) for d in q.get("answer_docs") or []}
-    return bool(set(it["episodes"]) & {str(e) for e in q.get("answer_episodes") or []})
+        return it["id"] in set(q.get("answer_docs") or [])
+    return bool(set(it["episodes"]) & set(q.get("answer_episodes") or []))
 
 
 def _stale(it: dict, stale: set[str]) -> bool:
-    """A replaced value shown as current: the replaced fact itself in the current section, or a fragment or passage that states it
-    with no "may be superseded" warning. A current fact that only shares an episode with the old one is not stale."""
+    """A replaced value shown as current: the replaced fact in the current section (Graphiti did not invalidate it), or a fragment
+    or passage from a stale episode or document with no "may be superseded" warning. A current fact that only shares an episode
+    with the old one is not stale."""
     if not it["current"]:
         return False
     return it["id"] in stale if it["kind"] in ("fact", "doc") else bool(set(it["episodes"]) & stale)
 
 
-def score(q: dict, items: list[dict], ms: float | None = None) -> dict:
+def score(q: dict, items: list[dict], ms: float | None = None, has_context: bool | None = None) -> dict:
     """One question's record. Each metric is a (numerator, denominator) pair, so a class or a resample is the ratio of their sums:
-    `noise` weighs every character the same, the rates weigh every question the same."""
+    `noise` weighs every character the same, the rates weigh every question the same. `has_context`: the final context has any text
+    (a state card counts); by default, whether any item reached it."""
+    has_context = bool(items) if has_context is None else has_context
     rel = [_relevant(it, q) for it in items]
     chars = sum(len(it["text"]) for it in items)
     m: dict[str, list[float]] = {"noise": [sum(len(it["text"]) for it, r in zip(items, rel, strict=True) if not r), chars]}
@@ -167,21 +245,22 @@ def score(q: dict, items: list[dict], ms: float | None = None) -> dict:
     if cls in ("point", "temporal", "volatile"):
         m["top3"] = [int(any(rel[:3])), 1]
     if cls == "entity":
-        want = {str(e) for e in q["answer_episodes"]}
+        want = set(q["answer_episodes"])
         got = {e for it in items for e in it["episodes"] if e in want}
         m["coverage"] = [len(got) / len(want), 1]
     if cls == "temporal" and q.get("stale"):
-        m["stale_as_current"] = [int(any(_stale(it, {str(s) for s in q["stale"]}) for it in items)), 1]
+        m["stale_as_current"] = [int(any(_stale(it, set(q["stale"])) for it in items)), 1]
     if cls == "ood":
-        m["empty_ok"] = [int(not items), 1]
+        m["empty_ok"] = [int(not has_context), 1]
     return {"id": q["id"], "class": cls, "items": len(items), "ms": ms, "m": m}
 
 
-def score_hook(h: dict, items: list[dict], ms: float | None = None) -> dict:
-    """A real prompt: was anything injected, and was it the labelled note. `hook_precision`: of the injected contexts, the share that
-    holds the note. `hook_silence`: of the prompts labelled `nothing`, the share with nothing injected."""
+def score_hook(h: dict, items: list[dict], ms: float | None = None, has_context: bool | None = None) -> dict:
+    """A real prompt: was anything injected (the hook injects any non-empty context), and was it the labelled note.
+    `hook_precision`: of the injected contexts, the share that holds the note. `hook_silence`: of the prompts labelled `nothing`, the
+    share with nothing injected."""
     note = label_hook(h)
-    injected = int(bool(items))
+    injected = int(bool(items) if has_context is None else has_context)
     m: dict[str, list[float]] = {}
     if injected:
         m["hook_precision"] = [int(note not in (None, "nothing") and any(note in it["episodes"] for it in items)), 1]
@@ -210,27 +289,35 @@ METRICS_BY_CLASS = {"point": ("top3",), "volatile": ("top3",), "entity": ("cover
                     "ood": ("empty_ok",), "hook": ("hook_precision", "hook_silence")}
 
 
+def _has_noise(rs: list[dict]) -> bool:
+    return any(r["m"].get("noise", [0, 0])[1] for r in rs)
+
+
 def _rows(records: list[dict]) -> list[tuple[str, str, list[dict]]]:
-    """(scope, metric, records) for every metric reported: per class, and noise over each class and over all the questions."""
+    """(scope, metric, records) for every metric reported: per class, and noise over each class and over all the questions. A record
+    whose recall failed is left out."""
+    ok = [r for r in records if not r.get("error")]
     out = []
     by: dict[str, list[dict]] = defaultdict(list)
-    for r in records:
+    for r in ok:
         by[r["class"]].append(r)
     for cls in [*CLASSES, "hook"]:
         rs = by.get(cls) or []
         for metric in METRICS_BY_CLASS[cls]:
             if any(metric in r["m"] for r in rs):
                 out.append((cls, metric, rs))
-        if cls != "hook" and any(r["m"]["noise"][1] for r in rs):
+        if cls != "hook" and _has_noise(rs):
             out.append((cls, "noise", rs))
-    questions = [r for r in records if r["class"] != "hook"]
-    if any(r["m"]["noise"][1] for r in questions):
+    questions = [r for r in ok if r["class"] != "hook"]
+    if _has_noise(questions):
         out.append(("all", "noise", questions))
     return out
 
 
 def bootstrap(records: list[dict], fn, n: int = BOOT, seed: int = SEED) -> tuple[float | None, float | None]:
     """95 % percentile interval of `fn` over resamples of the records."""
+    if not records:
+        return None, None
     rng = random.Random(seed)
     vals = [v for _ in range(n) if (v := fn([records[rng.randrange(len(records))] for _ in records])) is not None]
     return (percentile(vals, 2.5), percentile(vals, 97.5)) if vals else (None, None)
@@ -242,78 +329,92 @@ def summarize(records: list[dict], n: int = BOOT) -> dict:
         lo, hi = bootstrap(rs, lambda x, m=metric: aggregate(x, m), n)
         rows.append({"scope": scope, "metric": metric, "n": sum(1 for r in rs if metric in r["m"]), "value": aggregate(rs, metric),
                      "lo": lo, "hi": hi})
-    ms = [r["ms"] for r in records if r["ms"] is not None]
-    return {"rows": rows, "latency_ms": {"p50": percentile(ms, 50), "p95": percentile(ms, 95)}}
+    ms = [r["ms"] for r in records if r.get("ms") is not None and not r.get("error")]
+    return {"rows": rows, "errors": sum(1 for r in records if r.get("error")),
+            "latency_ms": {"p50": percentile(ms, 50), "p95": percentile(ms, 95)}}
 
 
 # --- comparison (pure) ---------------------------------------------------------------------------------------------------------------
 
 def compare(a: dict, b: dict, n: int = BOOT, seed: int = SEED) -> dict:
-    """B against A on the questions both ran, paired: every resample draws the same questions for both. Differences are B − A; for
-    the co-primaries also relative to A."""
-    for k in ("budget", "split"):
+    """B against A on the questions both ran without error, paired: every resample draws the same questions for both. Differences are
+    B − A, and relative to A. A metric A measured and B could not (nothing injected for any hook prompt, say) is kept, with no value,
+    and the verdict counts it against B."""
+    for k in ("budget", "split", "drafts_included"):
         if a["meta"].get(k) != b["meta"].get(k):
             raise SystemExit(f"the two runs differ in {k}: {a['meta'].get(k)} against {b['meta'].get(k)}")
     rb = {(r["class"], r["id"]): r for r in b["records"]}
-    pairs = [(r, rb[(r["class"], r["id"])]) for r in a["records"] if (r["class"], r["id"]) in rb]
+    pairs = [(r, rb[(r["class"], r["id"])]) for r in a["records"]
+             if (r["class"], r["id"]) in rb and not r.get("error") and not rb[(r["class"], r["id"])].get("error")]
     if not pairs:
-        raise SystemExit("the two runs share no question")
+        raise SystemExit("the two runs share no question that ran in both")
     rng = random.Random(seed)
     draws = [[rng.randrange(len(pairs)) for _ in pairs] for _ in range(n)]
     rows = []
     for scope, metric, _ in _rows([p[0] for p in pairs]):
         sel = [i for i, (x, _) in enumerate(pairs) if (scope == "all" and x["class"] != "hook") or x["class"] == scope]
-        xa = [pairs[i][0] for i in sel]
-        xb = [pairs[i][1] for i in sel]
+        xa, xb = [pairs[i][0] for i in sel], [pairs[i][1] for i in sel]
         va, vb = aggregate(xa, metric), aggregate(xb, metric)
-        if va is None or vb is None:
+        if va is None:
             continue
-        diffs, rels = [], []
-        pos = {i: k for k, i in enumerate(sel)}
-        for d in draws:
-            pick = [pos[i] for i in d if i in pos]
-            if not pick:
-                continue
-            sa, sb = aggregate([xa[k] for k in pick], metric), aggregate([xb[k] for k in pick], metric)
-            if sa is None or sb is None:
-                continue
-            diffs.append(sb - sa)
-            if sa:
-                rels.append((sb - sa) / sa)
-        rows.append({"scope": scope, "metric": metric, "n": len(sel), "a": va, "b": vb, "diff": vb - va,
-                     "diff_lo": percentile(diffs, 2.5), "diff_hi": percentile(diffs, 97.5),
-                     "rel": (vb - va) / va if va else None, "rel_lo": percentile(rels, 2.5), "rel_hi": percentile(rels, 97.5)})
-    return {"rows": rows, "verdict": verdict(rows), "latency_ms": {"a": a["summary"]["latency_ms"], "b": b["summary"]["latency_ms"]}}
+        row = {"scope": scope, "metric": metric, "n": len(sel), "a": va, "b": vb, "diff": None, "diff_lo": None, "diff_hi": None,
+               "rel": None, "rel_lo": None, "rel_hi": None}
+        if vb is not None:
+            pos = {i: k for k, i in enumerate(sel)}
+            diffs, rels = [], []
+            for d in draws:
+                pick = [pos[i] for i in d if i in pos]
+                sa = aggregate([xa[k] for k in pick], metric) if pick else None
+                sb = aggregate([xb[k] for k in pick], metric) if pick else None
+                if sa is None or sb is None:
+                    continue
+                diffs.append(sb - sa)
+                if sa:
+                    rels.append((sb - sa) / sa)
+            row.update(diff=vb - va, diff_lo=percentile(diffs, 2.5), diff_hi=percentile(diffs, 97.5), rel=(vb - va) / va if va else None,
+                       rel_lo=percentile(rels, 2.5), rel_hi=percentile(rels, 97.5))
+        rows.append(row)
+    counts = {"a": len(a["records"]), "b": len(b["records"]), "paired": len(pairs)}
+    return {"rows": rows, "verdict": verdict(rows), "counts": counts,
+            "latency_ms": {"a": a["summary"]["latency_ms"], "b": b["summary"]["latency_ms"]}}
 
 
 def verdict(rows: list[dict]) -> dict:
     """The rule written before measuring (#492). Yes only when:
-    - at least one co-primary (noise, stale-as-current; over all the questions) falls by its minimum relative effect, and its
-      interval is wholly below zero;
-    - no co-primary rises (its interval wholly above zero);
-    - every answer metric's lower bound loses at most NON_INFERIORITY points.
-    Anything else, a tie included, is a no."""
+    - at least one co-primary (noise over all the questions; stale-as-current on the temporal ones) falls by its minimum relative
+      effect, and the interval of its difference is wholly below zero;
+    - no co-primary rises (the interval wholly above zero);
+    - every answer metric A measured is measured in B too, and its lower bound loses at most NON_INFERIORITY points.
+    Anything else, a tie included, is a no. A co-primary at 0 in A cannot fall, so it does not count for B."""
     def get(scope, metric):
         return next((r for r in rows if r["scope"] == scope and r["metric"] == metric), None)
 
-    reasons, improved = [], []
+    reasons, improved, worse = [], [], []
     for metric in COPRIMARY:
         r = get("all" if metric == "noise" else "temporal", metric)
         if r is None:
             reasons.append(f"{metric}: not measured")
-            continue
-        if r["diff_lo"] is not None and r["diff_lo"] > 0:
+        elif r["b"] is None:
+            reasons.append(f"{metric}: not measured in B")
+            worse.append(metric)
+        elif r["diff_lo"] is not None and r["diff_lo"] > 0:
             reasons.append(f"{metric}: worse")
+            worse.append(metric)
         elif r["rel"] is not None and r["rel"] <= MIN_EFFECT[metric] and r["diff_hi"] is not None and r["diff_hi"] < 0:
             improved.append(metric)
         else:
             reasons.append(f"{metric}: below the minimum effect ({MIN_EFFECT[metric]:+.0%}) or not significant")
-    inferior = [f"{r['scope']} {r['metric']}" for r in rows
-                if r["metric"] in ANSWER and r["diff_lo"] is not None and 100 * r["diff_lo"] < NON_INFERIORITY]
+    inferior = []
+    for r in rows:
+        if r["metric"] not in ANSWER:
+            continue
+        if r["b"] is None:
+            inferior.append(f"{r['scope']} {r['metric']} (not measured in B)")
+        elif r["diff_lo"] is not None and 100 * r["diff_lo"] < NON_INFERIORITY:
+            inferior.append(f"{r['scope']} {r['metric']}")
     if inferior:
         reasons.append("worse answers: " + ", ".join(inferior))
-    yes = bool(improved) and not inferior and not any(x.endswith("worse") for x in reasons)
-    return {"yes": yes, "improved": improved, "reasons": reasons}
+    return {"yes": bool(improved) and not worse and not inferior, "improved": improved, "reasons": reasons}
 
 
 # --- markdown ------------------------------------------------------------------------------------------------------------------------
@@ -322,22 +423,30 @@ def _pct(v) -> str:
     return "–" if v is None else f"{100 * v:.1f}"
 
 
+def _pts(v) -> str:
+    return "–" if v is None else f"{100 * v:+.1f}"
+
+
 def summary_markdown(meta: dict, s: dict) -> str:
     lines = [f"## Eval · budget {meta['budget']} · split {meta['split']} · {meta['questions']} questions"
              + (f", {meta['hook']} hook prompts" if meta.get("hook") else ""), "",
              "| class | metric | n | value % | 95 % interval |", "|---|---|--:|--:|--:|"]
     lines += [f"| {r['scope']} | {r['metric']} | {r['n']} | {_pct(r['value'])} | {_pct(r['lo'])} – {_pct(r['hi'])} |" for r in s["rows"]]
     lat = s["latency_ms"]
-    lines += ["", f"Latency: p50 {lat['p50']} ms, p95 {lat['p95']} ms" if lat["p50"] is not None else "Latency: not measured", ""]
-    return "\n".join(lines)
+    lines += ["", f"Latency: p50 {lat['p50']} ms, p95 {lat['p95']} ms" if lat["p50"] is not None else "Latency: not measured"]
+    if s.get("errors"):
+        lines.append(f"**{s['errors']} recalls failed** and are left out (see `error` in the records).")
+    return "\n".join(lines + [""])
 
 
 def compare_markdown(c: dict) -> str:
-    lines = ["| class | metric | n | A % | B % | B − A (points) | 95 % interval | relative |", "|---|---|--:|--:|--:|--:|--:|--:|"]
+    k = c["counts"]
+    lines = [f"A {k['a']} records, B {k['b']}, compared on the {k['paired']} that ran in both.", "",
+             "| class | metric | n | A % | B % | B − A (points) | 95 % interval | relative |", "|---|---|--:|--:|--:|--:|--:|--:|"]
     for r in c["rows"]:
         rel = "–" if r["rel"] is None else f"{100 * r['rel']:+.0f} %"
-        lines.append(f"| {r['scope']} | {r['metric']} | {r['n']} | {_pct(r['a'])} | {_pct(r['b'])} | {100 * r['diff']:+.1f} | "
-                     f"{_pct(r['diff_lo'])} – {_pct(r['diff_hi'])} | {rel} |")
+        lines.append(f"| {r['scope']} | {r['metric']} | {r['n']} | {_pct(r['a'])} | {_pct(r['b'])} | {_pts(r['diff'])} | "
+                     f"{_pts(r['diff_lo'])} – {_pts(r['diff_hi'])} | {rel} |")
     v = c["verdict"]
     lines += ["", f"**Verdict: {'yes' if v['yes'] else 'no'}**" + (f" (improved: {', '.join(v['improved'])})" if v["improved"] else "")]
     lines += [f"- {x}" for x in v["reasons"]]
@@ -348,49 +457,80 @@ def compare_markdown(c: dict) -> str:
 
 # --- running against the snapshot ------------------------------------------------------------------------------------------------------
 
+def _one(item: dict, recall_fn, params: dict, scorer) -> dict:
+    try:
+        out = recall_fn(item["query"], **params)
+    except Exception as e:  # noqa: BLE001  (one failed recall is recorded, the run goes on)
+        return {"id": item["id"], "class": item.get("class") or "hook", "items": 0, "ms": None, "m": {}, "error": f"{type(e).__name__}: {e}"}
+    return scorer(item, context_items(out), (out.get("ms") or {}).get("total"), bool((out.get("context") or "").strip()))
+
+
 def run(questions: list[dict], hooks: list[dict], recall_fn, budget: str) -> list[dict]:
     """`recall_fn(query, **params) -> dict` is the app's recall on the snapshot (or a fake in the tests)."""
     params = BUDGETS[budget]
-    records = []
-    for q in questions:
-        out = recall_fn(q["query"], **params)
-        records.append(score(q, context_items(out), (out.get("ms") or {}).get("total")))
-    for h in hooks:
-        if label_hook(h) is None:
-            continue
-        out = recall_fn(h["query"], **params)
-        records.append(score_hook(h, context_items(out), (out.get("ms") or {}).get("total")))
-    return records
+    records = [_one(q, recall_fn, params, score) for q in questions]
+    return records + [_one(h, recall_fn, params, score_hook) for h in hooks if label_hook(h) is not None]
 
 
 def _app():
     sys.path.insert(0, str(HERE.parent / "api"))
     from mimirsynth import models, recall
+    from mimirsynth.federation import sources_for
     from mimirsynth.store import _factory
-    return models, recall, _factory
+    return models, recall, sources_for, _factory
 
 
-def recall_on(slug: str):
-    models, recall, factory = _app()
+def snapshot_guard() -> None:
+    """A snapshot is always PostgreSQL; an unset MIMIRSYNTH_DATABASE_URL would open (and create) the development SQLite file."""
+    import os
+    sys.path.insert(0, str(HERE.parent / "api"))
+    from mimirsynth.store import engine
+    name = engine().dialect.name
+    if name != "postgresql" and os.environ.get("MIMIRSYNTH_CENSUS_ALLOW_SQLITE") != "1":
+        raise SystemExit(f"the snapshot must be PostgreSQL (MIMIRSYNTH_DATABASE_URL); this is {name}")
+
+
+def recall_on(slug: str) -> tuple:
+    """The app's recall on one brain, as the hook's HTTP call makes it: with what other brains lend it (federation; reading a grant
+    stamps its last use), in the instance's default language and with its default number of document passages."""
+    snapshot_guard()
+    from mimirsynth import appsettings
+    lang = appsettings.get("default_language") or "es"
+    models, recall, sources_for, factory = _app()
     with factory()() as db:
         b = db.query(models.Brain).filter(models.Brain.slug == slug).one_or_none()
         if b is None:
             raise SystemExit(f"no brain with slug {slug!r}")
-        bid, gname = b.id, b.graph_name
-    return lambda query, **p: recall.recall(bid, gname, query, **p)
+        bid, gname, src = b.id, b.graph_name, sources_for(db, b)
+    extra = {"sources": src} if src else {}
+    return (lambda query, **p: recall.recall(bid, gname, query, lang=lang, **p, **extra)), {
+        "lang": lang, "docs": "instance default", "federated": [s.slug for s in src]}
 
 
 def hook_samples(slug: str) -> list[dict]:
     """The replay sample's prompts that came through the hook (over HTTP, with its parameters), as a sheet to label."""
-    models, _, factory = _app()
+    snapshot_guard()
+    census = _census()
+    models, _, _, factory = _app()
     with factory()() as db:
         b = db.query(models.Brain).filter(models.Brain.slug == slug).one_or_none()
         if b is None:
             raise SystemExit(f"no brain with slug {slug!r}")
         S = models.RecallSample
-        rows = db.query(S).filter(S.brain_id == b.id, S.via == "http").order_by(S.id).all()
-        return [{"id": f"h{s.id}", "query": s.query, "label": "", "masked": s.masked} for s in rows
-                if all((s.params or {}).get(k) == v for k, v in HOOK_PARAMS.items())]
+        rows = db.query(S).filter(S.brain_id == b.id).order_by(S.id).all()
+        return hook_rows([{"id": s.id, "via": s.via, "params": s.params, "query": s.query, "masked": s.masked} for s in rows],
+                         census._hook_like)
+
+
+def hook_rows(samples: list[dict], hook_like) -> list[dict]:
+    return [{"id": f"h{s['id']}", "query": s["query"], "label": "", "masked": bool(s.get("masked"))} for s in samples
+            if s.get("via") == "http" and hook_like(s.get("params"))]
+
+
+def merge_labels(new: list[dict], old: list[dict]) -> list[dict]:
+    """A re-export keeps every label already written: the old rows first, then the prompts that are new."""
+    have = {h["id"] for h in old}
+    return old + [h for h in new if h["id"] not in have]
 
 
 def _write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -402,8 +542,9 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("split", help="fix the tune / holdout split once")
     s.add_argument("--gold", type=Path, required=True)
+    s.add_argument("--hookset", type=Path, help="also split the hook prompts")
     s.add_argument("--out", type=Path, default=OUT / "split.json")
-    s.add_argument("--add", action="store_true", help="place only the questions that are in no side yet")
+    s.add_argument("--add", action="store_true", help="place only the questions and prompts that are in no side yet")
     r = sub.add_parser("run", help="run the questions and score them")
     r.add_argument("--brain", required=True)
     r.add_argument("--gold", type=Path, required=True)
@@ -427,25 +568,29 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
         print(compare_markdown(res))
         return 0 if res["verdict"]["yes"] else 1
     if a.cmd == "hookset":
-        rows = hook_samples(a.brain)
+        old = load_jsonl(a.out) if a.out.exists() else []
+        rows = merge_labels(hook_samples(a.brain), old)
         a.out.parent.mkdir(parents=True, exist_ok=True)
         _write_jsonl(a.out, rows)
-        print(f"{len(rows)} hook prompts written to {a.out}. Put in `label` the uuid of the episode that should have been injected, "
-              "or `nothing`.")
+        print(f"{len(rows)} hook prompts ({len(rows) - len(old)} new) in {a.out}. Put in `label` the uuid of the episode that should "
+              "have been injected, or `nothing`.")
         return 0
 
     gold = load_jsonl(a.gold)
     problems = check_gold(gold)
     if problems:
         raise SystemExit("the gold set has problems:\n" + "\n".join(f"- {p}" for p in problems))
+    hooks = load_jsonl(a.hookset) if a.hookset else []
     if a.cmd == "split":
         old = json.loads(a.out.read_text(encoding="utf-8")) if a.out.exists() else None
         if old and not a.add:
             raise SystemExit(f"{a.out} already exists: the split is fixed once. Use --add to place new questions only")
-        sp = make_split(gold, old=old)
+        sp = {"seed": SEED, **make_split(gold, old=old)}
+        sp["hook"] = make_split([{"id": x["id"], "class": "hook"} for x in hooks], old=(old or {}).get("hook"))
         a.out.parent.mkdir(parents=True, exist_ok=True)
         a.out.write_text(json.dumps(sp, indent=1), encoding="utf-8")
-        print(f"tune {len(sp['tune'])}, holdout {len(sp['holdout'])} → {a.out}")
+        print(f"tune {len(sp['tune'])}, holdout {len(sp['holdout'])}; hook prompts tune {len(sp['hook']['tune'])}, "
+              f"holdout {len(sp['hook']['holdout'])} → {a.out}")
         return 0
 
     split = json.loads(a.split_file.read_text(encoding="utf-8")) if a.split_file.exists() else None
@@ -454,10 +599,12 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     if drafts and not a.include_drafts:
         print(f"{len(drafts)} questions not validated yet are left out (--include-drafts to run them)", file=sys.stderr)
         questions = [q for q in questions if q.get("validated")]
-    hooks = load_jsonl(a.hookset) if a.hookset else []
-    fn = recall_fn or recall_on(a.brain)
-    records = run(questions, hooks, fn, a.budget)
-    meta = {"brain": a.brain, "budget": a.budget, "params": BUDGETS[a.budget], "split": a.split, "label": a.label,
+    hooks = pick_split([x for x in hooks if label_hook(x) is not None], split, a.split, "hook prompts")
+    how: dict = {}
+    if recall_fn is None:
+        recall_fn, how = recall_on(a.brain)
+    records = run(questions, hooks, recall_fn, a.budget)
+    meta = {"brain": a.brain, "budget": a.budget, "params": BUDGETS[a.budget], "split": a.split, "label": a.label, **how,
             "questions": sum(1 for x in records if x["class"] != "hook"), "hook": sum(1 for x in records if x["class"] == "hook"),
             "drafts_included": bool(drafts and a.include_drafts), "when": datetime.now(UTC).isoformat(timespec="seconds")}
     s = summarize(records)
@@ -466,7 +613,7 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     out.write_text(json.dumps({"meta": meta, "summary": s, "records": records}, indent=1), encoding="utf-8")
     print(summary_markdown(meta, s))
     print(f"→ {out}")
-    return 0
+    return 1 if records and s["errors"] == len(records) else 0
 
 
 if __name__ == "__main__":

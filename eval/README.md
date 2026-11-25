@@ -7,42 +7,63 @@ Everything runs on the **frozen Phase 0 snapshot**, restored on an instance that
 `MIMIRSYNTH_*` environment. Everything it writes goes to `eval/out/`, which git ignores: questions, prompts and results hold the
 brain's own text.
 
+Nothing here changes the brain, but it is not read-only either:
+- the recall's embedding calls and the drafts' LLM calls are counted in the snapshot's `ai_usage`, as on any instance;
+- reading a federation grant stamps its last use;
+- both refuse to run on anything but PostgreSQL;
+- run it with the instance's notifications off, so a budget warning goes nowhere.
+
 ## 1. Questions
 
 The gold set is a JSONL file, one question per line, kept in `eval/out/` (never in the repository):
 
 ```json
-{"id": "q001", "class": "temporal", "query": "¿dónde corre ahora X?", "answer_episodes": ["<uuid>"], "stale": ["<fact uuid>"], "validated": true}
+{"id": "q001", "class": "temporal", "query": "¿dónde corre ahora X?", "answer_episodes": ["<uuid>"], "stale": ["<uuid>"], "validated": true}
 ```
 
 | Field | |
 |---|---|
 | `class` | `point`, `entity` (the answer is spread over several notes), `temporal`, `ood` (out of domain: the answer is nothing), `volatile` (the three probes) |
-| `answer_episodes` | the uuids of the episodes that contain the answer: an `entity` question needs at least two, `ood` none |
+| `answer_episodes` | the uuids of the episodes that contain the answer: an `entity` question needs at least two distinct ones, `ood` none |
 | `answer_docs` | optional: document ids, when the answer is in a document |
-| `stale` | `temporal` only: what must not appear as current, meaning the replaced fact's uuid, or the episode or document that states the old value |
-| `validated` | the maintainer read it and accepts it; `run` leaves the rest out unless `--include-drafts` |
+| `stale` | `temporal` only: what must not appear as current. A fact uuid counts only when Graphiti failed to invalidate that fact, since an invalidated fact always shows as no longer true. An episode or document uuid counts when a fragment or passage from it shows with no warning |
+| `validated` | `true` or `false`: the maintainer read the question and accepts it. `run` leaves out the rest unless given `--include-drafts` |
+| `drafted_from` | where the draft came from: the census stratum of its episodes, `entities` or `replay sample`. Kept to measure the bias later |
 
-`check_gold` refuses a set with a missing id, a repeated id, an unknown class, an entity question with one episode, and so on.
+`check_gold` refuses a set with any of these:
+- a missing or repeated id;
+- an unknown class;
+- an id list that is not a list of strings;
+- a `validated` that is not a boolean;
+- an entity question with fewer than two distinct episodes.
 
-**Drafts.** `drafts.py` writes about 225 drafts to `eval/out/drafts.jsonl`, from the episodes of the curated strata of the census
-(`person`, `agent`; `--strata` changes them):
+**Drafts.** `drafts.py` writes drafts to `eval/out/drafts.jsonl`. It refuses to overwrite that file, since you edit it.
 
 ```bash
 .venv/bin/python ../eval/drafts.py --brain SLUG
 ```
 
-- `point`: one episode;
-- `entity`: two to five episodes that mention the same entity;
-- `temporal`: a fact Graphiti invalidated and the fact that replaced it, with the old one in `stale`;
-- `ood`: questions that sound like the brain but are not about it.
+- **From episodes, through the instance's default LLM engine.** The episodes come from the census strata in `--strata`: by default
+  `person`, `agent` and `capture`, so the gold set does not lean towards the clean arm of #516. Only text from episodes of those
+  strata reaches the engine.
+  - `point`: one episode.
+  - `entity`: two to five episodes that mention the same entity.
+  - `temporal`: a fact Graphiti invalidated and the fact that replaced it, both from those strata. `stale` gets the old fact and the
+    episodes only the old fact came from.
+  - `ood`: questions that sound like the brain but are not about it, drafted from the names of the entities those episodes mention,
+    ten per call. Each call is told the ones already written, and repeats are dropped. A failed call keeps what the earlier ones
+    gave.
+- **From real prompts.** The replay sample's most recent queries (`--samples`, 40 by default), as they were asked. They are never
+  sent to the engine, and they come with an empty `class` and no answer for you to fill in. A prompt asked twice is drafted once.
+  The hook's own prompts are left out, since they are the hook set (below), split on their own.
 
-The drafts use the instance's default LLM engine, so those episodes are sent to it. Every draft comes with `validated: false` and a
-`draft_answer`. Read each one, fix the query, `answer_episodes` and `stale`, set `validated: true`, and copy it to the gold set.
-Volatile questions are not drafted.
+Every draft has `validated: false`, a `draft_answer` and its `drafted_from`. To accept a draft:
+1. Read it.
+2. Fix its class, query, `answer_episodes` and `stale`.
+3. Set `validated: true`.
+4. Copy it to the gold set.
 
-Drafting only from curated episodes favours the clean arm of #516. To compensate, also draft from captures
-(`--strata person,agent,capture`) and use the real prompts below.
+The script reports at the end how many pieces of material the engine gave nothing usable for. Volatile questions are not drafted.
 
 ## 2. Real prompts (hook set)
 
@@ -50,18 +71,22 @@ Drafting only from curated episodes favours the clean arm of #516. To compensate
 .venv/bin/python ../eval/run.py hookset --brain SLUG     # eval/out/hookset.jsonl
 ```
 
-This writes the replay sample's prompts that came through the agents' hook: over HTTP, with `facts=6` and `chunks=3`. Put in `label`
-the uuid of the episode that should have been injected, or `nothing`. Unlabelled prompts are skipped.
+This writes the replay sample's prompts that came through the agents' hook: over HTTP, with `facts=6` and `chunks=3`.
+- Put in `label` the uuid of the episode that should have been injected, or `nothing`.
+- Unlabelled prompts are skipped.
+- Running the command again adds the new prompts and keeps every label already written.
 
 ## 3. Split
 
 ```bash
-.venv/bin/python ../eval/run.py split --gold ../eval/out/gold.jsonl          # eval/out/split.json
-.venv/bin/python ../eval/run.py split --gold ../eval/out/gold.jsonl --add    # place new questions only
+.venv/bin/python ../eval/run.py split --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl          # eval/out/split.json
+.venv/bin/python ../eval/run.py split --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl --add    # new ones only
 ```
 
-The split is `tune` / `holdout` at 50 / 50 within each class, fixed by id. It refuses to be redone. With `--add`, the questions already
-placed keep their side, and new ones go to the smaller side of their class. `run` stops if a question is in neither side.
+- The split is `tune` / `holdout` at 50 / 50 within each class, fixed by id. The hook prompts are split the same way, separately.
+- It refuses to be redone. With `--add`, everything already placed keeps its side, and new questions and prompts go to the smaller
+  side of their class.
+- `run` stops if a question or a labelled prompt is in neither side.
 
 ## 4. Run
 
@@ -75,23 +100,30 @@ placed keep their side, and new ones go to the smaller side of their class. `run
 | `2500` | 8 | 4 | 2,500 |
 | `plugin` | 6 | 3 | 4,000 (the hook's real parameters) |
 
-It calls the app's `recall()` in process, prints the table and writes `eval/out/run-<label>-<budget>-<split>.json`.
+It calls the app's `recall()` in process, the way the hook's HTTP call makes it: with what other brains lend this one (federation),
+in the instance's default language and with its default document passages. All three are recorded in the result's `meta`. It prints the table
+and writes `eval/out/run-<label>-<budget>-<split>.json`. A recall that fails is recorded with its error and left out of the metrics,
+and the run goes on. If every recall fails, the command exits with 1.
 
-**What is scored.** Only the items that made it into the final `context`, in the order they appear there. An item the budget cut
-out counts neither for nor against.
+**What is scored.** Only the items that made it into the final `context`, in the order they appear there.
+- Each item is matched by its own line: a fact by its `- <fact> (` line, and a fragment or passage by its text right under its
+  `###` header.
+- A text that is only quoted in another line (`[sustituye a «…»]`, a warning) does not count, and an item the budget cut out counts
+  neither for nor against.
+- `empty_ok` and hook silence look at the context itself, so a state card alone counts as something injected.
 
 | Metric | Classes | Definition |
 |---|---|---|
 | `top3` | point, temporal, volatile | an item from an answer episode (or answer document) is among the first three |
 | `coverage` | entity | share of the answer episodes that some item comes from |
-| `stale_as_current` | temporal | something in `stale` is shown as current: the replaced fact in the current section, or a fragment or passage from a stale episode with no «Puede estar superado» warning. A current fact that only shares an episode with the old one does not count |
-| `empty_ok` | ood | nothing was returned |
-| `noise` | every class, and all together | share of the characters that come from items outside the answer, the sum of characters over the sum of characters |
+| `stale_as_current` | temporal | something in `stale` is shown as current (see `stale` above) |
+| `empty_ok` | ood | the context is empty |
+| `noise` | every class, and all together | share of characters from items outside the answer: the sum of their characters over the sum of all items' characters |
 | `hook_precision` | hook | of the prompts where something was injected, the share that injected the labelled note |
 | `hook_silence` | hook | of the prompts labelled `nothing`, the share where nothing was injected |
 
-Also reported: latency p50 and p95 from the recall's own `ms.total`. Every rate comes with a 95 % bootstrap interval over the
-questions (2,000 resamples, fixed seed).
+Latency p50 and p95 come from the recall's own `ms.total`. Every rate has a 95 % bootstrap interval over the questions (2,000
+resamples, fixed seed).
 
 ## 5. Compare
 
@@ -99,8 +131,11 @@ questions (2,000 resamples, fixed seed).
 .venv/bin/python ../eval/run.py compare ../eval/out/run-a.json ../eval/out/run-b.json
 ```
 
-The comparison is paired: each resample draws the same questions for A and B. It refuses two runs with a different budget or split.
-The table gives B − A in points with its interval, and the change relative to A.
+- **Paired:** each resample draws the same questions for A and B, over the questions that ran without error in both. The counts are
+  printed.
+- **Refuses** two runs that differ in budget, split or whether drafts were included.
+- **The table** gives B − A in points with its interval, and the change relative to A. A metric that A measured and B could not,
+  such as hook precision when B injects nothing, stays in the table without a value.
 
 **The verdict, written before measuring:**
 
@@ -111,6 +146,6 @@ The table gives B − A in points with its interval, and the change relative to 
 
     and the interval of that change is wholly below zero;
   - neither co-primary rises (its interval is not wholly above zero);
-  - every answer metric (`top3`, `coverage`, `empty_ok`, `hook_precision`, `hook_silence`) loses 3 points or fewer at the lower bound
-    of its interval.
-- **Anything else, a tie included, is no.** The command exits with 1 on a no.
+  - every answer metric that A measured (`top3`, `coverage`, `empty_ok`, `hook_precision`, `hook_silence`) is measured in B too, and
+    loses 3 points or fewer at the lower bound of its interval.
+- **Anything else, a tie included, is no.** A co-primary at 0 in A cannot fall. The command exits with 1 on a no.
