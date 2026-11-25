@@ -160,7 +160,14 @@ def gate_weights(items: list[dict], keys: list[dict]) -> dict[str, dict]:
     per: dict[str, int] = defaultdict(int)
     for st in strata.values():
         per[st] += 1
-    pop = {st: int(key[i].get("population") or 0) for i, st in strata.items()}
+    pop: dict[str, int] = {}
+    for i, st in strata.items():
+        try:
+            pop[st] = int(str(key[i].get("population") or "").strip())
+        except ValueError:
+            pop[st] = 0
+        if pop[st] <= 0:   # it would drop out of the weighted precision, and the report would not say so
+            raise SystemExit(f"the census key gives stratum {st!r} no size (row {i}): it cannot be weighted back to the brain")
     return {i: {"stratum": st, "w": pop[st] / per[st]} for i, st in strata.items()}
 
 
@@ -494,6 +501,8 @@ def read_brain(slug: str, k: int = K):
     from mimirsynth import index
     from mimirsynth.db import graph, rows
     from mimirsynth.embed import get_embedder
+    if not index.enabled():   # every pair would have no candidate, and read as a miss of the prompt
+        raise SystemExit("the episode index is off on this instance: the `replaces` candidates come from it")
     with factory()() as db:
         b = db.query(models.Brain).filter(models.Brain.slug == slug).one_or_none()
         if b is None:

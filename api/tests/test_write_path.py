@@ -144,6 +144,9 @@ def test_the_p1_precision_is_weighted_back_to_the_brain():
     assert rows["precision_reject"]["value"] == 0.5
     assert rows["precision_reject_w"]["value"] == pytest.approx(0.9) and rows["precision_reject_w"]["n"] == 20
     assert rows["precision_reject_w"]["lo"] < 0.9 < rows["precision_reject_w"]["hi"]
+    for bad in ("", "0", "n/a"):   # a stratum with no size would drop out of the weighted precision unseen
+        with pytest.raises(SystemExit, match="no size"):
+            wp.gate_weights(items, [{**k, "population": bad} if k["stratum"] == "person" else k for k in keys])
     # without weights on every record there is no weighted row, and P1 reads it as not measured
     rows = wp.summarize([{k: v for k, v in r.items() if k != "w"} for r in recs], wp.GATE_ROWS, n=50, weighted=wp.GATE_WEIGHTED)
     assert "precision_reject_w" not in {r["metric"] for r in rows["rows"]}
