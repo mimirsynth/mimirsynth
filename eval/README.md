@@ -4,8 +4,9 @@ How well the recall serves a brain, measured on its final context: per question 
 against A with a verdict written before measuring (#491, Phase 0). `census/` holds the corpus census (#514).
 
 Everything runs on the **frozen Phase 0 snapshot**, restored on an instance that is not production, from `api/` with that instance's
-`MIMIRSYNTH_*` environment. Everything it writes goes to `eval/out/`, which git ignores: questions, prompts and results hold the
-brain's own text.
+`MIMIRSYNTH_*` environment and `MIMIRSYNTH_EVAL_SNAPSHOT=1`. Set that variable only on the restored instance: `run`, `hookset` and
+`drafts.py` refuse to touch a brain without it, since production is PostgreSQL too. Everything it writes goes to `eval/out/`, which
+git ignores: questions, prompts and results hold the brain's own text.
 
 Nothing here changes the brain, but it is not read-only either:
 - the recall's embedding calls and the drafts' LLM calls are counted in the snapshot's `ai_usage`, as on any instance;
@@ -111,6 +112,14 @@ and the run goes on. If every recall fails, the command exits with 1.
 - A text that is only quoted in another line (`[sustituye a «…»]`, a warning) does not count, and an item the budget cut out counts
   neither for nor against.
 - `empty_ok` and hook silence look at the context itself, so a state card alone counts as something injected.
+- `noise` is over the whole context. An item from the answer takes its whole entry: a fact's line, or a fragment's or passage's
+  header, text and "may be superseded" lines (any other `> ` line is not part of it). No two items share a character: a `###`
+  heading or a `- … (` line inside a passage's text is not taken as another item. Every other character is noise, whether it was parsed or not: section headers, state cards, items
+  outside the answer, and any text in a format the parser does not know. So a variant that writes its context another way cannot
+  look cleaner for it.
+- Each record keeps `unparsed_chars`, the characters no item took, and the summary prints their total against the context's.
+- If the recall returned items and none of them is found in a context that has text, the record is an error, `unparsed context`. It
+  leaves the metrics and the pairing instead of scoring as an empty answer. This also happens if state cards take the whole budget.
 
 | Metric | Classes | Definition |
 |---|---|---|
@@ -118,7 +127,7 @@ and the run goes on. If every recall fails, the command exits with 1.
 | `coverage` | entity | share of the answer episodes that some item comes from |
 | `stale_as_current` | temporal | something in `stale` is shown as current (see `stale` above) |
 | `empty_ok` | ood | the context is empty |
-| `noise` | every class, and all together | share of characters from items outside the answer: the sum of their characters over the sum of all items' characters |
+| `noise` | every class, and all together | share of the context's characters that are not part of an item from the answer: summed over the questions, over the sum of their context lengths |
 | `hook_precision` | hook | of the prompts where something was injected, the share that injected the labelled note |
 | `hook_silence` | hook | of the prompts labelled `nothing`, the share where nothing was injected |
 
@@ -139,7 +148,7 @@ resamples, fixed seed).
 
 **The verdict, written before measuring:**
 
-- **Yes** needs all three:
+- **Yes** needs all four:
   - at least one co-primary improves:
     - `noise` over all questions falls 30 % or more relative to A, or
     - `stale_as_current` on the temporal questions falls 50 % or more,
@@ -147,5 +156,11 @@ resamples, fixed seed).
     and the interval of that change is wholly below zero;
   - neither co-primary rises (its interval is not wholly above zero);
   - every answer metric that A measured (`top3`, `coverage`, `empty_ok`, `hook_precision`, `hook_silence`) is measured in B too, and
-    loses 3 points or fewer at the lower bound of its interval.
+    loses 3 points or fewer at the lower bound of its interval;
+  - B fails on no more of the questions both runs have than A does. A failed recall or an unparsed context leaves the pairing, and
+    B must not be judged only on the questions it got through.
 - **Anything else, a tie included, is no.** A co-primary at 0 in A cannot fall. The command exits with 1 on a no.
+
+How "improves" is read: the point estimate of the relative change reaches the minimum effect (−30 % or −50 %), and the interval of
+the difference B − A is wholly below zero. The interval does not have to be wholly past the minimum effect: with about 50 questions
+per class that would rarely be reached. Agreed in the review of #522.

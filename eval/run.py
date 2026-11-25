@@ -1,7 +1,8 @@
 """Retrieval eval for Phase 0 (#492): per-class metrics on the final context, at two budgets, with intervals, and a paired comparison
 with a verdict fixed in advance.
 
-It runs on the frozen Phase 0 snapshot, never on production, with the instance's MIMIRSYNTH_* environment, from `api/`:
+It runs on the frozen Phase 0 snapshot, never on production, with the instance's MIMIRSYNTH_* environment and
+MIMIRSYNTH_EVAL_SNAPSHOT=1 (set only on the restored instance), from `api/`:
 
     cd api && .venv/bin/python ../eval/run.py hookset --brain SLUG      # real prompts from the replay sample, to label
     cd api && .venv/bin/python ../eval/run.py split   --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl
@@ -31,7 +32,10 @@ OUT = HERE / "out"
 CLASSES = ("point", "entity", "temporal", "ood", "volatile")
 BUDGETS = {   # the recall parameters each budget runs with
     "2500": {"n_facts": 8, "n_chunks": 4, "max_chars": 2500},
-    "plugin": {"n_facts": 6, "n_chunks": 3, "max_chars": 4000},   # what the agent plugins' per-prompt hook sends
+    # What the agent plugins' per-prompt hook sends. The hook also cuts what it injects at 9,500 characters
+    # (integrations/claude-code/plugin/scripts/hook.py), which a max_chars of 4,000 never reaches: raising max_chars past it would
+    # measure text the agent never sees.
+    "plugin": {"n_facts": 6, "n_chunks": 3, "max_chars": 4000},
 }
 # Declared in advance (#492): the co-primaries must fall by at least this much, relative to the baseline; the answer metrics may
 # not lose more than NON_INFERIORITY points at the lower bound of their interval.
@@ -160,62 +164,82 @@ def pick_split(items: list[dict], split: dict | None, which: str, what: str = "q
 
 # --- scoring (pure) ------------------------------------------------------------------------------------------------------------------
 
+# The line build_context writes under a fragment or a passage that may be superseded (api/mimirsynth/recall.py, _superseded_note),
+# in each language the app speaks (web/src/i18n/en.server.json). Any other `> ` line under an entry is not part of it.
+WARNINGS = ("\n> Puede estar superado: ", "\n> May be superseded: ")
+
+
 def context_items(out: dict) -> list[dict]:
     """The items of a recall that made it into its final `context`, in the order they appear there. An item counts only by its own
     line, as `build_context` writes it: a fact by a line `- <fact> (`, a fragment or a passage by its text right under a `###` header
     (a passage's header carries its `[doc N, … M]`). A text quoted inside another line (`[sustituye a «…»]`, a "may be superseded"
-    warning) does not count, and two items with the same text need two lines."""
+    warning) does not count, and two items with the same text need two lines.
+
+    Each item carries `chars`, the characters of the context it takes: a fact's whole line, a fragment's or a passage's header, text
+    and "may be superseded" lines, each with its line break. No two items share a character, so their `chars` never add up to more
+    than the context: passages are placed first (their header is the most specific), then fragments, then facts, and a match that
+    would overlap one already placed (a `###` heading or a `- … (` line inside a passage's text, say) is not taken."""
     ctx = out.get("context") or ""
     lines = ctx.split("\n")
     starts, pos = [], 0
     for ln in lines:
         starts.append(pos)
         pos += len(ln) + 1
-    used: set[int] = set()
-    found: list[tuple[int, int, dict]] = []
+    taken: list[tuple[int, int]] = []
+    found: list[tuple[int, dict]] = []
 
-    def under_header(text: str, header_ok) -> int | None:
+    def with_break(end: int) -> int:
+        return end + 1 if ctx[end:end + 1] == "\n" else end
+
+    def free(start: int, end: int) -> bool:
+        return all(end <= s or start >= e for s, e in taken)
+
+    def place(start: int, end: int, it: dict) -> None:
+        taken.append((start, end))
+        found.append((start, {**it, "chars": end - start}))
+
+    def under_header(text: str, header_ok) -> tuple[int, int] | None:
+        """(start, end) of a free entry whose header passes `header_ok` and whose text follows it, with its warning lines."""
         for i in range(len(lines) - 1):
-            if i in used or not lines[i].startswith("### ") or not header_ok(lines[i]):
+            if not lines[i].startswith("### ") or not header_ok(lines[i]) or not ctx.startswith(text, starts[i + 1]):
                 continue
-            if ctx.startswith(text, starts[i + 1]):
-                used.add(i)
-                return starts[i]
+            end = starts[i + 1] + len(text)
+            while any(ctx.startswith(w, end) for w in WARNINGS):
+                nxt = ctx.find("\n", end + 1)
+                end = len(ctx) if nxt < 0 else nxt
+            end = with_break(end)
+            if free(starts[i], end):
+                return starts[i], end
         return None
 
-    n = 0
+    for d in out.get("documents") or []:
+        text = (d.get("text") or "").strip()
+        doc, idx = d.get("document_id"), d.get("chunk_idx")
+        marker = re.compile(rf"\[doc {re.escape(str(doc))}, \S+ {re.escape(str(idx))}\]$")
+        span = under_header(text, lambda h, m=marker: bool(m.search(h))) if text else None
+        if span is not None:
+            place(*span, {"kind": "doc", "id": str(doc or ""), "episodes": [], "text": text, "current": not d.get("superseded")})
+    for c in out.get("chunks") or []:
+        text = (c.get("text") or "").strip()
+        span = under_header(text, lambda h: not re.search(r"\[doc \d+, \S+ \d+\]$", h)) if text else None
+        if span is not None:
+            place(*span, {"kind": "chunk", "id": str(c.get("id") or ""), "text": text, "current": not c.get("superseded"),
+                          "episodes": [str(c["episode_uuid"])] if c.get("episode_uuid") else []})
+
     def own_section(ln: str, prefix: str, current: bool) -> bool:
         # an old fact's line reads `- <fact> (<since> → <until>)`; a current one's parenthesis has no arrow
         return ln.startswith(prefix) and ("→" not in ln[len(prefix):].split(")", 1)[0]) == current
 
     for f in out.get("facts") or []:
         text = (f.get("fact") or "").strip()
-        it = {"kind": "fact", "id": str(f.get("uuid") or ""), "episodes": [str(e) for e in f.get("episodes") or []], "text": text,
-              "current": f.get("status") != "invalidated"}
+        current = f.get("status") != "invalidated"
         for i, ln in enumerate(lines):
-            if text and i not in used and own_section(ln, f"- {text} (", it["current"]):
-                used.add(i)
-                found.append((starts[i], n, it))
+            end = with_break(starts[i] + len(ln))
+            if text and own_section(ln, f"- {text} (", current) and free(starts[i], end):
+                place(starts[i], end, {"kind": "fact", "id": str(f.get("uuid") or ""), "text": text, "current": current,
+                                       "episodes": [str(e) for e in f.get("episodes") or []]})
                 break
-        n += 1
-    for c in out.get("chunks") or []:
-        text = (c.get("text") or "").strip()
-        it = {"kind": "chunk", "id": str(c.get("id") or ""), "episodes": [str(c["episode_uuid"])] if c.get("episode_uuid") else [],
-              "text": text, "current": not c.get("superseded")}
-        p = under_header(text, lambda h: not re.search(r"\[doc \d+, \S+ \d+\]$", h)) if text else None
-        if p is not None:
-            found.append((p, n, it))
-        n += 1
-    for d in out.get("documents") or []:
-        text = (d.get("text") or "").strip()
-        doc, idx = d.get("document_id"), d.get("chunk_idx")
-        it = {"kind": "doc", "id": str(doc or ""), "episodes": [], "text": text, "current": not d.get("superseded")}
-        marker = re.compile(rf"\[doc {re.escape(str(doc))}, \S+ {re.escape(str(idx))}\]$")
-        p = under_header(text, lambda h, m=marker: bool(m.search(h))) if text else None
-        if p is not None:
-            found.append((p, n, it))
-        n += 1
-    return [it for _, _, it in sorted(found, key=lambda x: (x[0], x[1]))]
+    return [it for _, it in sorted(found, key=lambda x: x[0])]
 
 
 def _relevant(it: dict, q: dict) -> bool:
@@ -233,14 +257,24 @@ def _stale(it: dict, stale: set[str]) -> bool:
     return it["id"] in stale if it["kind"] in ("fact", "doc") else bool(set(it["episodes"]) & stale)
 
 
-def score(q: dict, items: list[dict], ms: float | None = None, has_context: bool | None = None) -> dict:
+def _context(items: list[dict], context: str | None) -> tuple[int, bool, int]:
+    """(characters of the final context, whether it has any text, characters no item takes). Without `context`, the items alone."""
+    taken = sum(it["chars"] for it in items)
+    if context is None:
+        return taken, bool(items), 0
+    return len(context), bool(context.strip()), max(0, len(context) - taken)
+
+
+def score(q: dict, items: list[dict], ms: float | None = None, context: str | None = None) -> dict:
     """One question's record. Each metric is a (numerator, denominator) pair, so a class or a resample is the ratio of their sums:
-    `noise` weighs every character the same, the rates weigh every question the same. `has_context`: the final context has any text
-    (a state card counts); by default, whether any item reached it."""
-    has_context = bool(items) if has_context is None else has_context
+    `noise` weighs every character the same, the rates weigh every question the same.
+
+    `noise` is over the whole final `context`: every character that is not part of an item from the answer is noise, whether it was
+    parsed or not (section headers, state cards, a format the parser does not know). `unparsed_chars` is the part no item took.
+    `empty_ok` reads the context itself, so a state card alone counts as something injected."""
+    total, has_context, unparsed = _context(items, context)
     rel = [_relevant(it, q) for it in items]
-    chars = sum(len(it["text"]) for it in items)
-    m: dict[str, list[float]] = {"noise": [sum(len(it["text"]) for it, r in zip(items, rel, strict=True) if not r), chars]}
+    m: dict[str, list[float]] = {"noise": [total - sum(it["chars"] for it, r in zip(items, rel, strict=True) if r), total]}
     cls = q["class"]
     if cls in ("point", "temporal", "volatile"):
         m["top3"] = [int(any(rel[:3])), 1]
@@ -252,21 +286,22 @@ def score(q: dict, items: list[dict], ms: float | None = None, has_context: bool
         m["stale_as_current"] = [int(any(_stale(it, set(q["stale"])) for it in items)), 1]
     if cls == "ood":
         m["empty_ok"] = [int(not has_context), 1]
-    return {"id": q["id"], "class": cls, "items": len(items), "ms": ms, "m": m}
+    return {"id": q["id"], "class": cls, "items": len(items), "ms": ms, "m": m, "chars": total, "unparsed_chars": unparsed}
 
 
-def score_hook(h: dict, items: list[dict], ms: float | None = None, has_context: bool | None = None) -> dict:
+def score_hook(h: dict, items: list[dict], ms: float | None = None, context: str | None = None) -> dict:
     """A real prompt: was anything injected (the hook injects any non-empty context), and was it the labelled note.
     `hook_precision`: of the injected contexts, the share that holds the note. `hook_silence`: of the prompts labelled `nothing`, the
     share with nothing injected."""
     note = label_hook(h)
-    injected = int(bool(items) if has_context is None else has_context)
+    total, has_context, unparsed = _context(items, context)
+    injected = int(has_context)
     m: dict[str, list[float]] = {}
     if injected:
         m["hook_precision"] = [int(note not in (None, "nothing") and any(note in it["episodes"] for it in items)), 1]
     if note == "nothing":
         m["hook_silence"] = [1 - injected, 1]
-    return {"id": h["id"], "class": "hook", "items": len(items), "ms": ms, "m": m}
+    return {"id": h["id"], "class": "hook", "items": len(items), "ms": ms, "m": m, "chars": total, "unparsed_chars": unparsed}
 
 
 def aggregate(records: list[dict], metric: str) -> float | None:
@@ -329,8 +364,12 @@ def summarize(records: list[dict], n: int = BOOT) -> dict:
         lo, hi = bootstrap(rs, lambda x, m=metric: aggregate(x, m), n)
         rows.append({"scope": scope, "metric": metric, "n": sum(1 for r in rs if metric in r["m"]), "value": aggregate(rs, metric),
                      "lo": lo, "hi": hi})
-    ms = [r["ms"] for r in records if r.get("ms") is not None and not r.get("error")]
+    ok = [r for r in records if not r.get("error")]
+    ms = [r["ms"] for r in ok if r.get("ms") is not None]
+    questions = [r for r in ok if r["class"] != "hook"]   # the ones `noise` is measured on
     return {"rows": rows, "errors": sum(1 for r in records if r.get("error")),
+            "unparsed_chars": sum(r.get("unparsed_chars") or 0 for r in questions),
+            "context_chars": sum(r.get("chars") or 0 for r in questions),
             "latency_ms": {"p50": percentile(ms, 50), "p95": percentile(ms, 95)}}
 
 
@@ -344,8 +383,9 @@ def compare(a: dict, b: dict, n: int = BOOT, seed: int = SEED) -> dict:
         if a["meta"].get(k) != b["meta"].get(k):
             raise SystemExit(f"the two runs differ in {k}: {a['meta'].get(k)} against {b['meta'].get(k)}")
     rb = {(r["class"], r["id"]): r for r in b["records"]}
-    pairs = [(r, rb[(r["class"], r["id"])]) for r in a["records"]
-             if (r["class"], r["id"]) in rb and not r.get("error") and not rb[(r["class"], r["id"])].get("error")]
+    shared = [(r, rb[(r["class"], r["id"])]) for r in a["records"] if (r["class"], r["id"]) in rb]
+    pairs = [(x, y) for x, y in shared if not x.get("error") and not y.get("error")]
+    failed = {"a": sum(1 for x, _ in shared if x.get("error")), "b": sum(1 for _, y in shared if y.get("error"))}
     if not pairs:
         raise SystemExit("the two runs share no question that ran in both")
     rng = random.Random(seed)
@@ -374,17 +414,19 @@ def compare(a: dict, b: dict, n: int = BOOT, seed: int = SEED) -> dict:
             row.update(diff=vb - va, diff_lo=percentile(diffs, 2.5), diff_hi=percentile(diffs, 97.5), rel=(vb - va) / va if va else None,
                        rel_lo=percentile(rels, 2.5), rel_hi=percentile(rels, 97.5))
         rows.append(row)
-    counts = {"a": len(a["records"]), "b": len(b["records"]), "paired": len(pairs)}
-    return {"rows": rows, "verdict": verdict(rows), "counts": counts,
+    counts = {"a": len(a["records"]), "b": len(b["records"]), "paired": len(pairs), "failed_a": failed["a"], "failed_b": failed["b"]}
+    return {"rows": rows, "verdict": verdict(rows, failed["b"] - failed["a"]), "counts": counts,
             "latency_ms": {"a": a["summary"]["latency_ms"], "b": b["summary"]["latency_ms"]}}
 
 
-def verdict(rows: list[dict]) -> dict:
+def verdict(rows: list[dict], more_failed: int = 0) -> dict:
     """The rule written before measuring (#492). Yes only when:
     - at least one co-primary (noise over all the questions; stale-as-current on the temporal ones) falls by its minimum relative
       effect, and the interval of its difference is wholly below zero;
     - no co-primary rises (the interval wholly above zero);
-    - every answer metric A measured is measured in B too, and its lower bound loses at most NON_INFERIORITY points.
+    - every answer metric A measured is measured in B too, and its lower bound loses at most NON_INFERIORITY points;
+    - B fails on no more of the shared questions than A (`more_failed`): a failed recall or an unparsed context leaves the pairing,
+      and B must not be judged on the questions it happened to get through.
     Anything else, a tie included, is a no. A co-primary at 0 in A cannot fall, so it does not count for B."""
     def get(scope, metric):
         return next((r for r in rows if r["scope"] == scope and r["metric"] == metric), None)
@@ -414,7 +456,9 @@ def verdict(rows: list[dict]) -> dict:
             inferior.append(f"{r['scope']} {r['metric']}")
     if inferior:
         reasons.append("worse answers: " + ", ".join(inferior))
-    return {"yes": bool(improved) and not worse and not inferior, "improved": improved, "reasons": reasons}
+    if more_failed > 0:
+        reasons.append(f"B failed on {more_failed} more of the shared questions than A")
+    return {"yes": bool(improved) and not worse and not inferior and more_failed <= 0, "improved": improved, "reasons": reasons}
 
 
 # --- markdown ------------------------------------------------------------------------------------------------------------------------
@@ -434,6 +478,9 @@ def summary_markdown(meta: dict, s: dict) -> str:
     lines += [f"| {r['scope']} | {r['metric']} | {r['n']} | {_pct(r['value'])} | {_pct(r['lo'])} – {_pct(r['hi'])} |" for r in s["rows"]]
     lat = s["latency_ms"]
     lines += ["", f"Latency: p50 {lat['p50']} ms, p95 {lat['p95']} ms" if lat["p50"] is not None else "Latency: not measured"]
+    if s.get("context_chars"):
+        lines.append(f"Unparsed: {s['unparsed_chars']} of the questions' {s['context_chars']} context characters "
+                     f"({_pct(s['unparsed_chars'] / s['context_chars'])} %), counted as noise.")
     if s.get("errors"):
         lines.append(f"**{s['errors']} recalls failed** and are left out (see `error` in the records).")
     return "\n".join(lines + [""])
@@ -441,7 +488,8 @@ def summary_markdown(meta: dict, s: dict) -> str:
 
 def compare_markdown(c: dict) -> str:
     k = c["counts"]
-    lines = [f"A {k['a']} records, B {k['b']}, compared on the {k['paired']} that ran in both.", "",
+    lines = [(f"A {k['a']} records, B {k['b']}, compared on the {k['paired']} that ran in both. Of the shared ones, A failed on "
+              f"{k['failed_a']} and B on {k['failed_b']}."), "",
              "| class | metric | n | A % | B % | B − A (points) | 95 % interval | relative |", "|---|---|--:|--:|--:|--:|--:|--:|"]
     for r in c["rows"]:
         rel = "–" if r["rel"] is None else f"{100 * r['rel']:+.0f} %"
@@ -458,11 +506,19 @@ def compare_markdown(c: dict) -> str:
 # --- running against the snapshot ------------------------------------------------------------------------------------------------------
 
 def _one(item: dict, recall_fn, params: dict, scorer) -> dict:
+    """One recall, scored. A failed recall is recorded with its error. So is a context the parser cannot read: the recall returned
+    items and none of them was found in a context that has text. Scoring it would read as empty (no answer, no noise), so it leaves
+    the metrics and the pairing instead."""
+    def failed(error: str, ms=None) -> dict:
+        return {"id": item["id"], "class": item.get("class") or "hook", "items": 0, "ms": ms, "m": {}, "error": error}
     try:
         out = recall_fn(item["query"], **params)
     except Exception as e:  # noqa: BLE001  (one failed recall is recorded, the run goes on)
-        return {"id": item["id"], "class": item.get("class") or "hook", "items": 0, "ms": None, "m": {}, "error": f"{type(e).__name__}: {e}"}
-    return scorer(item, context_items(out), (out.get("ms") or {}).get("total"), bool((out.get("context") or "").strip()))
+        return failed(f"{type(e).__name__}: {e}")
+    ctx, ms, items = out.get("context") or "", (out.get("ms") or {}).get("total"), context_items(out)
+    if ctx.strip() and not items and any(out.get(k) for k in ("facts", "chunks", "documents")):
+        return failed("unparsed context: the recall returned items and none was found in its context", ms)
+    return scorer(item, items, ms, ctx)
 
 
 def run(questions: list[dict], hooks: list[dict], recall_fn, budget: str) -> list[dict]:
@@ -481,8 +537,12 @@ def _app():
 
 
 def snapshot_guard() -> None:
-    """A snapshot is always PostgreSQL; an unset MIMIRSYNTH_DATABASE_URL would open (and create) the development SQLite file."""
+    """Only on the instance where the snapshot was restored, which says so with MIMIRSYNTH_EVAL_SNAPSHOT=1: production is PostgreSQL
+    too, and the recall writes (a grant's last use, `ai_usage`). A snapshot is always PostgreSQL; an unset MIMIRSYNTH_DATABASE_URL
+    would open (and create) the development SQLite file."""
     import os
+    if os.environ.get("MIMIRSYNTH_EVAL_SNAPSHOT") != "1":
+        raise SystemExit("set MIMIRSYNTH_EVAL_SNAPSHOT=1, only on the instance where the Phase 0 snapshot was restored")
     sys.path.insert(0, str(HERE.parent / "api"))
     from mimirsynth.store import engine
     name = engine().dialect.name

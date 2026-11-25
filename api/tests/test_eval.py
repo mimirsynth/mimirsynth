@@ -126,14 +126,51 @@ def test_documents_match_by_their_marker():
     assert ev.score(q, ev.context_items(o))["m"]["top3"] == [1, 1]
 
 
+def test_no_two_items_share_a_character():
+    """A `###` heading inside a passage is not a fragment's header, and a `> ` line is part of an entry only when it is the warning."""
+    t = "Deploy with the blue-green script."
+    o = out(docs=[D(7, 0, "# Runbook\n### Deploy\n" + t)])
+    o["chunks"] = [C(1, t, "e1")]   # returned, but its own entry is not in the context
+    items = ev.context_items(o)
+    assert [(i["kind"], i["id"]) for i in items] == [("doc", "7")]
+    q = {"id": "q", "class": "point", "query": "x", "answer_docs": ["7"], "answer_episodes": ["e1"]}
+    r = ev.score(q, items, context=o["context"])
+    assert 0 <= r["m"]["noise"][0] <= r["m"]["noise"][1] and r["unparsed_chars"] >= 0
+    padded = out(chunks=[C(1, "note: X on node 1", "e1")])
+    padded["context"] += "\n> a summary a variant might add " * 10
+    ctx = padded["context"]
+    items = ev.context_items(padded)
+    assert items[0]["chars"] == ctx.index("\n> a summary") + 1 - ctx.index("### ")   # header and text, with the break: no padding
+    r = ev.score(Q, items, context=ctx)
+    assert r["m"]["noise"] == [len(ctx) - items[0]["chars"], len(ctx)]   # the padding is noise, not answer
+
+
 # --- scoring --------------------------------------------------------------------------------------------------------------------
 
 def test_top3_noise_and_latency():
     o = out([F("a", "aaaa", ["x"]), F("b", "bbbb", ["x"]), F("c", "cccc", ["x"]), F("d", "dddddddd", ["e1"])])
-    r = ev.score(Q, ev.context_items(o), 42)
+    r = ev.score(Q, ev.context_items(o), 42, o["context"])
     assert r["m"]["top3"] == [0, 1]   # the answer is fourth
-    assert r["m"]["noise"] == [12, 20] and r["ms"] == 42
-    assert ev.score(Q, ev.context_items(out([F("d", "dddddddd", ["e1"])])))["m"] == {"noise": [0, 8], "top3": [1, 1]}
+    answer = o["context"].split("\n")[-1]   # its whole line, date included
+    assert answer.startswith("- dddddddd (")
+    total = len(o["context"])
+    assert r["m"]["noise"] == [total - len(answer), total] and r["ms"] == 42
+    assert r["unparsed_chars"] == len("## Hechos vigentes\n")   # the section header: noise, taken by no item
+    one = out([F("d", "dddddddd", ["e1"])])
+    assert ev.score(Q, ev.context_items(one), context=one["context"])["m"] == {"noise": [19, len(one["context"])], "top3": [1, 1]}
+
+
+def test_a_fragment_takes_its_header_text_and_warning():
+    warned = [{"fact": "X runs on node 1", "invalid_at": "2026-02-01"}]
+    o = out([F("a", "X has 4 GB", ["x"])], [C(1, "note: X on node 1", "e1", superseded=warned)])
+    items = ev.context_items(o)
+    assert sum(i["chars"] for i in items) + len("## Hechos vigentes\n## Fragmentos de episodios\n") == len(o["context"])
+    r = ev.score(Q, items, context=o["context"])
+    frag = o["context"][o["context"].index("### "):]
+    assert "Puede estar superado" in frag and r["m"]["noise"] == [len(o["context"]) - len(frag), len(o["context"])]
+    en = build_context([], [C(1, "note: X on node 1", "e1", superseded=warned)], 100000, lang="en")
+    item = ev.context_items({"chunks": [C(1, "note: X on node 1", "e1", superseded=warned)], "context": en})[0]
+    assert "May be superseded" in en and item["chars"] == len(en) - en.index("### ")   # the English warning is part of it too
 
 
 def test_entity_coverage_counts_distinct_answer_episodes():
@@ -157,11 +194,14 @@ def test_stale_as_current_and_what_does_not_count():
 
 def test_empty_ok_and_silence_read_the_context_not_only_the_items():
     q = {"id": "q4", "class": "ood", "query": "the payroll system", "answer_episodes": []}
-    assert ev.score(q, [], has_context=False)["m"] == {"noise": [0, 0], "empty_ok": [1, 1]}
-    assert ev.score(q, [], has_context=True)["m"]["empty_ok"] == [0, 1]   # a state card alone is still something injected
-    r = ev.score(q, ev.context_items(out([F("a", "unrelated", ["e1"])])))
-    assert r["m"] == {"noise": [9, 9], "empty_ok": [0, 1]}
-    assert ev.score_hook({"id": "h", "label": "nothing"}, [], has_context=True)["m"] == {"hook_precision": [0, 1], "hook_silence": [0, 1]}
+    card = "## Estado actual de «X»\n- runs_on: node 1 (desde 1 ene 2026)"
+    assert ev.score(q, [], context="")["m"] == {"noise": [0, 0], "empty_ok": [1, 1]}
+    s = ev.score(q, [], context=card)   # a state card alone is still something injected, and all of it is noise
+    assert s["m"] == {"noise": [len(card), len(card)], "empty_ok": [0, 1]} and s["unparsed_chars"] == len(card)
+    o = out([F("a", "unrelated", ["e1"])])
+    r = ev.score(q, ev.context_items(o), context=o["context"])
+    assert r["m"] == {"noise": [len(o["context"])] * 2, "empty_ok": [0, 1]}
+    assert ev.score_hook({"id": "h", "label": "nothing"}, [], context=card)["m"] == {"hook_precision": [0, 1], "hook_silence": [0, 1]}
 
 
 def test_hook_precision_and_silence():
@@ -218,7 +258,8 @@ def test_bootstrap_is_seeded_and_brackets_the_value():
     assert row["value"] == 0.5 and row["lo"] < 0.5 < row["hi"]
     assert ev.summarize(recs, n=500) == s
     assert s["latency_ms"] == {"p50": 29, "p95": 47}   # nearest rank over 10…49
-    assert ev.summarize([]) == {"rows": [], "errors": 0, "latency_ms": {"p50": None, "p95": None}}
+    assert ev.summarize([]) == {"rows": [], "errors": 0, "unparsed_chars": 0, "context_chars": 0,
+                                "latency_ms": {"p50": None, "p95": None}}
 
 
 def test_verdict_yes_when_noise_falls_enough_and_answers_hold():
@@ -228,7 +269,7 @@ def test_verdict_yes_when_noise_falls_enough_and_answers_hold():
     noise = next(r for r in c["rows"] if r["scope"] == "all" and r["metric"] == "noise")
     assert noise["rel"] < -0.30 and noise["diff_hi"] < 0
     assert c["verdict"]["yes"] and c["verdict"]["improved"] == ["noise"]
-    assert c["counts"] == {"a": 60, "b": 60, "paired": 60}
+    assert c["counts"] == {"a": 60, "b": 60, "paired": 60, "failed_a": 0, "failed_b": 0}
 
 
 def test_verdict_yes_on_stale_alone_and_no_when_the_other_co_primary_rises():
@@ -264,6 +305,17 @@ def test_a_metric_b_cannot_measure_counts_against_b():
     assert row["b"] is None and row["diff"] is None
     assert not c["verdict"]["yes"] and any("hook_precision (not measured in B)" in x for x in c["verdict"]["reasons"])
     assert "| hook | hook_precision |" in ev.compare_markdown(c)
+
+
+def test_b_failing_on_more_questions_is_a_no():
+    a = _run(_recs([1] * 40, [40] * 40))
+    recs = _recs([1] * 40, [20] * 40)   # noise −50 %, but B fails on five questions A ran
+    for r in recs[:5]:
+        r["m"], r["error"] = {}, "unparsed context: …"
+    c = ev.compare(a, _run(recs), n=300)
+    assert c["counts"]["failed_b"] == 5 and c["counts"]["paired"] == 35
+    assert not c["verdict"]["yes"] and "B failed on 5 more of the shared questions than A" in c["verdict"]["reasons"]
+    assert "B on 5" in ev.compare_markdown(c)
 
 
 def test_compare_refuses_runs_that_are_not_comparable():
@@ -304,6 +356,46 @@ def test_run_scores_validated_questions_at_the_plugin_budget(tmp_path):
     assert res["meta"]["questions"] == 2 and res["meta"]["hook"] == 1
     rows = {(r["scope"], r["metric"]): r["value"] for r in res["summary"]["rows"]}
     assert rows[("point", "top3")] == 1 and rows[("ood", "empty_ok")] == 1 and rows[("hook", "hook_precision")] == 1
+
+
+def test_a_context_in_an_unknown_format_does_not_look_cleaner():
+    """A variant of #513 or #516 may write its context another way. What the parser cannot read is noise, and a context with items
+    none of which was found is an error that leaves the pairing, never an empty answer."""
+    qs = [{**Q, "id": f"q{i}"} for i in range(20)]
+
+    def v017(query, **p):
+        return out([F("a", "X runs on node 1", ["e1"]), F("b", "Y is unrelated", ["e9"])])
+
+    def other(query, **p):   # the same facts, written with no `- fact (` lines
+        return {**v017(query), "context": "<<facts>>\n* X runs on node 1 — 2026\n* Y is unrelated — 2026"}
+
+    def bare(query, **p):    # only a context, in a format of its own
+        return {"context": "EPISODE e1: X runs on node 1, and much else besides. " * 3, "ms": {"total": 5}}
+
+    a = ev.run(qs, [], v017, "2500")
+    b = ev.run(qs, [], other, "2500")
+    assert all(r["error"].startswith("unparsed context") and r["m"] == {} for r in b)
+    with pytest.raises(SystemExit, match="share no question"):
+        ev.compare(_run(a), _run(b))
+    c = ev.run(qs, [], bare, "2500")
+    assert all(r["m"]["noise"][0] == r["m"]["noise"][1] == r["chars"] == r["unparsed_chars"] for r in c)
+    vs = ev.compare(_run(a), _run(c), n=200)
+    noise = next(r for r in vs["rows"] if r["scope"] == "all" and r["metric"] == "noise")
+    assert noise["diff"] > 0 and not vs["verdict"]["yes"] and "noise" not in vs["verdict"]["improved"]
+    s = ev.summarize(c, n=50)
+    assert s["unparsed_chars"] == s["context_chars"] > 0
+    assert "Unparsed:" in ev.summary_markdown({"budget": "2500", "split": "all", "questions": 20}, s)
+
+
+def test_only_the_restored_instance_runs_against_a_brain(tmp_path, monkeypatch):
+    monkeypatch.delenv("MIMIRSYNTH_EVAL_SNAPSHOT", raising=False)
+    with pytest.raises(SystemExit, match="MIMIRSYNTH_EVAL_SNAPSHOT=1"):
+        ev.main(["hookset", "--brain", "b", "--out", str(tmp_path / "h.jsonl")])
+    g, _, _ = _files(tmp_path, [Q])
+    with pytest.raises(SystemExit, match="MIMIRSYNTH_EVAL_SNAPSHOT=1"):
+        ev.main(["run", "--brain", "b", "--gold", g, "--split", "all"])
+    with pytest.raises(SystemExit, match="MIMIRSYNTH_EVAL_SNAPSHOT=1"):
+        drafts._read("b", 0)
 
 
 def test_the_hook_prompts_are_split_too_and_add_only_places_new_ones(tmp_path):

@@ -1,6 +1,6 @@
 """Draft eval questions from a snapshot (#492), for the maintainer to validate or edit.
 
-It runs from `api/` with the instance's environment, on the frozen snapshot:
+It runs from `api/` with the instance's environment and MIMIRSYNTH_EVAL_SNAPSHOT=1, on the frozen snapshot only:
 
     cd api && .venv/bin/python ../eval/drafts.py --brain SLUG
 
