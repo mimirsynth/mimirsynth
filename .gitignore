@@ -23,3 +23,6 @@ sources/
 
 # Copied into the image at build time from web/src/i18n (see Dockerfile)
 api/mimirsynth/en.server.json
+
+# Phase 0 census output: the brain's own text (eval/census/README.md)
+eval/census/out/

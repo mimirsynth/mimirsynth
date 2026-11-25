@@ -34,8 +34,8 @@ jobs:
           # api, api-neo4j: the API and what its tests read (plugins, scripts, docs and wiki, marketplaces, the server's translations).
           # Not the npm plugins: their tests in api/tests need `npm ci` in the plugin, which only their own workflows run (here they skip).
           npm_plugins='^integrations/(opencode|openclaw)/'
-          out api '^(api/|integrations/|scripts/|docs/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"
-          out api-neo4j '^(api/|integrations/|scripts/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"   # docs/: the api job checks them
+          out api '^(api/|eval/|integrations/|scripts/|docs/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"
+          out api-neo4j '^(api/|eval/|integrations/|scripts/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"   # docs/: the api job checks them
           out web '^web/'
           out agent-client '^integrations/shared/'
           out npm-packages '^(integrations/(opencode|openclaw|shared)/|scripts/npm_package\.mjs$)'
