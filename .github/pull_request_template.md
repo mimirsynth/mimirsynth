@@ -15,5 +15,7 @@ Added:
 - [ ] No infrastructure-specific data, secrets or personal names
 - [ ] Documentation updated if behaviour changes (`docs/`, `docs/wiki/`), in English and Spanish
 - [ ] Title, description and commits in English
+- [ ] The issue is labelled `help wanted` / `good first issue`, or a maintainer agreed to it in the issue
+- [ ] If an AI tool wrote or helped write this change, it is said above (which tool, and what I checked myself)
 
 Closes #
