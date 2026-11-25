@@ -67,20 +67,24 @@ def stratum(p: dict | None) -> str:
     return origin if origin in ("person", "agent", "auto") else "unknown"
 
 
-NO_PROPOSAL_TOP = 4   # an episode with no proposal is split by its most common source descriptions; the rest go to "other"
+NO_PROPOSAL_TOP = 4   # an episode with no proposal is split by its most common sources: "source A" to "D", "other", "(none)"
 
 
-def source_key(desc: str | None) -> str:
-    """An episode's source description with what varies taken out: a quoted name («project», «hook») and numbers. Similar sources
-    group together, and no project or service name reaches the counts posted in #491."""
-    d = re.sub(r"«[^»]*»", "«…»", desc or "")
-    d = " ".join(re.sub(r"\d+", "N", d).split())[:60]
-    return d or "(none)"
+def source_key(desc: str | None, source_map: list | None = None) -> str:
+    """The origin an episode's source description stands for. With a source map, the label of the first pattern that matches, so
+    the many spellings of one origin fold together; otherwise the text with quoted names and numbers taken out. Either way it is
+    only written to the local legend (`sources.csv`), never to the counts that are posted."""
+    desc = (desc or "").strip()
+    if not desc:
+        return "(none)"
+    for rx, label in source_map or []:
+        if rx.search(desc):
+            return label
+    d = re.sub(r"«[^»]*»", "«…»", desc)
+    return " ".join(re.sub(r"\d+", "N", d).split())[:60]
 
 
-def episode_strata(episodes: list[dict], proposals: list[dict]) -> dict[str, str]:
-    """Each episode's stratum. One with no proposal (an adopted or imported graph) gets a sub-stratum from its own source description
-    in the graph, so the labels can tell which of them are curated."""
+def _strata_and_sources(episodes: list[dict], proposals: list[dict], source_map: list | None = None):
     by_ep: dict[str, list[dict]] = defaultdict(list)
     for p in proposals:
         if p.get("episode_uuid"):
@@ -89,11 +93,42 @@ def episode_strata(episodes: list[dict], proposals: list[dict]) -> dict[str, str
     for e in episodes:
         st[e["uuid"]] = stratum(pick(by_ep.get(e["uuid"], [])))
         if st[e["uuid"]] == "no-proposal":
-            loose[e["uuid"]] = source_key(e.get("source_description"))
-    top = {k for k, _ in Counter(loose.values()).most_common(NO_PROPOSAL_TOP)}
+            loose[e["uuid"]] = source_key(e.get("source_description"), source_map)
+    counts = Counter(loose.values())
+    ranked = [k for k, _ in counts.most_common() if k != "(none)"]
+    names = {k: f"source {chr(65 + i)}" for i, k in enumerate(ranked[:NO_PROPOSAL_TOP])}
     for u, k in loose.items():
-        st[u] = f"no-proposal: {k if k in top else 'other'}"
-    return st
+        st[u] = "no-proposal: " + ("(none)" if k == "(none)" else names.get(k, "other"))
+    legend = [{"stratum": "no-proposal: " + names.get(k, "other"), "source": k, "episodes": counts[k]} for k in ranked]
+    return st, legend
+
+
+def episode_strata(episodes: list[dict], proposals: list[dict], source_map: list | None = None) -> dict[str, str]:
+    """Each episode's stratum. One with no proposal (an adopted or imported graph) gets a neutral sub-stratum from its own source
+    description in the graph (`no-proposal: source A`), so the labels can tell which of them are curated without any name
+    reaching the posted counts."""
+    return _strata_and_sources(episodes, proposals, source_map)[0]
+
+
+def source_legend(episodes: list[dict], proposals: list[dict], source_map: list | None = None) -> list[dict]:
+    """What each neutral `no-proposal` sub-stratum stands for, with its episodes: for `sources.csv`, which stays on the machine."""
+    return _strata_and_sources(episodes, proposals, source_map)[1]
+
+
+def read_source_map(path: Path) -> list:
+    """Lines of `regex<TAB>label`, first match wins; blank lines and lines starting with `#` are skipped."""
+    out = []
+    for n, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        rx, sep, label = line.partition("\t")
+        if not sep or not label.strip():
+            raise SystemExit(f"{path.name}:{n}: expected regex<TAB>label")
+        try:
+            out.append((re.compile(rx), label.strip()))
+        except re.error as err:
+            raise SystemExit(f"{path.name}:{n}: bad regex: {err}") from None
+    return out
 
 
 def approved_by(p: dict | None) -> str:
@@ -136,13 +171,13 @@ def pick(proposals: list[dict]) -> dict | None:
 
 # --- census (pure) ------------------------------------------------------------------------------------------------------------------
 
-def episode_census(episodes: list[dict], proposals: list[dict]) -> dict:
+def episode_census(episodes: list[dict], proposals: list[dict], source_map: list | None = None) -> dict:
     by_ep: dict[str, list[dict]] = defaultdict(list)
     for p in proposals:
         if p.get("episode_uuid"):
             by_ep[p["episode_uuid"]].append(p)
     n = len(episodes)
-    st = episode_strata(episodes, proposals)
+    st = episode_strata(episodes, proposals, source_map)
     strata, who, cats, dated, bands = Counter(st.values()), Counter(), Counter(), Counter(), Counter()
     for e in episodes:
         p = pick(by_ep.get(e["uuid"], []))
@@ -305,14 +340,15 @@ def _day(v) -> date:
 CURATED = ("person", "agent")   # the candidates for the clean corpus of #516, until the episode labels define "curated"
 
 
-def census(episodes, proposals, edges, manual, logs, samples, usage, now: datetime | None = None) -> dict:
-    ep = episode_census(episodes, proposals)
+def census(episodes, proposals, edges, manual, logs, samples, usage, now: datetime | None = None,
+           source_map: list | None = None) -> dict:
+    ep = episode_census(episodes, proposals, source_map)
     strata = {r["key"]: r["n"] for r in ep["by_stratum"]}
     curated = sum(strata.get(s, 0) for s in CURATED)
     loose = sum(n for s, n in strata.items() if s.startswith("no-proposal"))
     arms = {"all episodes": len(episodes), "person + agent": curated, "person + agent + no proposal": curated + loose}
     extracted = [p.get("ingested_at") for p in proposals if p.get("status") == "ingested" and p.get("episode_uuid")]
-    st = episode_strata(episodes, proposals)
+    st = episode_strata(episodes, proposals, source_map)
     return {"episodes": ep, "facts": fact_census(edges, [e["uuid"] for e in episodes], manual, now, st),
             "prompts": prompt_census(logs, samples), "cost": cost_estimate(usage, extracted, arms)}
 
@@ -365,12 +401,13 @@ def _cell(v: str) -> str:
     return "'" + v if v[:1] in ("=", "+", "-", "@") else v
 
 
-def blind_sheets(episodes, proposals, edges, n_eps: int, n_facts: int, seed: int, now: datetime | None = None):
+def blind_sheets(episodes, proposals, edges, n_eps: int, n_facts: int, seed: int, now: datetime | None = None,
+                 source_map: list | None = None):
     """The two sheets and the key. The sheets show only text, dates and entity names, shuffled, with neutral ids (E001, F001); not
     the episode's title, which names the system writer in several strata («Curador: …», «Corrección: …»). The key also records each
     stratum's size, so the overall share can be weighted back to the brain."""
     rng = random.Random(seed)
-    st = episode_strata(episodes, proposals)
+    st = episode_strata(episodes, proposals, source_map)
     eps = stratified(episodes, lambda e: st[e["uuid"]], n_eps, rng)
     current = [f for f in edges if f.get("episodes") and _state(f, now) == "current"]
     fact_st = lambda f: st.get(f["episodes"][0], "no-proposal")   # its first episode's; `mixed` says when others differ
@@ -609,6 +646,7 @@ def main(argv: list[str] | None = None) -> int:
         s = sub.add_parser(name)
         s.add_argument("--brain", required=True, help="the brain's slug")
         s.add_argument("--out", type=Path, default=OUT)
+        s.add_argument("--source-map", type=Path, help="lines of regex<TAB>label that fold the spellings of one source together")
     s = sub.choices["sample"]
     s.add_argument("--episodes", type=int, default=100)
     s.add_argument("--facts", type=int, default=100)
@@ -629,15 +667,17 @@ def main(argv: list[str] | None = None) -> int:
         print(md)
         return 0
 
+    smap = read_source_map(a.source_map) if a.source_map else None
     _, d = read_snapshot(a.brain, allow_sqlite=os.environ.get("MIMIRSYNTH_CENSUS_ALLOW_SQLITE") == "1")
+    _write_csv(a.out / "sources.csv", source_legend(d["episodes"], d["proposals"], smap))   # names: stays on this machine
     if a.cmd == "count":
-        c = census(d["episodes"], d["proposals"], d["edges"], d["manual"], d["logs"], d["samples"], d["usage"])
+        c = census(d["episodes"], d["proposals"], d["edges"], d["manual"], d["logs"], d["samples"], d["usage"], source_map=smap)
         (a.out / "census.json").write_text(json.dumps(c, indent=2, default=_json_default), encoding="utf-8")
         md = to_markdown(c)
         (a.out / "census.md").write_text(md, encoding="utf-8")
         print(md)
         return 0
-    eps, facts, keys = blind_sheets(d["episodes"], d["proposals"], d["edges"], a.episodes, a.facts, a.seed)
+    eps, facts, keys = blind_sheets(d["episodes"], d["proposals"], d["edges"], a.episodes, a.facts, a.seed, source_map=smap)
     _write_csv(a.out / "episodes.csv", eps)
     _write_csv(a.out / "facts.csv", facts)
     _write_csv(a.out / "keys.csv", keys)

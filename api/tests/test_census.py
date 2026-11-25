@@ -114,21 +114,49 @@ def test_a_fact_invalidated_minutes_later_shows_in_the_wider_windows_only():
     assert census.born_invalid(edges[0], 1) is False and census.born_invalid(edges[0], 5) is True
 
 
-def test_episodes_without_a_proposal_are_split_by_their_source():
+def test_episodes_without_a_proposal_get_neutral_sub_strata_and_a_local_legend():
     episodes = [{"uuid": f"m{i}", "source_description": f"migrated from «layer {i % 2}» batch {i}"} for i in range(4)]
-    episodes += [{"uuid": "c1", "source_description": "Claude Code session in «toro»"},
-                 {"uuid": "c2", "source_description": "Claude Code session in «lidia»"},
-                 {"uuid": "x", "source_description": ""}, {"uuid": "p", "source_description": "mcp"}]
-    st = census.episode_strata(episodes, [P(id=1, origin="person", episode_uuid="p")])
-    assert st["m0"] == st["m3"] == "no-proposal: migrated from «…» batch N"   # names and numbers taken out
-    assert st["c1"] == st["c2"] == "no-proposal: Claude Code session in «…»"
-    assert st["x"] == "no-proposal: (none)" and st["p"] == "person"
+    episodes += [{"uuid": "c1", "source_description": "Claude Code session — billing-api repo"},   # an unquoted name
+                 {"uuid": "c2", "source_description": "Claude Code session — billing-api repo"},
+                 {"uuid": "x", "source_description": ""}, {"uuid": "y", "source_description": "  "},
+                 {"uuid": "p", "source_description": "mcp"}]
+    proposals = [P(id=1, origin="person", episode_uuid="p")]
+    st = census.episode_strata(episodes, proposals)
+    assert st["m0"] == st["m3"] == "no-proposal: source A"   # the most common first
+    assert st["c1"] == st["c2"] == "no-proposal: source B"
+    assert st["x"] == st["y"] == "no-proposal: (none)" and st["p"] == "person"
+    legend = {r["stratum"]: r for r in census.source_legend(episodes, proposals)}
+    assert legend["no-proposal: source A"] == {"stratum": "no-proposal: source A", "source": "migrated from «…» batch N", "episodes": 4}
+    assert legend["no-proposal: source B"]["source"] == "Claude Code session — billing-api repo"
+    c = census.census(episodes, proposals, [], set(), [], [], [])
+    assert {r["key"] for r in c["episodes"]["by_stratum"]} == {"person", "no-proposal: source A", "no-proposal: source B",
+                                                                "no-proposal: (none)"}
+    md = census.to_markdown(c)
+    assert "billing-api" not in md and "layer" not in md and "migrated" not in md
+    _, _, keys = census.blind_sheets(episodes, proposals, [], n_eps=7, n_facts=0, seed=1, now=NOW)
+    assert all("billing" not in k["stratum"] for k in keys)
     many = [{"uuid": f"u{i}", "source_description": f"src {chr(97 + i)}"} for i in range(6)] + [{"uuid": "u9", "source_description": "src a"}]
     assert Counter(census.episode_strata(many, []).values())["no-proposal: other"] == 2   # beyond the top 4
-    c = census.census(episodes, [P(id=1, origin="person", episode_uuid="p")], [], set(), [], [], [])
-    assert {r["key"] for r in c["episodes"]["by_stratum"]} == {"person", "no-proposal: migrated from «…» batch N",
-                                                                "no-proposal: Claude Code session in «…»", "no-proposal: (none)"}
-    assert "toro" not in census.to_markdown(c) and "layer" not in census.to_markdown(c)
+    assert sum(r["stratum"] == "no-proposal: other" for r in census.source_legend(many, [])) == 2
+
+
+def test_a_source_map_folds_the_spellings_of_one_origin(tmp_path):
+    (tmp_path / "map.tsv").write_text("# agents\n(?i)claude.*session|sesión claude\tagent session\n\n(?i)^migrated\timport\n",
+                                      encoding="utf-8")
+    smap = census.read_source_map(tmp_path / "map.tsv")
+    episodes = [{"uuid": "a", "source_description": "Claude Code session — billing-api repo"},
+                {"uuid": "b", "source_description": "sesión Claude Code en la-maquina"},
+                {"uuid": "c", "source_description": "billing-api Claude session 2026-03-01"},
+                {"uuid": "d", "source_description": "migrated from layer 1"}, {"uuid": "e", "source_description": "other text"}]
+    st = census.episode_strata(episodes, [], smap)
+    assert st["a"] == st["b"] == st["c"] == "no-proposal: source A" and st["d"] == "no-proposal: source B"
+    assert {r["source"] for r in census.source_legend(episodes, [], smap)} == {"agent session", "import", "other text"}
+    (tmp_path / "bad.tsv").write_text("no tab here\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="bad.tsv:1"):
+        census.read_source_map(tmp_path / "bad.tsv")
+    (tmp_path / "rx.tsv").write_text("(unclosed\tx\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="bad regex"):
+        census.read_source_map(tmp_path / "rx.tsv")
 
 
 def test_facts_backed_by_several_strata_are_counted_and_marked():
@@ -308,6 +336,7 @@ def test_count_and_sample_read_a_brain_and_write_nothing(client, monkeypatch, tm
         assert census.main(["count", "--brain", "cen", "--out", str(tmp_path)]) == 0
         md = (tmp_path / "census.md").read_text(encoding="utf-8")
         assert "2 episodes, 2 facts" in md
+        assert (tmp_path / "sources.csv").exists()   # the legend, empty here: every episode has a proposal
         assert "| capture | 1 | 50.0 |" in md and "| person | 1 | 50.0 |" in md
         assert "| 15 min | 0 | **1** | 100.0 |" in md   # an op that is not `fact.invalidate` does not count
         assert census.main(["sample", "--brain", "cen", "--out", str(tmp_path), "--episodes", "2", "--facts", "2"]) == 0

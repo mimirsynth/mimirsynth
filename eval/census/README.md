@@ -46,6 +46,7 @@ Everything goes to `eval/census/out/`, which git ignores: the sheets and the key
 | `census.md`, `census.json` | counts and percentages | yes, in #491 |
 | `episodes.csv`, `facts.csv` | the blind label sheets: text, dates and entity names only | no |
 | `keys.csv` | each sheet row's episode or fact uuid and its stratum | no |
+| `sources.csv` | what each `no-proposal: source X` stands for, with its episodes (written by `count` and `sample`) | no |
 | `labels.md` | the share of each label per stratum | yes, in #491 |
 
 ## Strata
@@ -61,14 +62,27 @@ Each episode gets the stratum of the proposal that produced it (`stratum()` in t
 | `document` | a document passage promoted to memory |
 | `distil`, `forget-rewrite`, `machine` | written by the system: distil, forget, curator passes, verifier, topic-review gaps |
 | `correction` | the replacement text of a correction |
-| `no-proposal: …` | no proposal points to it: an adopted or imported graph. Split by the episode's own source description in the graph, the 4 most common and `other` |
+| `no-proposal: …` | no proposal points to it: an adopted or imported graph. Split by the episode's own source description in the graph: `source A` to `D` (the 4 most common), `other` and `(none)` |
 | `unknown` | a proposal from before `origin` existed |
 
 These strata come from metadata the client declares. The 100 labelled episodes are what defines "curated" in the end, including
 which `no-proposal` sources belong in the clean arm of #516.
 
-The `no-proposal` source descriptions are shown with quoted names and numbers taken out (`Claude Code session in «…»`), so no
-project or service name reaches the counts. Read `census.md` before posting it all the same.
+Source descriptions are free text and name repositories, hosts, services and people, so the counts, the JSON and `keys.csv` only
+carry the neutral `source A`… labels. What each one stands for is in `sources.csv`, next to them in `out/`, which never leaves the
+machine. Read `census.md` before posting it all the same.
+
+One origin is usually written several ways ("Claude Code session — repo", "sesión Claude Code …", "repo Claude session …").
+`--source-map FILE` on `count` and `sample` folds them together before counting: one `regex<TAB>label` per line, the first match
+wins, `#` starts a comment. Run `count` once, read `sources.csv`, write the map, and run `count` and `sample` again with it:
+
+```text
+(?i)claude.*session|sesión claude	agent session
+(?i)^migrated	import
+```
+
+Expect `(none)` to be large: many episodes without a proposal have no source description. If it is, its labels still tell what it
+holds, and it can be split further by the episode's name.
 
 ## Labelling
 
