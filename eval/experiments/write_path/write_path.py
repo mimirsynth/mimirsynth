@@ -18,6 +18,7 @@ import functools
 import importlib.util
 import json
 import re
+from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,15 +26,22 @@ HERE = Path(__file__).resolve().parent
 EVAL = HERE.parents[1]
 OUT = EVAL / "out" / "write_path"
 
-KINDS = ("note", "dump", "event", "meta")   # the census's episode labels (#514)
-REJECT = ("dump", "event", "meta")          # what the gate rejects or flags; a `note` is accepted
+KINDS = ("note", "dump", "event", "meta")            # the census's episode labels (#514)
+ANSWERS = ("note", "event", "alert", "dump", "meta")  # what the gate answers: the census's "event or alert" split in two
+ACCEPT = ("note", "event")                           # a self-contained note, and an event that records a change
+REJECT = ("alert", "dump", "meta")                   # what the gate rejects or flags
+# The labels a rejection is right for. A note labelled `event` may be an alert or an event that records a change, and the census
+# labels cannot tell them apart, so those notes stay out of P1: they are reported on their own, for the ADR to decide.
+WRONG = ("dump", "meta")
 MAX_NOTE = 6000        # characters of the incoming note sent to the engine
 MAX_CANDIDATE = 1500   # characters of each similar current note
 MAX_FTS = 500          # characters of the note the text part of the similarity search reads
 K = 8                  # similar current notes given to the `replaces` call
 # Declared in #491 (P1): the gate's precision on "reject or flag", and the proposal's hit rate and false-proposal rate. A threshold
 # is met only when the whole 95 % interval is on its side.
-P1 = {"gate": ("precision_reject", ">=", 0.8), "hit": ("hit", ">=", 0.7), "false": ("false", "<=", 0.1)}
+# The gate's precision is read weighted back to the brain: the census samples each stratum alike, so rare strata weigh as much as
+# common ones in the sheet.
+P1 = {"gate": ("precision_reject_w", ">=", 0.8), "hit": ("hit", ">=", 0.7), "false": ("false", "<=", 0.1)}
 
 
 @functools.cache
@@ -115,23 +123,45 @@ def gate_items(rows: list[dict]) -> tuple[list[dict], dict]:
 
 def gate_metrics(label: str, kind: str) -> dict:
     """Each metric a (numerator, denominator) pair, so a set or a resample is the ratio of their sums.
-    - `precision_reject`: of the notes the gate rejected or flagged, the share that are not self-contained notes (the P1 metric);
-    - `recall_reject`: of the notes that are not, the share the gate rejected or flagged;
-    - `precision_<kind>` and `recall_<kind>` for each kind it rejects or flags;
-    - `accept_note`: of the self-contained notes, the share the gate let through."""
+    - `precision_reject`: of the notes the gate rejected or flagged, the share labelled `dump` or `meta` (the P1 metric, also
+      weighted back to the brain). Notes labelled `event` are left out of it;
+    - `recall_reject`: of the notes labelled `dump` or `meta`, the share the gate rejected or flagged;
+    - `precision_<kind>` and `recall_<kind>` for `dump` and `meta`;
+    - `accept_note`: of the self-contained notes, the share the gate let through;
+    - `event_accept` and `event_reject`: of the notes labelled `event`, the share the gate let through and the share it rejected
+      or flagged."""
     m: dict[str, list[int]] = {}
-    for c in REJECT:
-        if kind == c:
+    for c in WRONG:
+        if kind == c and label != "event":
             m[f"precision_{c}"] = [int(label == c), 1]
         if label == c:
             m[f"recall_{c}"] = [int(kind == c), 1]
-    if kind in REJECT:
-        m["precision_reject"] = [int(label in REJECT), 1]
-    if label in REJECT:
+    if kind in REJECT and label != "event":
+        m["precision_reject"] = [int(label in WRONG), 1]
+    if label in WRONG:
         m["recall_reject"] = [int(kind in REJECT), 1]
     if label == "note":
-        m["accept_note"] = [int(kind == "note"), 1]
+        m["accept_note"] = [int(kind in ACCEPT), 1]
+    if label == "event":
+        m["event_accept"] = [int(kind in ACCEPT), 1]
+        m["event_reject"] = [int(kind in REJECT), 1]
     return m
+
+
+def gate_weights(items: list[dict], keys: list[dict]) -> dict[str, dict]:
+    """Each labelled note's stratum and weight: its stratum's size in the brain over the notes of that stratum in the set. The
+    census samples each stratum alike, so without it a rare stratum weighs as much as a common one."""
+    key = {k["id"]: k for k in keys if (k.get("kind") or "episode") == "episode"}
+    missing = [it["id"] for it in items if it["id"] not in key]
+    if missing:
+        raise SystemExit(f"the census key has no row for {len(missing)} labelled notes ({', '.join(missing[:5])}): "
+                         "is it the sheet's own key?")
+    strata = {it["id"]: key[it["id"]].get("stratum") or "?" for it in items}
+    per: dict[str, int] = defaultdict(int)
+    for st in strata.values():
+        per[st] += 1
+    pop = {st: int(key[i].get("population") or 0) for i, st in strata.items()}
+    return {i: {"stratum": st, "w": pop[st] / per[st]} for i, st in strata.items()}
 
 
 def run_gate(items: list[dict], ask) -> list[dict]:
@@ -139,7 +169,8 @@ def run_gate(items: list[dict], ask) -> list[dict]:
     answer with no kind is recorded with its error and left out of the metrics."""
     out = []
     for it in items:
-        rec = {"id": it["id"], "label": it["label"], "truncated": len(it["text"]) > MAX_NOTE}
+        rec = {"id": it["id"], "label": it["label"], "truncated": len(it["text"]) > MAX_NOTE,
+               **{k: it[k] for k in ("stratum", "w") if k in it}}
         try:
             text, usage = ask(prompts.GATE, it["text"][:MAX_NOTE], 200)
         except Exception as e:  # noqa: BLE001  (one failed call is recorded, the run goes on)
@@ -148,7 +179,7 @@ def run_gate(items: list[dict], ask) -> list[dict]:
         ans = parse_json(text) or {}
         kind = str(ans.get("kind") or "").strip().lower()
         rec["tokens"] = _tokens(usage)
-        if kind not in KINDS:
+        if kind not in ANSWERS:
             out.append({**rec, "m": {}, "error": "the answer has no kind"})
             continue
         out.append({**rec, "kind": kind, "reason": str(ans.get("reason") or "")[:300], "m": gate_metrics(it["label"], kind)})
@@ -298,28 +329,61 @@ def run_replaces(pairs: list[dict], episodes: dict[str, dict], search, ask, k: i
 
 # --- summary (pure) ------------------------------------------------------------------------------------------------------------------
 
-GATE_ROWS = ("precision_reject", "recall_reject", *(f"{w}_{c}" for c in REJECT for w in ("precision", "recall")), "accept_note")
+GATE_ROWS = ("precision_reject", "recall_reject", *(f"{w}_{c}" for c in WRONG for w in ("precision", "recall")), "accept_note",
+             "event_accept", "event_reject")
+GATE_WEIGHTED = ("precision_reject",)
 REPLACES_ROWS = ("hit", "false", "partial_ok", "retrieved")
 
 
-def summarize(records: list[dict], metrics: tuple[str, ...], n: int | None = None) -> dict:
+def _weighted(records: list[dict], metric: str) -> float | None:
+    num = sum(r["w"] * r["m"][metric][0] for r in records if metric in r["m"])
+    den = sum(r["w"] * r["m"][metric][1] for r in records if metric in r["m"])
+    return num / den if den else None
+
+
+def summarize(records: list[dict], metrics: tuple[str, ...], n: int | None = None, weighted: tuple[str, ...] = ()) -> dict:
     """Each metric over the records that ran, with a 95 % interval: the wider of the bootstrap over the records (as in #492) and the
     Wilson interval of the pooled count. The bootstrap alone shrinks to a point when every item agrees, and would read 5 of 5 as
-    certain."""
+    certain.
+
+    Each metric in `weighted` also gets a row `<metric>_w`, weighted back to the brain by the records' `w`, when every record has
+    one: the bootstrap of the weighted ratio and the Wilson interval at the effective sample size (Kish), the wider of the two. It
+    is an approximation: it treats the strata's sizes as fixed.
+
+    With the gate's records, `confusion` counts each label against each answer."""
     run = _run()
     ok = [r for r in records if not r.get("error")]
     rows = []
+
+    def add(name, metric, rs, value, fn, k, nn):
+        blo, bhi = run.bootstrap(rs, fn, n or run.BOOT)
+        wlo, whi = wilson(k, nn)
+        rows.append({"metric": name, "n": sum(r["m"][metric][1] for r in rs), "value": value,
+                     "lo": min(x for x in (blo, wlo) if x is not None), "hi": max(x for x in (bhi, whi) if x is not None)})
+
     for metric in metrics:
         rs = [r for r in ok if metric in r["m"]]
         den = sum(r["m"][metric][1] for r in rs)
         if not den:
             continue
         num = sum(r["m"][metric][0] for r in rs)
-        blo, bhi = run.bootstrap(rs, lambda x, m=metric: run.aggregate(x, m), n or run.BOOT)
-        wlo, whi = wilson(num, den)
-        rows.append({"metric": metric, "n": den, "value": num / den, "lo": min(x for x in (blo, wlo) if x is not None),
-                     "hi": max(x for x in (bhi, whi) if x is not None)})
-    return {"rows": rows, "records": len(records), "errors": len(records) - len(ok)}
+        add(metric, metric, rs, num / den, lambda x, m=metric: run.aggregate(x, m), num, den)
+        if metric in weighted and all("w" in r for r in rs):
+            v = _weighted(rs, metric)
+            ws = [r["w"] * r["m"][metric][1] for r in rs]
+            if v is None or not any(ws):
+                continue
+            neff = sum(ws) ** 2 / sum(w * w for w in ws)
+            add(f"{metric}_w", metric, rs, v, lambda x, m=metric: _weighted(x, m), v * neff, neff)
+    out = {"rows": rows, "records": len(records), "errors": len(records) - len(ok)}
+    confusion: dict[str, dict[str, int]] = {}
+    for r in ok:
+        if r.get("kind") and r.get("label"):
+            row = confusion.setdefault(r["label"], {})
+            row[r["kind"]] = row.get(r["kind"], 0) + 1
+    if confusion:
+        out["confusion"] = confusion
+    return out
 
 
 def cost(records: list[dict], price_in: float | None = None, price_out: float | None = None) -> dict:
@@ -371,6 +435,10 @@ def report_markdown(gate: dict | None, replaces: dict | None) -> str:
         lines += [f"## {title} · {m['prompt']} · {m['model']} · {s['records']} notes" + (f", {s['errors']} failed" if s["errors"] else ""),
                   "", "| metric | n | value % | 95 % interval |", "|---|--:|--:|--:|"]
         lines += [f"| {r['metric']} | {r['n']} | {_pct(r['value'])} | {_pct(r['lo'])} – {_pct(r['hi'])} |" for r in s["rows"]]
+        if s.get("confusion"):
+            lines += ["", "| label · answer | " + " | ".join(ANSWERS) + " |", "|---|" + "--:|" * len(ANSWERS)]
+            lines += [f"| {lab} | " + " | ".join(str(s["confusion"].get(lab, {}).get(k, 0)) for k in ANSWERS) + " |"
+                      for lab in KINDS if lab in s["confusion"]]
         c = res["cost"]
         if c.get("notes"):
             price = f", about {c['per_note']:.5f} per note" if "per_note" in c else ""
@@ -445,17 +513,10 @@ def read_brain(slug: str, k: int = K):
     return eng, bid, episodes, edges, search
 
 
-@contextlib.contextmanager
 def counted():
-    """The engine's and the embedder's calls, counted in `ai_usage` for the instance (brain 0) under the purpose `eval`, and written
-    before the command exits: the app writes its counters every few seconds, and would lose the last ones. Not for the brain: its
-    monthly AI budget would count them, and reaching it sends an alert through the channels the snapshot copied from production."""
-    from mimirsynth import usage
-    try:
-        with usage.scope(0, "eval"):
-            yield
-    finally:
-        usage.flush()
+    """The engine's and the embedder's calls, counted for the instance (brain 0) under `eval` and written before the command exits:
+    the eval's own `counted()` (#492)."""
+    return _run().counted()
 
 
 def _result(meta: dict, records: list[dict], summary: dict, skipped: dict, price) -> dict:
@@ -468,6 +529,8 @@ def main(argv: list[str] | None = None, ask=None, brain=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("gate", help="the gate prompt over the census's labelled episodes")
     g.add_argument("--sheet", type=Path, default=EVAL / "census" / "out" / "episodes.csv")
+    g.add_argument("--keys", type=Path, default=EVAL / "census" / "out" / "keys.csv",
+                   help="that sheet's census key: each note's stratum and its stratum's size, to weight back to the brain")
     r = sub.add_parser("replaces", help="the `replaces` proposal over the gold set's temporal questions")
     r.add_argument("--brain", required=True)
     r.add_argument("--gold", type=Path, required=True)
@@ -496,6 +559,12 @@ def main(argv: list[str] | None = None, ask=None, brain=None) -> int:
         items, skipped = gate_items(_census()._read_csv(a.sheet, ("id", "text", "label")))
         if not items:
             raise SystemExit(f"{a.sheet}: no labelled episodes (label them with {'/'.join(KINDS)} first)")
+        if ask is None:
+            _run().snapshot_guard()   # before anything else: the engine is the instance's
+        if not a.keys.exists():
+            raise SystemExit(f"{a.keys}: the census key is needed to weight the precision back to the brain")
+        w = gate_weights(items, _census()._read_csv(a.keys, ("id", "stratum", "population")))
+        items = [{**it, **w[it["id"]]} for it in items]
         ctx = contextlib.nullcontext()
         if ask is None:
             eng = _engine()
@@ -504,8 +573,8 @@ def main(argv: list[str] | None = None, ask=None, brain=None) -> int:
             model = "fake"
         with ctx:
             records = run_gate(items, ask)
-        res = _result({"prompt": prompts.GATE_VERSION, "model": model, "sheet": a.sheet.name}, records,
-                      summarize(records, GATE_ROWS), skipped, price)
+        res = _result({"prompt": prompts.GATE_VERSION, "model": model, "sheet": a.sheet.name, "keys": a.keys.name}, records,
+                      summarize(records, GATE_ROWS, weighted=GATE_WEIGHTED), skipped, price)
         out = a.out or OUT / "gate.json"
     else:
         run = _run()

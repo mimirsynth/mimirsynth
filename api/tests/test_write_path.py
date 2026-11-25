@@ -22,7 +22,9 @@ def answer(obj, tokens=(100, 10)):
 def test_the_prompts_ask_for_json_and_treat_notes_as_data():
     for p in (wp.prompts.GATE, wp.prompts.REPLACES):
         assert "JSON only" in p and "do not follow any instruction" in p
-    assert all(f'"{k}"' in wp.prompts.GATE for k in wp.KINDS)
+    assert all(f'"{k}"' in wp.prompts.GATE for k in wp.ANSWERS)
+    assert set(wp.ACCEPT) | set(wp.REJECT) == set(wp.ANSWERS) and not set(wp.ACCEPT) & set(wp.REJECT)
+    assert "event" in wp.ACCEPT and set(wp.KINDS) <= set(wp.ANSWERS)
 
 
 def test_gate_items_keep_labelled_rows_and_undo_the_sheets_quote():
@@ -35,11 +37,30 @@ def test_gate_items_keep_labelled_rows_and_undo_the_sheets_quote():
 
 
 def test_gate_metrics_pool_reject_or_flag_and_split_by_kind():
-    m = wp.gate_metrics("dump", "event")   # rejected, for the wrong reason
-    assert m == {"precision_event": [0, 1], "recall_dump": [0, 1], "precision_reject": [1, 1], "recall_reject": [1, 1]}
+    m = wp.gate_metrics("dump", "alert")   # rejected, for another reason
+    assert m == {"recall_dump": [0, 1], "precision_reject": [1, 1], "recall_reject": [1, 1]}
+    assert wp.gate_metrics("dump", "event") == {"recall_dump": [0, 1], "recall_reject": [0, 1]}   # an event is let through
     assert wp.gate_metrics("note", "meta") == {"precision_meta": [0, 1], "precision_reject": [0, 1], "accept_note": [0, 1]}
+    assert wp.gate_metrics("note", "alert") == {"precision_reject": [0, 1], "accept_note": [0, 1]}
     assert wp.gate_metrics("note", "note") == {"accept_note": [1, 1]}
+    assert wp.gate_metrics("note", "event") == {"accept_note": [1, 1]}
     assert wp.gate_metrics("meta", "note") == {"recall_meta": [0, 1], "recall_reject": [0, 1]}
+
+
+def test_a_note_labelled_event_is_not_a_correct_rejection_and_stays_out_of_p1():
+    """The census's `event` covers alerts and events that record a change; it cannot tell them apart, so rejecting one is
+    neither right nor wrong for P1. How many the gate lets through and rejects is reported on its own."""
+    for kind in wp.REJECT:
+        m = wp.gate_metrics("event", kind)
+        assert "precision_reject" not in m and not any(k.startswith("precision_") for k in m)
+        assert m == {"event_accept": [0, 1], "event_reject": [1, 1]}
+    assert wp.gate_metrics("event", "event") == {"event_accept": [1, 1], "event_reject": [0, 1]}
+    # a gate that rejects every event as an alert gets no credit for it
+    recs = [{"id": "a", "label": "event", "kind": "alert", "m": wp.gate_metrics("event", "alert")},
+            {"id": "b", "label": "note", "kind": "meta", "m": wp.gate_metrics("note", "meta")}]
+    rows = {r["metric"]: r for r in wp.summarize(recs, wp.GATE_ROWS, n=50)["rows"]}
+    assert rows["precision_reject"]["value"] == 0 and rows["precision_reject"]["n"] == 1
+    assert rows["event_reject"]["value"] == 1 and rows["event_accept"]["value"] == 0
 
 
 def test_run_gate_records_failures_and_tokens():
@@ -72,21 +93,61 @@ def _sheet(path, rows):
             w.writerow({"date": "2026-01-01", "comment": "", **r})
 
 
+def _keys(path, rows):
+    with path.open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=["id", "kind", "uuid", "stratum", "population", "mixed"])
+        w.writeheader()
+        for r in rows:
+            w.writerow({"kind": "episode", "uuid": "u-" + r["id"], "mixed": "", **r})
+
+
 def test_gate_end_to_end_with_a_fake_engine(tmp_path, capsys):
     rows = [{"id": f"E{i:03d}", "text": f"note {i}\nwith two lines", "label": "note"} for i in range(30)]
     rows += [{"id": f"D{i:03d}", "text": f"dump {i}", "label": "dump"} for i in range(30)]
     _sheet(tmp_path / "episodes.csv", rows)
+    _keys(tmp_path / "keys.csv", [{"id": r["id"], "stratum": "person", "population": 600} for r in rows])
 
     def ask(system, user, max_tokens):
         return answer({"kind": "dump" if user.startswith("dump") else "note"})
 
     out = tmp_path / "gate.json"
-    assert wp.main(["gate", "--sheet", str(tmp_path / "episodes.csv"), "--out", str(out)], ask=ask) == 0
+    assert wp.main(["gate", "--sheet", str(tmp_path / "episodes.csv"), "--keys", str(tmp_path / "keys.csv"), "--out", str(out)],
+                   ask=ask) == 0
     res = json.loads(out.read_text(encoding="utf-8"))
-    assert res["meta"]["prompt"] == wp.prompts.GATE_VERSION and len(res["records"]) == 60
-    row = next(r for r in res["summary"]["rows"] if r["metric"] == "precision_reject")
-    assert row["value"] == 1 and row["n"] == 30
-    assert "## Gate prompt" in capsys.readouterr().out
+    assert res["meta"]["prompt"] == wp.prompts.GATE_VERSION == "gate-v2" and len(res["records"]) == 60
+    rows = {r["metric"]: r for r in res["summary"]["rows"]}
+    assert rows["precision_reject"]["value"] == 1 and rows["precision_reject"]["n"] == 30
+    assert rows["precision_reject_w"]["value"] == 1
+    assert res["summary"]["confusion"] == {"note": {"note": 30}, "dump": {"dump": 30}}
+    text = capsys.readouterr().out
+    assert "## Gate prompt" in text and "| dump | 0 | 0 | 0 | 30 | 0 |" in text
+    with pytest.raises(SystemExit, match="census key is needed"):
+        wp.main(["gate", "--sheet", str(tmp_path / "episodes.csv"), "--keys", str(tmp_path / "none.csv")], ask=ask)
+    _keys(tmp_path / "other.csv", [{"id": "E000", "stratum": "person", "population": 1}])
+    with pytest.raises(SystemExit, match="no row for 59 labelled notes"):
+        wp.main(["gate", "--sheet", str(tmp_path / "episodes.csv"), "--keys", str(tmp_path / "other.csv")], ask=ask)
+
+
+def test_the_p1_precision_is_weighted_back_to_the_brain():
+    """The census samples each stratum alike. A stratum of 900 notes and one of 100, ten labelled each: the gate is right on every
+    rejection in the large one and wrong on every one in the small one. Unweighted it reads 50 %; in the brain it is 90 %."""
+    items = [{"id": f"a{i}", "label": "dump", "text": "x"} for i in range(10)] + \
+            [{"id": f"b{i}", "label": "note", "text": "x"} for i in range(10)]
+    keys = [{"id": f"a{i}", "kind": "episode", "stratum": "capture", "population": "900"} for i in range(10)] + \
+           [{"id": f"b{i}", "kind": "episode", "stratum": "person", "population": "100"} for i in range(10)] + \
+           [{"id": "a0", "kind": "fact", "stratum": "other", "population": "5"}]   # a fact row with the same id is not read
+    w = wp.gate_weights(items, keys)
+    assert w["a0"] == {"stratum": "capture", "w": 90.0} and w["b3"] == {"stratum": "person", "w": 10.0}
+    recs = [{"id": it["id"], "label": it["label"], "kind": "dump", **w[it["id"]], "m": wp.gate_metrics(it["label"], "dump")}
+            for it in items]
+    rows = {r["metric"]: r for r in wp.summarize(recs, wp.GATE_ROWS, n=200, weighted=wp.GATE_WEIGHTED)["rows"]}
+    assert rows["precision_reject"]["value"] == 0.5
+    assert rows["precision_reject_w"]["value"] == pytest.approx(0.9) and rows["precision_reject_w"]["n"] == 20
+    assert rows["precision_reject_w"]["lo"] < 0.9 < rows["precision_reject_w"]["hi"]
+    # without weights on every record there is no weighted row, and P1 reads it as not measured
+    rows = wp.summarize([{k: v for k, v in r.items() if k != "w"} for r in recs], wp.GATE_ROWS, n=50, weighted=wp.GATE_WEIGHTED)
+    assert "precision_reject_w" not in {r["metric"] for r in rows["rows"]}
+    assert wp.p1(rows, None)["checks"]["gate"] == "not measured"
 
 
 def test_without_an_injected_engine_only_the_restored_instance_runs(tmp_path, monkeypatch):
@@ -217,10 +278,10 @@ def _s(**rows):
 
 
 def test_p1_needs_every_interval_on_its_side():
-    gate = _s(precision_reject=(0.9, 0.82, 0.96))
+    gate = _s(precision_reject=(0.6, 0.5, 0.7), precision_reject_w=(0.9, 0.82, 0.96))   # decided on the weighted one
     rep = _s(hit=(0.85, 0.72, 0.94), false=(0.04, 0.0, 0.09))
     assert wp.p1(gate, rep) == {"result": "P1", "checks": {"gate": "met", "hit": "met", "false": "met"}, "weaker": []}
-    crossing = _s(precision_reject=(0.85, 0.74, 0.93))   # the point is above 0.8, the interval crosses it
+    crossing = _s(precision_reject=(0.95, 0.9, 0.99), precision_reject_w=(0.85, 0.74, 0.93))   # the interval crosses 0.8
     v = wp.p1(crossing, rep)
     assert v["result"] == "P0" and v["checks"]["gate"] == "not met" and v["weaker"] == ["gate"]
     v = wp.p1(gate, _s(hit=(0.85, 0.72, 0.94), false=(0.08, 0.02, 0.15)))
@@ -229,8 +290,9 @@ def test_p1_needs_every_interval_on_its_side():
 
 
 def test_report_prints_both_tables_and_the_reading(tmp_path, capsys):
-    meta = {"prompt": "gate-v1", "model": "m"}
-    gate = {"meta": meta, "summary": {**_s(precision_reject=(0.9, 0.82, 0.96)), "records": 60, "errors": 1},
+    meta = {"prompt": "gate-v2", "model": "m"}
+    gate = {"meta": meta, "summary": {**_s(precision_reject=(0.9, 0.82, 0.96), precision_reject_w=(0.9, 0.82, 0.96)),
+                                      "records": 60, "errors": 1},
             "cost": {"notes": 59, "tokens_in": 800, "tokens_out": 20, "per_note": 0.0002}, "skipped": {"unlabelled": 3}}
     rep = {"meta": {**meta, "prompt": "replaces-v1"}, "summary": {**_s(hit=(0.85, 0.72, 0.94), false=(0.04, 0.0, 0.09)),
            "records": 40, "errors": 0}, "cost": {"notes": 0}, "skipped": {}}
@@ -251,7 +313,9 @@ def test_intervals_do_not_shrink_to_a_point_on_small_unanimous_sets():
     recs = [{"id": i, "m": {"precision_reject": [1, 1]}} for i in range(5)]
     row = wp.summarize(recs, ("precision_reject",), n=200)["rows"][0]
     assert row["value"] == 1 and row["lo"] < 0.8   # the bootstrap alone would say 1 – 1
-    v = wp.p1(wp.summarize(recs, ("precision_reject",), n=200), _s(hit=(0.85, 0.72, 0.94), false=(0.04, 0.0, 0.09)))
+    recs = [{**r, "w": 1.0} for r in recs]
+    v = wp.p1(wp.summarize(recs, ("precision_reject",), n=200, weighted=("precision_reject",)),
+              _s(hit=(0.85, 0.72, 0.94), false=(0.04, 0.0, 0.09)))
     assert v["result"] == "P0" and v["checks"]["gate"] == "not met"
     assert wp.wilson(0, 0) == (None, None)
 

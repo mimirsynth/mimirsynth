@@ -19,22 +19,46 @@ and reaching it sends an alert through the channels the snapshot copied from pro
 ## Gate prompt
 
 ```bash
-.venv/bin/python ../eval/experiments/write_path/write_path.py gate --sheet ../eval/census/out/episodes.csv
+.venv/bin/python ../eval/experiments/write_path/write_path.py gate --sheet ../eval/census/out/episodes.csv \
+    --keys ../eval/census/out/keys.csv
 ```
 
 One call per note, over the episodes the census labelled blind (#514): `note`, `dump`, `event` or `meta`. The engine reads the text
-of the sheet, as the person labelling read it, and gives one of the same four kinds. A `note` is accepted; the other three are
-rejected or flagged.
+of the sheet, as the person labelling read it, and gives one of five kinds: the census's four, with its "event or alert" split in
+two.
+
+| Answer | The gate |
+|---|---|
+| `note`: a self-contained note | accepts it |
+| `event`: a dated record of something that changed (a deploy, a move, an incident with its cause or fix) | accepts it: this is what a temporal memory is for |
+| `alert`: a notification or alert with no lasting knowledge | rejects or flags it |
+| `dump`: a session dump | rejects or flags it |
+| `meta`: a note about the memory itself | rejects or flags it |
+
+**Notes labelled `event` stay out of P1.** The census label covers both alerts and events that record a change, and cannot tell them
+apart. So rejecting one is neither right nor wrong for P1: they are reported on their own, and the ADR decides.
 
 | Metric | Definition |
 |---|---|
-| `precision_reject` | of the notes the gate rejected or flagged, the share that are not self-contained notes. **The P1 metric** |
-| `recall_reject` | of the notes that are not self-contained, the share the gate rejected or flagged |
-| `precision_<kind>`, `recall_<kind>` | the same for `dump`, `event` and `meta` one by one |
+| `precision_reject` | of the notes the gate rejected or flagged, the share labelled `dump` or `meta`. Notes labelled `event` are left out |
+| `precision_reject_w` | the same, weighted back to the brain. **The P1 metric** |
+| `recall_reject` | of the notes labelled `dump` or `meta`, the share the gate rejected or flagged |
+| `precision_<kind>`, `recall_<kind>` | the same for `dump` and `meta` one by one |
 | `accept_note` | of the self-contained notes, the share the gate let through |
+| `event_accept`, `event_reject` | of the notes labelled `event`, the share the gate let through and the share it rejected or flagged |
+
+The report also gives each label against each answer, in counts.
+
+**Weighting.** The census labels about the same number of notes per stratum, so a rare stratum weighs as much as a common one in
+the sheet, and the plain precision does not describe the brain's own stream of notes. `--keys` is the census key of the same
+sheet. Each note weighs its stratum's size in the brain (`population`) over the notes of that stratum in the set, as `summarize` of
+the census weights its overall row. P1 is decided on `precision_reject_w`; the plain value is shown next to it. Its interval is an
+approximation: the wider of the bootstrap of the weighted ratio and the Wilson interval at the effective sample size (Kish), which
+treats the strata's sizes as fixed. The key is read by the script only, after the labelling: it is still never opened by hand
+before both sheets are labelled.
 
 Unlabelled rows and labels outside the four kinds are left out and counted. A failed call or an answer with no kind is recorded
-with its error and left out of the metrics.
+with its error and left out of the metrics. A labelled note that has no row in the key stops the command.
 
 ## `replaces` proposal
 
@@ -80,7 +104,7 @@ cost is over the notes for which a call was made, and the `replaces` cost leaves
 `report` prints both tables, each rate with a 95 % interval: the wider of the bootstrap over the notes (2,000 resamples, fixed
 seed, as in #492) and the Wilson interval of the pooled count. The bootstrap alone shrinks to a point when every note agrees, and
 would read 5 of 5 as certain. Then it reads #491's row:
-- **P1:** `precision_reject` ≥ 0.8, `hit` ≥ 0.7 and `false` ≤ 0.1, each with its whole interval on its side;
+- **P1:** `precision_reject_w` ≥ 0.8, `hit` ≥ 0.7 and `false` ≤ 0.1, each with its whole interval on its side;
 - **P0:** anything else. An interval that crosses its threshold counts as not met. The report names the weaker part: the gate, the
   proposal or both. That part stays a suggestion in the inbox, or is dropped.
 
@@ -89,5 +113,6 @@ would read 5 of 5 as certain. Then it reads #491's row:
 - Notes that replace nothing. Every pair here is a note that does replace something, so `false` measures proposals beside a true
   one, not proposals for a note that should get none.
 - The gate on facts. It reads the episode labels only, not the fact labels of the census.
-- The brain's own mix of kinds. The census labels about the same number of episodes per stratum, so `precision_reject` is the
-  precision on that sample, not weighted back to the brain. Precision depends on how common each kind is.
+- Which notes labelled `event` should be rejected. The census cannot tell an alert from an event that records a change, so
+  `event_accept` and `event_reject` are reported for the ADR, and not read against P1. Relabelling them as `alert` or `event`
+  would make that measurable.
