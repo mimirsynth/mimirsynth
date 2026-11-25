@@ -412,6 +412,31 @@ def test_the_eval_s_ai_calls_count_for_the_instance_not_the_brain(monkeypatch):
         assert usage._SCOPE.get() == (7, "recall")
 
 
+def test_run_and_drafts_make_their_ai_calls_inside_counted(tmp_path, monkeypatch):
+    from mimirsynth import usage
+    monkeypatch.setattr(usage, "flush", lambda: 0)
+    scopes = []
+
+    def recall_fn(query, **p):   # the real recall opens a scope for its brain
+        with usage.scope(7, "recall"):
+            scopes.append(usage._SCOPE.get())
+        return {"facts": [], "chunks": [], "documents": [], "context": "", "ms": {"total": 1}}
+
+    monkeypatch.setattr(ev, "recall_on", lambda slug: (recall_fn, {"lang": "es"}))
+    g, _, _ = _files(tmp_path, [Q])
+    ev.main(["run", "--brain", "b", "--gold", g, "--split", "all", "--out", str(tmp_path / "r.json")])
+    monkeypatch.setattr(drafts, "_read", lambda slug, n: ([], [], [], [], [], None))
+
+    def build(*a, **k):
+        with usage.scope(7, "other"):
+            scopes.append(usage._SCOPE.get())
+        return [], {}
+
+    monkeypatch.setattr(drafts, "build", build)
+    drafts.main(["--brain", "b", "--out", str(tmp_path / "d.jsonl")])
+    assert scopes == [(0, "eval"), (0, "eval")]
+
+
 def test_the_hook_prompts_are_split_too_and_add_only_places_new_ones(tmp_path):
     gold = [{**Q, "id": f"q{i}"} for i in range(4)]
     hooks = [{"id": f"h{i}", "query": f"p{i}", "label": "e1"} for i in range(4)]
