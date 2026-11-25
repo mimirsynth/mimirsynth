@@ -1,7 +1,7 @@
 # Retrieval eval (#492)
 
 How well the recall serves a brain, measured on its final context: per question class, at two budgets, with intervals, and B
-against A with a verdict written before measuring (#491, Phase 0). `census/` holds the corpus census (#514).
+against A with a verdict written before measuring (#491, Phase 0). `census/` holds the corpus census (#514), and `errors/` the error analysis (#515).
 
 Everything runs on the **frozen Phase 0 snapshot**, restored on an instance that is not production, from `api/` with that instance's
 `MIMIRSYNTH_*` environment and `MIMIRSYNTH_EVAL_SNAPSHOT=1`. Set that variable only on the restored instance: `run`, `hookset` and
