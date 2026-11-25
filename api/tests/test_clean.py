@@ -219,6 +219,7 @@ def test_run_on_the_clean_corpus_filters_and_says_what_it_left_out(tmp_path, cap
     assert all(patched) and recall.search_facts.__module__ == "mimirsynth.recall"
     c = res["meta"]["curated"]
     assert res["meta"]["corpus"] == "clean" and c["left_out_episodes"] == 1 and c["questions_with_every_answer_left_out"] == 1
+    assert c["latency"] == "not comparable with a full run"
     assert c["items_left_out"] == {"linked facts": 2}   # this fake recall builds its context with everything it found
     rec = {r["id"]: r for r in res["records"]}
     assert rec["q1"]["m"]["top3"] == [1, 1] and rec["q2"]["m"]["top3"] == [0, 1]

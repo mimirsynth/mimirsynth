@@ -56,6 +56,8 @@ default) nothing is replaced. The curated file records its brain, and `run` stop
   them (`meta.curated.not_filtered`) and `run` warns.
 - **State cards are not filtered,** since they describe the current graph. Their characters are counted, because they weigh in the
   noise.
+- **Latency is not comparable with a full run.** The filter runs the fact search twice and asks for four times as many chunks.
+  The result says so (`meta.curated.latency`); compare the metrics, not the latency.
 - **One known gap:** when a fact's text is repeated, the search keeps its first copy only. If that copy comes from an episode left
   out and a later one from a curated episode, the later copy is lost too.
 

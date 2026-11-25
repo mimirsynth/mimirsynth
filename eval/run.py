@@ -710,7 +710,9 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     if clean:
         meta["curated"] = {"rule": cur["rule"], "cells": cur["cells"], "left_out_episodes": len(drop),
                            "questions_with_every_answer_left_out": clean.answers_left_out(questions, drop),
-                           "items_left_out": dict(stats)}
+                           "items_left_out": dict(stats),
+                           # the filter searches the facts twice and asks for four times as many chunks
+                           "latency": "not comparable with a full run"}
         if how.get("federated"):   # lent graphs keep all of their content: only this brain's episodes are left out
             meta["curated"]["not_filtered"] = how["federated"]
     s = summarize(records)
@@ -723,6 +725,8 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
         print(clean.table_markdown({**cur, "drop": drop}))
         print(f"Questions whose every answer episode is left out: {c['questions_with_every_answer_left_out']}. Items left out: "
               + (", ".join(f"{v} {k}" for k, v in sorted(c["items_left_out"].items())) or "none") + ".")
+        print("The latency is not comparable with a full run: the filter searches the facts twice and asks for four times as many "
+              "chunks.")
         if c.get("not_filtered"):
             print(f"**Warning:** the recall also reads {', '.join(c['not_filtered'])}, lent to this brain, and nothing of theirs is "
                   "left out.")
