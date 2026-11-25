@@ -265,7 +265,8 @@ def main(argv: list[str] | None = None) -> int:
     episodes, proposals, edges, mentions, samples, ask = _read(a.brain, a.samples)
     counts = {"point": a.point, "entity": a.entity, "temporal": a.temporal, "ood": a.ood, "samples": a.samples}
     strata = tuple(s.strip() for s in a.strata.split(",") if s.strip())
-    drafts, failed = build(episodes, proposals, edges, mentions, ask, counts, strata, samples)
+    with _run().counted():
+        drafts, failed = build(episodes, proposals, edges, mentions, ask, counts, strata, samples)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text("".join(json.dumps(d, ensure_ascii=False) + "\n" for d in drafts), encoding="utf-8")
     by = Counter(d["class"] or "to classify" for d in drafts)

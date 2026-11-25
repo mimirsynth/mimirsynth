@@ -15,6 +15,7 @@ brain, but it is not read-only: the app's recall counts its embedding calls in t
 from __future__ import annotations
 
 import argparse
+import contextlib
 import functools
 import importlib.util
 import json
@@ -550,6 +551,24 @@ def snapshot_guard() -> None:
         raise SystemExit(f"the snapshot must be PostgreSQL (MIMIRSYNTH_DATABASE_URL); this is {name}")
 
 
+@contextlib.contextmanager
+def counted():
+    """The AI calls inside (the recall's embeddings, the drafts' LLM calls) counted in `ai_usage` for the instance (brain 0) under
+    the purpose `eval`, never for the brain: its monthly AI budget would count them, and reaching it sends an alert through the
+    channels the snapshot copied from production. The recall opens its own scope for the brain, so `usage.scope` is replaced for
+    the length of the block, in this process only. The counters are written before the block ends: the app writes them every few
+    seconds, and would lose the last ones."""
+    from mimirsynth import usage
+    real = usage.scope
+    usage.scope = lambda _brain, _purpose: real(0, "eval")
+    try:
+        with real(0, "eval"):
+            yield
+    finally:
+        usage.scope = real
+        usage.flush()
+
+
 def recall_on(slug: str) -> tuple:
     """The app's recall on one brain, as the hook's HTTP call makes it: with what other brains lend it (federation; reading a grant
     stamps its last use), in the instance's default language and with its default number of document passages."""
@@ -663,7 +682,8 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     how: dict = {}
     if recall_fn is None:
         recall_fn, how = recall_on(a.brain)
-    records = run(questions, hooks, recall_fn, a.budget)
+    with counted() if how else contextlib.nullcontext():
+        records = run(questions, hooks, recall_fn, a.budget)
     meta = {"brain": a.brain, "budget": a.budget, "params": BUDGETS[a.budget], "split": a.split, "label": a.label, **how,
             "questions": sum(1 for x in records if x["class"] != "hook"), "hook": sum(1 for x in records if x["class"] == "hook"),
             "drafts_included": bool(drafts and a.include_drafts), "when": datetime.now(UTC).isoformat(timespec="seconds")}

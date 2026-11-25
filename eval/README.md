@@ -9,10 +9,12 @@ Everything runs on the **frozen Phase 0 snapshot**, restored on an instance that
 git ignores: questions, prompts and results hold the brain's own text.
 
 Nothing here changes the brain, but it is not read-only either:
-- the recall's embedding calls and the drafts' LLM calls are counted in the snapshot's `ai_usage`, as on any instance;
+- the recall's embedding calls and the drafts' LLM calls are counted in the snapshot's `ai_usage` for the instance (brain 0),
+  under the purpose `eval`, never for the brain: its monthly AI budget would count them, and reaching it sends an alert through
+  the channels the snapshot copied from production;
 - reading a federation grant stamps its last use;
 - both refuse to run on anything but PostgreSQL;
-- run it with the instance's notifications off, so a budget warning goes nowhere.
+- run it with the instance's notifications off all the same, so nothing else the snapshot copied can send anything.
 
 ## 1. Questions
 

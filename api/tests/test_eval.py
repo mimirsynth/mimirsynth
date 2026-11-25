@@ -398,6 +398,20 @@ def test_only_the_restored_instance_runs_against_a_brain(tmp_path, monkeypatch):
         drafts._read("b", 0)
 
 
+def test_the_eval_s_ai_calls_count_for_the_instance_not_the_brain(monkeypatch):
+    from mimirsynth import usage
+    flushed = []
+    monkeypatch.setattr(usage, "flush", lambda: flushed.append(1) or 0)
+    real = usage.scope
+    with ev.counted():
+        assert usage._SCOPE.get() == (0, "eval")
+        with usage.scope(7, "recall"):   # what the recall opens for its brain
+            assert usage._SCOPE.get() == (0, "eval")
+    assert usage.scope is real and flushed == [1]
+    with usage.scope(7, "recall"):
+        assert usage._SCOPE.get() == (7, "recall")
+
+
 def test_the_hook_prompts_are_split_too_and_add_only_places_new_ones(tmp_path):
     gold = [{**Q, "id": f"q{i}"} for i in range(4)]
     hooks = [{"id": f"h{i}", "query": f"p{i}", "label": "e1"} for i in range(4)]
