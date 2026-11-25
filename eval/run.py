@@ -694,7 +694,7 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     clean, filter_ = None, contextlib.nullcontext()
     if a.corpus == "clean":   # #516: the curated episodes only; with `full` nothing in the recall is replaced
         clean = _clean()
-        cur = clean.load(a.curated)
+        cur = clean.load(a.curated, a.brain)
         drop = set(cur["drop"])
     if recall_fn is None:
         recall_fn, how = recall_on(a.brain)
@@ -711,6 +711,8 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
         meta["curated"] = {"rule": cur["rule"], "cells": cur["cells"], "left_out_episodes": len(drop),
                            "questions_with_every_answer_left_out": clean.answers_left_out(questions, drop),
                            "items_left_out": dict(stats)}
+        if how.get("federated"):   # lent graphs keep all of their content: only this brain's episodes are left out
+            meta["curated"]["not_filtered"] = how["federated"]
     s = summarize(records)
     out = a.out or OUT / f"run-{a.label or 'x'}-{a.budget}-{a.split}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -721,6 +723,9 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
         print(clean.table_markdown({**cur, "drop": drop}))
         print(f"Questions whose every answer episode is left out: {c['questions_with_every_answer_left_out']}. Items left out: "
               + (", ".join(f"{v} {k}" for k, v in sorted(c["items_left_out"].items())) or "none") + ".")
+        if c.get("not_filtered"):
+            print(f"**Warning:** the recall also reads {', '.join(c['not_filtered'])}, lent to this brain, and nothing of theirs is "
+                  "left out.")
     print(f"→ {out}")
     return 1 if records and s["errors"] == len(records) else 0
 

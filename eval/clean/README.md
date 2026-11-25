@@ -41,22 +41,29 @@ the table it prints in #491.
 
 ## 2. The filter
 
-`run --corpus clean` (with `--curated`, by default `eval/out/clean/curated.json`) runs the same recall, with three of its
+`run --corpus clean` (with `--curated`, by default `eval/out/clean/curated.json`) runs the same recall, with four of its
 functions replaced in the eval's own process for the length of the run. Nothing in `api/` changes, and with `--corpus full` (the
-default) nothing is replaced.
+default) nothing is replaced. The curated file records its brain, and `run` stops when it is given another one.
 
-- `search_facts` and `search_chunks` ask for four times as many candidates. They drop the facts and chunks that come only from
-  episodes left out, and then cut to the number asked. So the recall's own cut is not left short.
-- `build_context` also drops the facts that the recall adds through links (a fact that replaces one in the result, an old fact a
-  fragment states), which no search returned.
-- A fact stays when **any** of its episodes is curated. One with no episode stays too: a lent brain's, or a document passage.
+- **`search_facts` and `search_chunks`** ask for four times as many candidates, drop the facts and chunks that come only from
+  episodes left out, and cut after that, so the recall's own cut is not left short. The facts are cut to as many as the unfiltered
+  search gives: it removes repeated texts after its own limit, so with nothing left out both arms see exactly the same facts.
+- **`superseded`** drops them from what stopped being true behind a fragment or a passage, and from what replaces it. So no "may
+  be superseded" note, `replaces` mark or linked fact carries their text, and they take none of the places for linked facts.
+- **`build_context`** also drops the facts that the recall adds through links and that no search returned.
+- **A fact stays when any of its episodes is curated.** One with no episode (a document passage) stays too.
+- **Lent graphs are not filtered.** `drop` holds only this brain's episodes. When the recall reads lent brains, the result names
+  them (`meta.curated.not_filtered`) and `run` warns.
 - **State cards are not filtered,** since they describe the current graph. Their characters are counted, because they weigh in the
   noise.
+- **One known gap:** when a fact's text is repeated, the search keeps its first copy only. If that copy comes from an episode left
+  out and a later one from a curated episode, the later copy is lost too.
 
 The result's `meta.curated` records:
 - the rule and the table;
 - how many episodes were left out;
 - how many questions had **every** answer episode left out;
-- how many items each step dropped.
+- the items each step dropped, counted among what the unfiltered recall would have used (the first `n` of each search), not among
+  the extra candidates.
 
 Questions with every answer left out cannot be answered from the clean graph. Read the comparison with that count beside it.

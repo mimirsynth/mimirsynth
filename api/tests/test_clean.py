@@ -104,13 +104,46 @@ def test_the_cut_is_made_after_filtering(monkeypatch):
     assert stats == Counter({"facts": 3, "chunks": 3})
 
 
+def test_with_nothing_left_out_the_searches_are_the_same_even_with_repeated_texts(monkeypatch):
+    rows = [{"uuid": f"f{i}", "fact": f"fact {i // 2}", "episodes": [f"e{i}"]} for i in range(40)]   # each text twice
+
+    def facts(graph_name, qvec, limit, amap=None):   # as the real one: LIMIT first, then repeated texts out
+        seen, out = set(), []
+        for f in rows[:limit]:
+            if f["fact"] not in seen:
+                seen.add(f["fact"])
+                out.append(f)
+        return out
+
+    monkeypatch.setattr(recall, "search_facts", facts)
+    full = recall.search_facts("g", [0.1], 6)
+    with cl.corpus(set()):
+        assert recall.search_facts("g", [0.1], 6) == full
+    with cl.corpus({"e0", "e1"}) as stats:   # both copies of "fact 0" left out: one more text comes in, no more than full had
+        got = recall.search_facts("g", [0.1], 6)
+    assert [f["fact"] for f in got] == ["fact 1", "fact 2", "fact 3"] and len(got) == len(full)
+    assert stats["facts"] == 1   # of what the full recall would have used
+
+
+def test_what_stopped_being_true_leaves_no_trace_of_a_left_out_episode(monkeypatch):
+    old = {"uuid": "o", "fact": "X ran on node 1", "episodes": ["e1"]}          # stated by a kept fragment
+    old_bad = {"uuid": "ob", "fact": "Y ran on node 1", "episodes": ["bad"]}
+    new_bad = {"uuid": "nb", "fact": "X runs on node 9", "episodes": ["bad"]}   # replaces it, only from a left-out episode
+    new_mixed = {"uuid": "nm", "fact": "X runs on node 2", "episodes": ["bad", "e2"]}
+    monkeypatch.setattr(recall, "superseded", lambda *a, **k: ([old, old_bad], {"o": [new_bad, new_mixed], "ob": [new_bad]}))
+    with cl.corpus({"bad"}) as stats:
+        found, repl = recall.superseded("g", {"e1"}, [])
+    assert found == [old] and repl == {"o": [new_mixed]}
+    assert stats == Counter({"superseding facts": 2, "superseded facts": 1})
+
+
 def test_the_patch_does_not_outlive_the_block_even_on_error():
-    real = (recall.search_facts, recall.search_chunks, recall.build_context)
+    real = (recall.search_facts, recall.search_chunks, recall.superseded, recall.build_context)
     with pytest.raises(RuntimeError):
         with cl.corpus({"x"}):
-            assert recall.search_facts is not real[0] and recall.build_context is not real[2]
+            assert recall.search_facts is not real[0] and recall.superseded is not real[2] and recall.build_context is not real[3]
             raise RuntimeError("boom")
-    assert (recall.search_facts, recall.search_chunks, recall.build_context) == real
+    assert (recall.search_facts, recall.search_chunks, recall.superseded, recall.build_context) == real
 
 
 def test_linked_facts_leave_the_context_and_state_cards_are_counted():
@@ -167,7 +200,7 @@ def test_run_without_the_flag_replaces_nothing_and_writes_the_same_result(tmp_pa
 
 
 def test_run_on_the_clean_corpus_filters_and_says_what_it_left_out(tmp_path, capsys):
-    cur = {"rule": {"clean_labels": ["note", "event"], "min_clean": 0.8, "min_labelled": 5, "source_map": None},
+    cur = {"brain": "b", "rule": {"clean_labels": ["note", "event"], "min_clean": 0.8, "min_labelled": 5, "source_map": None},
            "cells": [{"stratum": "capture", "review": "category tier", "episodes": 1, "labelled": 5, "clean": 0, "share": 0.0,
                       "lo": 0.0, "hi": 0.43, "curated": False}], "skipped": {}, "drop": ["bad"]}
     (tmp_path / "curated.json").write_text(json.dumps(cur), encoding="utf-8")
@@ -191,9 +224,26 @@ def test_run_on_the_clean_corpus_filters_and_says_what_it_left_out(tmp_path, cap
     assert rec["q1"]["m"]["top3"] == [1, 1] and rec["q2"]["m"]["top3"] == [0, 1]
     text = capsys.readouterr().out
     assert "Curated cells (#516)" in text and "| capture | category tier |" in text and "every answer episode is left out: 1" in text
+    with pytest.raises(SystemExit, match="made for brain 'b', not 'other'"):
+        ev.main(["run", "--brain", "other", "--gold", _gold(tmp_path), "--split", "all", "--corpus", "clean",
+                 "--curated", str(tmp_path / "curated.json")], recall_fn=recall_fn)
     with pytest.raises(SystemExit, match="run `clean.py curated` first"):
         ev.main(["run", "--brain", "b", "--gold", _gold(tmp_path), "--split", "all", "--corpus", "clean",
                  "--curated", str(tmp_path / "none.json")], recall_fn=recall_fn)
+
+
+def test_a_clean_run_warns_that_lent_graphs_are_not_filtered(tmp_path, monkeypatch, capsys):
+    cur = {"brain": "b", "rule": {"clean_labels": ["note"], "min_clean": 0.8, "min_labelled": 5, "source_map": None}, "cells": [],
+           "drop": []}
+    (tmp_path / "curated.json").write_text(json.dumps(cur), encoding="utf-8")
+    fn = lambda query, **p: {"facts": [], "chunks": [], "documents": [], "context": "", "ms": {"total": 1}}  # noqa: E731
+    monkeypatch.setattr(ev, "recall_on", lambda slug: (fn, {"federated": ["ops"]}))
+    monkeypatch.setattr(ev, "counted", lambda: __import__("contextlib").nullcontext())
+    out = tmp_path / "r.json"
+    ev.main(["run", "--brain", "b", "--gold", _gold(tmp_path), "--split", "all", "--out", str(out), "--corpus", "clean",
+             "--curated", str(tmp_path / "curated.json")])
+    assert json.loads(out.read_text(encoding="utf-8"))["meta"]["curated"]["not_filtered"] == ["ops"]
+    assert "lent to this brain, and nothing of theirs is left out" in capsys.readouterr().out
 
 
 def _csv(path, rows):
@@ -215,8 +265,12 @@ def test_curated_end_to_end_with_a_fake_snapshot(tmp_path, capsys):
     assert cl.main(["curated", "--brain", "b", "--sheet", str(tmp_path / "episodes.csv"), "--keys", str(tmp_path / "keys.csv"),
                     "--out", str(out)], snapshot=(eps, props)) == 0
     cur = json.loads(out.read_text(encoding="utf-8"))
-    assert cur["drop"] == [f"c{i}" for i in range(6)] and cur["rule"]["min_labelled"] == 5
+    assert cur["drop"] == [f"c{i}" for i in range(6)] and cur["rule"]["min_labelled"] == 5 and cur["brain"] == "b"
     assert "| capture | category tier | 6 | 6 | 0 |" in capsys.readouterr().out
+    for bad in ("80", "0"):
+        with pytest.raises(SystemExit, match="--min-clean"):
+            cl.main(["curated", "--brain", "b", "--sheet", str(tmp_path / "episodes.csv"), "--keys", str(tmp_path / "keys.csv"),
+                     "--min-clean", bad], snapshot=(eps, props))
     with pytest.raises(SystemExit, match="--clean-labels"):
         cl.main(["curated", "--brain", "b", "--sheet", str(tmp_path / "episodes.csv"), "--keys", str(tmp_path / "keys.csv"),
                  "--clean-labels", "note,true"], snapshot=(eps, props))

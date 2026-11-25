@@ -1,6 +1,6 @@
 """A virtual clean corpus for Phase 0 (#516, step 1): which episodes are curated, extrapolated from the census labels (#514), and a
 filter that leaves the others out of 0.17's recall at query time. No LLM, no rebuild, and nothing in the app changes: the filter
-replaces three of the recall's functions inside the eval's process, for the length of a block.
+replaces four of the recall's functions inside the eval's process, for the length of a block.
 
 Run from `api/`, on the instance where the snapshot was restored, with its MIMIRSYNTH_* environment and MIMIRSYNTH_EVAL_SNAPSHOT=1:
 
@@ -133,7 +133,8 @@ def table_markdown(cur: dict) -> str:
 # --- the filter ----------------------------------------------------------------------------------------------------------------------
 
 def _keep(item: dict, drop: set[str]) -> bool:
-    """An item stays unless every episode it comes from is left out. One with no episode (a lent brain's, a document's) stays."""
+    """An item stays unless every episode it comes from is left out. One with no episode (a document passage) stays, and so does
+    what a lent brain gives: `drop` holds only this brain's episodes."""
     eps = [str(item["episode_uuid"])] if item.get("episode_uuid") else [str(e) for e in item.get("episodes") or []]
     return not eps or not all(e in drop for e in eps)
 
@@ -142,29 +143,46 @@ def _keep(item: dict, drop: set[str]) -> bool:
 def corpus(drop: set[str], stats: Counter | None = None):
     """0.17's recall without the episodes in `drop`, in this process, for the length of the block:
     - `search_facts` and `search_chunks` ask for OVERFETCH times as many, leave out the facts and chunks that come only from those
-      episodes, and cut to what was asked, so the recall's own cut is not left short;
-    - `build_context` also leaves them out of what the recall adds through links (a fact that replaces one in the result, an old
-      fact a fragment states), which no search returned.
-    The state cards are not filtered: they describe the current graph. `stats` counts what was left out at each step, and the
-    characters the state cards take (`state card chars`), since they weigh in the noise."""
+      episodes, and cut after that, so the recall's own cut is not left short. The facts are cut to as many as the unfiltered
+      search gives, since it removes repeated texts after its own limit: with nothing left out, both arms see the same facts;
+    - `superseded` leaves them out of what stopped being true behind a fragment or passage and of what replaces it, so no "may be
+      superseded" note, `replaces` mark or linked fact carries their text;
+    - `build_context` also leaves them out of the facts the recall adds through links, which no search returned.
+    The state cards are not filtered: they describe the current graph. `stats` counts, at each step, what was left out of what the
+    unfiltered recall would have used, and the characters the state cards take (`state card chars`), since they weigh in the
+    noise."""
     from mimirsynth import recall
-    names = ("search_facts", "search_chunks", "build_context")
+    names = ("search_facts", "search_chunks", "superseded", "build_context")
     real = {n: getattr(recall, n) for n in names}
     stats = stats if stats is not None else Counter()
 
+    def count(items: list[dict], what: str) -> None:
+        n = sum(1 for x in items if not _keep(x, drop))
+        if n:
+            stats[what] += n
+
     def keep(items: list[dict], what: str) -> list[dict]:
-        kept = [x for x in items if _keep(x, drop)]
-        if len(kept) < len(items):
-            stats[what] += len(items) - len(kept)
-        return kept
+        count(items, what)
+        return [x for x in items if _keep(x, drop)]
 
     def search_facts(graph_name, qvec, limit, amap=None):
-        return keep(real["search_facts"](graph_name, qvec, limit * OVERFETCH, amap), "facts")[:limit]
+        base = real["search_facts"](graph_name, qvec, limit, amap)
+        if not drop:
+            return base
+        count(base, "facts")
+        return [f for f in real["search_facts"](graph_name, qvec, limit * OVERFETCH, amap) if _keep(f, drop)][:len(base)]
 
     def search_chunks(brain_id, qvec, query, n, min_sim, common=False):
-        if n <= 0:
+        if n <= 0 or not drop:
             return real["search_chunks"](brain_id, qvec, query, n, min_sim, common)
-        return keep(real["search_chunks"](brain_id, qvec, query, n * OVERFETCH, min_sim, common), "chunks")[:n]
+        got = real["search_chunks"](brain_id, qvec, query, n * OVERFETCH, min_sim, common)
+        count(got[:n], "chunks")
+        return [c for c in got if _keep(c, drop)][:n]
+
+    def superseded(*a, **k):
+        found, repl = real["superseded"](*a, **k)
+        repl = {u: keep(rs, "superseding facts") for u, rs in repl.items()}
+        return keep(found, "superseded facts"), {u: rs for u, rs in repl.items() if rs}
 
     def build_context(facts, chunks, max_chars, passages=None, lang="es", cards=None):
         if cards:
@@ -172,7 +190,8 @@ def corpus(drop: set[str], stats: Counter | None = None):
         return real["build_context"](keep(list(facts), "linked facts"), keep(list(chunks), "linked chunks"), max_chars, passages,
                                      lang, cards)
 
-    for n, f in (("search_facts", search_facts), ("search_chunks", search_chunks), ("build_context", build_context)):
+    for n, f in (("search_facts", search_facts), ("search_chunks", search_chunks), ("superseded", superseded),
+                 ("build_context", build_context)):
         setattr(recall, n, f)
     try:
         yield stats
@@ -195,12 +214,15 @@ def answers_left_out(questions: list[dict], drop: set[str]) -> int:
     return sum(1 for q in questions if q.get("answer_episodes") and all(e in drop for e in q["answer_episodes"]))
 
 
-def load(path: Path) -> dict:
+def load(path: Path, brain: str) -> dict:
+    """The curated file of this brain: another brain's uuids would leave nothing out, and the run would still read as clean."""
     if not path.exists():
         raise SystemExit(f"{path}: run `clean.py curated` first")
     cur = json.loads(path.read_text(encoding="utf-8"))
-    if not {"rule", "cells", "drop"} <= set(cur):
+    if not {"brain", "rule", "cells", "drop"} <= set(cur):
         raise SystemExit(f"{path}: not a curated file")
+    if cur["brain"] != brain:
+        raise SystemExit(f"{path} was made for brain {cur['brain']!r}, not {brain!r}")
     return cur
 
 
@@ -221,6 +243,10 @@ def main(argv: list[str] | None = None, snapshot=None) -> int:
     a = ap.parse_args(argv)
     census = _run()._census()
     clean_labels = tuple(x.strip() for x in a.clean_labels.split(",") if x.strip())
+    if not 0 < a.min_clean <= 1:
+        raise SystemExit("--min-clean is a share between 0 and 1 (0.8 is 80 %)")
+    if a.min_labelled < 1:
+        raise SystemExit("--min-labelled must be at least 1")
     if not clean_labels or set(clean_labels) - set(census.EPISODE_LABELS):
         raise SystemExit(f"--clean-labels must be among {', '.join(census.EPISODE_LABELS)}")
     sheet = census._read_csv(a.sheet, ("id", "label"))
@@ -238,7 +264,7 @@ def main(argv: list[str] | None = None, snapshot=None) -> int:
     if not labelled:
         raise SystemExit("no labelled episode of the sheet is in this snapshot")
     table = curated_table(cell_of, labelled, a.min_clean, clean_labels, a.min_labelled)
-    cur = {"rule": {"clean_labels": list(clean_labels), "min_clean": a.min_clean, "min_labelled": a.min_labelled, "source_map": a.source_map.name if a.source_map else None},
+    cur = {"brain": a.brain, "rule": {"clean_labels": list(clean_labels), "min_clean": a.min_clean, "min_labelled": a.min_labelled, "source_map": a.source_map.name if a.source_map else None},
            "cells": table, "skipped": skipped, "drop": sorted(dropped(cell_of, table))}
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(json.dumps(cur, indent=1), encoding="utf-8")
