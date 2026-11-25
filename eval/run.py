@@ -23,7 +23,7 @@ import math
 import random
 import re
 import sys
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -51,6 +51,14 @@ SEED = 492
 @functools.cache
 def _census():
     spec = importlib.util.spec_from_file_location("census", HERE / "census" / "census.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@functools.cache
+def _clean():
+    spec = importlib.util.spec_from_file_location("eval_clean", HERE / "clean" / "clean.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -634,6 +642,9 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     r.add_argument("--include-drafts", action="store_true", help="also the questions the maintainer has not validated")
     r.add_argument("--label", default="", help="a name for this system, kept in the result")
     r.add_argument("--out", type=Path)
+    r.add_argument("--corpus", choices=("full", "clean"), default="full",
+                   help="clean: leave out the episodes of the cells that are not curated (#516)")
+    r.add_argument("--curated", type=Path, default=OUT / "clean" / "curated.json", help="from `clean/clean.py curated`")
     c = sub.add_parser("compare", help="B against A, with the verdict")
     c.add_argument("a", type=Path)
     c.add_argument("b", type=Path)
@@ -680,18 +691,36 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
         questions = [q for q in questions if q.get("validated")]
     hooks = pick_split([x for x in hooks if label_hook(x) is not None], split, a.split, "hook prompts")
     how: dict = {}
+    clean, filter_ = None, contextlib.nullcontext()
+    if a.corpus == "clean":   # #516: the curated episodes only; with `full` nothing in the recall is replaced
+        clean = _clean()
+        cur = clean.load(a.curated)
+        drop = set(cur["drop"])
     if recall_fn is None:
         recall_fn, how = recall_on(a.brain)
-    with counted() if how else contextlib.nullcontext():
+    if clean:
+        stats: Counter = Counter()
+        filter_, recall_fn = clean.corpus(drop, stats), clean.filtered(recall_fn, drop)
+    with counted() if how else contextlib.nullcontext(), filter_:
         records = run(questions, hooks, recall_fn, a.budget)
     meta = {"brain": a.brain, "budget": a.budget, "params": BUDGETS[a.budget], "split": a.split, "label": a.label, **how,
             "questions": sum(1 for x in records if x["class"] != "hook"), "hook": sum(1 for x in records if x["class"] == "hook"),
-            "drafts_included": bool(drafts and a.include_drafts), "when": datetime.now(UTC).isoformat(timespec="seconds")}
+            "drafts_included": bool(drafts and a.include_drafts), "when": datetime.now(UTC).isoformat(timespec="seconds"),
+            "corpus": a.corpus}
+    if clean:
+        meta["curated"] = {"rule": cur["rule"], "cells": cur["cells"], "left_out_episodes": len(drop),
+                           "questions_with_every_answer_left_out": clean.answers_left_out(questions, drop),
+                           "items_left_out": dict(stats)}
     s = summarize(records)
     out = a.out or OUT / f"run-{a.label or 'x'}-{a.budget}-{a.split}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"meta": meta, "summary": s, "records": records}, indent=1), encoding="utf-8")
     print(summary_markdown(meta, s))
+    if clean:
+        c = meta["curated"]
+        print(clean.table_markdown({**cur, "drop": drop}))
+        print(f"Questions whose every answer episode is left out: {c['questions_with_every_answer_left_out']}. Items left out: "
+              + (", ".join(f"{v} {k}" for k, v in sorted(c["items_left_out"].items())) or "none") + ".")
     print(f"→ {out}")
     return 1 if records and s["errors"] == len(records) else 0
 
