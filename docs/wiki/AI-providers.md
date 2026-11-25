@@ -22,7 +22,7 @@ The instance also runs this check on its own every few minutes and raises an ale
 - **API key:** stored **encrypted**. For a local service without authentication any text usually works. When editing, empty = keep the current one.
 - **Load models:** asks the endpoint for the list of available models. If the endpoint does not offer it, type the name by hand.
 - **Model:** the model to use. For an embedding engine it cannot be changed after saving (see below).
-- **Small model (LLM only, optional):** for lightweight tasks; defaults to the same one.
+- **Small model (LLM only, optional):** for lightweight tasks such as entity summaries, deduplication and edge resolution. Choose a non-reasoning model, or disable thinking; it defaults to the same one.
 - **Confidence threshold (Decider only):** between 0.50 and 0.99 (default 0.80). Below it, the proposal goes to human review.
 - **Name** and **Enabled**.
 Press **Save**. Then **Test** makes a real call: the result ("OK…" or the error) appears under the engine.

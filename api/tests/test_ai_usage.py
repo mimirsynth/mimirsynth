@@ -75,6 +75,44 @@ def test_the_async_client_of_the_extraction_counts_too(client):  # noqa: F811
     assert (r["kind"], r["purpose"], r["prompt_tokens"], r["completion_tokens"]) == ("llm", "extraction", 100, 20)
 
 
+def test_async_response_state_exposes_finish_reason_and_token_limit():
+    from mimirsynth import usage
+
+    request = httpx.Request("POST", "http://llm/v1/chat/completions", content=b"{}")
+    limited = httpx.Response(200, json={"choices": [{"finish_reason": "length", "message": {"content": ""}}],
+                                    "usage": {"prompt_tokens": 12, "completion_tokens": 34}}, request=request)
+    with usage.response_state() as state:
+        usage._on_response("llm", "m-summary", limited, limited.content)
+    assert state["finish_reason"] == "length" and state["prompt_tokens"] == 12 and state["completion_tokens"] == 34
+    assert state["token_limit"] is True and state["estimated"] is False
+    assert usage._token_limit("stop") is False and usage._token_limit(None) == "unknown"
+
+
+def test_nested_async_response_states_are_task_local(monkeypatch):
+    import asyncio
+    from mimirsynth import usage
+
+    monkeypatch.setattr(usage, "record", lambda *args, **kwargs: None)
+
+    async def one(reason, prompt_tokens, completion_tokens, wait):
+        with usage.response_state():
+            await asyncio.sleep(wait)   # the two flights interleave: the second one answers first
+            request = httpx.Request("POST", "http://llm/v1/chat/completions", content=b"{}")
+            response = httpx.Response(200, json={"choices": [{"finish_reason": reason}],
+                                                 "usage": {"prompt_tokens": prompt_tokens, "completion_tokens": completion_tokens}},
+                                      request=request)
+            usage._on_response("llm", "m-summary", response, response.content)
+            await asyncio.sleep(0)
+            return usage.response_details()
+
+    async def both():
+        return await asyncio.gather(one("length", 1, 2, 0.02), one("stop", 3, 4, 0))
+
+    first, second = asyncio.run(both())
+    assert (first["finish_reason"], first["prompt_tokens"], first["token_limit"]) == ("length", 1, True)
+    assert (second["finish_reason"], second["prompt_tokens"], second["token_limit"]) == ("stop", 3, False)
+
+
 def test_the_decider_is_counted(client, monkeypatch):  # noqa: F811
     from mimirsynth import decider, usage
     assert client.post("/api/brains", json={"slug": "au3", "name": "Au3"}).status_code == 201

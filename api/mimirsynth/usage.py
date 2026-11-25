@@ -20,6 +20,7 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import date, datetime, timedelta, timezone
@@ -41,6 +42,7 @@ CHARS_PER_TOKEN = 4
 PAUSED = "en pausa: el brain ha agotado su presupuesto de IA de este mes"  # the marker of a proposal that waits for the budget
 LEVELS = (80, 100)
 _SCOPE: ContextVar[tuple[int, str]] = ContextVar("mimirsynth_ai_scope", default=(0, "other"))
+_RESPONSE_STATE: ContextVar[dict[str, object] | None] = ContextVar("mimirsynth_ai_response_state", default=None)
 _LOCK = threading.Lock()
 _RECENT: dict[tuple[str, str], deque] = defaultdict(deque)   # (kind, model) -> times of the last minute's calls
 _MINUTE: dict[tuple, int] = {}                                # (day, brain, kind, model, purpose, minute) -> calls in that minute
@@ -70,6 +72,22 @@ def scope(brain_id: int | None, purpose: str):
 
 def current() -> tuple[int, str]:
     return _SCOPE.get()
+
+
+@contextmanager
+def response_state() -> Iterator[dict[str, object]]:
+    """Captures metadata from the current async engine call for its caller (never the response body)."""
+    state: dict[str, object] = {}
+    token = _RESPONSE_STATE.set(state)
+    try:
+        yield state
+    finally:
+        _RESPONSE_STATE.reset(token)
+
+
+def response_details() -> dict[str, object]:
+    """Returns the latest response metadata visible in this async context."""
+    return dict(_RESPONSE_STATE.get() or {})
 
 
 # --- counting -------------------------------------------------------------------------------------
@@ -191,6 +209,14 @@ def _on_response(kind: str, model: str, response, body: bytes) -> None:
             payload = None
     tin, tout, est = _tokens(response.request.content if response.request else b"", payload) if response.status_code == 200 else (0, 0, False)
     record(kind, model, response.status_code, tin, tout, est)
+    state = _RESPONSE_STATE.get()
+    if state is not None:
+        choices = payload.get("choices") if isinstance(payload, dict) else None
+        choice = choices[0] if isinstance(choices, list) and choices else {}
+        finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+        details = {"status_code": response.status_code, "finish_reason": finish_reason, "prompt_tokens": tin,
+                   "completion_tokens": tout, "estimated": est, "token_limit": _token_limit(finish_reason)}
+        state.update(details)
     seconds = _seconds(response)
     if seconds is not None:
         from . import metrics
@@ -204,6 +230,15 @@ def _seconds(response) -> float | None:
         return time.monotonic() - t0 if t0 is not None else response.elapsed.total_seconds()
     except RuntimeError:  # no request, or an answer not read to the end: no time to give
         return None
+
+
+def _token_limit(finish_reason: object) -> bool | str:
+    """Whether the provider explicitly says that generation stopped at its token limit."""
+    if finish_reason in ("length", "max_tokens", "token_limit"):
+        return True
+    if finish_reason is None:
+        return "unknown"
+    return False
 
 
 def observe(kind: str, model: str, response) -> None:

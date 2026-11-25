@@ -165,7 +165,7 @@ function Engines({ kind, title, description, help }: { kind: "llm" | "embedding"
           <Group><Btn disabled={!form.base_url} loading={loadModels.isPending} onClick={() => loadModels.mutate(form)} icon="models">{t("Cargar modelos")}</Btn></Group>
           {mErr && <Notice tone="warn">{mErr}</Notice>}
           <ComboField label={t("Modelo")} description={models.length ? t("{{length}} modelos disponibles", { length: models.length }) : t("Rellena endpoint y clave para listar los modelos del proveedor")} disabled={emb && !!form.id} data={models} limit={50} value={form.model} onChange={(v) => set("model", v)} placeholder={t("Elige uno o escribe el nombre")} />
-          {!emb && !dec && <ComboField label={t("Modelo pequeño (opcional)")} description={t("Para tareas ligeras; por defecto el mismo modelo")} data={models} limit={50} value={form.small_model} onChange={(v) => set("small_model", v)} />}
+          {!emb && !dec && <ComboField label={t("Modelo pequeño (opcional)")} description={t("Para tareas ligeras; por defecto el mismo modelo") + ". " + t("Usa un modelo sin razonamiento o desactiva el thinking")} data={models} limit={50} value={form.small_model} onChange={(v) => set("small_model", v)} />}
           {dec && <NumberField label={t("Umbral de confianza")} description={t("Por debajo, la propuesta va a revisión humana")} min={0.5} max={0.99} step={0.05} decimalScale={2} value={form.threshold ?? 0.8} onChange={(v) => set("threshold", Number(v) as unknown as string)} />}
           <TextField label={t("Nombre")} value={form.name} onChange={(e) => set("name", e.currentTarget.value)} />
           <Toggle label={t("Activado")} checked={form.enabled} onChange={(e) => set("enabled", e.currentTarget.checked)} />
