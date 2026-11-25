@@ -105,10 +105,14 @@ def stage(rec: dict, items: list[dict], eps: set[str], docs: set[str]) -> tuple[
             found.append(f"{path} rank {rank}" + (f", the recall returns {n}" if n else ""))
     if found:
         return 5, 5, "; ".join(found), ""
+    # the candidates come from the brain's own graph and index only: an answer only a lent brain holds is not among them
+    lent = (rec.get("how") or {}).get("federated")
+    lent = f"; the recall also reads {', '.join(lent)}, which the candidates do not cover" if lent else ""
     missing = sorted(e for e in eps if not (snap.get(e) or {}).get("in", True))
     if eps and len(missing) == len(eps):
-        return 1, None, "in no top 50", "the snapshot does not hold the answer episode: 1, unless another note holds the answer"
+        return 1, None, "in no top 50", "the snapshot does not hold the answer episode: 1, unless another note holds the answer" + lent
     hint = "no fact comes from the answer episode: 3?" if eps and all(not (snap.get(e) or {}).get("facts", True) for e in eps) else ""
+    hint = (hint + lent).removeprefix("; ")
     if docs and not eps:
         return 4, 4, "documents are not among the paths looked at", hint
     return 4, 4, f"in no top {TOP} of facts or chunks", hint
@@ -125,9 +129,10 @@ def stale_hint(rec: dict, shown: list[dict], eps: set[str]) -> tuple[int | None,
         return 6, f"6: the snapshot has {', '.join(gone)} invalidated or expired"
     facts = {k: v for k, v in info.items() if "invalid" in v}
     stale_eps = {s for s in rec.get("stale") or [] if s not in facts} | {e for f in facts.values() for e in f.get("episodes") or []}
-    dates = [d for e in stale_eps if (d := (snap.get(e) or info.get(e) or {}).get("valid_at"))]
+    ts = _run()._census()._ts   # dates as the graph gives them, with or without an offset
+    dates = [d for e in stale_eps if (d := ts((snap.get(e) or info.get(e) or {}).get("valid_at")))]
     held = [e for e in eps if (snap.get(e) or {}).get("in") and e not in stale_eps]
-    later = [e for e in held if dates and (snap[e].get("valid_at") or "") > max(dates)]
+    later = [e for e in held if dates and (d := ts(snap[e].get("valid_at"))) and d > max(dates)]
     if later:
         return 6, f"6: answer episode {later[0]} is dated after every stale episode"
     if not held:

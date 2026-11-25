@@ -26,7 +26,8 @@ For each validated question of the split (`tune` by default) and each labelled h
 - **for each answer episode**: whether the snapshot holds it, its date, and whether any fact comes from it;
 - **for each `stale` uuid**: whether the fact is invalidated or expired in the snapshot, and the dates of the stale episodes.
 
-Only the brain's own graph and index are searched. What other brains lend is in the recall, but not among the candidates.
+Only the brain's own graph and index are searched. What other brains lend is in the recall, but not among the candidates. So when
+the recall reads lent brains, a row suggested 1 or 4 says so in its hint: an answer that only a lent brain holds would look missing.
 Document passages are not searched either.
 
 ## 2. The sheet

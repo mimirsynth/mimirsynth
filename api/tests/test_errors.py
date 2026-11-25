@@ -143,6 +143,17 @@ def test_stale_rows_get_a_hint_from_the_snapshot_and_no_class():
     assert (s["suggested"], s["class"]) == (2, "") and "only episodes with the answer are the stale ones" in s["hint"]
     s = stale({"fo": {"invalid": False, "episodes": ["e0"]}, "e0": {"valid_at": "2026-05-01"}}, dated)
     assert (s["suggested"], s["class"]) == ("", "")   # the answer is older than the stale note: a person reads it
+    s = stale({"fo": {"invalid": False, "episodes": ["e0"]}, "e0": {"valid_at": "2026-03-01T01:00:00+02:00"}}, dated)
+    assert s["suggested"] == 6   # dates compared as dates: 23:00 the day before is earlier, whatever the text says
+
+
+def test_an_answer_a_lent_brain_may_hold_says_so():
+    rec = R("q1", "point", snapshot={"e1": {"in": False, "facts": False}}, how={"federated": ["ops"]})
+    (m,) = only(er.classify(rec), "miss")
+    assert m["suggested"] == 1 and "also reads ops" in m["hint"]
+    rec = R("q1", "point", how={"federated": ["ops"]})
+    (m,) = only(er.classify(rec), "miss")
+    assert m["class"] == 4 and m["hint"].startswith("the recall also reads ops")
 
 
 def test_errors_and_unparsed_contexts_are_their_own_rows():
