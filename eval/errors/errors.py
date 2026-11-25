@@ -114,6 +114,27 @@ def stage(rec: dict, items: list[dict], eps: set[str], docs: set[str]) -> tuple[
     return 4, 4, f"in no top {TOP} of facts or chunks", hint
 
 
+def stale_hint(rec: dict, shown: list[dict], eps: set[str]) -> tuple[int | None, str]:
+    """A suggestion for a stale row, which a person still decides (#515):
+    - 6, a wrong or missing invalidation: a stale fact shown as current is invalidated or expired in the snapshot, or an answer
+      episode the snapshot holds is dated after every stale episode, so the new value was there to invalidate the old one;
+    - 2, stored stale: no answer episode the snapshot holds is anything but a stale one, so only the old version is stored."""
+    info, snap = rec.get("stale_info") or {}, rec.get("snapshot") or {}
+    gone = [it["id"] for it in shown if it["kind"] == "fact" and (info.get(it["id"]) or {}).get("invalid")]
+    if gone:
+        return 6, f"6: the snapshot has {', '.join(gone)} invalidated or expired"
+    facts = {k: v for k, v in info.items() if "invalid" in v}
+    stale_eps = {s for s in rec.get("stale") or [] if s not in facts} | {e for f in facts.values() for e in f.get("episodes") or []}
+    dates = [d for e in stale_eps if (d := (snap.get(e) or info.get(e) or {}).get("valid_at"))]
+    held = [e for e in eps if (snap.get(e) or {}).get("in") and e not in stale_eps]
+    later = [e for e in held if dates and (snap[e].get("valid_at") or "") > max(dates)]
+    if later:
+        return 6, f"6: answer episode {later[0]} is dated after every stale episode"
+    if not held:
+        return 2, "2: the only episodes with the answer are the stale ones"
+    return None, "6 if Graphiti failed to invalidate it, 2 if only the stale version is stored"
+
+
 def _linked(rec: dict, it: dict) -> str:
     """How an item came into the context: through a link, not its similarity (a fact that replaces one in the result, or an old
     fact a fragment states, both with no similarity), or by passing the threshold."""
@@ -173,10 +194,10 @@ def classify(rec: dict) -> list[dict]:
     elif cls == "entity" and m.get("coverage", [1])[0] < 1:
         covered = {e for it in items for e in it["episodes"]}
         limit = (params.get("n_facts") or 0) + (params.get("n_chunks") or 0)
-        if limit and len(eps) > limit:
-            row("miss", "coverage", 7, 7, f"{len(eps)} answer episodes for {limit} items")
-        else:
-            row("miss", "coverage", *stage(rec, items, eps - covered, docs))
+        sug, pre, why, hint = stage(rec, items, eps - covered, docs)
+        if limit and len(eps) > limit and sug == 5:   # found among the candidates, but more notes than the recall returns
+            sug, pre, why = 7, 7, f"{len(eps)} answer episodes for {limit} items; the missing ones: {why}"
+        row("miss", "coverage", sug, pre, why, hint)
     elif cls == "ood" and m.get("empty_ok", [1])[0] == 0:
         row("miss", "empty_ok", 9, 9, f"{len(items)} items injected" if items else "only text outside any item (a state card)")
     elif cls == "hook":
@@ -186,9 +207,10 @@ def classify(rec: dict) -> list[dict]:
             row("miss", "hook_precision" if "hook_precision" in m else "hook_injected", *stage(rec, items, eps, set()))
     if m.get("stale_as_current", [0])[0] == 1:
         stale = set(rec.get("stale") or [])
-        shown = [f"{it['kind']} {it['id']}" for it in items if ev._stale(it, stale)]
-        row("stale", "stale_as_current", "", "", "shown as current: " + ", ".join(shown),
-            "6 if Graphiti failed to invalidate it, 2 if only the stale version is stored")
+        shown = [it for it in items if ev._stale(it, stale)]
+        sug, hint = stale_hint(rec, shown, eps)
+        row("stale", "stale_as_current", sug, "", "shown as current: " + ", ".join(f"{it['kind']} {it['id']}" for it in shown),
+            hint)
     for it in items:
         if relevant(it):
             continue
@@ -292,9 +314,15 @@ def gather(slug: str, items: list[dict], params: dict, top: int = TOP) -> list[d
         bid, gname = b.id, b.graph_name
         amap = alias_map(db, bid)
     g = graph(gname)
-    held = {r["uuid"] for r in rows(g.ro_query("MATCH (e:Episodic) RETURN e.uuid AS uuid"))}
+    held = {r["uuid"]: str(r["valid_at"] or "") for r in rows(g.ro_query("MATCH (e:Episodic) RETURN e.uuid AS uuid, "
+                                                                        "e.valid_at AS valid_at"))}
     with_facts = {r["e"] for r in rows(g.ro_query("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) UNWIND r.episodes AS e "
                                                   "RETURN DISTINCT e AS e"))}
+    wanted = sorted({s for it in items for s in it.get("stale") or []})
+    stale_facts = {r["uuid"]: {"invalid": bool(r["invalid_at"] or r["expired_at"]), "episodes": r["episodes"] or []}
+                   for r in rows(g.ro_query("MATCH (:Entity)-[r:RELATES_TO]->(:Entity) WHERE r.uuid IN $ids RETURN r.uuid AS uuid, "
+                                            "r.invalid_at AS invalid_at, r.expired_at AS expired_at, r.episodes AS episodes",
+                                            {"ids": wanted}))} if wanted else {}
     common = _common(bid, "chunks", appsettings.get("recall_common_terms") == "yes")
     embedder = get_embedder()
     records = []
@@ -304,7 +332,12 @@ def gather(slug: str, items: list[dict], params: dict, top: int = TOP) -> list[d
             rec["class"] = it.get("class") or "hook"
             rec["params"] = params
             eps, _ = _target(rec)
-            rec["snapshot"] = {e: {"in": e in held, "facts": e in with_facts} for e in sorted(eps)}
+            rec["snapshot"] = {e: {"in": e in held, "facts": e in with_facts, "valid_at": held.get(e, "")} for e in sorted(eps)}
+            if rec.get("stale"):   # what the stale rows' hints read: each stale fact's state, and the stale episodes' dates
+                info = {s: stale_facts[s] for s in rec["stale"] if s in stale_facts}
+                for e in {s for s in rec["stale"] if s not in info} | {e for f in info.values() for e in f["episodes"]}:
+                    info.setdefault(e, {"valid_at": held.get(e, "")})
+                rec["stale_info"] = info
             try:
                 rec["out"] = recall_fn(it["query"], **params)
                 qvec = embedder.embed([it["query"]])[0]

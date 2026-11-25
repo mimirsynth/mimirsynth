@@ -80,8 +80,15 @@ def test_in_no_top_50_is_not_among_the_candidates_unless_the_snapshot_lacks_it()
 
 def test_entity_questions_spread_past_the_limit_and_the_missing_episodes_only():
     answer = ("e1", "e2", "e3", "e4")
+    found = {"facts": [], "chunks": [{"id": i, "episode_uuid": e, "similarity": 0.6} for i, e in enumerate(answer)]}
+    (m,) = only(er.classify(R("q2", "entity", [F("f1", "X has A", ["e1"])], answer=answer, cands=found)), "miss")
+    assert (m["suggested"], m["class"]) == (7, 7) and m["why"].startswith("4 answer episodes for 3 items")
+    # past the limit, but the missing ones are in no top 50: the limit is not why
     (m,) = only(er.classify(R("q2", "entity", [F("f1", "X has A", ["e1"])], answer=answer)), "miss")
-    assert (m["suggested"], m["class"]) == (7, 7) and "4 answer episodes for 3 items" in m["why"]
+    assert (m["suggested"], m["class"]) == (4, 4)
+    # an entity question is never "after the first three": it is scored on coverage
+    facts = [F(f"n{i}", f"noise {i}", ["e9"]) for i in range(3)] + [F("f1", "X has A", ["e1"]), F("f2", "X has B", ["e2"])]
+    assert only(er.classify(R("q2", "entity", facts, answer=("e1", "e2"))), "miss") == []
     # within the limit: the stage of the episodes it missed, not of the one it found
     cands = {"facts": [{"uuid": "f1", "episodes": ["e1"], "similarity": 0.9}], "chunks": [{"id": 1, "episode_uuid": "e2", "similarity": 0.6}]}
     (m,) = only(er.classify(R("q2", "entity", [F("f1", "X has A", ["e1"])], answer=("e1", "e2"), cands=cands)), "miss")
@@ -113,9 +120,29 @@ def test_stale_as_current_is_left_for_a_person_and_linked_noise_says_so():
     rec = R("q4", "temporal", [F("fn", "X runs on node 2", ["e1"]), old, linked], stale=["fo"])
     rows = er.classify(rec)
     (s,) = only(rows, "stale")
-    assert s["class"] == "" and "fact fo" in s["why"]
+    assert (s["suggested"], s["class"]) == ("", "") and "fact fo" in s["why"]   # nothing in the snapshot to go on
     noise = {r["why"].split(";")[0] for r in only(rows, "noise")}
     assert "came in through a link: replaces a fact in the result" in noise and "similarity 0.600" in noise
+
+
+def test_stale_rows_get_a_hint_from_the_snapshot_and_no_class():
+    def stale(info, snapshot):
+        rec = R("q4", "temporal", [F("fn", "X runs on node 2", ["e1"]), F("fo", "X runs on node 1", ["e0"])], stale=["fo"],
+                snapshot=snapshot)
+        rec["stale_info"] = info
+        (s,) = only(er.classify(rec), "stale")
+        return s
+
+    dated = {"e1": {"in": True, "facts": True, "valid_at": "2026-03-01"}}
+    s = stale({"fo": {"invalid": True, "episodes": ["e0"]}, "e0": {"valid_at": "2026-01-01"}}, dated)
+    assert (s["suggested"], s["class"]) == (6, "") and "invalidated or expired" in s["hint"]
+    s = stale({"fo": {"invalid": False, "episodes": ["e0"]}, "e0": {"valid_at": "2026-01-01"}}, dated)
+    assert (s["suggested"], s["class"]) == (6, "") and "dated after every stale episode" in s["hint"]
+    s = stale({"fo": {"invalid": False, "episodes": ["e0"]}, "e0": {"valid_at": "2026-01-01"}},
+              {"e1": {"in": False, "facts": False, "valid_at": ""}})
+    assert (s["suggested"], s["class"]) == (2, "") and "only episodes with the answer are the stale ones" in s["hint"]
+    s = stale({"fo": {"invalid": False, "episodes": ["e0"]}, "e0": {"valid_at": "2026-05-01"}}, dated)
+    assert (s["suggested"], s["class"]) == ("", "")   # the answer is older than the stale note: a person reads it
 
 
 def test_errors_and_unparsed_contexts_are_their_own_rows():

@@ -23,7 +23,8 @@ For each validated question of the split (`tune` by default) and each labelled h
 - **the top 50 of each path, before the threshold and the cut**:
   - facts by cosine, as 0.17 searches them (`search_facts`);
   - episode chunks by the hybrid search (`index.search`), with the recall's recency weight and common terms;
-- **for each answer episode**: whether the snapshot holds it, and whether any fact comes from it.
+- **for each answer episode**: whether the snapshot holds it, its date, and whether any fact comes from it;
+- **for each `stale` uuid**: whether the fact is invalidated or expired in the snapshot, and the dates of the stale episodes.
 
 Only the brain's own graph and index are searched. What other brains lend is in the recall, but not among the candidates.
 Document passages are not searched either.
@@ -44,18 +45,22 @@ to the answer episodes it missed.
 
 | Where the answer got furthest | Class |
 |---|---|
-| in the final context, after the first three | 5 |
+| in the final context, after the first three (point, temporal and volatile questions; an entity question is scored on coverage) | 5 |
 | returned by the recall, then cut out of the context by the character budget | 8 |
 | among the top 50 of a path, below the number the recall returns or below its threshold (`why` says which) | 5 |
 | in no top 50 | 4 |
-| an entity question with more answer episodes than `n_facts + n_chunks` | 7 |
+| an entity question with more answer episodes than `n_facts + n_chunks`, whose missing ones are among the top 50 (when they are in none, it stays 4) | 7 |
 | an out-of-domain question, or a hook prompt labelled `nothing`, with something injected | 9 |
 
 **Left for a person** (`class` empty). The `suggested` and `hint` columns help.
 - An answer episode the snapshot does not hold is suggested 1, unless another note holds the answer.
 - An answer episode no fact comes from is hinted 3, when the chunks did not find it either.
 - Class 2 is read from the episodes.
-- Every `stale` row.
+- Every `stale` row. Its suggestion comes from the snapshot:
+  - **6**: a stale fact shown as current is invalidated or expired there, or an answer episode it holds is dated after every stale
+    episode, so the new value was there to invalidate the old one;
+  - **2**: the snapshot holds no answer episode other than the stale ones;
+  - none, when neither is clear.
 
 Correct any filled-in class you disagree with. Each row keeps exactly one class.
 
