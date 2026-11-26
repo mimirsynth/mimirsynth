@@ -69,6 +69,14 @@ python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
 ```
 It copies the row's script to `~/.config/mimirsynth/statusline.py`, a path that does not change when the plugin updates (each session start keeps the copy current), and adds `statusLine` to `~/.claude/settings.json`. **If you already have a status line it is left alone**, and the command prints what your own script can call to add MimirSynth's row. `cli.py statusline --remove` takes out only MimirSynth's. The row reads only files the hooks wrote, so it makes no network call. `/whoami` is asked at session start, at most once an hour, and not at all with `recall` and `news` both off; if it cannot reach the server, that start asks nothing else. What the server sends is shown without control characters. `NO_COLOR` turns the colours off.
 
+### In the interface
+Where Claude Code draws a plugin's interface (the terminal, or the desktop app on a local session), the plugin also shows, with nothing to set up:
+- **A band above the prompt**, `● mimirsynth · my-brain · contributor · recall: 4 facts`, which says `recalling…` with an amber dot while the recall runs and turns red when it fails. It reads the same per-session file as the status row.
+- **`· recalling`** after the spinner's word while the recall runs (terminal).
+- **A line under the answer** saying which recalled fact helped and what for, `◉ The API listens on port 4000, which answered the question directly.` A small model (Haiku, low effort) judges it once per turn that recalled something, on your Claude Code account; when no fact helped, no line is shown. Set `"explain": false` in `~/.config/mimirsynth/config.json` to turn the line and its call off.
+
+A session started from somewhere with no interface attached (`claude -p`, a cloud session followed from the web) shows neither the band nor the spinner. It needs a Claude Code version that loads plugin hooks modules; older versions ignore it and keep the rest of the plugin working.
+
 ### Other memory plugins
 
 If another plugin or hook also injects memory, the session start says so (it does not block anything). MimirSynth's blocks are marked so you can tell them apart. If `mimirsynth_recall.py` is still in `settings.json`, it says that too.
