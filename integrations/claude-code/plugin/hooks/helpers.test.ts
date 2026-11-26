@@ -20,6 +20,6 @@ test('the judge reply becomes one clean line, or nothing when it names no fact',
   expect(noteOf('  \n`NONE`\n')).toBe(null)
   expect(noteOf('')).toBe(null)
   expect(noteOf('Port 4000 answered it.\nSecond line')).toBe('Port 4000 answered it.')
-  expect(noteOf('a\u0007b\u202ec')).toBe('abc')
+  expect(noteOf('a\u0007b\u202ec\u2067d')).toBe('abcd')
   expect(noteOf('x'.repeat(500))?.length).toBe(300)
 })

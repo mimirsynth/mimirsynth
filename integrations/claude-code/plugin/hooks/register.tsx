@@ -13,8 +13,8 @@ const live = atom({ plugin: 'mimirsynth', key: 'live' } as const, {
 const BLOCK = /<mimirsynth-memory brain="([^"]*)">([\s\S]*?)<\/mimirsynth-memory>/
 const NONE = 'NONE'
 const FALSE = ['0', 'false', 'off', 'no']   // as `config.FALSE` in the scripts
-// control and invisible characters, as `mimir.clean` drops them from what the server sends
-const CONTROL = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]/g
+// control and format (invisible, bidi) characters, as `mimir.clean` drops them from what the server sends
+const CONTROL = /[\p{Cc}\p{Cf}\u2028\u2029]/gu
 
 type Recalled = { prompt: string; memory: string }
 
@@ -50,7 +50,9 @@ async function readJson($: EngineInterface, path: string): Promise<Record<string
 // The shared configuration, as `config_path` in the scripts finds it: MIMIRSYNTH_CONFIG (a leading ~ expanded), else
 // ~/.config/mimirsynth/config.json. Null when it cannot be told (no HOME nor USERPROFILE): nothing is read from a guessed path.
 async function configPath($: EngineInterface): Promise<string | null> {
-  const home = ((await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) || '').trim() || null
+  // Python's Path.home(): USERPROFILE on Windows, HOME elsewhere
+  const [h, u] = [await $.env.get('HOME'), await $.env.get('USERPROFILE')]
+  const home = (((await $.env.get('OS')) === 'Windows_NT' ? u || h : h || u) ?? '').trim() || null
   const set = (await $.env.get('MIMIRSYNTH_CONFIG'))?.trim()
   if (set) return /^~([/\\]|$)/.test(set) ? (home ? home + set.slice(1) : null) : set
   return home ? `${home}/.config/mimirsynth/config.json` : null
