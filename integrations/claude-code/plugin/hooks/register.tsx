@@ -11,15 +11,19 @@ const live = atom({ plugin: 'mimirsynth', key: 'live' } as const, {
 } as Live)
 
 const BLOCK = /<mimirsynth-memory brain="([^"]*)">([\s\S]*?)<\/mimirsynth-memory>/
-// The model's last line when a recalled fact shaped its answer, as `mimir.CREDIT` asks for it.
-const CREDIT = /^(?:>\s*)?◉\s*MimirSynth:\s*(.+)$/u
+// The model's last line when a recalled fact shaped its answer, as `mimir.CREDIT` asks for it (`mimir.CREDIT_LINE` there):
+// up to 3 spaces (4 make a code line), an optional quote mark, and markdown the model may wrap the label in.
+const CREDIT = /^ {0,3}[`*]*(?:>\s*)?[`*]*\s*◉\s*\**MimirSynth\**:\s*(.+)$/u
+// control and format (invisible, bidi) characters, as `mimir.clean` drops them
+const CONTROL = /[\p{Cc}\p{Cf}\u2028\u2029]/gu
 
-/** The answer without its credit line, and the line's note; null when the text does not end with one. */
+/** The answer without its credit line, and the line's note as plain text; null when the text does not end with one. */
 export function splitCredit(text: string): { body: string; note: string } | null {
   const lines = text.replace(/\s+$/u, '').split('\n')
-  const m = CREDIT.exec((lines[lines.length - 1] ?? '').trim())
-  if (!m) return null
-  return { body: lines.slice(0, -1).join('\n').replace(/\s+$/u, ''), note: (m[1] ?? '').trim() }
+  const m = CREDIT.exec(lines[lines.length - 1] ?? '')
+  const note = (m?.[1] ?? '').replace(CONTROL, '').replace(/[`*]+/g, '').trim()
+  if (!note) return null
+  return { body: lines.slice(0, -1).join('\n').replace(/\s+$/u, ''), note }
 }
 
 /** The folder of a path written with `/` or `\` (Windows), `.` for a bare file name: what Python's `Path.parent` gives. */

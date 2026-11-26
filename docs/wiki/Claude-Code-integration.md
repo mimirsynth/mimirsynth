@@ -67,7 +67,7 @@ Where Claude Code draws a plugin's interface (the terminal, or the desktop app o
 - **`· recalling`** after the spinner's word while the recall runs (terminal).
 - **A line under the answer** saying which recalled fact helped and what for. With the recalled block the model is asked to end an answer a recalled fact shaped with `> ◉ MimirSynth: <the fact>: <what it was used for>`, and to leave it out otherwise; the plugin draws that line under the answer as a quote, `◉ the API port: it answered the question`. It costs no extra call, only a sentence of instructions in each recall. In a session the apps follow over Remote Control the line stays a quote inside the answer. Set `explain` off (`"explain": false` in the configuration file, `MIMIRSYNTH_EXPLAIN=off`, or a `projects` entry) to stop asking for it.
 
-A session started from somewhere with no interface attached (`claude -p`, a cloud session followed from the web) shows neither the band nor the spinner. It needs a Claude Code version that loads plugin hooks modules; older versions ignore it and keep the rest of the plugin working.
+A session started from somewhere with no interface attached (`claude -p`, a cloud session followed from the web) shows neither the band nor the spinner, and a credit line the model writes stays part of the answer's text (it is asked to leave it out of output meant for a program, such as JSON). It needs a Claude Code version that loads plugin hooks modules; older versions ignore it and keep the rest of the plugin working.
 
 ### What it writes on your machine
 - `~/.config/mimirsynth/config.json`, the shared configuration (by `setup`).

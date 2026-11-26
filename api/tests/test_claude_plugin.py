@@ -31,7 +31,7 @@ def plugin(monkeypatch, tmp_path):
     monkeypatch.setattr(mimir, "CONFIG", tmp_path / "config.json")
     monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(tmp_path / "data"))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)   # no real ~/.claude/settings.json
-    for k in ("URL", "BRAIN", "TOKEN", "WRITE_TOKEN", "CAPTURE", "NEWS", "RECALL"):
+    for k in ("URL", "BRAIN", "TOKEN", "WRITE_TOKEN", "CAPTURE", "NEWS", "RECALL", "EXPLAIN"):
         monkeypatch.delenv(f"MIMIRSYNTH_{k}", raising=False)
     calls, answers = [], {}
 
@@ -126,6 +126,27 @@ def test_the_recall_asks_for_the_credit_line_unless_explain_is_off(plugin, monke
     assert _run(plugin, "prompt", {"prompt": "where does the database run now?"}, capsys) == {}
 
 
+def test_explain_is_also_read_from_the_file_and_a_project_entry(plugin, monkeypatch, capsys):
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/recall"] = {"context": "## Facts\n- db runs on db02"}
+    cfg = plugin.tmp / "config.json"
+    ask = {"prompt": "where does the database run now?", "cwd": str(plugin.tmp)}
+    for file in ({"explain": False}, {"explain": 0}, {"projects": {str(plugin.tmp): {"explain": "off"}}}):
+        cfg.write_text(json.dumps(file), encoding="utf-8")
+        assert _run(plugin, "prompt", ask, capsys)["hookSpecificOutput"]["additionalContext"].endswith("</mimirsynth-memory>"), file
+    cfg.write_text(json.dumps({"explain": True}), encoding="utf-8")
+    assert _run(plugin, "prompt", ask, capsys)["hookSpecificOutput"]["additionalContext"].endswith(plugin.mimir.CREDIT)
+
+
+def test_the_credit_line_never_reaches_a_captured_session(plugin):
+    strip = plugin.mimir.without_credit
+    assert strip("Port 4000.\n\n> ◉ MimirSynth: the API port: it answered\n") == "Port 4000."
+    assert strip("Port 4000.\n`> ◉ **MimirSynth**: x`") == "Port 4000."
+    assert strip("> ◉ MimirSynth: only the credit") == ""
+    for kept in ("a line that ends ◉ MimirSynth: x", "code:\n    > ◉ MimirSynth: x", "> ◉ MimirSynth: x\nthen more"):
+        assert strip(kept) == kept
+
+
 def test_with_capture_off_nothing_is_written_or_sent(plugin, monkeypatch, capsys):
     _configure(monkeypatch, NEWS="off")
     plugin.answers["/brains/b1/recall"] = {"context": ""}
@@ -150,7 +171,8 @@ def _session(plugin, capsys, sid, message):
 
 def test_capture_sends_one_redacted_quarantined_proposal_per_session(plugin, monkeypatch, capsys):
     _configure(monkeypatch, CAPTURE="send", NEWS="off")
-    _session(plugin, capsys, "s1", f"The deploy key now lives in Vaultwarden; the old one {GITHUB} was revoked.")
+    _session(plugin, capsys, "s1", f"The deploy key now lives in Vaultwarden; the old one {GITHUB} was revoked.\n"
+                                   "> ◉ MimirSynth: deploy keys go to Vaultwarden: where to keep it")
     assert not [c for c in plugin.calls if c["path"].endswith("/proposals")]          # nothing left the machine at the end of the session
     plugin.answers["/brains/b1/whoami"] = {"role": "contributor"}
     plugin.answers["/brains/b1/proposals"] = {"id": 7, "status": "pending"}
@@ -160,6 +182,7 @@ def test_capture_sends_one_redacted_quarantined_proposal_per_session(plugin, mon
     p = sent[0]["body"]
     assert GITHUB not in json.dumps(p) and "[secret removed]" in p["body"] and "ops/deploy.sh" in p["body"].replace("\\", "/")
     assert p["origin"] == "auto" and p["confidence"] == 0.3 and p["name"].startswith("Claude Code: ")
+    assert "revoked." in p["body"] and "MimirSynth:" not in p["body"]   # the credit restates a known fact: not a finding
     _run(plugin, "session-start", {"session_id": "s3", "source": "startup"}, capsys)
     assert len([c for c in plugin.calls if c["path"] == "/brains/b1/proposals"]) == 1   # at most one per session
 

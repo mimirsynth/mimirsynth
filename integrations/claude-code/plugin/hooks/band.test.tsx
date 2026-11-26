@@ -76,8 +76,16 @@ for (const surface of ['terminal', 'desktop'] as const) {
   })
 }
 
-test('an answer with no credit line, or a phone, keeps the answer as it is', async $ => {
-  const ui = await $.ui.mount({ plugin: 'mimirsynth', surface: 'mobile', component: 'AssistantMessage', props: { text: 'x\n> ◉ MimirSynth: y', isFirstOfReply: true } as never })
-  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).not.toContain('y')
-  await ui.unmount()
+test('a phone, a summary row and an answer with no credit line are drawn as they are', async $ => {
+  const credit = 'x\n> ◉ MimirSynth: y'
+  for (const [surface, props] of [
+    ['mobile', { text: credit, isFirstOfReply: true }],
+    ['desktop', { text: credit, isFirstOfReply: true, isSummary: true }],
+    ['desktop', { text: 'an answer with no credit', isFirstOfReply: true }],
+  ] as const) {
+    const ui = await $.ui.mount({ plugin: 'mimirsynth', surface, component: 'AssistantMessage', props: props as never })
+    expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).not.toContain('y')
+    expect((await ui.findAll({ type: 'Box' })).some(b => b.props.backgroundColor === 'gray')).toBe(false)
+    await ui.unmount()
+  }
 })

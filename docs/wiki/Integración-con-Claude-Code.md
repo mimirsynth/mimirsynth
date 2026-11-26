@@ -67,7 +67,7 @@ Donde Claude Code dibuja la interfaz de un plugin (la terminal, o la app de escr
 - **`· recalling`** tras la palabra del spinner mientras corre el recall (terminal).
 - **Una línea bajo la respuesta** que dice qué hecho recordado ayudó y para qué. Junto al bloque recordado se pide al modelo que, si un hecho recordado dio forma a la respuesta, la termine con `> ◉ MimirSynth: <el hecho>: <para qué sirvió>`, y que no la ponga si no; el plugin pinta esa línea bajo la respuesta como una cita, `◉ el puerto de la API: respondió la pregunta`. No cuesta ninguna llamada extra, solo una frase de instrucciones en cada recall. En una sesión que las apps siguen por Remote Control la línea queda como una cita dentro de la respuesta. Apaga `explain` (`"explain": false` en el fichero de configuración, `MIMIRSYNTH_EXPLAIN=off` o una entrada de `projects`) para no pedirla.
 
-Una sesión iniciada sin interfaz conectada (`claude -p`, una sesión en la nube seguida desde la web) no muestra ni la banda ni el spinner. Requiere una versión de Claude Code que cargue módulos de hooks de plugins; las anteriores lo ignoran y el resto del plugin sigue funcionando.
+Una sesión iniciada sin interfaz conectada (`claude -p`, una sesión en la nube seguida desde la web) no muestra ni la banda ni el spinner, y la línea de crédito que escriba el modelo queda dentro del texto de la respuesta (se le pide que no la ponga en una salida pensada para un programa, como un JSON). Requiere una versión de Claude Code que cargue módulos de hooks de plugins; las anteriores lo ignoran y el resto del plugin sigue funcionando.
 
 ### Qué escribe en tu máquina
 - `~/.config/mimirsynth/config.json`, la configuración compartida (lo escribe `setup`).

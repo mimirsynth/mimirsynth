@@ -184,7 +184,7 @@ def stop(data: dict) -> None:
     rec = mimir.load(data.get("session_id") or "")
     rec["turns"], rec["ended"] = int(rec.get("turns") or 0) + 1, False   # a resumed session is not over
     if msg:
-        rec["last_message"] = mimir.redact(msg[:6000])
+        rec["last_message"] = mimir.redact(mimir.without_credit(msg)[:6000])
     rec.setdefault("project", Path(data.get("cwd") or ".").name)
     mimir.save(rec)
 

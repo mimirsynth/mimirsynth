@@ -54,8 +54,16 @@ def config() -> lib.Config:
 
 
 # Asked of the model after the recalled block: the hooks module draws this last line as a note under the answer (CREDIT there).
-CREDIT = ("If a fact recalled above shaped your answer, end the answer with one last line, in the answer's language: "
-          "`> ◉ MimirSynth: <the fact, in a few words>: <what it was used for>`. Leave the line out when none did.")
+CREDIT = ("If a fact recalled above shaped your answer, end the answer with one last line of plain text, in the answer's language: "
+          "> ◉ MimirSynth: <the fact, in a few words>: <what it was used for>. Leave the line out when none did, and in output "
+          "meant for a program (JSON, code, a file's contents).")
+# That line at the end of an answer, as the hooks module recognises it (its CREDIT): up to 3 spaces, an optional quote mark.
+CREDIT_LINE = re.compile(r"(?:\A|\n) {0,3}[`*]*(?:>\s*)?[`*]*\s*◉\s*\**MimirSynth\**:[^\n]*\s*\Z")
+
+
+def without_credit(text: str) -> str:
+    """An answer without its credit line: what the session itself said, not a restatement of a fact the brain already holds."""
+    return CREDIT_LINE.sub("", text).rstrip()
 
 
 def explain() -> bool:

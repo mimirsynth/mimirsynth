@@ -18,4 +18,7 @@ test('the credit line is split off the end of an answer, quoted or not, and nowh
   expect(splitCredit('> ◉ MimirSynth: x\nmore text after it')).toBe(null)
   expect(splitCredit('An answer with no credit.')).toBe(null)
   expect(splitCredit('> ◉ MimirSynth:   ')).toBe(null)
+  expect(splitCredit('x\n`> ◉ MimirSynth: the **db02** host: \u202ewhere`')).toEqual({ body: 'x', note: 'the db02 host: where' })
+  expect(splitCredit('x\n> ◉ **MimirSynth**: y')).toEqual({ body: 'x', note: 'y' })
+  expect(splitCredit('x\n    > ◉ MimirSynth: inside a code line')).toBe(null)
 })
