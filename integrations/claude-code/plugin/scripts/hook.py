@@ -154,7 +154,8 @@ def prompt(data: dict) -> None:
     mimir.status(sid, **here, health="ok",
                  action="recall: " + (", ".join(x for x in found if x) if ctx and any(found) else "nothing relevant" if not ctx else "context"))
     if ctx:
-        _out(f"<mimirsynth-memory brain=\"{mimir.cfg('brain')}\">\n{ctx}\n</mimirsynth-memory>", "UserPromptSubmit")
+        credit = f"\n{mimir.CREDIT}" if mimir.explain() else ""
+        _out(f"<mimirsynth-memory brain=\"{mimir.cfg('brain')}\">\n{ctx}\n</mimirsynth-memory>{credit}", "UserPromptSubmit")
 
 
 def tool(data: dict) -> None:

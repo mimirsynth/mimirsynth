@@ -111,6 +111,21 @@ def test_recall_fails_open_and_says_when_the_token_is_not_valid(plugin, monkeypa
     assert _run(plugin, "prompt", {"prompt": "/mimirsynth:status"}, capsys) == {} and len(plugin.calls) == n   # commands are not recalled
 
 
+def test_the_recall_asks_for_the_credit_line_unless_explain_is_off(plugin, monkeypatch, capsys):
+    _configure(monkeypatch)
+    plugin.answers["/brains/b1/recall"] = {"context": "## Facts\n- db runs on db02"}
+    ctx = _run(plugin, "prompt", {"prompt": "where does the database run now?"}, capsys)["hookSpecificOutput"]["additionalContext"]
+    assert ctx.endswith("</mimirsynth-memory>\n" + plugin.mimir.CREDIT) and "> ◉ MimirSynth:" in plugin.mimir.CREDIT
+    for off in ("off", "false", "0", "no"):
+        monkeypatch.setenv("MIMIRSYNTH_EXPLAIN", off)
+        ctx = _run(plugin, "prompt", {"prompt": "where does the database run now?"}, capsys)["hookSpecificOutput"]["additionalContext"]
+        assert ctx.endswith("</mimirsynth-memory>"), off
+    monkeypatch.setenv("MIMIRSYNTH_EXPLAIN", "on")
+    assert plugin.mimir.explain()
+    plugin.answers["/brains/b1/recall"] = {"context": ""}   # nothing recalled: nothing injected, so nothing asked
+    assert _run(plugin, "prompt", {"prompt": "where does the database run now?"}, capsys) == {}
+
+
 def test_with_capture_off_nothing_is_written_or_sent(plugin, monkeypatch, capsys):
     _configure(monkeypatch, NEWS="off")
     plugin.answers["/brains/b1/recall"] = {"context": ""}

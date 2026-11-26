@@ -64,3 +64,20 @@ test('without HOME the config is found under USERPROFILE, and with neither nothi
   expect(read.length).toBe(1)
   expect(read[0]?.endsWith('C:\\Users\\x/.config/mimirsynth/status/s1.json')).toBe(true)
 })
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`${surface}: the credit line at the end of an answer is drawn as a note under it`, async $ => {
+    const text = 'Port 4000.\n\n> ◉ MimirSynth: the API port: it answered the question'
+    const ui = await $.ui.mount({ plugin: 'mimirsynth', surface, component: 'AssistantMessage', props: { text, isFirstOfReply: true } as never })
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    expect(texts).toContain('the API port: it answered the question')
+    expect(texts.some(t => t.includes('> ◉ MimirSynth'))).toBe(false)
+    await ui.unmount()
+  })
+}
+
+test('an answer with no credit line, or a phone, keeps the answer as it is', async $ => {
+  const ui = await $.ui.mount({ plugin: 'mimirsynth', surface: 'mobile', component: 'AssistantMessage', props: { text: 'x\n> ◉ MimirSynth: y', isFirstOfReply: true } as never })
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).not.toContain('y')
+  await ui.unmount()
+})

@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import mimirsynth_agent as lib  # noqa: E402
 from mimirsynth_agent import capture  # noqa: E402
 from mimirsynth_agent.client import ApiError  # noqa: E402,F401
+from mimirsynth_agent.config import FALSE
 
 AGENT, SOURCE = "Claude Code", "claude-code"   # how a captured session's proposal names the agent, for people and for machines
 CONFIG = lib.config_path()
@@ -50,6 +51,22 @@ def config() -> lib.Config:
         except OSError:   # the folder was removed under us: no project applies
             cwd = None
     return lib.Config(path=CONFIG, cwd=cwd)
+
+
+# Asked of the model after the recalled block: the hooks module draws this last line as a note under the answer (CREDIT there).
+CREDIT = ("If a fact recalled above shaped your answer, end the answer with one last line, in the answer's language: "
+          "`> ◉ MimirSynth: <the fact, in a few words>: <what it was used for>`. Leave the line out when none did.")
+
+
+def explain() -> bool:
+    """`explain` (on unless turned off): whether the model is asked to say which recalled fact helped. Not a key of the shared
+    contract, so it is read here, from the same places and with the same on/off rule as the contract's own keys."""
+    v = config().lookup("explain")[0]
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    return not (isinstance(v, str) and v.strip().lower() in FALSE)
 
 
 def client() -> lib.Client:
