@@ -44,3 +44,23 @@ test('a failed recall turns the dot red, and the brain comes from the recalled b
   expect((await ui.findAll({ type: 'Text' })).map(t => t.text).join('')).toBe('● mimirsynth · seismenos · contributor · recall: offline')
   await ui.unmount()
 })
+
+test('without HOME the config is found under USERPROFILE, and with neither nothing is read from a guessed path', async ($, on) => {
+  let home: string | undefined = undefined
+  const read: string[] = []
+  on('env.get', (_, e) => ({ value: e.name === 'USERPROFILE' ? home : undefined }))
+  on('fs.read', (_, e) => {
+    read.push(e.path)
+    return { value: JSON.stringify(STATUS) }
+  })
+  on('classic.UserPromptSubmit', () => ({}))
+
+  await $.classic.UserPromptSubmit({ prompt: 'a prompt long enough', session_id: 's1' })
+  expect(read).toEqual([])
+
+  home = 'C:\\Users\\x'
+  await $.classic.UserPromptSubmit({ prompt: 'a prompt long enough', session_id: 's1' })
+  // the engine resolves the path for the machine it runs on: on this test's Linux a `C:\` path is relative
+  expect(read.length).toBe(1)
+  expect(read[0]?.endsWith('C:\\Users\\x/.config/mimirsynth/status/s1.json')).toBe(true)
+})
