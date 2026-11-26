@@ -69,6 +69,14 @@ python3 ~/.claude/plugins/…/mimirsynth/scripts/cli.py statusline
 ```
 Copia el script de la fila a `~/.config/mimirsynth/statusline.py`, una ruta que no cambia al actualizar el plugin (cada inicio de sesión mantiene la copia al día), y añade `statusLine` a `~/.claude/settings.json`. **Si ya tienes una línea de estado, no se toca**, y el comando dice qué puede llamar tu propio script para añadir la fila de MimirSynth. `cli.py statusline --remove` quita solo la de MimirSynth. La fila solo lee ficheros que escribieron los hooks, así que no hace ninguna llamada de red. `/whoami` se pregunta al empezar la sesión, como mucho una vez por hora, y nunca con `recall` y `news` apagados; si no llega al servidor, ese inicio no pregunta nada más. Lo que manda el servidor se muestra sin caracteres de control. `NO_COLOR` quita los colores.
 
+### En la interfaz
+Donde Claude Code dibuja la interfaz de un plugin (la terminal, o la app de escritorio en una sesión local), el plugin muestra además, sin configurar nada:
+- **Una banda sobre el prompt**, `● mimirsynth · mi-brain · contributor · recall: 4 facts`, que dice `recalling…` con el punto ámbar mientras corre el recall y se pone en rojo si falla. Lee el mismo fichero por sesión que la fila de estado.
+- **`· recalling`** tras la palabra del spinner mientras corre el recall (terminal).
+- **Una línea bajo la respuesta** que dice qué hecho recordado ayudó y para qué, `◉ La API escucha en el puerto 4000, lo que respondió directamente a la pregunta.` Lo juzga un modelo pequeño (Haiku, esfuerzo bajo) una vez por cada turno tuyo que recordó algo (nunca en los de un subagente), en tu cuenta de Claude Code; si ningún hecho ayudó, no se muestra nada. Pon `"explain": false` en el nivel superior del fichero de configuración (`~/.config/mimirsynth/config.json`, o el que indique `MIMIRSYNTH_CONFIG`) para quitar la línea y su llamada; si no se encuentra ese fichero, la llamada no se hace.
+
+Una sesión iniciada sin interfaz conectada (`claude -p`, una sesión en la nube seguida desde la web) no muestra ni la banda ni el spinner. Requiere una versión de Claude Code que cargue módulos de hooks de plugins; las anteriores lo ignoran y el resto del plugin sigue funcionando.
+
 ### Otros plugins de memoria
 
 Si otro plugin o hook también inyecta memoria, el inicio de sesión lo avisa (sin bloquear nada). Los bloques de MimirSynth van marcados para distinguirlos. Si `mimirsynth_recall.py` sigue en `settings.json`, también lo dice.
