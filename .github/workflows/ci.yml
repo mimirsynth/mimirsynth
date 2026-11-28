@@ -15,6 +15,7 @@ jobs:
       api-neo4j: ${{ steps.f.outputs.api-neo4j }}
       web: ${{ steps.f.outputs.web }}
       agent-client: ${{ steps.f.outputs.agent-client }}
+      claude-code-plugin: ${{ steps.f.outputs.claude-code-plugin }}
       npm-packages: ${{ steps.f.outputs.npm-packages }}
       image: ${{ steps.f.outputs.image }}
       installer-desktop: ${{ steps.f.outputs.installer-desktop }}
@@ -38,6 +39,7 @@ jobs:
           out api-neo4j '^(api/|eval/|integrations/|scripts/|ocr/|\.claude-plugin/|\.agents/|web/src/i18n/)' "$npm_plugins"   # docs/: the api job checks them
           out web '^web/'
           out agent-client '^integrations/shared/'
+          out claude-code-plugin '^integrations/claude-code/plugin/'
           out npm-packages '^(integrations/(opencode|openclaw|shared)/|scripts/npm_package\.mjs$)'
           # docker, installer-clean: the images and the installer that starts them
           out image '^(Dockerfile|\.dockerignore|docker-compose[^/]*\.yml|install\.sh|api/|web/|ocr/)'
@@ -165,6 +167,23 @@ jobs:
       - uses: actions/setup-node@v7
         with: {node-version: 22, cache: npm, cache-dependency-path: integrations/shared/typescript/package-lock.json}
       - run: cd integrations/shared/typescript && npm ci && npm run check && npm test
+  claude-code-plugin:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.claude-code-plugin != 'false' }}
+    # The Claude Code plugin's interface code (hooks/*.test.ts and *.test.tsx, #450): `claude plugin test` runs each file in the
+    # environment the plugin's hooks run in. No account or key is needed. Pinned, so a new Claude Code release does not change the run
+    # by itself; raise it on purpose. The plugin's Python scripts are tested in the api job.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:   # nothing but the tests: no telemetry, and no update that would replace the pinned version
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: {node-version: 22}
+      - run: npm install -g @anthropic-ai/claude-code@2.1.330 && claude --version
+      - run: claude plugin test integrations/claude-code/plugin
   npm-packages:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.npm-packages != 'false' }}

@@ -31,7 +31,7 @@ def _contract_env(inst) -> dict:
 @pytest.mark.skipif(not (PLUGIN / "node_modules" / "@opencode-ai" / "plugin").exists(),
                     reason="npm ci in integrations/opencode first (the plugin-opencode workflow does)")
 def test_the_opencode_plugin_hooks_against_a_test_instance(agent_instance):  # noqa: F811
-    r = subprocess.run([_node(), "--experimental-strip-types", "--no-warnings", "--test", "test/live.test.ts"], cwd=PLUGIN,
+    r = subprocess.run([_node(), "--experimental-strip-types", "--no-warnings", "--test", "--test-reporter=tap", "test/live.test.ts"], cwd=PLUGIN,
                        env=_contract_env(agent_instance), capture_output=True, text=True, encoding="utf-8", timeout=180)
     out = r.stdout + r.stderr
     assert r.returncode == 0, out

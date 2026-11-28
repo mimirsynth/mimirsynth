@@ -151,7 +151,7 @@ def test_the_typescript_port_against_a_test_instance(agent_instance):
     env = {**os.environ, "MIMIRSYNTH_CONTRACT_URL": agent_instance.url, "MIMIRSYNTH_CONTRACT_BRAIN": agent_instance.brain,
            **{f"MIMIRSYNTH_CONTRACT_{k.upper()}": v for k, v in agent_instance.tokens.items()},
            "MIMIRSYNTH_CONTRACT_NEWS": "1" if FALKOR else ""}
-    r = subprocess.run([_node(), "--experimental-strip-types", "--no-warnings", "--test", "test/live.test.ts"], cwd=TS, env=env,
+    r = subprocess.run([_node(), "--experimental-strip-types", "--no-warnings", "--test", "--test-reporter=tap", "test/live.test.ts"], cwd=TS, env=env,
                        capture_output=True, text=True, encoding="utf-8", timeout=180)
     out = r.stdout + r.stderr
     assert r.returncode == 0, out

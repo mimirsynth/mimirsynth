@@ -21,7 +21,9 @@ git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
 cd api && uv venv && uv pip install -e . pytest && .venv/bin/pytest -q     # API: tests use SQLite; those needing PostgreSQL or FalkorDB skip themselves
 cd ../web && npm install && npm run build                                   # web: includes the interface guardians (check:ui and i18n)
 ```
-To run the API tests as CI does, start FalkorDB (`docker run -d -p 6379:6379 falkordb/falkordb:v4.22.0`) and set `MIMIRSYNTH_TEST_FALKOR=localhost`. On Windows the interpreter is `.venv\Scripts\python` (`.venv/Scripts/python -m pytest -q`) and the suite passes there too. When a test writes a text file, give it `encoding="utf-8"` (and `newline=""` if the exact bytes matter): otherwise Windows writes it in its own code page and with CRLF.
+Before the totals, the summary says how many tests were skipped for lack of a service, and which. To run the API tests as CI does, start FalkorDB (`docker run -d -p 6379:6379 falkordb/falkordb:v4.22.0`) and set `MIMIRSYNTH_TEST_FALKOR=localhost`; the graph tests, such as those in `test_corrections.py`, run only then. The PostgreSQL ones (`tests/test_*_pg.py`) need PostgreSQL with pgvector: start it with `docker run -d -p 5432:5432 -e POSTGRES_USER=mimirsynth -e POSTGRES_PASSWORD=mimirsynth -e POSTGRES_DB=mimirsynth_test pgvector/pgvector:pg17`, set `MIMIRSYNTH_TEST_PG=postgresql+psycopg://mimirsynth:mimirsynth@localhost:5432/mimirsynth_test`, and run each `tests/test_*_pg.py` file on its own, as CI does. On Windows the interpreter is `.venv\Scripts\python` (`.venv/Scripts/python -m pytest -q`) and the suite passes there too. When a test writes a text file, give it `encoding="utf-8"` (and `newline=""` if the exact bytes matter): otherwise Windows writes it in its own code page and with CRLF.
+
+The Claude Code plugin's interface code has its own tests: `claude plugin test integrations/claude-code/plugin`. CI runs them on Linux; on Windows three of them fail, since they expect POSIX paths.
 
 To run the full stack from your checkout (builds the image locally instead of pulling the official one):
 ```bash
