@@ -43,6 +43,8 @@ CAUSES = {
 FENCED = T("lo envolvió en ``` y {{cause}}")
 UNREACHABLE = T("no se pudo contactar con el endpoint: {{v}}")  # the same texts as before, already in the catalogue
 HTTP = T("el endpoint respondió HTTP {{status_code}}: {{text}}")
+EMPTY = T("el endpoint respondió HTTP 200, pero sin texto de respuesta del modelo: {{text}}")
+PING_TOKENS = 32  # room for a reasoning model to show it generated something (#452), short enough for a local model on a CPU
 
 
 def _fill(template: str, **values) -> str:
@@ -221,7 +223,8 @@ def ping(base_url: str, model: str, api_key: str = "", timeout: float = 30) -> N
 
     An endpoint without a key (a local Ollama) is asked for its models list, which costs nothing and does not load the model on the CPU;
     when it lists the model, that is the answer. Otherwise (a key to prove, no list, or a list without the model) one chat request with
-    a one-word prompt and `max_tokens` 1: a few tokens, where the full check sends about 2,000."""
+    a one-word prompt and `max_tokens` PING_TOKENS: a few tokens, where the full check sends about 2,000. A 200 is not enough (#452): the
+    reply has to show the model answered (see `answered`)."""
     base = base_url.rstrip("/")
     if not api_key:
         try:
@@ -237,8 +240,56 @@ def ping(base_url: str, model: str, api_key: str = "", timeout: float = 30) -> N
                 return
     try:
         r = httpx.post(f"{base}/chat/completions", timeout=timeout, headers=_auth(api_key),
-                       json={"model": model, "messages": [{"role": "user", "content": "ok"}], "max_tokens": 1})
+                       json={"model": model, "messages": [{"role": "user", "content": "ok"}], "max_tokens": PING_TOKENS})
     except Exception as ex:  # noqa: BLE001
         raise RuntimeError(_fill(UNREACHABLE, v=str(ex)[:150])) from None
     if r.status_code != 200:
         raise RuntimeError(_fill(HTTP, status_code=r.status_code, text=r.text[:150]))
+    try:
+        body = r.json()
+    except ValueError:
+        body = None
+    if not answered(body):
+        raise RuntimeError(_fill(EMPTY, text=_why(body, r.text)))
+
+
+def _why(body, raw: str) -> str:
+    """What the empty reply said: its finish reason and token counts (a chat reply's first characters are only its id and model), or
+    the start of the body when it is not one."""
+    if isinstance(body, dict) and isinstance(body.get("choices"), list) and body["choices"] and isinstance(body["choices"][0], dict):
+        usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+        return f"finish_reason={body['choices'][0].get('finish_reason')}, completion_tokens={usage.get('completion_tokens')}"
+    return raw[:150]
+
+
+def _text(v) -> str:
+    """A message field as text: a string, or the text parts of a list of parts."""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, list):
+        return "".join(x.get("text") or "" for x in v if isinstance(x, dict) and isinstance(x.get("text"), str)).strip()
+    return ""
+
+
+def answered(body) -> bool:
+    """Whether a 200 chat reply shows the model answered (#452): text in the reply, or a model that was cut off while it was generating,
+    as a reasoning model is when it spends the probe's tokens thinking. Cut off is any `finish_reason` but "stop" ("length", a gateway's
+    "max_tokens", none at all); generating is completion tokens, reasoning tokens (some providers count them apart and never return the
+    reasoning), any output beyond the prompt, or reasoning text. Not an answer: a body with no choices (a gateway that answers 200 with
+    an error), an empty message with nothing generated (a wrong chat template, a misbehaving proxy), or a model that stopped with
+    only its reasoning."""
+    if not isinstance(body, dict) or not isinstance(body.get("choices"), list) or not body["choices"]:
+        return False
+    choice = body["choices"][0] if isinstance(body["choices"][0], dict) else {}
+    msg = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+    if _text(msg.get("content")):
+        return True
+    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+    details = usage.get("completion_tokens_details") if isinstance(usage.get("completion_tokens_details"), dict) else {}
+
+    def n(v) -> float:
+        return v if isinstance(v, (int, float)) else 0
+    generated = (n(usage.get("completion_tokens")) > 0 or n(details.get("reasoning_tokens")) > 0
+                 or n(usage.get("total_tokens")) > n(usage.get("prompt_tokens")) > 0
+                 or bool(_text(msg.get("reasoning_content")) or _text(msg.get("reasoning"))))
+    return choice.get("finish_reason") != "stop" and generated
