@@ -232,7 +232,7 @@ def context_items(out: dict) -> list[dict]:
         text = (c.get("text") or "").strip()
         span = under_header(text, lambda h: not re.search(r"\[doc \d+, \S+ \d+\]$", h)) if text else None
         if span is not None:
-            # an external system's fragment (adapters/cognee.py) may map to several episodes that were loaded with the same text
+            # an external system's fragment (adapters/cognee_arm.py) may map to several episodes that were loaded with the same text
             eps = c.get("episodes") or ([c["episode_uuid"]] if c.get("episode_uuid") else [])
             place(*span, {"kind": "chunk", "id": str(c.get("id") or ""), "text": text, "current": not c.get("superseded"),
                           "episodes": [str(e) for e in eps]})
@@ -597,7 +597,7 @@ def recall_on(slug: str) -> tuple:
 
 
 def cognee_recall(slug: str, corpus: str, map_file: Path | None, results: Path | None) -> tuple:
-    """Cognee's arm (#526): the chunks `adapters/cognee.py search` stored, put in the app's context within the budget and mapped
+    """Cognee's arm (#526): the chunks `adapters/cognee_arm.py search` stored, put in the app's context within the budget and mapped
     back to their episodes. It reads no brain: no snapshot guard and no AI calls here."""
     cg = _cognee()
     m = cg.read_map(map_file or cg.map_path(slug), slug)
@@ -616,7 +616,7 @@ def cognee_recall(slug: str, corpus: str, map_file: Path | None, results: Path |
 
 @functools.cache
 def _cognee():
-    spec = importlib.util.spec_from_file_location("eval_cognee", HERE / "adapters" / "cognee.py")
+    spec = importlib.util.spec_from_file_location("eval_cognee", HERE / "adapters" / "cognee_arm.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -674,7 +674,7 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
                    help="clean: leave out the episodes of the cells that are not curated (#516)")
     r.add_argument("--curated", type=Path, default=OUT / "clean" / "curated.json", help="from `clean/clean.py curated`")
     r.add_argument("--system", choices=("mimirsynth", "cognee"), default="mimirsynth",
-                   help="cognee: score the results `adapters/cognee.py search` wrote (#526)")
+                   help="cognee: score the results `adapters/cognee_arm.py search` wrote (#526)")
     r.add_argument("--cognee-map", type=Path, help="default: eval/out/cognee/<brain>.json")
     r.add_argument("--cognee-results", type=Path, help="default: eval/out/cognee/results-<brain>.jsonl")
     c = sub.add_parser("compare", help="B against A, with the verdict")

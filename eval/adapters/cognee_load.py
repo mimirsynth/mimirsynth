@@ -35,7 +35,7 @@ def _load(name: str, path: Path):
 
 @functools.cache
 def _cognee():
-    return _load("eval_cognee", HERE / "cognee.py")
+    return _load("eval_cognee", HERE / "cognee_arm.py")
 
 
 def snapshot_guard() -> None:
@@ -76,22 +76,27 @@ def export(brain: str, corpus: str, curated: Path, out: Path, snapshot=None) -> 
     _, data = snapshot(brain)
     rows = episode_rows(data["episodes"], drop)
     m = {"brain": brain, "corpus": corpus, "dataset": f"mimirsynth-eval-{brain}-{corpus}", "lang": lang, "episodes": rows,
-         "loaded": [], "left_out": len(drop)}
+         "loaded": [], "left_out": sum(1 for e in data["episodes"] if e["uuid"] in drop)}   # of this snapshot, not the drop list
     _cognee().write_map(out, m)
-    print(f"{len(rows)} episodes of {brain} ({corpus} corpus, {len(drop)} left out) → {out}")
+    print(f"{len(rows)} episodes of {brain} ({corpus} corpus, {m['left_out']} left out) -> {out}")
     return m
 
 
 # --- load (Cognee's venv) ------------------------------------------------------------------------------------------------------------
 
+NOT_RETRIED = (ImportError, AttributeError, TypeError, NameError)   # a mistake in the code or the install: waiting will not fix it
+
+
 def with_retries(fn, retries: int, sleep, what: str):
     for attempt in range(retries + 1):
         try:
             return fn()
+        except NOT_RETRIED:
+            raise
         except Exception as e:  # noqa: BLE001  (the gateway's limits and timeouts are retried; the last error stops the load)
             if attempt == retries:
-                raise SystemExit(f"{what} failed {retries + 1} times, the last with {type(e).__name__}: {e}. What was loaded is "
-                                 "saved: run `load` again to resume") from None
+                raise SystemExit(f"{what} failed (attempts: {retries + 1}), the last with {type(e).__name__}: {e}. What was "
+                                 "loaded is saved: run `load` again to resume") from None
             wait = 2 ** attempt * 5
             print(f"{what}: {type(e).__name__}: {e}; retrying in {wait} s", file=sys.stderr)
             sleep(wait)

@@ -222,7 +222,7 @@ cd api && .venv/bin/python ../eval/adapters/cognee_load.py export --brain SLUG  
 **Run the arm.**
 
 ```bash
-~/cognee-eval/.venv/bin/python ../eval/adapters/cognee.py search --brain SLUG --gold ../eval/out/gold.jsonl \
+~/cognee-eval/.venv/bin/python ../eval/adapters/cognee_arm.py search --brain SLUG --gold ../eval/out/gold.jsonl \
     --hookset ../eval/out/hookset.jsonl                                       # Cognee venv: eval/out/cognee/results-SLUG.jsonl
 .venv/bin/python ../eval/run.py run --system cognee --brain SLUG --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl \
     --split holdout --budget plugin --label cognee                            # app venv; --corpus as loaded

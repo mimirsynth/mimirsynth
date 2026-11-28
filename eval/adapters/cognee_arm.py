@@ -4,7 +4,7 @@ separate Cognee instance loaded with the snapshot's episodes (`cognee_load.py`).
 Cognee and the app do not share a virtual environment (their dependencies pin different versions), so the arm runs in two steps:
 
     # in Cognee's own venv (eval/adapters/requirements-cognee.txt), with MIMIRSYNTH_EVAL_COGNEE_ROOT set
-    python ../eval/adapters/cognee.py search --brain SLUG --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl
+    python ../eval/adapters/cognee_arm.py search --brain SLUG --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl
     # in the app's venv: score those results like any other system
     .venv/bin/python ../eval/run.py run --system cognee --brain SLUG --gold ../eval/out/gold.jsonl ... --label cognee
 
@@ -333,8 +333,9 @@ def make_recall(search_fn, episodes: list[dict], build_context, lang: str = "es"
         return build_context([], chunks, max_chars, None, lang)
 
     def recall_fn(query: str, n_facts: int = 0, n_chunks: int = 0, max_chars: int = 2500, **_):
-        raw, ms = search_fn(query, n_facts + n_chunks)
-        chunks = fit(to_chunks(results_of(raw), index, stats), max_chars, build, stats)
+        top_k = n_facts + n_chunks
+        raw, ms = search_fn(query, top_k)
+        chunks = fit(to_chunks(results_of(raw)[:top_k], index, stats), max_chars, build, stats)
         return {"facts": [], "chunks": chunks, "documents": [], "context": build(chunks, max_chars), "ms": {"total": ms}}
 
     return recall_fn, stats
@@ -346,7 +347,7 @@ def from_results(path: Path):
     """`search_fn` over the file `search` wrote. A question it has no answer for, or whose search failed, fails its recall, and
     `run.py` records the error."""
     if not path.exists():
-        raise SystemExit(f"{path}: run `cognee.py search` first, in Cognee's venv")
+        raise SystemExit(f"{path}: run `cognee_arm.py search` first, in Cognee's venv")
     got = {}
     for row in _run().load_jsonl(path):
         got[(row["query"], row["top_k"])] = row
@@ -354,7 +355,7 @@ def from_results(path: Path):
     def search_fn(query: str, top_k: int):
         row = got.get((query, top_k))
         if row is None:
-            raise LookupError(f"no Cognee result for this question at top_k {top_k}: run `cognee.py search` again")
+            raise LookupError(f"no Cognee result for this question at top_k {top_k}: run `cognee_arm.py search` again")
         if row.get("error"):
             raise RuntimeError(f"Cognee's search failed: {row['error']}")
         return (row["raw"] if "raw" in row else row["results"]), row.get("ms")   # flattened again, as `run.py` reads it now
@@ -408,8 +409,9 @@ def main(argv: list[str] | None = None, client=None) -> int:
     a = ap.parse_args(argv)
 
     m = read_map(a.map or map_path(a.brain), a.brain)
-    if not m.get("cognee"):
-        raise SystemExit("this brain was never loaded into Cognee: run `cognee_load.py load` first")
+    if not m.get("cognee") or len(set(m.get("loaded") or [])) < len(m["episodes"]):
+        raise SystemExit(f"Cognee holds {len(set(m.get('loaded') or []))} of the {len(m['episodes'])} episodes: finish "
+                         "`cognee_load.py load` first")
     root = instance_guard()
     if client is None:
         client = CogneeClient(root, m["dataset"])
@@ -421,7 +423,7 @@ def main(argv: list[str] | None = None, client=None) -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows), encoding="utf-8")
     failed = sum(1 for r in rows if r.get("error"))
-    print(f"{len(rows)} searches ({len(qs)} questions), {failed} failed → {out}")
+    print(f"{len(rows)} searches ({len(qs)} questions), {failed} failed -> {out}")
     return 1 if rows and failed == len(rows) else 0
 
 

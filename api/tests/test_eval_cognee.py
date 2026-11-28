@@ -21,7 +21,7 @@ def _load(name, path):
 
 
 ev = _load("eval_run", EVAL / "run.py")
-cg = _load("eval_cognee", EVAL / "adapters" / "cognee.py")
+cg = _load("eval_cognee", EVAL / "adapters" / "cognee_arm.py")
 ld = _load("eval_cognee_load", EVAL / "adapters" / "cognee_load.py")
 
 E1 = {"uuid": "e1", "reference_time": "2026-01-05T10:00:00", "text": "2026-01-05\nThe backup server powers off at 23:00 every night."}
@@ -299,7 +299,7 @@ def test_load_retries_and_needs_the_calls_per_episode_when_they_cannot_be_counte
 
     down = FakeCognee(fail=("cognify",) * 3)
     ld.main(["export", "--brain", "b", "--out", str(env / "n.json")], snapshot=_snapshot(3))
-    with pytest.raises(SystemExit, match="cognify failed 3 times"):
+    with pytest.raises(SystemExit, match=r"cognify failed \(attempts: 3\)"):
         ld.main(["load", "--brain", "b", "--map", str(env / "n.json"), "--retries", "2"], client=down, sleep=lambda s: None)
     assert json.loads((env / "n.json").read_text(encoding="utf-8"))["loaded"] == []
 
@@ -372,3 +372,70 @@ def test_search_refuses_another_cognee_version_than_the_load(env):
     g = _gold(env, [Q])
     with pytest.raises(SystemExit, match="loaded with 1.6.11"):
         cg.main(["search", "--brain", "b", "--gold", str(g), "--map", str(mp)], client=FakeCognee(version="1.7.0"))
+
+
+# --- the scripts as the README runs them ---------------------------------------------------------------------------------------------
+
+STUB = r'''
+import json, os
+from pathlib import Path
+
+class SearchType:
+    CHUNKS = "CHUNKS"
+
+def _path():
+    return Path(os.environ["SYSTEM_ROOT_DIRECTORY"]) / "stub-store.json"
+
+def _read():
+    return json.loads(_path().read_text()) if _path().exists() else {"added": [], "cognified": 0}
+
+def _write(d):
+    _path().parent.mkdir(parents=True, exist_ok=True)
+    _path().write_text(json.dumps(d))
+
+async def add(data, dataset_name=None, node_set=None, **kw):
+    d = _read(); d["added"].append({"text": str(data), "node_set": node_set}); _write(d)
+
+async def cognify(datasets=None, **kw):
+    d = _read(); d["cognified"] += 1; _write(d)
+
+async def search(query_text, query_type=None, datasets=None, top_k=15, **kw):
+    hits = [{"text": a["text"].split(chr(10), 1)[-1], "id": i} for i, a in enumerate(_read()["added"])]
+    return [{"dataset_name": datasets[0], "search_result": hits[:top_k]}]
+'''
+
+
+def test_the_scripts_run_by_path_reach_the_real_cognee_package_not_the_adapter(env):
+    """Run as `python eval/adapters/<script>.py`, the script's folder comes first on sys.path: an adapter named like the package
+    would be imported instead of Cognee. A stand-in `cognee` package on PYTHONPATH must be the one reached."""
+    import os
+    import subprocess
+    import sys
+    stub = env / "stub"
+    (stub / "cognee").mkdir(parents=True)
+    (stub / "cognee" / "__init__.py").write_text(STUB, encoding="utf-8")
+    (stub / "cognee-1.6.11.dist-info").mkdir()
+    (stub / "cognee-1.6.11.dist-info" / "METADATA").write_text("Metadata-Version: 2.1\nName: cognee\nVersion: 1.6.11\n",
+                                                                encoding="utf-8")
+    mp = env / "m.json"
+    cg.write_map(mp, {"brain": "b", "corpus": "full", "dataset": "d", "lang": "es", "episodes": [E1, E2], "loaded": []})
+    g = _gold(env, [Q])
+    e = {k: v for k, v in os.environ.items() if k not in (*cg.REMOTE_ENV, "COGNEE_ENV_FILE")}
+    e.update(PYTHONPATH=str(stub), PYTHONUTF8="1")
+
+    def script(name, *args):
+        return subprocess.run([sys.executable, str(EVAL / "adapters" / name), *args], env=e, capture_output=True, text=True, check=False,
+                              timeout=120)
+
+    r = script("cognee_load.py", "load", "--brain", "b", "--map", str(mp), "--calls-per-episode", "2")
+    assert r.returncode == 0, r.stderr
+    m = json.loads(mp.read_text(encoding="utf-8"))
+    assert m["loaded"] == ["e1", "e2"] and m["cognee"]["version"] == "1.6.11"
+    store = json.loads((env / "cognee" / "system" / "stub-store.json").read_text())
+    assert [a["node_set"] for a in store["added"]] == [["episode:e1"], ["episode:e2"]] and store["cognified"] == 1
+
+    res = env / "res.jsonl"
+    r = script("cognee_arm.py", "search", "--brain", "b", "--gold", str(g), "--map", str(mp), "--out", str(res))
+    assert r.returncode == 0, r.stderr
+    rows = [json.loads(x) for x in res.read_text(encoding="utf-8").splitlines()]
+    assert all("error" not in x for x in rows) and rows[0]["results"][0]["text"].startswith("The backup server")
