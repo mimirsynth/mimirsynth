@@ -19,12 +19,15 @@ if os.environ.get("MIMIRSYNTH_TEST_NEO4J"):
 # What the default run leaves out (#450): the tests that need a service skip themselves, and a count in the summary says so, since
 # "N skipped" alone does not tell a contributor that the graph or PostgreSQL code went untested. CONTRIBUTING.md says how to start them.
 SERVICES = (("MIMIRSYNTH_TEST_FALKOR", "a graph database (MIMIRSYNTH_TEST_FALKOR=localhost with a throwaway FalkorDB)"),
-            ("MIMIRSYNTH_TEST_PG", "PostgreSQL with pgvector (MIMIRSYNTH_TEST_PG)"))
+            ("MIMIRSYNTH_TEST_PG", "PostgreSQL with pgvector (MIMIRSYNTH_TEST_PG)"),
+            ("MIMIRSYNTH_TEST_NEO4J", "Neo4j (MIMIRSYNTH_TEST_NEO4J)"))
 
 
-def service_skips(reasons: list[str]) -> list[tuple[int, str]]:
-    """(how many, what they need) for each service some skipped test was waiting for."""
-    return [(n, what) for var, what in SERVICES if (n := sum(1 for r in reasons if var in r))]
+def service_skips(reasons: list[str], env=None) -> list[tuple[int, str]]:
+    """(how many, what they need) for each service some skipped test was waiting for, counted from the variable its reason names.
+    A service already set is not counted: a test that needs two skipped for the other one."""
+    env = os.environ if env is None else env
+    return [(n, what) for var, what in SERVICES if not env.get(var) and (n := sum(1 for r in reasons if var in r))]
 
 
 def pytest_terminal_summary(terminalreporter):
