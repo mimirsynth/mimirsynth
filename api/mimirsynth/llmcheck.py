@@ -43,8 +43,8 @@ CAUSES = {
 FENCED = T("lo envolvió en ``` y {{cause}}")
 UNREACHABLE = T("no se pudo contactar con el endpoint: {{v}}")  # the same texts as before, already in the catalogue
 HTTP = T("el endpoint respondió HTTP {{status_code}}: {{text}}")
-EMPTY = T("el endpoint respondió HTTP 200, pero sin respuesta del modelo (ni texto ni tokens generados): {{text}}")
-PING_TOKENS = 64  # room for a reasoning model to show it generated something (#452); still a few tokens every few minutes
+EMPTY = T("el endpoint respondió HTTP 200, pero sin texto de respuesta del modelo: {{text}}")
+PING_TOKENS = 32  # room for a reasoning model to show it generated something (#452), short enough for a local model on a CPU
 
 
 def _fill(template: str, **values) -> str:
@@ -250,7 +250,16 @@ def ping(base_url: str, model: str, api_key: str = "", timeout: float = 30) -> N
     except ValueError:
         body = None
     if not answered(body):
-        raise RuntimeError(_fill(EMPTY, text=r.text[:150]))
+        raise RuntimeError(_fill(EMPTY, text=_why(body, r.text)))
+
+
+def _why(body, raw: str) -> str:
+    """What the empty reply said: its finish reason and token counts (a chat reply's first characters are only its id and model), or
+    the start of the body when it is not one."""
+    if isinstance(body, dict) and isinstance(body.get("choices"), list) and body["choices"] and isinstance(body["choices"][0], dict):
+        usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+        return f"finish_reason={body['choices'][0].get('finish_reason')}, completion_tokens={usage.get('completion_tokens')}"
+    return raw[:150]
 
 
 def _text(v) -> str:
@@ -263,10 +272,12 @@ def _text(v) -> str:
 
 
 def answered(body) -> bool:
-    """Whether a 200 chat reply shows the model answered (#452): text in the reply, or a model that ran out of the budget while it was
-    generating (`finish_reason` "length", with completion tokens or reasoning text), as a reasoning model does when it spends the
-    probe's tokens thinking. Not an answer: a body with no choices (a gateway that answers 200 with an error), or an empty message
-    with nothing generated, as a wrong chat template or a misbehaving proxy gives."""
+    """Whether a 200 chat reply shows the model answered (#452): text in the reply, or a model that was cut off while it was generating,
+    as a reasoning model is when it spends the probe's tokens thinking. Cut off is any `finish_reason` but "stop" ("length", a gateway's
+    "max_tokens", none at all); generating is completion tokens, reasoning tokens (some providers count them apart and never return the
+    reasoning), any output beyond the prompt, or reasoning text. Not an answer: a body with no choices (a gateway that answers 200 with
+    an error), an empty message with nothing generated (a wrong chat template, a misbehaving proxy), or a model that stopped with
+    only its reasoning."""
     if not isinstance(body, dict) or not isinstance(body.get("choices"), list) or not body["choices"]:
         return False
     choice = body["choices"][0] if isinstance(body["choices"][0], dict) else {}
@@ -274,6 +285,11 @@ def answered(body) -> bool:
     if _text(msg.get("content")):
         return True
     usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
-    tokens = usage.get("completion_tokens")
-    generated = (isinstance(tokens, (int, float)) and tokens > 0) or bool(_text(msg.get("reasoning_content")) or _text(msg.get("reasoning")))
-    return choice.get("finish_reason") == "length" and generated
+    details = usage.get("completion_tokens_details") if isinstance(usage.get("completion_tokens_details"), dict) else {}
+
+    def n(v) -> float:
+        return v if isinstance(v, (int, float)) else 0
+    generated = (n(usage.get("completion_tokens")) > 0 or n(details.get("reasoning_tokens")) > 0
+                 or n(usage.get("total_tokens")) > n(usage.get("prompt_tokens")) > 0
+                 or bool(_text(msg.get("reasoning_content")) or _text(msg.get("reasoning"))))
+    return choice.get("finish_reason") != "stop" and generated

@@ -266,13 +266,21 @@ def _choice(content="", finish="stop", **msg):
 ])
 def test_a_200_with_no_answer_is_reported_as_an_empty_reply(monkeypatch, body):
     _reply(monkeypatch, body)
-    with pytest.raises(RuntimeError, match="sin respuesta del modelo"):
+    with pytest.raises(RuntimeError, match="sin texto de respuesta del modelo"):
+        llmcheck.ping("http://paid/v1", "m", "sk")
+
+
+def test_the_message_says_why_a_chat_reply_was_empty(monkeypatch):
+    """A chat reply's first characters are only its id and model: the message gives its finish reason and tokens instead."""
+    _reply(monkeypatch, {"id": "chatcmpl-" + "x" * 200, "object": "chat.completion", "model": "m", **_choice("", "stop"),
+                         "usage": {"completion_tokens": 0}})
+    with pytest.raises(RuntimeError, match=r"sin texto de respuesta del modelo: finish_reason=stop, completion_tokens=0$"):
         llmcheck.ping("http://paid/v1", "m", "sk")
 
 
 def test_a_200_that_is_not_json_is_an_empty_reply_too(monkeypatch):
     _reply(monkeypatch, text="<html>Bad gateway</html>")
-    with pytest.raises(RuntimeError, match=r"sin respuesta del modelo.*Bad gateway"):
+    with pytest.raises(RuntimeError, match=r"sin texto de respuesta del modelo.*Bad gateway"):
         llmcheck.ping("http://paid/v1", "m", "sk")
 
 
@@ -283,17 +291,21 @@ def test_a_200_that_is_not_json_is_an_empty_reply_too(monkeypatch):
                                         "completion_tokens_details": {"reasoning_tokens": 64}}},  # a reasoning model out of budget
     _choice("", "length", reasoning_content="The user says ok. I should"),                       # its reasoning, and no usage
     _choice(None, "length", reasoning="Let me think"),
+    {**_choice(None, "length"), "usage": {"completion_tokens": 0, "completion_tokens_details": {"reasoning_tokens": 32}}},  # thinking counted apart
+    {**_choice(None, "length"), "usage": {"prompt_tokens": 5, "total_tokens": 37}},                                       # only the total says it
+    {**_choice("", "max_tokens"), "usage": {"completion_tokens": 32}},                                                     # a gateway's own word
+    {**_choice("", None), "usage": {"completion_tokens": 32}},                                                             # or none
 ])
 def test_a_model_that_answered_or_ran_out_of_budget_reasoning_is_available(monkeypatch, body):
     sent = _reply(monkeypatch, body)
     assert llmcheck.ping("http://paid/v1", "m", "sk") is None
-    assert sent[0]["max_tokens"] == llmcheck.PING_TOKENS == 64
+    assert sent[0]["max_tokens"] == llmcheck.PING_TOKENS == 32
 
 
 def test_a_reasoning_model_that_stopped_with_only_its_reasoning_did_not_answer(monkeypatch):
     """Done, with nothing for the user: not out of budget, so not an answer."""
     _reply(monkeypatch, {**_choice("", "stop", reasoning_content="hmm"), "usage": {"completion_tokens": 12}})
-    with pytest.raises(RuntimeError, match="sin respuesta del modelo"):
+    with pytest.raises(RuntimeError, match="sin texto de respuesta del modelo"):
         llmcheck.ping("http://paid/v1", "m", "sk")
 
 
