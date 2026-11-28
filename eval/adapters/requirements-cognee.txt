@@ -1,0 +1,3 @@
+# Cognee's own venv for the eval's external arm (#526). Pinned: the version is recorded in the results' meta, and a brain loaded
+# with one version is never searched with another.
+cognee==1.6.11

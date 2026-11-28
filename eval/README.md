@@ -2,8 +2,8 @@
 
 How well the recall serves a brain, measured on its final context: per question class, at two budgets, with intervals, and B
 against A with a verdict written before measuring (#491, Phase 0). `census/` holds the corpus census (#514),
-`experiments/write_path/` the offline write-path experiment (#517), `errors/` the error analysis (#515), and `clean/`
-the virtual clean corpus (#516, `run --corpus clean`).
+`experiments/write_path/` the offline write-path experiment (#517), `errors/` the error analysis (#515), `clean/`
+the virtual clean corpus (#516, `run --corpus clean`), and `adapters/` Cognee as an external baseline (#526, section 6).
 
 Everything runs on the **frozen Phase 0 snapshot**, restored on an instance that is not production, from `api/` with that instance's
 `MIMIRSYNTH_*` environment and `MIMIRSYNTH_EVAL_SNAPSHOT=1`. Set that variable only on the restored instance: `run`, `hookset` and
@@ -168,3 +168,69 @@ resamples, fixed seed).
 How "improves" is read: the point estimate of the relative change reaches the minimum effect (−30 % or −50 %), and the interval of
 the difference B − A is wholly below zero. The interval does not have to be wholly past the minimum effect: with about 50 questions
 per class that would rarely be reached. Agreed in the review of #522.
+
+## 6. Cognee as an external baseline (#526)
+
+The same questions, budgets and scoring, on Cognee loaded with the snapshot's episodes, so that "v1 is better" means better than a
+known alternative too. Cognee runs in **its own venv** (its dependencies pin other versions than the app's) and as **a separate
+instance**, never production.
+
+**Set up the separate instance.**
+
+```bash
+python -m venv ~/cognee-eval/.venv && ~/cognee-eval/.venv/bin/pip install -r ../eval/adapters/requirements-cognee.txt
+export MIMIRSYNTH_EVAL_SNAPSHOT=1
+export MIMIRSYNTH_EVAL_COGNEE_ROOT=~/cognee-eval/instance      # an empty folder: Cognee keeps all its stores under it
+export LLM_PROVIDER=... LLM_MODEL=... LLM_ENDPOINT=... LLM_API_KEY=...
+export EMBEDDING_PROVIDER=... EMBEDDING_MODEL=... EMBEDDING_DIMENSIONS=...   # the same family as the snapshot's embeddings
+export LLM_RATE_LIMIT_ENABLED=true LLM_RATE_LIMIT_REQUESTS=30 LLM_RATE_LIMIT_INTERVAL=60   # below the gateway's limit
+```
+
+- The scripts refuse to start without `MIMIRSYNTH_EVAL_COGNEE_ROOT`, or with any of `DB_HOST`, `DB_PROVIDER`, `VECTOR_DB_URL`,
+  `VECTOR_DB_PROVIDER`, `GRAPH_DATABASE_URL` or `GRAPH_DATABASE_PROVIDER` set: those point Cognee at a database server, and
+  production's Cognee keeps its vectors in PostgreSQL. With none of them, Cognee uses its embedded stores under the root.
+- Cognee's documented defaults are kept: `add` + `cognify` (not `improve`), and `search` with `CHUNKS`. Note in #491 any setting you
+  change.
+
+**Load it.**
+
+```bash
+cd api && .venv/bin/python ../eval/adapters/cognee_load.py export --brain SLUG               # app venv: eval/out/cognee/SLUG.json
+~/cognee-eval/.venv/bin/python ../eval/adapters/cognee_load.py load --brain SLUG             # Cognee venv: the trial, then the cost
+~/cognee-eval/.venv/bin/python ../eval/adapters/cognee_load.py load --brain SLUG --yes       # the rest
+```
+
+- `export` takes every episode with text, like the 0.17 baseline. `--corpus clean` leaves out the episodes in `curated.json`
+  (#516); each corpus goes to its own dataset. The file holds each episode's uuid, reference time and text, and is the brain's
+  own text, so it stays in `eval/out/`.
+- `load` adds the episodes oldest first, each with its reference time on its first line (Cognee has no reference time of its own)
+  and its uuid as a node set.
+  - **The trial**: it loads the first 10 episodes (`--trial`), counts the LLM calls `cognify` made through litellm, and prints the
+    estimate for the rest: episodes × calls per episode. If the calls cannot be counted, read them on the gateway and give
+    `--calls-per-episode`. Without `--yes` it stops there.
+  - **Serially**: batches of 10 (`--batch`), each added and cognified before the next, and each call retried 3 times (`--retries`)
+    after 5, 10 and 20 s. The episodes loaded are saved after each batch: run `load` again to resume.
+  - The Cognee version, LLM and embedding are recorded in the file. A brain loaded with one version is never loaded further or
+    searched with another.
+
+**Run the arm.**
+
+```bash
+~/cognee-eval/.venv/bin/python ../eval/adapters/cognee.py search --brain SLUG --gold ../eval/out/gold.jsonl \
+    --hookset ../eval/out/hookset.jsonl                                       # Cognee venv: eval/out/cognee/results-SLUG.jsonl
+.venv/bin/python ../eval/run.py run --system cognee --brain SLUG --gold ../eval/out/gold.jsonl --hookset ../eval/out/hookset.jsonl \
+    --split holdout --budget plugin --label cognee                            # app venv; --corpus as loaded
+.venv/bin/python ../eval/run.py compare ../eval/out/run-baseline-0.17-plugin-holdout.json ../eval/out/run-cognee-plugin-holdout.json
+```
+
+- `search` asks Cognee for every question's chunks at both budgets and stores them as they came. `run --system cognee` scores them
+  like any other system, and reads no brain.
+- **The budget:** Cognee gets as many results as the app's recall may show (8 + 4 at `2500`, 6 + 3 at `plugin`), and its context is
+  written by the app's own `build_context` within the same characters. Its chunks are longer than 0.17's 900-character fragments,
+  so the first one that does not fit whole is cut, at a space, to what is left (at least 200 characters); nothing comes after it.
+- **Back to episodes:** a chunk is mapped to the episode whose loaded text contains it, whitespace aside. A chunk found in no
+  episode counts as noise, never as a match. A text loaded for several episodes maps to all of them. The counts (`results`,
+  `unmapped`, `ambiguous`, `cut`) are in the result's `meta.results`: many unmapped chunks mean the mapping failed, not that Cognee
+  is noisy, so look at them before posting.
+- The result's `meta` also has `system: cognee`, the Cognee version, LLM, embedding and dataset. The latency is Cognee's search
+  alone, timed by `search`.
