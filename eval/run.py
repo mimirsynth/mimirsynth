@@ -232,8 +232,10 @@ def context_items(out: dict) -> list[dict]:
         text = (c.get("text") or "").strip()
         span = under_header(text, lambda h: not re.search(r"\[doc \d+, \S+ \d+\]$", h)) if text else None
         if span is not None:
+            # an external system's fragment (adapters/cognee_arm.py) may map to several episodes that were loaded with the same text
+            eps = c.get("episodes") or ([c["episode_uuid"]] if c.get("episode_uuid") else [])
             place(*span, {"kind": "chunk", "id": str(c.get("id") or ""), "text": text, "current": not c.get("superseded"),
-                          "episodes": [str(c["episode_uuid"])] if c.get("episode_uuid") else []})
+                          "episodes": [str(e) for e in eps]})
 
     def own_section(ln: str, prefix: str, current: bool) -> bool:
         # an old fact's line reads `- <fact> (<since> → <until>)`; a current one's parenthesis has no arrow
@@ -594,6 +596,32 @@ def recall_on(slug: str) -> tuple:
         "lang": lang, "docs": "instance default", "federated": [s.slug for s in src]}
 
 
+def cognee_recall(slug: str, corpus: str, map_file: Path | None, results: Path | None) -> tuple:
+    """Cognee's arm (#526): the chunks `adapters/cognee_arm.py search` stored, put in the app's context within the budget and mapped
+    back to their episodes. It reads no brain: no snapshot guard and no AI calls here."""
+    cg = _cognee()
+    m = cg.read_map(map_file or cg.map_path(slug), slug)
+    if m["corpus"] != corpus:
+        raise SystemExit(f"Cognee was loaded with the {m['corpus']} corpus, not {corpus}: give --corpus {m['corpus']}")
+    loaded = set(m.get("loaded") or [])
+    if not m.get("cognee") or len(loaded) < len(m["episodes"]):
+        raise SystemExit(f"Cognee holds {len(loaded)} of the {len(m['episodes'])} episodes: finish `cognee_load.py load` first")
+    sys.path.insert(0, str(HERE.parent / "api"))
+    from mimirsynth.recall import build_context
+    lang = m.get("lang") or "es"
+    fn, stats = cg.make_recall(cg.from_results(results or cg.results_path(slug)), m["episodes"], build_context, lang)
+    # `results` is the stats counter the recall fills as it goes: by the time `meta` is written it holds the whole run's counts
+    return fn, {"lang": lang, "cognee": m["cognee"], "dataset": m["dataset"], "episodes_loaded": len(loaded), "results": stats}
+
+
+@functools.cache
+def _cognee():
+    spec = importlib.util.spec_from_file_location("eval_cognee", HERE / "adapters" / "cognee_arm.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def hook_samples(slug: str) -> list[dict]:
     """The replay sample's prompts that came through the hook (over HTTP, with its parameters), as a sheet to label."""
     snapshot_guard()
@@ -645,6 +673,10 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     r.add_argument("--corpus", choices=("full", "clean"), default="full",
                    help="clean: leave out the episodes of the cells that are not curated (#516)")
     r.add_argument("--curated", type=Path, default=OUT / "clean" / "curated.json", help="from `clean/clean.py curated`")
+    r.add_argument("--system", choices=("mimirsynth", "cognee"), default="mimirsynth",
+                   help="cognee: score the results `adapters/cognee_arm.py search` wrote (#526)")
+    r.add_argument("--cognee-map", type=Path, help="default: eval/out/cognee/<brain>.json")
+    r.add_argument("--cognee-results", type=Path, help="default: eval/out/cognee/results-<brain>.jsonl")
     c = sub.add_parser("compare", help="B against A, with the verdict")
     c.add_argument("a", type=Path)
     c.add_argument("b", type=Path)
@@ -692,7 +724,9 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     hooks = pick_split([x for x in hooks if label_hook(x) is not None], split, a.split, "hook prompts")
     how: dict = {}
     clean, filter_ = None, contextlib.nullcontext()
-    if a.corpus == "clean":   # #516: the curated episodes only; with `full` nothing in the recall is replaced
+    if a.system == "cognee":   # #526: the corpus was chosen when it was loaded into Cognee
+        recall_fn, how = cognee_recall(a.brain, a.corpus, a.cognee_map, a.cognee_results)
+    elif a.corpus == "clean":   # #516: the curated episodes only; with `full` nothing in the recall is replaced
         clean = _clean()
         cur = clean.load(a.curated, a.brain)
         drop = set(cur["drop"])
@@ -701,9 +735,10 @@ def main(argv: list[str] | None = None, recall_fn=None) -> int:
     if clean:
         stats: Counter = Counter()
         filter_, recall_fn = clean.corpus(drop, stats), clean.filtered(recall_fn, drop)
-    with counted() if how else contextlib.nullcontext(), filter_:
+    with counted() if how and a.system == "mimirsynth" else contextlib.nullcontext(), filter_:
         records = run(questions, hooks, recall_fn, a.budget)
-    meta = {"brain": a.brain, "budget": a.budget, "params": BUDGETS[a.budget], "split": a.split, "label": a.label, **how,
+    meta = {"brain": a.brain, "system": a.system, "budget": a.budget, "params": BUDGETS[a.budget], "split": a.split, "label": a.label,
+            **how,
             "questions": sum(1 for x in records if x["class"] != "hook"), "hook": sum(1 for x in records if x["class"] == "hook"),
             "drafts_included": bool(drafts and a.include_drafts), "when": datetime.now(UTC).isoformat(timespec="seconds"),
             "corpus": a.corpus}
