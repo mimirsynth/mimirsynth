@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import functools
+import hashlib
 import importlib.util
 import json
 import os
@@ -42,6 +43,17 @@ def _run():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def check_same(have: dict, loaded: dict) -> None:
+    """The Cognee a brain was loaded with is the one that searches or loads it further. Another version is refused; other packages
+    in the venv (they are not pinned) are only warned about."""
+    if have.get("version") != loaded.get("version"):
+        raise SystemExit(f"Cognee {have.get('version')} is installed, but the brain was loaded with {loaded.get('version')}: "
+                         "load it again into a new instance")
+    if have.get("packages_sha256") != loaded.get("packages_sha256"):
+        print("Warning: the packages in Cognee's venv are not the ones it was loaded with (packages_sha256 differs)",
+              file=sys.stderr)
 
 
 def map_path(brain: str) -> Path:
@@ -88,14 +100,39 @@ def instance_guard(env=None) -> Path:
     return Path(root).resolve()
 
 
+def prepare_env(root: Path, env=None) -> None:
+    """Before `import cognee`. Importing it loads a `.env` (from COGNEE_ENV_FILE, or the nearest one above the working directory or
+    the package) over the environment, which could point it back at production after `instance_guard` passed. So COGNEE_ENV_FILE
+    must be unset, and is pointed at an empty file under the root; the stores go under the root too."""
+    env = os.environ if env is None else env
+    if (env.get("COGNEE_ENV_FILE") or "").strip():
+        raise SystemExit("unset COGNEE_ENV_FILE: the separate instance takes its settings from the environment only")
+    root.mkdir(parents=True, exist_ok=True)
+    empty = root / "empty.env"
+    empty.write_text("", encoding="utf-8")
+    env["COGNEE_ENV_FILE"] = str(empty)
+    env["SYSTEM_ROOT_DIRECTORY"] = str(root / "system")
+    env["DATA_ROOT_DIRECTORY"] = str(root / "data")
+
+
+def packages() -> dict[str, str]:
+    """Every package in Cognee's venv: only `cognee` is pinned, and the rest (litellm, the stores) changes how it counts and chunks."""
+    from importlib.metadata import distributions
+    return dict(sorted({(d.metadata["Name"] or "").lower(): d.version for d in distributions() if d.metadata["Name"]}.items()))
+
+
+def packages_hash(pkgs: dict[str, str]) -> str:
+    return hashlib.sha256(json.dumps(pkgs, sort_keys=True).encode()).hexdigest()[:16]
+
+
 class CogneeClient:
     """The few Cognee calls the arm makes, on the instance under `root`, in one event loop. The tests use a fake with the same
     methods. Only `add`, `cognify` and `search` with `CHUNKS` are used: `CHUNKS` returns the stored text, with no LLM in between."""
 
     def __init__(self, root: Path, dataset: str):
-        os.environ["SYSTEM_ROOT_DIRECTORY"] = str(root / "system")
-        os.environ["DATA_ROOT_DIRECTORY"] = str(root / "data")
+        prepare_env(root)
         import cognee
+        instance_guard()   # again: nothing the import loaded may point it at a database server
         for name, sub in (("system_root_directory", "system"), ("data_root_directory", "data")):
             set_dir = getattr(getattr(cognee, "config", None), name, None)
             if callable(set_dir):
@@ -104,19 +141,20 @@ class CogneeClient:
         self._loop = asyncio.new_event_loop()
         self._calls = self._count_llm_calls()
 
-    def _count_llm_calls(self) -> Counter | None:
-        """LLM calls (not embeddings) seen through litellm, which Cognee calls them through. None when litellm cannot be hooked:
-        the load then needs --calls-per-episode."""
+    def _count_llm_calls(self) -> set | None:
+        """The LLM calls (not embeddings) seen through litellm, which Cognee calls them through, by litellm's call id, so a call
+        that reaches both the sync and the async hook counts once. None when litellm cannot be hooked: the load then needs
+        --calls-per-episode."""
         try:
             import litellm
             from litellm.integrations.custom_logger import CustomLogger
         except ImportError:
             return None
-        calls: Counter = Counter()
+        calls: set = set()
 
         def seen(kwargs) -> None:
             if "embedding" not in str(kwargs.get("call_type") or ""):
-                calls["llm"] += 1
+                calls.add(kwargs.get("litellm_call_id") or object())
 
         class _Count(CustomLogger):
             def log_success_event(self, kwargs, *a):
@@ -138,7 +176,13 @@ class CogneeClient:
         return self._loop.run_until_complete(coro)
 
     def add(self, episode: dict) -> None:
-        self._do(self._cognee.add(episode["text"], dataset_name=self.dataset, node_set=[f"episode:{episode['uuid']}"]))
+        data = episode["text"]
+        try:   # stored as text even when it reads like a path or a URL
+            from cognee.tasks.ingestion.data_item import DataItem
+            data = DataItem(data, literal_text=True)
+        except (ImportError, TypeError):
+            pass
+        self._do(self._cognee.add(data, dataset_name=self.dataset, node_set=[f"episode:{episode['uuid']}"]))
 
     def cognify(self) -> None:
         self._do(self._cognee.cognify(datasets=[self.dataset]))
@@ -148,15 +192,29 @@ class CogneeClient:
         return self._do(self._cognee.search(query_text=query, query_type=SearchType.CHUNKS, datasets=[self.dataset], top_k=top_k))
 
     def llm_calls(self) -> int | None:
-        return None if self._calls is None else self._calls["llm"]
+        return None if self._calls is None else len(self._calls)
 
     def describe(self) -> dict:
+        """What Cognee actually runs with: its own configuration where it can be read (its defaults when nothing is exported),
+        never an API key."""
         from importlib.metadata import version
         env = os.environ
+
+        def conf(module: str, getter: str, fields: tuple[str, ...], names: tuple[str, ...]) -> dict:
+            try:
+                cfg = getattr(__import__(module, fromlist=[getter]), getter)()
+                return {f: getattr(cfg, f, None) for f in fields}
+            except Exception:  # noqa: BLE001  (an internal module that moved: the environment says what was asked for)
+                return {n: env.get(n) for n in names}
+
+        pkgs = packages()
         return {"version": version("cognee"), "search": "CHUNKS", "steps": "add + cognify (no improve)",
-                "llm": {k: env.get(k) for k in ("LLM_PROVIDER", "LLM_MODEL", "LLM_ENDPOINT")},
-                "embedding": {k: env.get(k) for k in ("EMBEDDING_PROVIDER", "EMBEDDING_MODEL", "EMBEDDING_DIMENSIONS",
-                                                      "EMBEDDING_ENDPOINT")}}
+                "llm": conf("cognee.infrastructure.llm.config", "get_llm_config", ("llm_provider", "llm_model", "llm_endpoint"),
+                            ("LLM_PROVIDER", "LLM_MODEL", "LLM_ENDPOINT")),
+                "embedding": conf("cognee.infrastructure.databases.vector.embeddings.config", "get_embedding_config",
+                                  ("embedding_provider", "embedding_model", "embedding_dimensions", "embedding_endpoint"),
+                                  ("EMBEDDING_PROVIDER", "EMBEDDING_MODEL", "EMBEDDING_DIMENSIONS", "EMBEDDING_ENDPOINT")),
+                "python": sys.version.split()[0], "packages_sha256": packages_hash(pkgs), "packages": len(pkgs)}
 
 
 # --- results back to episodes (pure) -------------------------------------------------------------------------------------------------
@@ -172,10 +230,16 @@ class EpisodeIndex:
     def __init__(self, episodes: list[dict]):
         self._eps = [(e["uuid"], norm(e["text"])) for e in episodes]
         self._ref = {e["uuid"]: e.get("reference_time") for e in episodes}
+        self._text = dict(self._eps)
 
     def find(self, text: str) -> list[str]:
         n = norm(text)
         return [u for u, t in self._eps if n in t] if n else []
+
+    def same_text(self, uuids: list[str]) -> bool:
+        """Whether these episodes were loaded with the same whole text: then a chunk of it comes from any of them. A short chunk
+        found in different episodes ("Gracias.") says nothing about which one it came from."""
+        return len({self._text[u] for u in uuids}) == 1
 
     def reference_time(self, uuid: str):
         return self._ref.get(uuid)
@@ -183,12 +247,16 @@ class EpisodeIndex:
 
 def results_of(raw) -> list[dict]:
     """Cognee's search output as a flat list of results with a `text`. It may come wrapped per dataset (`search_result`); anything
-    that is not a dict with text is kept as its string, so it still takes room in the context and counts as noise."""
+    that is not a dict with text is kept as its string, so it still takes room in the context and counts as noise. A dataset Cognee
+    could not search comes back with an `error` instead of raising: it raises here, so the question fails instead of scoring as an
+    empty answer."""
     if raw is None:
         return []
     if isinstance(raw, list):
         return [r for x in raw for r in results_of(x)]
     if isinstance(raw, dict):
+        if raw.get("error"):
+            raise RuntimeError(f"Cognee could not search {raw.get('dataset_name') or 'the dataset'}: {raw['error']}")
         if "search_result" in raw:
             return results_of(raw["search_result"])
         if isinstance(raw.get("text"), str):
@@ -198,8 +266,8 @@ def results_of(raw) -> list[dict]:
 
 
 def to_chunks(results: list[dict], index: EpisodeIndex, stats: Counter) -> list[dict]:
-    """The results as the app's fragments, in Cognee's order, each with the episodes it maps to (none: noise; several: the same text
-    was loaded for more than one episode)."""
+    """The results as the app's fragments, in Cognee's order, each with the episodes it maps to. None: noise. Several: only when
+    they were all loaded with the same text; a chunk found in different episodes is ambiguous, and counts as noise too."""
     chunks = []
     for i, r in enumerate(results):
         text = (r.get("text") or "").strip()
@@ -208,10 +276,13 @@ def to_chunks(results: list[dict], index: EpisodeIndex, stats: Counter) -> list[
             continue
         eps = index.find(text)
         stats["results"] += 1
+        if len(eps) > 1 and not index.same_text(eps):
+            stats["ambiguous"] += 1
+            eps = []
+        elif len(eps) > 1:
+            stats["duplicates"] += 1
         if not eps:
             stats["unmapped"] += 1
-        elif len(eps) > 1:
-            stats["ambiguous"] += 1
         one = eps[0] if len(eps) == 1 else None
         chunks.append({"id": r.get("id") or f"cognee-{i}", "text": text, "name": "Cognee", "episode_uuid": one, "episodes": eps,
                        "valid_at": index.reference_time(one) if one else None})
@@ -223,14 +294,21 @@ def fit(chunks: list[dict], max_chars: int, build, stats: Counter) -> list[dict]
     first one that does not fit whole is cut, at a space, to what is left (at least MIN_PIECE characters), instead of leaving the
     budget unused; nothing after it is added. The cut text is still inside its episode, so it maps the same."""
     kept: list[dict] = []
+
+    def fits(c: dict) -> bool:
+        """`build` wrote this chunk as its last entry. Not whether its text is somewhere in the context: an earlier chunk may hold
+        the same text."""
+        before, after = build(kept, max_chars), build(kept + [c], max_chars)
+        return after != before and after.endswith(c["text"].strip())
+
     for c in chunks:
-        if c["text"] in build(kept + [c], max_chars):
+        if fits(c):
             kept.append(c)
             continue
         lo, hi = 0, len(c["text"])
         while lo < hi:   # the longest prefix that still fits
             mid = (lo + hi + 1) // 2
-            if c["text"][:mid].strip() in build(kept + [{**c, "text": c["text"][:mid]}], max_chars):
+            if fits({**c, "text": c["text"][:mid]}):
                 lo = mid
             else:
                 hi = mid - 1
@@ -279,7 +357,7 @@ def from_results(path: Path):
             raise LookupError(f"no Cognee result for this question at top_k {top_k}: run `cognee.py search` again")
         if row.get("error"):
             raise RuntimeError(f"Cognee's search failed: {row['error']}")
-        return row["results"], row.get("ms")
+        return (row["raw"] if "raw" in row else row["results"]), row.get("ms")   # flattened again, as `run.py` reads it now
 
     return search_fn
 
@@ -293,18 +371,27 @@ def queries(gold: list[dict], hooks: list[dict]) -> list[str]:
     return out
 
 
+def _plain(raw):
+    """Cognee's output as JSON: ids and other objects as their strings."""
+    return json.loads(json.dumps(raw, ensure_ascii=False, default=str))
+
+
 def search_all(client, qs: list[str], budgets: list[str], clock=time.perf_counter) -> list[dict]:
     """Every question at the top_k of each budget, in order. A failed search is kept with its error, and the rest go on."""
     rows = []
     for top_k in sorted({p["n_facts"] + p["n_chunks"] for b, p in _run().BUDGETS.items() if b in budgets}):
         for q in qs:
             t0 = clock()
+            raw = None
             try:
-                res = results_of(client.search(q, top_k))
+                raw = client.search(q, top_k)
+                ms = round(1000 * (clock() - t0), 1)
+                res = results_of(raw)
             except Exception as e:  # noqa: BLE001  (one failed search is recorded, the rest go on)
-                rows.append({"query": q, "top_k": top_k, "error": f"{type(e).__name__}: {e}"})
+                rows.append({"query": q, "top_k": top_k, "error": f"{type(e).__name__}: {e}", "raw": _plain(raw)})
                 continue
-            rows.append({"query": q, "top_k": top_k, "ms": round(1000 * (clock() - t0), 1), "results": res})
+            # `raw` as it came, so a flattening mistake can be fixed by scoring again without asking Cognee again
+            rows.append({"query": q, "top_k": top_k, "ms": ms, "results": res, "raw": _plain(raw)})
     return rows
 
 
@@ -326,9 +413,7 @@ def main(argv: list[str] | None = None, client=None) -> int:
     root = instance_guard()
     if client is None:
         client = CogneeClient(root, m["dataset"])
-    have = client.describe().get("version")
-    if have != m["cognee"].get("version"):
-        raise SystemExit(f"Cognee {have} is installed, but the brain was loaded with {m['cognee'].get('version')}")
+    check_same(client.describe(), m["cognee"])
     run = _run()
     qs = queries(run.load_jsonl(a.gold), run.load_jsonl(a.hookset) if a.hookset else [])
     rows = search_all(client, qs, a.budget)

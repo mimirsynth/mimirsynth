@@ -178,7 +178,8 @@ instance**, never production.
 **Set up the separate instance.**
 
 ```bash
-python -m venv ~/cognee-eval/.venv && ~/cognee-eval/.venv/bin/pip install -r ../eval/adapters/requirements-cognee.txt
+python3.11 -m venv ~/cognee-eval/.venv && ~/cognee-eval/.venv/bin/pip install -r ../eval/adapters/requirements-cognee.txt
+mkdir -p ../eval/out/cognee && ~/cognee-eval/.venv/bin/pip freeze > ../eval/out/cognee/pip-freeze.txt               # keep it with the results
 export MIMIRSYNTH_EVAL_SNAPSHOT=1
 export MIMIRSYNTH_EVAL_COGNEE_ROOT=~/cognee-eval/instance      # an empty folder: Cognee keeps all its stores under it
 export LLM_PROVIDER=... LLM_MODEL=... LLM_ENDPOINT=... LLM_API_KEY=...
@@ -189,6 +190,11 @@ export LLM_RATE_LIMIT_ENABLED=true LLM_RATE_LIMIT_REQUESTS=30 LLM_RATE_LIMIT_INT
 - The scripts refuse to start without `MIMIRSYNTH_EVAL_COGNEE_ROOT`, or with any of `DB_HOST`, `DB_PROVIDER`, `VECTOR_DB_URL`,
   `VECTOR_DB_PROVIDER`, `GRAPH_DATABASE_URL` or `GRAPH_DATABASE_PROVIDER` set: those point Cognee at a database server, and
   production's Cognee keeps its vectors in PostgreSQL. With none of them, Cognee uses its embedded stores under the root.
+- Importing Cognee loads a `.env` over the environment (the nearest one above the working directory or the package). So the
+  scripts refuse a `COGNEE_ENV_FILE` already set, point it at an empty file under the root, and check the settings again after
+  the import. Give every setting in the environment.
+- Python 3.11 or later: the scripts load `eval/run.py`. Only `cognee` is pinned; the venv's packages are hashed into the meta
+  (`packages_sha256`), and a venv that changed since the load is warned about.
 - Cognee's documented defaults are kept: `add` + `cognify` (not `improve`), and `search` with `CHUNKS`. Note in #491 any setting you
   change.
 
@@ -210,7 +216,7 @@ cd api && .venv/bin/python ../eval/adapters/cognee_load.py export --brain SLUG  
     `--calls-per-episode`. Without `--yes` it stops there.
   - **Serially**: batches of 10 (`--batch`), each added and cognified before the next, and each call retried 3 times (`--retries`)
     after 5, 10 and 20 s. The episodes loaded are saved after each batch: run `load` again to resume.
-  - The Cognee version, LLM and embedding are recorded in the file. A brain loaded with one version is never loaded further or
+  - The Cognee version, LLM and embedding, as Cognee's own configuration reads them, are recorded in the file. A brain loaded with one version is never loaded further or
     searched with another.
 
 **Run the arm.**
@@ -223,14 +229,17 @@ cd api && .venv/bin/python ../eval/adapters/cognee_load.py export --brain SLUG  
 .venv/bin/python ../eval/run.py compare ../eval/out/run-baseline-0.17-plugin-holdout.json ../eval/out/run-cognee-plugin-holdout.json
 ```
 
-- `search` asks Cognee for every question's chunks at both budgets and stores them as they came. `run --system cognee` scores them
-  like any other system, and reads no brain.
+- `search` asks Cognee for every question's chunks at both budgets and stores them as they came (`raw`), next to the flattened
+  list. `run --system cognee` flattens `raw` again and scores it like any other system, and reads no brain. A dataset Cognee could
+  not search comes back with an `error` instead of raising: that question's recall fails and is recorded, never scored as empty.
 - **The budget:** Cognee gets as many results as the app's recall may show (8 + 4 at `2500`, 6 + 3 at `plugin`), and its context is
   written by the app's own `build_context` within the same characters. Its chunks are longer than 0.17's 900-character fragments,
   so the first one that does not fit whole is cut, at a space, to what is left (at least 200 characters); nothing comes after it.
 - **Back to episodes:** a chunk is mapped to the episode whose loaded text contains it, whitespace aside. A chunk found in no
-  episode counts as noise, never as a match. A text loaded for several episodes maps to all of them. The counts (`results`,
-  `unmapped`, `ambiguous`, `cut`) are in the result's `meta.results`: many unmapped chunks mean the mapping failed, not that Cognee
-  is noisy, so look at them before posting.
+  episode counts as noise, never as a match. A chunk found in several episodes maps to all of them only when they were loaded with
+  the same whole text (`duplicates`); found in different episodes, it says nothing about where it came from (`Gracias.`), so it is
+  `ambiguous` and counts as noise too. The counts (`results`, `unmapped`, `ambiguous`, `duplicates`, `cut`) are in the result's
+  `meta.results`: many unmapped or ambiguous chunks mean the mapping failed, not that Cognee is noisy, so look at them before
+  posting.
 - The result's `meta` also has `system: cognee`, the Cognee version, LLM, embedding and dataset. The latency is Cognee's search
   alone, timed by `search`.

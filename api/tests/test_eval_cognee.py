@@ -107,12 +107,55 @@ def test_a_text_loaded_for_two_episodes_maps_to_both():
     items = ev.context_items(out)
     assert items[0]["episodes"] == ["e2", "e3"] and out["chunks"][0]["episode_uuid"] is None
     assert ev.score(q, items, None, out["context"])["m"]["top3"] == [1, 1]
-    assert stats["ambiguous"] == 1
+    assert stats["duplicates"] == 1 and stats["unmapped"] == 0
+
+
+def test_a_chunk_found_in_different_episodes_is_noise_not_a_match_for_all_of_them():
+    eps = [{"uuid": f"e{i}", "reference_time": None, "text": f"Note {i} about something else.\nGracias."} for i in range(30)]
+    q = {**Q, "query": "x", "answer_episodes": ["e17"]}
+    fn, stats = cg.make_recall(lambda q_, k: ([{"text": "Gracias."}], 1), eps, build_context)
+    out = fn("x", n_facts=8, n_chunks=4, max_chars=2500)
+    items = ev.context_items(out)
+    assert items[0]["episodes"] == [] and ev.score(q, items, None, out["context"])["m"]["top3"] == [0, 1]
+    assert stats["ambiguous"] == 1 and stats["unmapped"] == 1
 
 
 def test_results_wrapped_per_dataset_or_not_text_are_flattened():
     raw = [{"dataset_name": "d", "search_result": [{"text": "a", "id": 5}, "plain string"]}, {"text": "b", "score": 0.3}, 42, None]
     assert cg.results_of(raw) == [{"text": "a", "id": "5"}, {"text": "plain string"}, {"text": "b", "score": 0.3}, {"text": "42"}]
+
+
+def test_a_dataset_cognee_could_not_search_fails_the_question_instead_of_scoring_empty(env):
+    with pytest.raises(RuntimeError, match="boom"):
+        cg.results_of([{"dataset_name": "d", "search_result": [], "error": "boom"}])
+    mp = _loaded(env)
+    g = _gold(env, [Q])
+    res = env / "res.jsonl"
+
+    class Broken(FakeCognee):
+        def search(self, query, top_k):
+            return [{"dataset_name": "d", "search_result": [], "error": "no searchable memory"}]
+
+    assert cg.main(["search", "--brain", "b", "--gold", str(g), "--map", str(mp), "--out", str(res)], client=Broken()) == 1
+    row = json.loads(res.read_text(encoding="utf-8").splitlines()[0])
+    assert "no searchable memory" in row["error"] and row["raw"][0]["error"] == "no searchable memory"
+    assert ev.main(["run", "--brain", "b", "--gold", str(g), "--split", "all", "--system", "cognee", "--cognee-map", str(mp),
+                    "--cognee-results", str(res), "--out", str(env / "r.json")]) == 1
+    assert json.loads((env / "r.json").read_text(encoding="utf-8"))["records"][0]["error"].startswith("RuntimeError")
+
+
+def test_the_stored_raw_output_is_what_gets_scored(env):
+    mp = _loaded(env)
+    g = _gold(env, [Q])
+    res = env / "res.jsonl"
+    wrapped = [{"dataset_name": "d", "dataset_id": "x", "search_result": [{"text": "Vaultwarden runs on LXC 104.", "id": 1}]}]
+    fake = FakeCognee({Q["query"]: wrapped})
+    fake.search = lambda q, k: wrapped
+    cg.main(["search", "--brain", "b", "--gold", str(g), "--map", str(mp), "--out", str(res)], client=fake)
+    row = json.loads(res.read_text(encoding="utf-8").splitlines()[0])
+    assert row["raw"] == wrapped and row["results"] == [{"text": "Vaultwarden runs on LXC 104.", "id": "1"}]
+    fn, _ = cg.make_recall(cg.from_results(res), [E1, E2], build_context)
+    assert fn(Q["query"], n_facts=6, n_chunks=3, max_chars=4000)["chunks"][0]["episode_uuid"] == "e2"
 
 
 # --- the budget ----------------------------------------------------------------------------------------------------------------------
@@ -146,6 +189,17 @@ def test_what_does_not_fit_is_left_out_and_a_tiny_remainder_is_not_kept():
     assert "backup" not in out["context"]
 
 
+def test_a_repeated_text_does_not_count_as_fitting_twice_and_the_next_one_is_still_cut_in():
+    big = "B " * 1100
+    eps = [{"uuid": "a", "reference_time": None, "text": big}, {"uuid": "b", "reference_time": None, "text": "C " * 2000}]
+    fn, stats = cg.make_recall(lambda q, k: ([{"text": big}, {"text": big}, {"text": "C " * 1500}], 1), eps, build_context)
+    out = fn("x", n_facts=6, n_chunks=3, max_chars=4000)
+    # the repeat does not fit whole (its text being in the context already is not fitting): it is the one cut to what is left
+    assert [c["episode_uuid"] for c in out["chunks"]] == ["a", "a"] and stats["cut"] == 1
+    assert len(out["chunks"][1]["text"]) < len(big.strip()) and 3800 < len(out["context"]) <= 4000
+    assert len(ev.context_items(out)) == 2
+
+
 def test_nothing_returned_is_an_empty_context():
     fn, _ = recall({})
     out = fn("payroll", n_facts=8, n_chunks=4, max_chars=2500)
@@ -160,6 +214,17 @@ def test_the_separate_instance_needs_its_own_folder_and_no_database_server(tmp_p
     with pytest.raises(SystemExit, match="VECTOR_DB_URL"):
         cg.instance_guard({"MIMIRSYNTH_EVAL_COGNEE_ROOT": str(tmp_path), "VECTOR_DB_URL": "postgresql://prod"})
     assert cg.instance_guard({"MIMIRSYNTH_EVAL_COGNEE_ROOT": str(tmp_path)}) == tmp_path.resolve()
+
+
+def test_cognee_s_own_env_file_cannot_point_it_back_at_production(tmp_path):
+    """Importing Cognee loads a .env over the environment: it is pointed at an empty file under the root, and a COGNEE_ENV_FILE
+    already set is refused."""
+    with pytest.raises(SystemExit, match="unset COGNEE_ENV_FILE"):
+        cg.prepare_env(tmp_path, {"COGNEE_ENV_FILE": "/home/me/.env"})
+    env = {}
+    cg.prepare_env(tmp_path / "inst", env)
+    assert Path(env["COGNEE_ENV_FILE"]).read_text(encoding="utf-8") == ""
+    assert env["SYSTEM_ROOT_DIRECTORY"].startswith(str(tmp_path / "inst"))
 
 
 def test_export_and_load_refuse_to_start_without_the_snapshot_flag(tmp_path, monkeypatch):
@@ -243,7 +308,7 @@ def test_a_brain_loaded_with_another_cognee_version_is_not_mixed(env):
     path = env / "m.json"
     ld.main(["export", "--brain", "b", "--out", str(path)], snapshot=_snapshot(12))
     ld.main(["load", "--brain", "b", "--map", str(path)], client=FakeCognee())
-    with pytest.raises(SystemExit, match="loaded with Cognee 1.6.11"):
+    with pytest.raises(SystemExit, match="loaded with 1.6.11"):
         ld.main(["load", "--brain", "b", "--map", str(path), "--yes"], client=FakeCognee(version="1.7.0"))
     with pytest.raises(SystemExit, match="already has episodes loaded"):
         ld.main(["export", "--brain", "b", "--out", str(path)], snapshot=_snapshot(12))

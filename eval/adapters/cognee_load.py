@@ -108,10 +108,9 @@ def load(m: dict, path: Path, client, *, trial: int, per_episode: float | None, 
     """Serial: one batch at a time, each added and cognified before the next, with retries. Without `yes`, it stops after the trial
     with the estimated LLM calls for the rest."""
     cg = _cognee()
-    m["cognee"] = m.get("cognee") or client.describe()
-    if client.describe().get("version") != m["cognee"].get("version"):
-        raise SystemExit(f"this brain was loaded with Cognee {m['cognee'].get('version')}, and {client.describe().get('version')} "
-                         "is installed: load it again into a new instance")
+    have = client.describe()
+    m["cognee"] = m.get("cognee") or have
+    cg.check_same(have, m["cognee"])
     done = set(m.get("loaded") or [])
     todo = [e for e in m["episodes"] if e["uuid"] not in done]
 
