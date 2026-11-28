@@ -1,0 +1,3 @@
+{
+  "el endpoint respondió HTTP 200, pero sin respuesta del modelo (ni texto ni tokens generados): {{text}}": "the endpoint answered HTTP 200, but with no answer from the model (no text and no tokens generated): {{text}}"
+}

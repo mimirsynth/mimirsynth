@@ -43,6 +43,8 @@ CAUSES = {
 FENCED = T("lo envolvió en ``` y {{cause}}")
 UNREACHABLE = T("no se pudo contactar con el endpoint: {{v}}")  # the same texts as before, already in the catalogue
 HTTP = T("el endpoint respondió HTTP {{status_code}}: {{text}}")
+EMPTY = T("el endpoint respondió HTTP 200, pero sin respuesta del modelo (ni texto ni tokens generados): {{text}}")
+PING_TOKENS = 64  # room for a reasoning model to show it generated something (#452); still a few tokens every few minutes
 
 
 def _fill(template: str, **values) -> str:
@@ -221,7 +223,8 @@ def ping(base_url: str, model: str, api_key: str = "", timeout: float = 30) -> N
 
     An endpoint without a key (a local Ollama) is asked for its models list, which costs nothing and does not load the model on the CPU;
     when it lists the model, that is the answer. Otherwise (a key to prove, no list, or a list without the model) one chat request with
-    a one-word prompt and `max_tokens` 1: a few tokens, where the full check sends about 2,000."""
+    a one-word prompt and `max_tokens` PING_TOKENS: a few tokens, where the full check sends about 2,000. A 200 is not enough (#452): the
+    reply has to show the model answered (see `answered`)."""
     base = base_url.rstrip("/")
     if not api_key:
         try:
@@ -237,8 +240,40 @@ def ping(base_url: str, model: str, api_key: str = "", timeout: float = 30) -> N
                 return
     try:
         r = httpx.post(f"{base}/chat/completions", timeout=timeout, headers=_auth(api_key),
-                       json={"model": model, "messages": [{"role": "user", "content": "ok"}], "max_tokens": 1})
+                       json={"model": model, "messages": [{"role": "user", "content": "ok"}], "max_tokens": PING_TOKENS})
     except Exception as ex:  # noqa: BLE001
         raise RuntimeError(_fill(UNREACHABLE, v=str(ex)[:150])) from None
     if r.status_code != 200:
         raise RuntimeError(_fill(HTTP, status_code=r.status_code, text=r.text[:150]))
+    try:
+        body = r.json()
+    except ValueError:
+        body = None
+    if not answered(body):
+        raise RuntimeError(_fill(EMPTY, text=r.text[:150]))
+
+
+def _text(v) -> str:
+    """A message field as text: a string, or the text parts of a list of parts."""
+    if isinstance(v, str):
+        return v.strip()
+    if isinstance(v, list):
+        return "".join(x.get("text") or "" for x in v if isinstance(x, dict) and isinstance(x.get("text"), str)).strip()
+    return ""
+
+
+def answered(body) -> bool:
+    """Whether a 200 chat reply shows the model answered (#452): text in the reply, or a model that ran out of the budget while it was
+    generating (`finish_reason` "length", with completion tokens or reasoning text), as a reasoning model does when it spends the
+    probe's tokens thinking. Not an answer: a body with no choices (a gateway that answers 200 with an error), or an empty message
+    with nothing generated, as a wrong chat template or a misbehaving proxy gives."""
+    if not isinstance(body, dict) or not isinstance(body.get("choices"), list) or not body["choices"]:
+        return False
+    choice = body["choices"][0] if isinstance(body["choices"][0], dict) else {}
+    msg = choice.get("message") if isinstance(choice.get("message"), dict) else {}
+    if _text(msg.get("content")):
+        return True
+    usage = body.get("usage") if isinstance(body.get("usage"), dict) else {}
+    tokens = usage.get("completion_tokens")
+    generated = (isinstance(tokens, (int, float)) and tokens > 0) or bool(_text(msg.get("reasoning_content")) or _text(msg.get("reasoning")))
+    return choice.get("finish_reason") == "length" and generated
