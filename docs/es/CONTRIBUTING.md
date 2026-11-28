@@ -19,7 +19,9 @@ git clone https://github.com/MimirSynth/mimirsynth.git && cd mimirsynth
 cd api && uv venv && uv pip install -e . pytest && .venv/bin/pytest -q     # API: los tests usan SQLite; los que necesitan PostgreSQL o FalkorDB se omiten solos
 cd ../web && npm install && npm run build                                   # web: incluye los guardianes de interfaz (check:ui e i18n)
 ```
-Para pasar los tests de la API como el CI, arranca FalkorDB (`docker run -d -p 6379:6379 falkordb/falkordb:v4.22.0`) y define `MIMIRSYNTH_TEST_FALKOR=localhost`. En Windows el intérprete es `.venv\Scripts\python` (`.venv/Scripts/python -m pytest -q`), y la suite también pasa allí. Si un test escribe un fichero de texto, pásale `encoding="utf-8"` (y `newline=""` si importan los bytes exactos): si no, Windows lo escribe con su propia página de códigos y con CRLF.
+El resumen termina diciendo cuántos tests se omitieron por falta de un servicio, y de cuál. Para pasar los tests de la API como el CI, arranca FalkorDB (`docker run -d -p 6379:6379 falkordb/falkordb:v4.22.0`) y define `MIMIRSYNTH_TEST_FALKOR=localhost`; los tests del grafo, como los de `test_corrections.py`, solo corren entonces. En Windows el intérprete es `.venv\Scripts\python` (`.venv/Scripts/python -m pytest -q`), y la suite también pasa allí. Si un test escribe un fichero de texto, pásale `encoding="utf-8"` (y `newline=""` si importan los bytes exactos): si no, Windows lo escribe con su propia página de códigos y con CRLF.
+
+El código de interfaz del plugin de Claude Code tiene sus propios tests: `claude plugin test integrations/claude-code/plugin` (el CI los pasa en Linux).
 
 Para levantar el stack completo desde tu copia (construye la imagen en local en vez de descargar la oficial):
 ```bash

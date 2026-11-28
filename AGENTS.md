@@ -38,6 +38,7 @@ cd api && .venv/bin/pytest -q                                # API (PostgreSQL/F
 cd web && npm run build && npm test                          # types, build, check:ui, i18n, tooling tests
 ruff check --select E9,F63,F7,F82 api/                       # syntax errors and undefined names
 shellcheck -S error install.sh update.sh                     # if you touched them
+claude plugin test integrations/claude-code/plugin           # if you touched the Claude Code plugin's hooks
 gitleaks detect --no-git -s <changed paths>                  # no secrets
 semgrep scan --config p/default --severity ERROR <changed>   # static security, errors only
 ```
